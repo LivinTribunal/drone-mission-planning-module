@@ -1,0 +1,108 @@
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel
+
+from app.schemas.geometry import PointZ
+
+
+class InspectionConfigOverride(BaseModel):
+    """config overrides for an inspection within a mission"""
+
+    altitude_offset: float | None = None
+    speed_override: float | None = None
+    measurement_density: int | None = None
+    custom_tolerances: dict | None = None
+    density: float | None = None
+
+
+class InspectionCreate(BaseModel):
+    """add inspection to mission"""
+
+    template_id: UUID
+    method: str
+    config: InspectionConfigOverride | None = None
+
+
+class InspectionUpdate(BaseModel):
+    """update inspection within mission"""
+
+    method: str | None = None
+    config: InspectionConfigOverride | None = None
+    sequence_order: int | None = None
+
+
+class InspectionResponse(BaseModel):
+    """inspection response"""
+
+    id: UUID
+    mission_id: UUID
+    template_id: UUID
+    config_id: UUID | None = None
+    method: str
+    sequence_order: int
+
+    model_config = {"from_attributes": True}
+
+
+class ReorderRequest(BaseModel):
+    """reorder inspections by sequence"""
+
+    inspection_ids: list[UUID]
+
+
+class MissionCreate(BaseModel):
+    """create mission"""
+
+    name: str
+    drone_profile_id: UUID | None = None
+    airport_id: UUID | None = None
+    operator_notes: str | None = None
+    default_speed: float | None = None
+    default_altitude_offset: float | None = None
+    takeoff_coordinate: PointZ | None = None
+    landing_coordinate: PointZ | None = None
+
+
+class MissionUpdate(BaseModel):
+    """update mission"""
+
+    name: str | None = None
+    drone_profile_id: UUID | None = None
+    operator_notes: str | None = None
+    default_speed: float | None = None
+    default_altitude_offset: float | None = None
+    takeoff_coordinate: PointZ | None = None
+    landing_coordinate: PointZ | None = None
+    date_time: datetime | None = None
+
+
+class MissionResponse(BaseModel):
+    """mission response"""
+
+    id: UUID
+    name: str
+    status: str
+    created_at: datetime
+    operator_notes: str | None = None
+    drone_profile_id: UUID | None = None
+    date_time: datetime | None = None
+    default_speed: float | None = None
+    default_altitude_offset: float | None = None
+    takeoff_coordinate: PointZ | None = None
+    landing_coordinate: PointZ | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class MissionDetailResponse(MissionResponse):
+    """mission with inspections"""
+
+    inspections: list[InspectionResponse] = []
+
+
+class MissionListResponse(BaseModel):
+    """mission list response"""
+
+    data: list[MissionResponse]
+    meta: dict
