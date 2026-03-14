@@ -29,6 +29,7 @@ EXPECTED_TABLES = {
 def test_all_19_tables_registered():
     """all 19 tables exist in metadata"""
     table_names = set(Base.metadata.tables.keys())
+
     assert EXPECTED_TABLES.issubset(table_names), f"missing: {EXPECTED_TABLES - table_names}"
 
 
@@ -36,10 +37,12 @@ def test_all_tables_created_in_database(db_engine):
     """tables are actually created in a real postgis database"""
     inspector = inspect(db_engine)
     db_tables = set(inspector.get_table_names())
+
     assert EXPECTED_TABLES.issubset(db_tables), f"missing: {EXPECTED_TABLES - db_tables}"
 
 
 def test_airport_crud(db_session):
+    """test airport CRUD operations"""
     from app.models.airport import Airport
 
     airport = Airport(
@@ -57,6 +60,7 @@ def test_airport_crud(db_session):
 
 
 def test_mission_default_status(db_session):
+    """test mission default status"""
     from app.models.mission import Mission
 
     mission = Mission(name="Test Mission")
@@ -64,5 +68,6 @@ def test_mission_default_status(db_session):
     db_session.flush()
 
     result = db_session.query(Mission).filter_by(name="Test Mission").first()
+
     assert result is not None
     assert result.status == "DRAFT"

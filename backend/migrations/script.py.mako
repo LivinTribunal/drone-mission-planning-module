@@ -12,7 +12,6 @@ import sqlalchemy as sa
 import geoalchemy2
 ${imports if imports else ""}
 
-# revision identifiers, used by Alembic.
 revision: str = ${repr(up_revision)}
 down_revision: Union[str, None] = ${repr(down_revision)}
 branch_labels: Union[str, Sequence[str], None] = ${repr(branch_labels)}
