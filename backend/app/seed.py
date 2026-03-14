@@ -1,6 +1,13 @@
 from app.core.database import SessionLocal
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
+from app.models.inspection import (
+    InspectionConfiguration,
+    InspectionTemplate,
+    insp_template_methods,
+    insp_template_targets,
+)
+from app.models.mission import DroneProfile
 
 
 # TODO: add more airports
@@ -166,5 +173,102 @@ def seed_lkpr():
         db.close()
 
 
+def seed_drone_profiles():
+    db = SessionLocal()
+    try:
+        existing = db.query(DroneProfile).filter_by(name="DJI Matrice 300 RTK").first()
+        if existing:
+            print("drone profiles already seeded")
+            return
+
+        drone = DroneProfile(
+            name="DJI Matrice 300 RTK",
+            manufacturer="DJI",
+            model="Matrice 300 RTK",
+            max_speed=23.0,
+            max_climb_rate=6.0,
+            max_altitude=500.0,
+            battery_capacity=5935.0,
+            endurance_minutes=55.0,
+            camera_resolution="20MP",
+            camera_frame_rate=30,
+            sensor_fov=84.0,
+            weight=6.3,
+        )
+        db.add(drone)
+        db.commit()
+        print("DJI Matrice 300 RTK seeded")
+    finally:
+        db.close()
+
+
+def seed_inspection_templates():
+    db = SessionLocal()
+    try:
+        existing = db.query(InspectionTemplate).filter_by(name="PAPI Angular Sweep").first()
+        if existing:
+            print("inspection templates already seeded")
+            return
+
+        # find LKPR PAPI AGL
+        papi = db.query(AGL).filter_by(name="PAPI RWY 24 Left").first()
+        if not papi:
+            print("LKPR PAPI not found - run seed_lkpr first")
+            return
+
+        # default config for angular sweep
+        sweep_config = InspectionConfiguration(
+            altitude_offset=0.0,
+            speed_override=5.0,
+            measurement_density=10,
+        )
+        db.add(sweep_config)
+        db.flush()
+
+        sweep = InspectionTemplate(
+            name="PAPI Angular Sweep",
+            description="angular sweep inspection for PAPI systems",
+            default_config_id=sweep_config.id,
+            created_by="system",
+        )
+        db.add(sweep)
+        db.flush()
+
+        db.execute(insp_template_targets.insert().values(template_id=sweep.id, agl_id=papi.id))
+        db.execute(
+            insp_template_methods.insert().values(template_id=sweep.id, method="ANGULAR_SWEEP")
+        )
+
+        # default config for vertical profile
+        vp_config = InspectionConfiguration(
+            altitude_offset=0.0,
+            speed_override=3.0,
+            measurement_density=8,
+        )
+        db.add(vp_config)
+        db.flush()
+
+        vp = InspectionTemplate(
+            name="PAPI Vertical Profile",
+            description="vertical profile inspection for PAPI systems",
+            default_config_id=vp_config.id,
+            created_by="system",
+        )
+        db.add(vp)
+        db.flush()
+
+        db.execute(insp_template_targets.insert().values(template_id=vp.id, agl_id=papi.id))
+        db.execute(
+            insp_template_methods.insert().values(template_id=vp.id, method="VERTICAL_PROFILE")
+        )
+
+        db.commit()
+        print("inspection templates seeded (angular sweep + vertical profile)")
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     seed_lkpr()
+    seed_drone_profiles()
+    seed_inspection_templates()
