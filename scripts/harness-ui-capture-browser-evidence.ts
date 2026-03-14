@@ -167,14 +167,23 @@ function detectRequiredFlows(): string[] {
 // --- Capture ---
 
 async function captureFlows(args: CliArgs): Promise<EvidenceManifest> {
-  // import playwright — fail fast if missing
+  // import playwright - try root first, then frontend/node_modules
   let chromium: typeof import('playwright').chromium;
+  let pw: any;
   try {
-    const pw = await import('playwright');
-    chromium = pw.chromium;
+    pw = await import('playwright');
   } catch {
-    console.error('ERROR: playwright is not installed.');
-    console.error('Run: cd frontend && npm add -D playwright && npx playwright install chromium');
+    try {
+      pw = await import(resolve('frontend/node_modules/playwright'));
+    } catch {
+      console.error('ERROR: playwright is not installed.');
+      console.error('Run: cd frontend && npm add -D playwright && npx playwright install chromium');
+      process.exit(2);
+    }
+  }
+  chromium = pw.chromium || pw.default?.chromium;
+  if (!chromium) {
+    console.error('ERROR: could not resolve playwright chromium export');
     process.exit(2);
   }
 

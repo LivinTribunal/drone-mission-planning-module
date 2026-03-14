@@ -1,0 +1,123 @@
+# example sqlalchemy model - shows all patterns used across the real model files.
+
+from uuid import uuid4
+
+from geoalchemy2 import Geometry
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+
+from app.core.database import Base
+
+
+# junction table (no ORM class, just a linking table)
+
+example_tags = Table(
+    "example_tags",
+    Base.metadata,
+    Column(
+        "parent_id",
+        UUID,
+        ForeignKey("example_parent.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("tag", String(30), primary_key=True),
+)
+
+
+# standard model
+
+class ExampleParent(Base):
+    # here's table name
+    __tablename__ = "example_parent"
+
+    # uuid primary key — every table uses this
+    id = Column(UUID, primary_key=True, default=uuid4)
+
+    # basic columns
+    name = Column(String, nullable=False)
+    description = Column(String)
+    value = Column(Float)
+    count = Column(Integer)
+    is_active = Column(Boolean, nullable=False, default=True)
+    metadata_json = Column(JSONB)
+
+    # timestamp with server default
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # geometry column — always srid=4326, type is POINTZ / POLYGONZ / LINESTRINGZ
+    location = Column(Geometry("POINTZ", srid=4326), nullable=False)
+
+    # enum stored as varchar + check constraint (not sqlalchemy Enum)
+    status = Column(String(20), nullable=False, default="DRAFT")
+
+    # foreign key — CASCADE for owned children, SET NULL for optional refs
+    category_id = Column(UUID, ForeignKey("example_category.id", ondelete="SET NULL"))
+
+    # relationships
+    category = relationship("ExampleCategory")
+    children = relationship(
+        "ExampleChild", back_populates="parent", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('DRAFT', 'ACTIVE', 'ARCHIVED')",
+            name="ck_example_parent_status",
+        ),
+    )
+
+
+# child model with FK back to parent
+
+class ExampleChild(Base):
+    __tablename__ = "example_child"
+
+    id = Column(UUID, primary_key=True, default=uuid4)
+    parent_id = Column(
+        UUID, ForeignKey("example_parent.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence_order = Column(Integer, nullable=False)
+    position = Column(Geometry("POINTZ", srid=4326))
+
+    parent = relationship("ExampleParent", back_populates="children")
+
+
+# single-table inheritance
+
+class ExampleBase(Base):
+    __tablename__ = "example_base"
+
+    id = Column(UUID, primary_key=True, default=uuid4)
+    name = Column(String, nullable=False)
+    base_type = Column(String(20), nullable=False)  # discriminator
+
+    # columns only used by SubtypeA
+    extra_a = Column(Float)
+
+    # columns only used by SubtypeB
+    extra_b = Column(String)
+
+    __mapper_args__ = {
+        "polymorphic_on": base_type,
+        "polymorphic_identity": "BASE",
+    }
+
+
+class SubtypeA(ExampleBase):
+    __mapper_args__ = {"polymorphic_identity": "TYPE_A"}
+
+
+class SubtypeB(ExampleBase):
+    __mapper_args__ = {"polymorphic_identity": "TYPE_B"}
