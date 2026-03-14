@@ -11,6 +11,8 @@ from app.schemas.infrastructure import (
 
 
 class AirportCreate(BaseModel):
+    """airport create schema"""
+
     icao_code: str = Field(min_length=4, max_length=4, pattern=r"^[A-Z]{4}$")
     name: str
     elevation: float
@@ -18,12 +20,16 @@ class AirportCreate(BaseModel):
 
 
 class AirportUpdate(BaseModel):
+    """airport update schema"""
+
     name: str | None = None
     elevation: float | None = None
     location: PointZ | None = None
 
 
 class AirportResponse(BaseModel):
+    """airport response schema"""
+
     id: UUID
     icao_code: str
     name: str
@@ -34,11 +40,15 @@ class AirportResponse(BaseModel):
 
 
 class AirportDetailResponse(AirportResponse):
+    """airport detail response schema"""
+
     surfaces: list[SurfaceResponse] = []
     obstacles: list[ObstacleResponse] = []
     safety_zones: list[SafetyZoneResponse] = []
 
 
 class AirportListResponse(BaseModel):
+    """airport list response schema"""
+
     data: list[AirportResponse]
     meta: dict

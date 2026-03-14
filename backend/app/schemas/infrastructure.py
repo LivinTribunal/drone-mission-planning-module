@@ -4,10 +4,11 @@ from pydantic import BaseModel
 
 from app.schemas.geometry import LineStringZ, PointZ, PolygonZ
 
-# surfaces
 
-
+# surfaces for airport
 class SurfaceCreate(BaseModel):
+    """surface create schema"""
+
     identifier: str
     surface_type: str
     geometry: LineStringZ
@@ -20,6 +21,8 @@ class SurfaceCreate(BaseModel):
 
 
 class SurfaceUpdate(BaseModel):
+    """surface update schema"""
+
     identifier: str | None = None
     geometry: LineStringZ | None = None
     heading: float | None = None
@@ -31,6 +34,8 @@ class SurfaceUpdate(BaseModel):
 
 
 class SurfaceResponse(BaseModel):
+    """surface response schema"""
+
     id: UUID
     airport_id: UUID
     identifier: str
@@ -47,10 +52,10 @@ class SurfaceResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# obstacles
-
-
+# obstacles for airport
 class ObstacleCreate(BaseModel):
+    """obstacle create schema"""
+
     name: str
     position: PointZ
     height: float
@@ -60,6 +65,8 @@ class ObstacleCreate(BaseModel):
 
 
 class ObstacleUpdate(BaseModel):
+    """obstacle update schema"""
+
     name: str | None = None
     position: PointZ | None = None
     height: float | None = None
@@ -69,6 +76,8 @@ class ObstacleUpdate(BaseModel):
 
 
 class ObstacleResponse(BaseModel):
+    """obstacle response schema"""
+
     id: UUID
     airport_id: UUID
     name: str
@@ -81,10 +90,10 @@ class ObstacleResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# safety zones
-
-
+# safety zones for airport
 class SafetyZoneCreate(BaseModel):
+    """safety zone create schema"""
+
     name: str
     type: str
     geometry: PolygonZ
@@ -94,6 +103,8 @@ class SafetyZoneCreate(BaseModel):
 
 
 class SafetyZoneUpdate(BaseModel):
+    """safety zone update schema"""
+
     name: str | None = None
     type: str | None = None
     geometry: PolygonZ | None = None
@@ -103,6 +114,8 @@ class SafetyZoneUpdate(BaseModel):
 
 
 class SafetyZoneResponse(BaseModel):
+    """safety zone response schema"""
+
     id: UUID
     airport_id: UUID
     name: str
@@ -115,10 +128,10 @@ class SafetyZoneResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# AGL
-
-
+# AGLs for airport surfaces
 class LHACreate(BaseModel):
+    """LHA create schema"""
+
     unit_number: int
     setting_angle: float
     transition_sector_width: float | None = None
@@ -127,6 +140,8 @@ class LHACreate(BaseModel):
 
 
 class LHAUpdate(BaseModel):
+    """LHA update schema"""
+
     unit_number: int | None = None
     setting_angle: float | None = None
     transition_sector_width: float | None = None
@@ -135,6 +150,8 @@ class LHAUpdate(BaseModel):
 
 
 class LHAResponse(BaseModel):
+    """LHA response schema"""
+
     id: UUID
     agl_id: UUID
     unit_number: int
@@ -147,6 +164,8 @@ class LHAResponse(BaseModel):
 
 
 class AGLCreate(BaseModel):
+    """AGL create schema"""
+
     agl_type: str
     name: str
     position: PointZ
@@ -157,6 +176,8 @@ class AGLCreate(BaseModel):
 
 
 class AGLUpdate(BaseModel):
+    """AGL update schema"""
+
     agl_type: str | None = None
     name: str | None = None
     position: PointZ | None = None
@@ -167,6 +188,8 @@ class AGLUpdate(BaseModel):
 
 
 class AGLResponse(BaseModel):
+    """AGL response schema"""
+
     id: UUID
     surface_id: UUID
     agl_type: str
