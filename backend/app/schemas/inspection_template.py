@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -46,7 +47,7 @@ class InspectionTemplateResponse(BaseModel):
     description: str | None = None
     angular_tolerances: dict | None = None
     created_by: str | None = None
-    created_at: str | None = None
+    created_at: datetime | None = None
     default_config: InspectionConfigResponse | None = None
     target_agl_ids: list[UUID] = []
     methods: list[str] = []

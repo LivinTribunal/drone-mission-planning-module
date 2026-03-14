@@ -12,58 +12,19 @@ from app.models.inspection import (
 )
 
 
-def _serialize(template: InspectionTemplate, db: Session) -> dict:
-    # get methods from junction table
+def _enrich(template: InspectionTemplate, db: Session) -> InspectionTemplate:
+    """attach computed fields so pydantic can serialize them"""
     methods_rows = db.execute(
         select(insp_template_methods.c.method).where(
             insp_template_methods.c.template_id == template.id
         )
     ).fetchall()
-    methods = [r[0] for r in methods_rows]
-
-    target_ids = [str(agl.id) for agl in template.targets]
-
-    result = {
-        "id": template.id,
-        "name": template.name,
-        "description": template.description,
-        "angular_tolerances": template.angular_tolerances,
-        "created_by": template.created_by,
-        "created_at": str(template.created_at) if template.created_at else None,
-        "default_config": None,
-        "target_agl_ids": target_ids,
-        "methods": methods,
-    }
-
-    if template.default_config:
-        cfg = template.default_config
-        result["default_config"] = {
-            "id": cfg.id,
-            "altitude_offset": cfg.altitude_offset,
-            "speed_override": cfg.speed_override,
-            "measurement_density": cfg.measurement_density,
-            "custom_tolerances": cfg.custom_tolerances,
-            "density": cfg.density,
-        }
-
-    return result
+    template.methods = [r[0] for r in methods_rows]
+    template.target_agl_ids = [agl.id for agl in template.targets]
+    return template
 
 
-def list_templates(db: Session, airport_id: UUID | None = None) -> list[dict]:
-    query = db.query(InspectionTemplate).options(
-        joinedload(InspectionTemplate.default_config),
-        joinedload(InspectionTemplate.targets),
-    )
-
-    if airport_id:
-        # filter templates that target AGLs belonging to surfaces at this airport
-        query = query.filter(InspectionTemplate.targets.any(AGL.surface.has(airport_id=airport_id)))
-
-    templates = query.all()
-    return [_serialize(t, db) for t in templates]
-
-
-def get_template(db: Session, template_id: UUID) -> dict:
+def _load_template(db: Session, template_id: UUID) -> InspectionTemplate:
     template = (
         db.query(InspectionTemplate)
         .options(
@@ -75,10 +36,27 @@ def get_template(db: Session, template_id: UUID) -> dict:
     )
     if not template:
         raise HTTPException(status_code=404, detail="template not found")
-    return _serialize(template, db)
+    return _enrich(template, db)
 
 
-def create_template(db: Session, data: dict) -> dict:
+def list_templates(db: Session, airport_id: UUID | None = None) -> list[InspectionTemplate]:
+    query = db.query(InspectionTemplate).options(
+        joinedload(InspectionTemplate.default_config),
+        joinedload(InspectionTemplate.targets),
+    )
+
+    if airport_id:
+        query = query.filter(InspectionTemplate.targets.any(AGL.surface.has(airport_id=airport_id)))
+
+    templates = query.all()
+    return [_enrich(t, db) for t in templates]
+
+
+def get_template(db: Session, template_id: UUID) -> InspectionTemplate:
+    return _load_template(db, template_id)
+
+
+def create_template(db: Session, data: dict) -> InspectionTemplate:
     config_data = data.pop("default_config", None)
     target_ids = data.pop("target_agl_ids", [])
     methods = data.pop("methods", [])
@@ -107,11 +85,10 @@ def create_template(db: Session, data: dict) -> dict:
         db.execute(insp_template_methods.insert().values(template_id=template.id, method=method))
 
     db.commit()
-    db.refresh(template)
-    return get_template(db, template.id)
+    return _load_template(db, template.id)
 
 
-def update_template(db: Session, template_id: UUID, data: dict) -> dict:
+def update_template(db: Session, template_id: UUID, data: dict) -> InspectionTemplate:
     template = (
         db.query(InspectionTemplate)
         .options(joinedload(InspectionTemplate.targets))
@@ -141,12 +118,22 @@ def update_template(db: Session, template_id: UUID, data: dict) -> dict:
             )
 
     db.commit()
-    return get_template(db, template_id)
+    return _load_template(db, template_id)
 
 
 def delete_template(db: Session, template_id: UUID):
-    template = db.query(InspectionTemplate).filter(InspectionTemplate.id == template_id).first()
+    template = (
+        db.query(InspectionTemplate)
+        .options(joinedload(InspectionTemplate.default_config))
+        .filter(InspectionTemplate.id == template_id)
+        .first()
+    )
     if not template:
         raise HTTPException(status_code=404, detail="template not found")
+
+    config = template.default_config
     db.delete(template)
+    if config:
+        db.delete(config)
+
     db.commit()
