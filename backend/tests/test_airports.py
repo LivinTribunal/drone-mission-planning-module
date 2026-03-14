@@ -46,6 +46,7 @@ def client(db_engine):
     app.dependency_overrides.clear()
 
 
+# Test Data
 AIRPORT_PAYLOAD = {
     "icao_code": "LKPR",
     "name": "Prague Airport",
@@ -54,6 +55,7 @@ AIRPORT_PAYLOAD = {
 }
 
 
+# Tests
 def test_create_airport(client):
     r = client.post("/api/v1/airports", json=AIRPORT_PAYLOAD)
     assert r.status_code == 201

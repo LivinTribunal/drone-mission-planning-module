@@ -3,6 +3,7 @@ from sqlalchemy import inspect
 import app.models  # noqa: F401
 from app.core.database import Base
 
+# Test Data
 EXPECTED_TABLES = {
     "airport",
     "airfield_surface",
@@ -25,7 +26,19 @@ EXPECTED_TABLES = {
     "constraint_rule",
 }
 
+AIRPORT_PAYLOAD = {
+    "icao_code": "LZIB",
+    "name": "Bratislava Airport",
+    "elevation": 133.0,
+    "location": "SRID=4326;POINTZ(17.2127 48.1702 133)",
+}
 
+MISSION_PAYLOAD = {
+    "name": "Test Mission",
+}
+
+
+# Tests
 def test_all_19_tables_registered():
     """all 19 tables exist in metadata"""
     table_names = set(Base.metadata.tables.keys())
@@ -45,12 +58,7 @@ def test_airport_crud(db_session):
     """test airport CRUD operations"""
     from app.models.airport import Airport
 
-    airport = Airport(
-        icao_code="LZIB",
-        name="Bratislava Airport",
-        elevation=133.0,
-        location="SRID=4326;POINTZ(17.2127 48.1702 133)",
-    )
+    airport = Airport(**AIRPORT_PAYLOAD)
     db_session.add(airport)
     db_session.flush()
 
@@ -63,7 +71,7 @@ def test_mission_default_status(db_session):
     """test mission default status"""
     from app.models.mission import Mission
 
-    mission = Mission(name="Test Mission")
+    mission = Mission(**MISSION_PAYLOAD)
     db_session.add(mission)
     db_session.flush()
 
