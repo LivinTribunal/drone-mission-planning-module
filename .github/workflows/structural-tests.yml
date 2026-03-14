@@ -1,0 +1,75 @@
+name: Structural Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  structural-tests:
+    name: Architectural Boundary Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate architectural boundaries
+        run: bash scripts/structural-tests.sh
+
+      - name: Verify backend layer discipline
+        run: |
+          echo "checking backend dependency rules: routes -> services -> models/schemas"
+          violations=0
+
+          # routes must not import models directly
+          if grep -rn "from app\.models" backend/app/api/routes/ 2>/dev/null; then
+            echo "::error::routes/ must not import from models/ directly (use services)"
+            violations=$((violations + 1))
+          fi
+
+          # routes must not import database/core internals
+          if grep -rn "from app\.core\.database" backend/app/api/routes/ 2>/dev/null; then
+            echo "::error::routes/ must not import database internals directly"
+            violations=$((violations + 1))
+          fi
+
+          # schemas must not import models
+          if grep -rn "from app\.models" backend/app/schemas/ 2>/dev/null; then
+            echo "::error::schemas/ must not import from models/"
+            violations=$((violations + 1))
+          fi
+
+          # models must not import services
+          if grep -rn "from app\.services" backend/app/models/ 2>/dev/null; then
+            echo "::error::models/ must not import from services/"
+            violations=$((violations + 1))
+          fi
+
+          if (( violations > 0 )); then
+            echo "found ${violations} layer violation(s)"
+            exit 1
+          fi
+          echo "all backend layer boundaries respected"
+
+      - name: Verify frontend API client discipline
+        run: |
+          echo "checking that all API calls go through api/client.ts"
+          violations=0
+
+          # no direct axios imports outside api/
+          while IFS= read -r file; do
+            rel="${file#./}"
+            # skip the client itself and node_modules
+            [[ "$rel" == *"api/"* ]] && continue
+            [[ "$rel" == *"node_modules"* ]] && continue
+            echo "::error file=${rel}::direct axios import found outside api/ — use api/client.ts"
+            violations=$((violations + 1))
+          done < <(grep -rl "from ['\"]axios['\"]" frontend/src/ 2>/dev/null || true)
+
+          if (( violations > 0 )); then
+            echo "found ${violations} direct axios import(s)"
+            exit 1
+          fi
+          echo "all API calls go through client"

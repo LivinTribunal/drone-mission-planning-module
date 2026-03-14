@@ -1,0 +1,78 @@
+name: Project Smoke Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  harness-smoke:
+    name: Project Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check critical project files
+        run: |
+          files=(
+            backend/app/main.py
+            backend/requirements.txt
+            backend/pyproject.toml
+            frontend/package.json
+            frontend/tsconfig.json
+            frontend/vite.config.ts
+            docker-compose.yml
+          )
+          missing=0
+          for f in "${files[@]}"; do
+            if [[ ! -f "$f" ]]; then
+              echo "::error::Missing: $f"
+              ((missing++))
+            fi
+          done
+          if (( missing > 0 )); then exit 1; fi
+          echo "All ${#files[@]} critical files present"
+
+      - name: Check CI workflow files
+        run: |
+          workflows=(
+            .github/workflows/ci.yml
+            .github/workflows/structural-tests.yml
+            .github/workflows/harness-smoke.yml
+          )
+          missing=0
+          for f in "${workflows[@]}"; do
+            if [[ ! -f "$f" ]]; then
+              echo "::error::Missing workflow: $f"
+              ((missing++))
+            fi
+          done
+          if (( missing > 0 )); then exit 1; fi
+          echo "All ${#workflows[@]} workflow files present"
+
+      - name: Check PR template
+        run: |
+          if [[ -f .github/pull_request_template.md ]] || [[ -f .github/PULL_REQUEST_TEMPLATE.md ]]; then
+            echo "PR template present"
+          else
+            echo "::warning::No PR template found in .github/"
+          fi
+
+      - name: Check risk-policy-gate script
+        run: |
+          if [[ ! -f scripts/risk-policy-gate.sh ]]; then
+            echo "::error::scripts/risk-policy-gate.sh not found"
+            exit 1
+          fi
+          echo "Risk policy gate script present"
+
+      - name: Check structural-tests script
+        run: |
+          if [[ ! -f scripts/structural-tests.sh ]]; then
+            echo "::error::scripts/structural-tests.sh not found"
+            exit 1
+          fi
+          echo "Structural tests script present"

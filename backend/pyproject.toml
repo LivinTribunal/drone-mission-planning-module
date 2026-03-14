@@ -1,0 +1,16 @@
+[project]
+name = "tarmacview-backend"
+version = "0.1.0"
+description = "Drone Mission Planning Module for Airport Lighting Inspection"
+requires-python = ">=3.12"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

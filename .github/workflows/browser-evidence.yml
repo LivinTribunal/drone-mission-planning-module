@@ -1,0 +1,102 @@
+name: Browser Evidence
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/**/*.tsx'
+      - 'frontend/src/**/*.ts'
+      - 'frontend/src/**/*.css'
+      - 'frontend/public/**'
+      - 'frontend/index.html'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: browser-evidence-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    name: Capture Browser Evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Install Playwright browsers
+        run: cd frontend && npx playwright install --with-deps chromium
+
+      - name: Start dev server
+        run: cd frontend && npm run dev &
+        env:
+          CI: true
+
+      - name: Wait for dev server
+        run: npx wait-on http://localhost:5173 --timeout 30000
+
+      - name: Capture browser evidence
+        run: npx tsx scripts/harness-ui-capture-browser-evidence.ts --base-url http://localhost:5173
+
+      - name: Verify browser evidence
+        run: npx tsx scripts/harness-ui-verify-browser-evidence.ts
+
+      - name: Upload evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: browser-evidence
+          path: .harness/evidence/
+          retention-days: 14
+
+      - name: Post evidence summary
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ ! -f .harness/evidence/manifest.json ]]; then
+            BODY="### 🖥 Browser Evidence\n\n❌ No evidence manifest found — capture may have failed.\n\n<!-- browser-evidence-comment -->"
+          else
+            FLOW_COUNT=$(jq '.flows | length' .harness/evidence/manifest.json)
+            ERRORS=$(jq '[.flows[].consoleErrors | length] | add // 0' .harness/evidence/manifest.json)
+            SHA=$(jq -r '.headSha' .harness/evidence/manifest.json)
+            TIMESTAMP=$(jq -r '.capturedAt' .harness/evidence/manifest.json)
+
+            BODY="### 🖥 Browser Evidence\n\n"
+            BODY+="| Field | Value |\n|-------|-------|\n"
+            BODY+="| **Flows captured** | ${FLOW_COUNT} |\n"
+            BODY+="| **Console errors** | ${ERRORS} |\n"
+            BODY+="| **SHA** | \`${SHA:0:12}\` |\n"
+            BODY+="| **Captured at** | ${TIMESTAMP} |\n\n"
+
+            BODY+="<details><summary>Flow details</summary>\n\n"
+            BODY+=$(jq -r '.flows[] | "- **\(.name)**: \(.entrypoint) → \(.finalUrl) (\(.durationMs)ms)"' .harness/evidence/manifest.json | tr '\n' '\n')
+            BODY+="\n</details>\n\n<!-- browser-evidence-comment -->"
+          fi
+
+          # delete previous comment if exists
+          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+            --jq '.[] | select(.body | contains("<!-- browser-evidence-comment -->")) | .id' 2>/dev/null || true)
+
+          if [[ -n "$EXISTING" ]]; then
+            for CID in $EXISTING; do
+              gh api -X DELETE "repos/${{ github.repository }}/issues/comments/${CID}" 2>/dev/null || true
+            done
+          fi
+
+          gh pr comment "${{ github.event.pull_request.number }}" --body "$(echo -e "$BODY")"

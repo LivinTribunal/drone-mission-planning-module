@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: tarmacview-db
+    environment:
+      POSTGRES_DB: tarmacview
+      POSTGRES_USER: tarmacview
+      POSTGRES_PASSWORD: tarmacview
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

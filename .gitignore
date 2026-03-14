@@ -1,0 +1,51 @@
+# Python
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+*.pyo
+backend/.venv/
+backend/venv/
+*.egg-info/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.env
+
+# Logs
+*.log
+
+# Build artifacts
+.harness/
+
+# Local config
+CLAUDE.md
+KIRO.md
+CODEX.md
+harness.config.json
+.codefactory/
+.mcp.json
+OPSEC-Vibecoding-Guide.md
+OPERATIONS.md
+ISSUE-TRACKER.md
+docs/specs/*
+ISSUE-TRACKER-1403.md
+SPRINT.md
+NAMING-CONVENTIONS.md
+STARTUP.md

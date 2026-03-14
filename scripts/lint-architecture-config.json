@@ -1,0 +1,44 @@
+{
+  "srcRoot": "backend/app",
+  "layers": [
+    {
+      "name": "routes",
+      "patterns": ["backend/app/api/routes/**"],
+      "canDependOn": ["services", "schemas", "core"],
+      "modulePrefix": "app.api.routes"
+    },
+    {
+      "name": "services",
+      "patterns": ["backend/app/services/**"],
+      "canDependOn": ["models", "schemas", "core"],
+      "modulePrefix": "app.services"
+    },
+    {
+      "name": "models",
+      "patterns": ["backend/app/models/**"],
+      "canDependOn": ["core"],
+      "modulePrefix": "app.models"
+    },
+    {
+      "name": "schemas",
+      "patterns": ["backend/app/schemas/**"],
+      "canDependOn": [],
+      "modulePrefix": "app.schemas"
+    },
+    {
+      "name": "core",
+      "patterns": ["backend/app/core/**"],
+      "canDependOn": [],
+      "modulePrefix": "app.core"
+    }
+  ],
+  "ignorePatterns": [
+    "**/*.pyc",
+    "**/__pycache__/**",
+    "**/tests/**",
+    "**/test_*",
+    "**/conftest.py",
+    "**/migrations/**"
+  ],
+  "exemptComment": "arch-exempt"
+}
