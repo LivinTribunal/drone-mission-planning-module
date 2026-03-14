@@ -26,7 +26,7 @@ def seed_lkpr():
             airport_id=airport.id,
             identifier="06/24",
             surface_type="RUNWAY",
-            geometry=("SRID=4326;LINESTRINGZ(" "14.2436 50.1044 380, " "14.2764 50.0972 380)"),
+            geometry="SRID=4326;LINESTRINGZ(14.2436 50.1044 380, 14.2764 50.0972 380)",
             heading=243.0,
             length=3715.0,
             width=45.0,
