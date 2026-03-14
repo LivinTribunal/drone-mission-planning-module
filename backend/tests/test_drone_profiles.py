@@ -11,6 +11,7 @@ from app.main import app
 
 @pytest.fixture(scope="module")
 def db_engine():
+    """db engine for testing"""
     with PostgresContainer(
         image="postgis/postgis:16-3.4",
         username="test",
@@ -18,6 +19,7 @@ def db_engine():
         dbname="test",
     ) as pg:
         engine = create_engine(pg.get_connection_url())
+
         with engine.connect() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
             conn.commit()
@@ -29,6 +31,7 @@ def db_engine():
 
 @pytest.fixture(scope="module")
 def client(db_engine):
+    """client for testing"""
     TestSession = sessionmaker(bind=db_engine)
 
     def override_get_db():
@@ -43,6 +46,8 @@ def client(db_engine):
     app.dependency_overrides.clear()
 
 
+# Test Data
+# TODO: add more drone profiles
 DRONE_PAYLOAD = {
     "name": "DJI Matrice 300 RTK",
     "manufacturer": "DJI",
@@ -59,38 +64,45 @@ DRONE_PAYLOAD = {
 }
 
 
+# Tests
 def test_create_drone(client):
-    r = client.post("/api/v1/drone-profiles", json=DRONE_PAYLOAD)
-    assert r.status_code == 201
-    data = r.json()
+    """test create drone profile"""
+    response = client.post("/api/v1/drone-profiles", json=DRONE_PAYLOAD)
+    assert response.status_code == 201
+    data = response.json()
+
     assert data["name"] == "DJI Matrice 300 RTK"
     assert data["max_speed"] == 23.0
     assert data["camera_frame_rate"] == 30
 
 
 def test_list_drones(client):
-    r = client.get("/api/v1/drone-profiles")
-    assert r.status_code == 200
-    body = r.json()
+    """test list drone profiles"""
+    response = client.get("/api/v1/drone-profiles")
+    assert response.status_code == 200
+    body = response.json()
+
     assert body["meta"]["total"] >= 1
 
 
 def test_get_drone(client):
+    """test get drone profile"""
     drones = client.get("/api/v1/drone-profiles").json()["data"]
     drone_id = drones[0]["id"]
 
-    r = client.get(f"/api/v1/drone-profiles/{drone_id}")
-    assert r.status_code == 200
-    assert r.json()["manufacturer"] == "DJI"
+    response = client.get(f"/api/v1/drone-profiles/{drone_id}")
+    assert response.status_code == 200
+    assert response.json()["manufacturer"] == "DJI"
 
 
 def test_update_drone(client):
+    """test update drone profile"""
     drones = client.get("/api/v1/drone-profiles").json()["data"]
     drone_id = drones[0]["id"]
 
-    r = client.put(f"/api/v1/drone-profiles/{drone_id}", json={"max_speed": 25.0})
-    assert r.status_code == 200
-    assert r.json()["max_speed"] == 25.0
+    response = client.put(f"/api/v1/drone-profiles/{drone_id}", json={"max_speed": 25.0})
+    assert response.status_code == 200
+    assert response.json()["max_speed"] == 25.0
 
 
 def test_delete_drone(client):

@@ -22,6 +22,7 @@ def list_templates(
 ):
     """list inspection templates, optionally filtered by airport"""
     templates = template_service.list_templates(db, airport_id=airport_id)
+
     return {"data": templates, "meta": {"total": len(templates)}}
 
 
@@ -43,6 +44,7 @@ def update_template(
 ):
     """update inspection template"""
     data = body.model_dump(exclude_unset=True)
+
     return template_service.update_template(db, template_id, data)
 
 

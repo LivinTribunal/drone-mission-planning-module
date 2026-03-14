@@ -4,6 +4,8 @@ from pydantic import BaseModel
 
 
 class DroneProfileCreate(BaseModel):
+    """drone profile create schema"""
+
     name: str
     manufacturer: str | None = None
     model: str | None = None
@@ -19,6 +21,8 @@ class DroneProfileCreate(BaseModel):
 
 
 class DroneProfileUpdate(BaseModel):
+    """drone profile update schema"""
+
     name: str | None = None
     manufacturer: str | None = None
     model: str | None = None
@@ -34,6 +38,8 @@ class DroneProfileUpdate(BaseModel):
 
 
 class DroneProfileResponse(BaseModel):
+    """drone profile response schema"""
+
     id: UUID
     name: str
     manufacturer: str | None = None
@@ -52,5 +58,7 @@ class DroneProfileResponse(BaseModel):
 
 
 class DroneProfileListResponse(BaseModel):
+    """drone profile list response schema"""
+
     data: list[DroneProfileResponse]
     meta: dict

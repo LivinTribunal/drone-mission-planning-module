@@ -19,12 +19,15 @@ def _enrich(template: InspectionTemplate, db: Session) -> InspectionTemplate:
             insp_template_methods.c.template_id == template.id
         )
     ).fetchall()
-    template.methods = [r[0] for r in methods_rows]
+
+    template.methods = [row[0] for row in methods_rows]
     template.target_agl_ids = [agl.id for agl in template.targets]
+
     return template
 
 
 def _load_template(db: Session, template_id: UUID) -> InspectionTemplate:
+    """load template with eager-loaded relations"""
     template = (
         db.query(InspectionTemplate)
         .options(
@@ -34,12 +37,15 @@ def _load_template(db: Session, template_id: UUID) -> InspectionTemplate:
         .filter(InspectionTemplate.id == template_id)
         .first()
     )
+
     if not template:
         raise HTTPException(status_code=404, detail="template not found")
+
     return _enrich(template, db)
 
 
 def list_templates(db: Session, airport_id: UUID | None = None) -> list[InspectionTemplate]:
+    """list all inspection templates"""
     query = db.query(InspectionTemplate).options(
         joinedload(InspectionTemplate.default_config),
         joinedload(InspectionTemplate.targets),
@@ -49,14 +55,16 @@ def list_templates(db: Session, airport_id: UUID | None = None) -> list[Inspecti
         query = query.filter(InspectionTemplate.targets.any(AGL.surface.has(airport_id=airport_id)))
 
     templates = query.all()
-    return [_enrich(t, db) for t in templates]
+    return [_enrich(template, db) for template in templates]
 
 
 def get_template(db: Session, template_id: UUID) -> InspectionTemplate:
+    """get template by id"""
     return _load_template(db, template_id)
 
 
 def create_template(db: Session, data: dict) -> InspectionTemplate:
+    """create inspection template"""
     config_data = data.pop("default_config", None)
     target_ids = data.pop("target_agl_ids", [])
     methods = data.pop("methods", [])
@@ -89,12 +97,14 @@ def create_template(db: Session, data: dict) -> InspectionTemplate:
 
 
 def update_template(db: Session, template_id: UUID, data: dict) -> InspectionTemplate:
+    """update inspection template"""
     template = (
         db.query(InspectionTemplate)
         .options(joinedload(InspectionTemplate.targets))
         .filter(InspectionTemplate.id == template_id)
         .first()
     )
+
     if not template:
         raise HTTPException(status_code=404, detail="template not found")
 
@@ -122,6 +132,7 @@ def update_template(db: Session, template_id: UUID, data: dict) -> InspectionTem
 
 
 def delete_template(db: Session, template_id: UUID):
+    """delete inspection template"""
     template = (
         db.query(InspectionTemplate)
         .options(joinedload(InspectionTemplate.default_config))
@@ -133,6 +144,7 @@ def delete_template(db: Session, template_id: UUID):
 
     config = template.default_config
     db.delete(template)
+
     if config:
         db.delete(config)
 

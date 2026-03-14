@@ -5,6 +5,8 @@ from pydantic import BaseModel
 
 
 class InspectionConfigCreate(BaseModel):
+    """inspection config create schema"""
+
     altitude_offset: float | None = None
     speed_override: float | None = None
     measurement_density: int | None = None
@@ -13,6 +15,8 @@ class InspectionConfigCreate(BaseModel):
 
 
 class InspectionConfigResponse(BaseModel):
+    """inspection config response schema"""
+
     id: UUID
     altitude_offset: float | None = None
     speed_override: float | None = None
@@ -24,6 +28,8 @@ class InspectionConfigResponse(BaseModel):
 
 
 class InspectionTemplateCreate(BaseModel):
+    """inspection template create schema"""
+
     name: str
     description: str | None = None
     angular_tolerances: dict | None = None
@@ -34,6 +40,8 @@ class InspectionTemplateCreate(BaseModel):
 
 
 class InspectionTemplateUpdate(BaseModel):
+    """inspection template update schema"""
+
     name: str | None = None
     description: str | None = None
     angular_tolerances: dict | None = None
@@ -42,6 +50,8 @@ class InspectionTemplateUpdate(BaseModel):
 
 
 class InspectionTemplateResponse(BaseModel):
+    """inspection template response schema"""
+
     id: UUID
     name: str
     description: str | None = None
@@ -56,5 +66,7 @@ class InspectionTemplateResponse(BaseModel):
 
 
 class InspectionTemplateListResponse(BaseModel):
+    """inspection template list response schema"""
+
     data: list[InspectionTemplateResponse]
     meta: dict

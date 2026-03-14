@@ -19,6 +19,7 @@ router = APIRouter(prefix="/api/v1/drone-profiles", tags=["drone-profiles"])
 def list_drones(db: Session = Depends(get_db)):
     """list all drone profiles"""
     drones = drone_service.list_drones(db)
+
     return {"data": drones, "meta": {"total": len(drones)}}
 
 
@@ -38,6 +39,7 @@ def create_drone(body: DroneProfileCreate, db: Session = Depends(get_db)):
 def update_drone(drone_id: UUID, body: DroneProfileUpdate, db: Session = Depends(get_db)):
     """update drone profile"""
     data = body.model_dump(exclude_unset=True)
+
     return drone_service.update_drone(db, drone_id, data)
 
 
@@ -45,4 +47,5 @@ def update_drone(drone_id: UUID, body: DroneProfileUpdate, db: Session = Depends
 def delete_drone(drone_id: UUID, db: Session = Depends(get_db)):
     """delete drone profile - returns warnings if missions use it"""
     warnings = drone_service.delete_drone(db, drone_id)
+
     return {"deleted": True, "warnings": warnings}
