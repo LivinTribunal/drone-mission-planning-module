@@ -1,11 +1,21 @@
-import json
+from pydantic import BaseModel
 
-from sqlalchemy import func
+# all geometry column names across the project
+GEOM_FIELDS = {
+    "location",
+    "geometry",
+    "position",
+    "threshold_position",
+    "end_position",
+    "takeoff_coordinate",
+    "landing_coordinate",
+    "camera_target",
+    "boundary",
+}
 
 
-# helper functions for geometry
 def geojson_to_ewkt(geojson: dict) -> str:
-    """convert a geojson to an ewkt"""
+    """convert GeoJSON dict to EWKT string"""
     coords = geojson["coordinates"]
     geom_type = geojson["type"]
 
@@ -28,13 +38,25 @@ def geojson_to_ewkt(geojson: dict) -> str:
     raise ValueError(f"unsupported geometry type: {geom_type}")
 
 
-def wkb_to_geojson(wkb_element, db) -> dict | None:
-    """convert a wkb to a geojson"""
-    if wkb_element is None:
-        return None
+def schema_to_model_data(schema: BaseModel) -> dict:
+    """convert pydantic schema to dict with geometry fields as EWKT"""
+    data = schema.model_dump()
+    for key in GEOM_FIELDS & data.keys():
+        if data[key] is not None:
+            data[key] = geojson_to_ewkt(data[key])
 
-    result = db.execute(func.ST_AsGeoJSON(wkb_element)).scalar()
-    if result is None:
-        return None
+    return data
 
-    return json.loads(result)
+
+def apply_schema_update(obj, schema: BaseModel):
+    """apply pydantic update schema to ORM model, converting geometry to EWKT"""
+    apply_dict_update(obj, schema.model_dump(exclude_unset=True))
+
+
+def apply_dict_update(obj, data: dict):
+    """apply dict to ORM model, converting geometry fields to EWKT"""
+    for key, val in data.items():
+        if key in GEOM_FIELDS and val is not None:
+            setattr(obj, key, geojson_to_ewkt(val))
+        else:
+            setattr(obj, key, val)

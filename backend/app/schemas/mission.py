@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
 
 
@@ -49,6 +50,12 @@ class ReorderRequest(BaseModel):
     """reorder inspections by sequence"""
 
     inspection_ids: list[UUID]
+
+
+class ReorderResponse(BaseModel):
+    """reorder response"""
+
+    reordered: bool
 
 
 class MissionCreate(BaseModel):
@@ -106,4 +113,4 @@ class MissionListResponse(BaseModel):
     """mission list response"""
 
     data: list[MissionResponse]
-    meta: dict
+    meta: ListMeta

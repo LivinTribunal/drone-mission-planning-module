@@ -2,6 +2,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.common import ListMeta
+
 
 class DroneProfileCreate(BaseModel):
     """drone profile create schema"""
@@ -61,4 +63,4 @@ class DroneProfileListResponse(BaseModel):
     """drone profile list response schema"""
 
     data: list[DroneProfileResponse]
-    meta: dict
+    meta: ListMeta

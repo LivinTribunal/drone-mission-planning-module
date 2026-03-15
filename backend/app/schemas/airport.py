@@ -2,6 +2,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
 from app.schemas.infrastructure import (
     ObstacleResponse,
@@ -51,4 +52,4 @@ class AirportListResponse(BaseModel):
     """airport list response schema"""
 
     data: list[AirportResponse]
-    meta: dict
+    meta: ListMeta
