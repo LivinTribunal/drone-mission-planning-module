@@ -206,10 +206,7 @@ def _check_speed_framerate(speed, drone) -> str | None:
     if not drone.camera_frame_rate:
         return None
     if drone.max_speed and speed > drone.max_speed * 0.8:
-        return (
-            f"speed {speed:.1f} m/s may be too high for "
-            f"frame rate {drone.camera_frame_rate} fps"
-        )
+        return f"speed {speed:.1f} m/s may be too high for frame rate {drone.camera_frame_rate} fps"
 
     return None
 

@@ -75,8 +75,7 @@ def check_drone_constraints(wp, drone: DroneProfile) -> dict | None:
         return {
             "is_warning": False,
             "message": (
-                f"waypoint alt {wp.alt:.0f}m exceeds drone max "
-                f"altitude {drone.max_altitude:.0f}m"
+                f"waypoint alt {wp.alt:.0f}m exceeds drone max altitude {drone.max_altitude:.0f}m"
             ),
             "constraint_id": None,
         }
@@ -271,7 +270,7 @@ def _check_constraint(
         if constraint.max_horizontal_speed and wp.speed > constraint.max_horizontal_speed:
             return _violation(
                 constraint,
-                f"speed {wp.speed:.1f} exceeds max " f"{constraint.max_horizontal_speed:.1f} m/s",
+                f"speed {wp.speed:.1f} exceeds max {constraint.max_horizontal_speed:.1f} m/s",
             )
 
     if ctype == "GEOFENCE" and constraint.boundary:
@@ -329,7 +328,7 @@ def _check_runway_buffer(
         if too_close:
             return _violation(
                 constraint,
-                f"waypoint within {buffer_m:.0f}m of runway " f"{surface.identifier}",
+                f"waypoint within {buffer_m:.0f}m of runway {surface.identifier}",
             )
 
     return None
