@@ -20,6 +20,23 @@ from app.services.safety_validator import (
     validate_inspection_pass,
 )
 from app.services.trajectory_types import (
+    DEFAULT_GLIDE_SLOPE,
+    DEFAULT_HEADING,
+    DEFAULT_HORIZONTAL_DISTANCE,
+    DEFAULT_OBSTACLE_RADIUS,
+    DEFAULT_RESERVE_MARGIN,
+    DEFAULT_SPEED,
+    DEFAULT_SWEEP_ANGLE,
+    HOVER_ANGLE_TOLERANCE,
+    MAX_ELEVATION_ANGLE,
+    MAX_REROUTE_DEVIATION,
+    MAX_TURN_ANGLE,
+    MIN_ARC_RADIUS,
+    MIN_ELEVATION_ANGLE,
+    MIN_LHA_FOR_FOV_CHECK,
+    NORTH_BEARING,
+    REROUTE_SEARCH_RADIUS_MULTIPLIER,
+    SPEED_FRAMERATE_MARGIN,
     Degrees,
     InspectionPass,
     Meters,
@@ -39,32 +56,6 @@ from app.utils.geo import (
     point_at_distance,
     total_path_distance,
 )
-
-# TODO: move these defaults outside this file
-# trajectory defaults
-MIN_ARC_RADIUS = 350.0
-DEFAULT_SWEEP_ANGLE = 15.0  # degrees each side of centerline (ZEPHYR manual)
-DEFAULT_HORIZONTAL_DISTANCE = 400.0
-MIN_ELEVATION_ANGLE = 1.9
-MAX_ELEVATION_ANGLE = 6.5
-DEFAULT_RESERVE_MARGIN = 0.15
-HOVER_ANGLE_TOLERANCE = 0.05  # 3 arc minutes per ZEPHYR spec
-DEFAULT_SPEED = 5.0
-DEFAULT_GLIDE_SLOPE = 3.0
-DEFAULT_HEADING = 0.0
-
-# speed/sensor checks
-SPEED_FRAMERATE_MARGIN = 0.8
-MIN_LHA_FOR_FOV_CHECK = 2
-NORTH_BEARING = 0.0
-
-# obstacle rerouting
-REROUTE_MARGIN = 1.2
-DEFAULT_OBSTACLE_RADIUS = 15.0
-REROUTE_DISTANCE_TOLERANCE = 0.1
-REROUTE_SEARCH_RADIUS_MULTIPLIER = 3.0
-MAX_REROUTE_DEVIATION = 0.15
-MAX_TURN_ANGLE = 60.0
 
 # config fields that can be overridden per-inspection
 CONFIG_FIELDS = (
@@ -254,7 +245,6 @@ def _check_sensor_fov(drone, lha_positions: list[Point3D], distance: Meters) -> 
 
 
 # phase 3 - trajectory computation (section 3.3.9 interface)
-# TODO: add switch instead of ifs
 def determine_start_position(
     center: Point3D,
     config: ResolvedConfig,
@@ -263,25 +253,25 @@ def determine_start_position(
     glide_slope: Degrees,
 ) -> Point3D:
     """compute start position of inspection pass"""
-    if method == InspectionMethod.ANGULAR_SWEEP:
-        radius = config.horizontal_distance or MIN_ARC_RADIUS
-        half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
-        angle = runway_heading - half_sweep
-        lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
-        alt = center.alt + radius * math.tan(math.radians(glide_slope))
+    match method:
+        case InspectionMethod.ANGULAR_SWEEP:
+            radius = config.horizontal_distance or MIN_ARC_RADIUS
+            half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+            angle = runway_heading - half_sweep
+            lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
+            alt = center.alt + radius * math.tan(math.radians(glide_slope))
 
-        return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
+            return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
-    # vertical profile
-    distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
-    approach_heading = (runway_heading + 180) % 360
-    lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
-    alt = center.alt + distance * math.tan(math.radians(MIN_ELEVATION_ANGLE))
+        case _:
+            distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
+            approach = (runway_heading + 180) % 360
+            lon, lat = point_at_distance(center.lon, center.lat, approach, distance)
+            alt = center.alt + distance * math.tan(math.radians(MIN_ELEVATION_ANGLE))
 
-    return Point3D(lon=lon, lat=lat, alt=alt)
+            return Point3D(lon=lon, lat=lat, alt=alt)
 
 
-# TODO: add switch instead of ifs
 def determine_end_position(
     center: Point3D,
     config: ResolvedConfig,
@@ -290,22 +280,23 @@ def determine_end_position(
     glide_slope: Degrees,
 ) -> Point3D:
     """compute end position of inspection pass"""
-    if method == InspectionMethod.ANGULAR_SWEEP:
-        radius = config.horizontal_distance or MIN_ARC_RADIUS
-        half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
-        angle = runway_heading + half_sweep
-        lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
-        alt = center.alt + radius * math.tan(math.radians(glide_slope))
+    match method:
+        case InspectionMethod.ANGULAR_SWEEP:
+            radius = config.horizontal_distance or MIN_ARC_RADIUS
+            half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+            angle = runway_heading + half_sweep
+            lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
+            alt = center.alt + radius * math.tan(math.radians(glide_slope))
 
-        return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
+            return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
-    # vertical profile
-    distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
-    approach_heading = (runway_heading + 180) % 360
-    lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
-    alt = center.alt + distance * math.tan(math.radians(MAX_ELEVATION_ANGLE))
+        case _:
+            distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
+            approach = (runway_heading + 180) % 360
+            lon, lat = point_at_distance(center.lon, center.lat, approach, distance)
+            alt = center.alt + distance * math.tan(math.radians(MAX_ELEVATION_ANGLE))
 
-    return Point3D(lon=lon, lat=lat, alt=alt)
+            return Point3D(lon=lon, lat=lat, alt=alt)
 
 
 def calculate_arc_path(
@@ -474,6 +465,7 @@ def _collect_nearby_objects(
     for zone in zones:
         if not zone.geometry or zone.type not in HARD_ZONE_TYPES:
             continue
+
         # approximate zone distance by checking if zone center is within range
         verts = _extract_polygon_vertices(zone.geometry.data)
         if verts:
@@ -585,7 +577,11 @@ def _max_turn_angle(waypoints: list[WaypointData]) -> Degrees:
 
 
 # phase 3 - A* inspection rerouting (section 3.3.5)
-def reroute_measurement_pass(
+# A* transit finds any shortest obstacle-free path, but measurement waypoints
+# must be at specific positions for camera accuracy. this function finds
+# alternative positions that still preserve measurement geometry (distance
+# to center, line-of-sight to PAPI, max turn angle).
+def resolve_inspection_collisions(
     db: Session,
     waypoints: list[WaypointData],
     obstacles: list[Obstacle],
@@ -828,6 +824,13 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             speed = config.speed_override
         elif optimal_speed:
             speed = optimal_speed
+            # save computed speed back to config so the operator can see it
+            if inspection.config:
+                inspection.config.speed_override = optimal_speed
+            warnings.append(
+                f"inspection {inspection.id}: speed auto-set to "
+                f"{optimal_speed:.1f} m/s based on path geometry and frame rate"
+            )
         else:
             speed = default_speed
 
@@ -858,7 +861,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         ]
 
         if obstacle_violations:
-            pass_wps = reroute_measurement_pass(
+            pass_wps = resolve_inspection_collisions(
                 db, pass_wps, data.obstacles, data.safety_zones, center
             )
 

@@ -14,6 +14,31 @@ MetersPerSecond = float
 Meters = float
 Seconds = float
 
+# trajectory defaults
+MIN_ARC_RADIUS: Meters = 350.0
+DEFAULT_SWEEP_ANGLE: Degrees = 15.0  # degrees each side of centerline (ZEPHYR manual)
+DEFAULT_HORIZONTAL_DISTANCE: Meters = 400.0
+MIN_ELEVATION_ANGLE: Degrees = 1.9
+MAX_ELEVATION_ANGLE: Degrees = 6.5
+DEFAULT_RESERVE_MARGIN = 0.15
+HOVER_ANGLE_TOLERANCE: Degrees = 0.05  # 3 arc minutes per ZEPHYR spec
+DEFAULT_SPEED: MetersPerSecond = 5.0
+DEFAULT_GLIDE_SLOPE: Degrees = 3.0
+DEFAULT_HEADING: Degrees = 0.0
+
+# speed/sensor checks
+SPEED_FRAMERATE_MARGIN = 0.8
+MIN_LHA_FOR_FOV_CHECK = 2
+NORTH_BEARING: Degrees = 0.0
+
+# obstacle rerouting
+REROUTE_MARGIN = 1.2
+DEFAULT_OBSTACLE_RADIUS: Meters = 15.0
+REROUTE_DISTANCE_TOLERANCE = 0.1
+REROUTE_SEARCH_RADIUS_MULTIPLIER = 3.0
+MAX_REROUTE_DEVIATION = 0.15
+MAX_TURN_ANGLE: Degrees = 60.0
+
 
 @dataclass
 class Point3D:
