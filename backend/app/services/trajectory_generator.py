@@ -183,6 +183,33 @@ def _get_runway_heading(template: InspectionTemplate, surfaces: list[AirfieldSur
     return DEFAULT_HEADING
 
 
+def compute_optimal_density(
+    method: InspectionMethod,
+    setting_angles: list[Degrees],
+    config: ResolvedConfig,
+) -> int | None:
+    """compute minimum density to capture all transition angles.
+    for vertical profiles: step must be <= 2 * HOVER_ANGLE_TOLERANCE
+    so every setting angle has at least one waypoint within tolerance.
+    for arc sweeps: at least one point per degree of sweep."""
+    if method == InspectionMethod.VERTICAL_PROFILE and setting_angles:
+        angular_range = MAX_ELEVATION_ANGLE - MIN_ELEVATION_ANGLE
+        # step must be small enough to land within tolerance of each angle
+        max_step = 2 * HOVER_ANGLE_TOLERANCE
+        optimal = math.ceil(angular_range / max_step) + 1
+
+        return optimal
+
+    if method == InspectionMethod.ANGULAR_SWEEP:
+        half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+        # at least one point per degree of sweep
+        optimal = math.ceil(2 * half_sweep) + 1
+
+        return optimal
+
+    return None
+
+
 def compute_optimal_speed(
     path_distance: Meters,
     density: int,
@@ -812,6 +839,17 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         glide_slope = _get_glide_slope_angle(template)
         rwy_heading = _get_runway_heading(template, data.surfaces)
         setting_angles = _get_lha_setting_angles(template)
+
+        # compute optimal density if not overridden
+        optimal_density = compute_optimal_density(inspection.method, setting_angles, config)
+        if optimal_density and config.measurement_density < optimal_density:
+            config.measurement_density = optimal_density
+            if inspection.config:
+                inspection.config.measurement_density = optimal_density
+            warnings.append(
+                f"inspection {inspection.id}: density auto-set to "
+                f"{optimal_density} to capture all transition angles"
+            )
 
         # compute optimal speed from path geometry and camera frame rate
         start_pos = determine_start_position(

@@ -179,8 +179,9 @@ def test_vertical_path_hover_at_transitions():
     """HOVER waypoints inserted at LHA setting angle boundaries"""
     from app.services.trajectory_generator import calculate_vertical_path
 
-    # density=100 ensures step=0.046 degrees - within 0.05 HOVER_ANGLE_TOLERANCE
-    config = ResolvedConfig(measurement_density=100, hover_duration=5.0)
+    # optimal density for 0.05 tolerance over 4.6 range = ceil(4.6/0.1)+1 = 47
+    # use 50 to be safe
+    config = ResolvedConfig(measurement_density=50, hover_duration=5.0)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
     setting_angles = [3.0, 3.5, 4.0, 4.5]
 
@@ -379,6 +380,34 @@ def test_point3d_roundtrip():
 
     assert p.to_tuple() == (14.26, 50.10, 380.0)
     assert Point3D.from_tuple(p.to_tuple()) == p
+
+
+# optimal density tests
+def test_compute_optimal_density_vertical():
+    """optimal density for vertical profile covers all transition angles"""
+    from app.services.trajectory_generator import compute_optimal_density
+
+    config = ResolvedConfig()
+    setting_angles = [3.0, 3.5, 4.0, 4.5]
+
+    density = compute_optimal_density(InspectionMethod.VERTICAL_PROFILE, setting_angles, config)
+
+    assert density is not None
+    # 4.6 range / (2 * 0.05 tolerance) + 1 = 47
+    assert density >= 47
+
+
+def test_compute_optimal_density_arc():
+    """optimal density for arc provides at least one point per degree"""
+    from app.services.trajectory_generator import compute_optimal_density
+
+    config = ResolvedConfig()
+
+    density = compute_optimal_density(InspectionMethod.ANGULAR_SWEEP, [], config)
+
+    assert density is not None
+    # 2 * 15 degrees + 1 = 31
+    assert density >= 31
 
 
 # full pipeline e2e test
