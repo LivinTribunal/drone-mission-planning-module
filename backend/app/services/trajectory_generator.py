@@ -11,6 +11,7 @@ from app.models.flight_plan import ConstraintRule
 from app.models.inspection import Inspection, InspectionTemplate
 from app.models.mission import DroneProfile, Mission
 from app.schemas.geometry import parse_ewkb
+from app.services.flight_plan_service import persist_flight_plan
 from app.services.safety_validator import (
     check_battery,
     check_obstacle,
@@ -874,8 +875,6 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple:
 
         if all_waypoints[j].hover_duration:
             total_dur += all_waypoints[j].hover_duration
-
-    from app.services.flight_plan_service import persist_flight_plan
 
     flight_plan = persist_flight_plan(
         db,
