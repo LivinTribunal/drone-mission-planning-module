@@ -20,7 +20,10 @@ from app.services.safety_validator import (
     validate_inspection_pass,
 )
 from app.services.trajectory_types import (
+    Degrees,
     InspectionPass,
+    Meters,
+    MetersPerSecond,
     MissionData,
     Point3D,
     ResolvedConfig,
@@ -37,6 +40,7 @@ from app.utils.geo import (
     total_path_distance,
 )
 
+# TODO: move these defaults outside this file
 # trajectory defaults
 MIN_ARC_RADIUS = 350.0
 DEFAULT_SWEEP_ANGLE = 15.0  # degrees each side of centerline (ZEPHYR manual)
@@ -160,7 +164,7 @@ def _get_lha_positions(template) -> list[Point3D]:
     return positions
 
 
-def _get_lha_setting_angles(template) -> list[float]:
+def _get_lha_setting_angles(template) -> list[Degrees]:
     angles = []
     for agl in template.targets:
         for lha in agl.lhas:
@@ -170,7 +174,7 @@ def _get_lha_setting_angles(template) -> list[float]:
     return sorted(angles)
 
 
-def _get_glide_slope_angle(template) -> float:
+def _get_glide_slope_angle(template) -> Degrees:
     for agl in template.targets:
         if agl.glide_slope_angle:
             return agl.glide_slope_angle
@@ -178,7 +182,7 @@ def _get_glide_slope_angle(template) -> float:
     return DEFAULT_GLIDE_SLOPE
 
 
-def _get_runway_heading(template, surfaces) -> float:
+def _get_runway_heading(template, surfaces) -> Degrees:
     for agl in template.targets:
         for surface in surfaces:
             if surface.id == agl.surface_id and surface.heading:
@@ -187,7 +191,7 @@ def _get_runway_heading(template, surfaces) -> float:
     return DEFAULT_HEADING
 
 
-def _check_speed_framerate(speed: float, drone) -> str | None:
+def _check_speed_framerate(speed: MetersPerSecond, drone) -> str | None:
     """isSpeedCompatibleWithFrameRate - section 3.3.4"""
     if not drone.camera_frame_rate:
         return None
@@ -198,7 +202,7 @@ def _check_speed_framerate(speed: float, drone) -> str | None:
     return None
 
 
-def _check_sensor_fov(drone, lha_positions: list[Point3D], distance: float) -> str | None:
+def _check_sensor_fov(drone, lha_positions: list[Point3D], distance: Meters) -> str | None:
     """checkSensorFOV - verify camera covers all LHA units at distance"""
     if not drone.sensor_fov or len(lha_positions) < MIN_LHA_FOR_FOV_CHECK:
         return None
@@ -222,63 +226,61 @@ def determine_start_position(
     center: Point3D,
     config: ResolvedConfig,
     method: InspectionMethod,
-    runway_heading: float,
-    glide_slope: float,
+    runway_heading: Degrees,
+    glide_slope: Degrees,
 ) -> Point3D:
     """compute start position of inspection pass"""
-    match method:
-        case InspectionMethod.ANGULAR_SWEEP:
-            radius = config.horizontal_distance or MIN_ARC_RADIUS
-            half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
-            angle = runway_heading - half_sweep
-            lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
-            alt = center.alt + radius * math.tan(math.radians(glide_slope))
+    if method == InspectionMethod.ANGULAR_SWEEP:
+        radius = config.horizontal_distance or MIN_ARC_RADIUS
+        half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+        angle = runway_heading - half_sweep
+        lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
+        alt = center.alt + radius * math.tan(math.radians(glide_slope))
 
-            return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
+        return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
-        case _:
-            distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
-            approach_heading = (runway_heading + 180) % 360
-            lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
-            alt = center.alt + distance * math.tan(math.radians(MIN_ELEVATION_ANGLE))
+    # vertical profile
+    distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
+    approach_heading = (runway_heading + 180) % 360
+    lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
+    alt = center.alt + distance * math.tan(math.radians(MIN_ELEVATION_ANGLE))
 
-            return Point3D(lon=lon, lat=lat, alt=alt)
+    return Point3D(lon=lon, lat=lat, alt=alt)
 
 
 def determine_end_position(
     center: Point3D,
     config: ResolvedConfig,
     method: InspectionMethod,
-    runway_heading: float,
-    glide_slope: float,
+    runway_heading: Degrees,
+    glide_slope: Degrees,
 ) -> Point3D:
     """compute end position of inspection pass"""
-    match method:
-        case InspectionMethod.ANGULAR_SWEEP:
-            radius = config.horizontal_distance or MIN_ARC_RADIUS
-            half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
-            angle = runway_heading + half_sweep
-            lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
-            alt = center.alt + radius * math.tan(math.radians(glide_slope))
+    if method == InspectionMethod.ANGULAR_SWEEP:
+        radius = config.horizontal_distance or MIN_ARC_RADIUS
+        half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+        angle = runway_heading + half_sweep
+        lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
+        alt = center.alt + radius * math.tan(math.radians(glide_slope))
 
-            return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
+        return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
-        case _:
-            distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
-            approach_heading = (runway_heading + 180) % 360
-            lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
-            alt = center.alt + distance * math.tan(math.radians(MAX_ELEVATION_ANGLE))
+    # vertical profile
+    distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
+    approach_heading = (runway_heading + 180) % 360
+    lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
+    alt = center.alt + distance * math.tan(math.radians(MAX_ELEVATION_ANGLE))
 
-            return Point3D(lon=lon, lat=lat, alt=alt)
+    return Point3D(lon=lon, lat=lat, alt=alt)
 
 
 def calculate_arc_path(
     center: Point3D,
-    runway_heading: float,
-    glide_slope_angle: float,
+    runway_heading: Degrees,
+    glide_slope_angle: Degrees,
     config: ResolvedConfig,
     inspection_id: UUID | None,
-    speed: float,
+    speed: MetersPerSecond,
 ) -> list[WaypointData]:
     """equation 3.1 - angular sweep arc path"""
     density = config.measurement_density
@@ -323,11 +325,11 @@ def calculate_arc_path(
 
 def calculate_vertical_path(
     center: Point3D,
-    runway_heading: float,
+    runway_heading: Degrees,
     config: ResolvedConfig,
     inspection_id: UUID | None,
-    speed: float,
-    setting_angles: list[float],
+    speed: MetersPerSecond,
+    setting_angles: list[Degrees],
 ) -> list[WaypointData]:
     """equation 3.2 - vertical profile with HOVER at transition angles"""
     density = config.measurement_density
@@ -382,23 +384,21 @@ def compute_measurement_trajectory(
     inspection,
     config: ResolvedConfig,
     center: Point3D,
-    runway_heading: float,
-    glide_slope: float,
-    speed: float,
-    setting_angles: list[float],
+    runway_heading: Degrees,
+    glide_slope: Degrees,
+    speed: MetersPerSecond,
+    setting_angles: list[Degrees],
 ) -> list[WaypointData]:
     """computeTrajectory - section 3.3.9"""
-    match inspection.method:
-        case InspectionMethod.ANGULAR_SWEEP:
-            return calculate_arc_path(
-                center, runway_heading, glide_slope, config, inspection.id, speed
-            )
-        case InspectionMethod.VERTICAL_PROFILE:
-            return calculate_vertical_path(
-                center, runway_heading, config, inspection.id, speed, setting_angles
-            )
-        case _:
-            return []
+    if inspection.method == InspectionMethod.ANGULAR_SWEEP:
+        return calculate_arc_path(center, runway_heading, glide_slope, config, inspection.id, speed)
+
+    if inspection.method == InspectionMethod.VERTICAL_PROFILE:
+        return calculate_vertical_path(
+            center, runway_heading, config, inspection.id, speed, setting_angles
+        )
+
+    return []
 
 
 # phase 3 - A* obstacle rerouting (section 3.3.5)
@@ -429,7 +429,7 @@ def _nearby_obstacles(
     return nearby
 
 
-def _max_turn_angle(waypoints: list[WaypointData]) -> float:
+def _max_turn_angle(waypoints: list[WaypointData]) -> Degrees:
     """compute maximum turn angle between consecutive waypoint headings"""
     max_angle = 0.0
     for i in range(1, len(waypoints)):
@@ -449,6 +449,7 @@ def reroute_measurement_pass(
 ) -> list[WaypointData]:
     """A*-based rerouting around obstacles while preserving measurement geometry"""
     # find which waypoints collide with obstacles
+    # TODO: this should be helper function
     collisions = [False] * len(waypoints)
     for i, wp in enumerate(waypoints):
         for obs in obstacles:
@@ -643,7 +644,7 @@ def compute_transit_path(
     to_point: Point3D,
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
-    speed: float,
+    speed: MetersPerSecond,
 ) -> list[WaypointData]:
     """A* pathfinding on visibility graph - section 3.3.7"""
     # straight-line if path is clear

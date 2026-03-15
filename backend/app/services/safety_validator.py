@@ -253,45 +253,45 @@ def _check_constraint(
     constraint: ConstraintRule,
     surfaces: list[AirfieldSurface],
 ) -> dict | None:
-    match constraint.constraint_type:
-        case "ALTITUDE":
-            if constraint.min_altitude and wp.alt < constraint.min_altitude:
-                return _violation(
-                    constraint,
-                    f"alt {wp.alt:.0f}m below min {constraint.min_altitude:.0f}m",
-                )
-            if constraint.max_altitude and wp.alt > constraint.max_altitude:
-                return _violation(
-                    constraint,
-                    f"alt {wp.alt:.0f}m above max {constraint.max_altitude:.0f}m",
-                )
+    ctype = constraint.constraint_type
 
-        case "SPEED":
-            if constraint.max_horizontal_speed and wp.speed > constraint.max_horizontal_speed:
-                return _violation(
-                    constraint,
-                    f"speed {wp.speed:.1f} exceeds max {constraint.max_horizontal_speed:.1f} m/s",
-                )
+    if ctype == "ALTITUDE":
+        if constraint.min_altitude and wp.alt < constraint.min_altitude:
+            return _violation(
+                constraint,
+                f"alt {wp.alt:.0f}m below min {constraint.min_altitude:.0f}m",
+            )
+        if constraint.max_altitude and wp.alt > constraint.max_altitude:
+            return _violation(
+                constraint,
+                f"alt {wp.alt:.0f}m above max {constraint.max_altitude:.0f}m",
+            )
 
-        case "GEOFENCE":
-            if constraint.boundary:
-                wp_ewkt = _wp_to_ewkt(wp)
-                contained = db.execute(
-                    text(
-                        "SELECT ST_Contains("
-                        "ST_Force2D(:boundary::geometry), "
-                        "ST_Force2D(ST_GeomFromEWKT(:point)))"
-                    ),
-                    {"boundary": constraint.boundary, "point": wp_ewkt},
-                ).scalar()
+    elif ctype == "SPEED":
+        if constraint.max_horizontal_speed and wp.speed > constraint.max_horizontal_speed:
+            return _violation(
+                constraint,
+                f"speed {wp.speed:.1f} exceeds max {constraint.max_horizontal_speed:.1f} m/s",
+            )
 
-                if not contained:
-                    return _violation(constraint, "waypoint outside geofence boundary")
+    elif ctype == "GEOFENCE" and constraint.boundary:
+        wp_ewkt = _wp_to_ewkt(wp)
+        contained = db.execute(
+            text(
+                "SELECT ST_Contains("
+                "ST_Force2D(:boundary::geometry), "
+                "ST_Force2D(ST_GeomFromEWKT(:point)))"
+            ),
+            {"boundary": constraint.boundary, "point": wp_ewkt},
+        ).scalar()
 
-        case "RUNWAY_BUFFER":
-            v = _check_runway_buffer(db, wp, constraint, surfaces)
-            if v:
-                return v
+        if not contained:
+            return _violation(constraint, "waypoint outside geofence boundary")
+
+    elif ctype == "RUNWAY_BUFFER":
+        v = _check_runway_buffer(db, wp, constraint, surfaces)
+        if v:
+            return v
 
     return None
 

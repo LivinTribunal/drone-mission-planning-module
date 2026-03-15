@@ -8,6 +8,12 @@ from app.models.enums import CameraAction, WaypointType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile, Mission
 
+# type aliases for domain-specific floats
+Degrees = float
+MetersPerSecond = float
+Meters = float
+Seconds = float
+
 
 @dataclass
 class Point3D:
@@ -15,7 +21,7 @@ class Point3D:
 
     lon: float
     lat: float
-    alt: float
+    alt: Meters
 
     def to_tuple(self) -> tuple[float, float, float]:
         return (self.lon, self.lat, self.alt)
@@ -29,14 +35,14 @@ class Point3D:
 class ResolvedConfig:
     """merged inspection config: operator override > template default > hardcoded"""
 
-    altitude_offset: float = 0.0
-    speed_override: float | None = None
+    altitude_offset: Meters = 0.0
+    speed_override: MetersPerSecond | None = None
     measurement_density: int = 8
     custom_tolerances: dict | None = None
     density: float | None = None
-    hover_duration: float | None = None
-    horizontal_distance: float | None = None
-    sweep_angle: float | None = None
+    hover_duration: Seconds | None = None
+    horizontal_distance: Meters | None = None
+    sweep_angle: Degrees | None = None
 
 
 @dataclass
@@ -45,15 +51,15 @@ class WaypointData:
 
     lon: float
     lat: float
-    alt: float
-    heading: float = 0.0
-    speed: float = 5.0
+    alt: Meters
+    heading: Degrees = 0.0
+    speed: MetersPerSecond = 5.0
     waypoint_type: WaypointType = WaypointType.MEASUREMENT
     camera_action: CameraAction = CameraAction.PHOTO_CAPTURE
     camera_target: Point3D | None = None
     inspection_id: UUID | None = None
-    hover_duration: float | None = None
-    gimbal_pitch: float | None = None
+    hover_duration: Seconds | None = None
+    gimbal_pitch: Degrees | None = None
 
 
 @dataclass
@@ -78,4 +84,4 @@ class MissionData:
     safety_zones: list[SafetyZone]
     surfaces: list[AirfieldSurface]
     constraints: list[ConstraintRule]
-    default_speed: float
+    default_speed: MetersPerSecond
