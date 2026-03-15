@@ -1,8 +1,7 @@
 from app.services.trajectory_generator import WaypointData
 
+
 # altitude constraint
-
-
 def test_altitude_above_max():
     """altitude above max should produce hard violation"""
     from app.services.safety_validator import _check_constraint
@@ -53,8 +52,6 @@ def test_altitude_below_min():
 
 
 # speed constraint
-
-
 def test_speed_exceeds_max():
     """speed exceeding max should produce violation"""
     from app.services.safety_validator import _check_constraint
@@ -80,8 +77,6 @@ def test_speed_exceeds_max():
 
 
 # drone constraints
-
-
 def test_drone_max_altitude():
     """waypoint above drone max altitude should produce hard violation"""
     from app.services.safety_validator import check_drone_constraints
@@ -124,8 +119,6 @@ def test_drone_within_limits():
 
 
 # battery check
-
-
 def test_battery_exceeded():
     """flight time exceeding battery should produce soft warning"""
     from app.services.safety_validator import check_battery
@@ -151,8 +144,6 @@ def test_battery_ok():
 
 
 # safety zone
-
-
 def test_safety_zone_no_geometry():
     """zone with no geometry should return None"""
     from app.services.safety_validator import check_safety_zone

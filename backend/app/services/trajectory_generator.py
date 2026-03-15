@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.agl import AGL
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
-from app.models.flight_plan import ConstraintRule
+from app.models.flight_plan import ConstraintRule, FlightPlan
 from app.models.inspection import (
     Inspection,
     InspectionTemplate,
 )
 from app.models.mission import DroneProfile, Mission
 from app.schemas.geometry import parse_ewkb
+from app.services.flight_plan_service import persist_flight_plan
 from app.services.safety_validator import check_battery, validate_inspection_pass
 from app.utils.geo import (
     angular_span_at_distance,
@@ -73,8 +74,6 @@ class MissionData:
 
 
 # phase 1 - load all data
-
-
 def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     """load everything needed for trajectory computation"""
     mission = (
@@ -132,8 +131,6 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
 
 
 # phase 2 helpers
-
-
 def _resolve_with_defaults(inspection: Inspection, template: InspectionTemplate) -> dict:
     """field-by-field merge: override > template default > hardcoded default"""
     defaults = {
@@ -218,10 +215,7 @@ def _check_speed_framerate(speed: float, drone: DroneProfile) -> str | None:
         return None
 
     if drone.max_speed and speed > drone.max_speed * 0.8:
-        return (
-            f"speed {speed:.1f} m/s may be too high for "
-            f"frame rate {drone.camera_frame_rate} fps"
-        )
+        return f"speed {speed:.1f} m/s may be too high for frame rate {drone.camera_frame_rate} fps"
 
     return None
 
@@ -250,8 +244,6 @@ def _check_sensor_fov(
 
 
 # phase 3 - waypoint computation
-
-
 def calculate_arc_path(
     center: tuple[float, float, float],
     runway_heading: float,
@@ -358,8 +350,6 @@ def calculate_vertical_path(
 
 
 # phase 4 - post-inspection processing
-
-
 def _apply_camera_actions(waypoints: list[WaypointData]):
     """lead-in and lead-out waypoints get NONE camera action"""
     if len(waypoints) >= 2:
@@ -375,8 +365,6 @@ def _segment_duration(points: list[tuple[float, float, float]], speed: float) ->
 
 
 # phase 5 - final assembly
-
-
 def _build_transit_waypoint(
     from_wp: WaypointData,
     to_wp: WaypointData,
@@ -395,9 +383,7 @@ def _build_transit_waypoint(
 
 
 # main pipeline
-
-
-def generate_trajectory(db: Session, mission_id: UUID) -> dict:
+def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list[str]]:
     """5-phase trajectory generation pipeline per thesis section 3.3"""
 
     # phase 1 - load mission data
@@ -589,9 +575,6 @@ def generate_trajectory(db: Session, mission_id: UUID) -> dict:
         if all_waypoints[j].hover_duration:
             total_dur += all_waypoints[j].hover_duration
 
-    # persist via flight_plan_service
-    from app.services.flight_plan_service import persist_flight_plan
-
     flight_plan = persist_flight_plan(
         db,
         mission,
@@ -601,4 +584,4 @@ def generate_trajectory(db: Session, mission_id: UUID) -> dict:
         total_dur,
     )
 
-    return {"flight_plan": flight_plan, "warnings": warnings}
+    return flight_plan, warnings

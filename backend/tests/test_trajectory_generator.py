@@ -7,10 +7,16 @@ from app.utils.geo import (
     elevation_angle,
     haversine,
 )
+from tests.data.trajectory import (
+    TRAJECTORY_AGL_PAYLOAD,
+    TRAJECTORY_AIRPORT_PAYLOAD,
+    TRAJECTORY_DRONE_PAYLOAD,
+    TRAJECTORY_SURFACE_PAYLOAD,
+    make_lha_payload,
+)
+
 
 # geo utility tests
-
-
 def test_haversine_prague_brno():
     """haversine between prague and brno - roughly 185km"""
     dist = haversine(14.42, 50.08, 16.61, 49.19)
@@ -64,8 +70,6 @@ def test_elevation_angle_above():
 
 
 # arc path tests
-
-
 def test_arc_path_count():
     """arc path should generate measurement_density waypoints"""
     from app.services.trajectory_generator import calculate_arc_path
@@ -129,8 +133,6 @@ def test_arc_path_altitude_uses_glide_slope():
 
 
 # vertical path tests
-
-
 def test_vertical_path_count():
     """vertical path should generate measurement_density waypoints"""
     from app.services.trajectory_generator import calculate_vertical_path
@@ -199,8 +201,6 @@ def test_vertical_path_hover_at_transitions():
 
 
 # config resolution tests
-
-
 def test_resolve_with_defaults_merge():
     """field-by-field merge: override > template > hardcoded"""
     from app.models.inspection import InspectionConfiguration
@@ -244,8 +244,6 @@ def test_resolve_with_defaults_no_configs():
 
 
 # camera action tests
-
-
 def test_lead_in_lead_out_none():
     """first and last waypoints should have NONE camera action"""
     from app.services.trajectory_generator import WaypointData, _apply_camera_actions
@@ -264,67 +262,28 @@ def test_lead_in_lead_out_none():
 
 
 # full pipeline e2e test
-
-
 def test_full_pipeline(client):
     """end-to-end trajectory generation with real PostGIS"""
-    # create airport
-    airport = client.post(
-        "/api/v1/airports",
-        json={
-            "icao_code": "LKNA",
-            "name": "Trajectory Test Airport",
-            "elevation": 300.0,
-            "location": {"type": "Point", "coordinates": [14.26, 50.10, 300]},
-        },
-    ).json()
+    airport = client.post("/api/v1/airports", json=TRAJECTORY_AIRPORT_PAYLOAD).json()
     airport_id = airport["id"]
 
-    # create runway surface
     surface = client.post(
-        f"/api/v1/airports/{airport_id}/surfaces",
-        json={
-            "identifier": "06/24",
-            "surface_type": "RUNWAY",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [[14.24, 50.10, 300], [14.28, 50.09, 300]],
-            },
-            "heading": 243.0,
-            "length": 3500.0,
-            "width": 45.0,
-        },
+        f"/api/v1/airports/{airport_id}/surfaces", json=TRAJECTORY_SURFACE_PAYLOAD
     ).json()
     surface_id = surface["id"]
 
-    # create AGL with 4 LHAs
     agl = client.post(
         f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls",
-        json={
-            "agl_type": "PAPI",
-            "name": "Test PAPI",
-            "position": {"type": "Point", "coordinates": [14.274, 50.098, 300]},
-            "side": "LEFT",
-            "glide_slope_angle": 3.0,
-        },
+        json=TRAJECTORY_AGL_PAYLOAD,
     ).json()
     agl_id = agl["id"]
 
     for i in range(1, 5):
         client.post(
             f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas",
-            json={
-                "unit_number": i,
-                "setting_angle": 3.0 + (i - 1) * 0.5,
-                "lamp_type": "HALOGEN",
-                "position": {
-                    "type": "Point",
-                    "coordinates": [14.274 + i * 0.0003, 50.098, 300],
-                },
-            },
+            json=make_lha_payload(i),
         )
 
-    # create template targeting this AGL
     template = client.post(
         "/api/v1/inspection-templates",
         json={
@@ -335,18 +294,7 @@ def test_full_pipeline(client):
         },
     ).json()
 
-    # create drone
-    drone = client.post(
-        "/api/v1/drone-profiles",
-        json={
-            "name": "E2E Test Drone",
-            "max_speed": 23.0,
-            "max_altitude": 500.0,
-            "endurance_minutes": 55.0,
-            "camera_frame_rate": 30,
-            "sensor_fov": 84.0,
-        },
-    ).json()
+    drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
 
     # create mission
     mission = client.post(
