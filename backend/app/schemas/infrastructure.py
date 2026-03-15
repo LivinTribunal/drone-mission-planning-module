@@ -2,6 +2,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.common import ListMeta
 from app.schemas.geometry import LineStringZ, PointZ, PolygonZ
 
 
@@ -202,3 +203,39 @@ class AGLResponse(BaseModel):
     lhas: list[LHAResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+# list responses
+class SurfaceListResponse(BaseModel):
+    """surface list response"""
+
+    data: list[SurfaceResponse]
+    meta: ListMeta
+
+
+class ObstacleListResponse(BaseModel):
+    """obstacle list response"""
+
+    data: list[ObstacleResponse]
+    meta: ListMeta
+
+
+class SafetyZoneListResponse(BaseModel):
+    """safety zone list response"""
+
+    data: list[SafetyZoneResponse]
+    meta: ListMeta
+
+
+class AGLListResponse(BaseModel):
+    """AGL list response"""
+
+    data: list[AGLResponse]
+    meta: ListMeta
+
+
+class LHAListResponse(BaseModel):
+    """LHA list response"""
+
+    data: list[LHAResponse]
+    meta: ListMeta

@@ -1,67 +1,22 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from testcontainers.postgres import PostgresContainer
 
-import app.models  # noqa: F401
-from app.core.database import Base, get_db
-from app.main import app
-
-
-@pytest.fixture(scope="module")
-def db_engine():
-    """db engine for testing"""
-    with PostgresContainer(
-        image="postgis/postgis:16-3.4",
-        username="test",
-        password="test",
-        dbname="test",
-    ) as pg:
-        engine = create_engine(pg.get_connection_url())
-
-        with engine.connect() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-            conn.commit()
-
-        Base.metadata.create_all(engine)
-        yield engine
-        Base.metadata.drop_all(engine)
-
-
-@pytest.fixture(scope="module")
-def client(db_engine):
-    """client for testing"""
-    TestSession = sessionmaker(bind=db_engine)
-
-    def override_get_db():
-        db = TestSession()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
-    app.dependency_overrides.clear()
+from tests.data.missions import (
+    INVALID_AIRPORT_ID,
+    MISSION_AIRPORT_PAYLOAD,
+    MISSION_TEMPLATE_PAYLOAD,
+    MISSION_UPDATE_PAYLOAD,
+)
 
 
 @pytest.fixture(scope="module")
 def airport_id(client):
-    """create a test airport and return its id"""
-    r = client.post(
-        "/api/v1/airports",
-        json={
-            "icao_code": "LKMT",
-            "name": "Mosnov Airport",
-            "elevation": 260.0,
-            "location": {"type": "Point", "coordinates": [18.11, 49.69, 260.0]},
-        },
-    )
+    """create a test airport for mission tests"""
+    r = client.post("/api/v1/airports", json=MISSION_AIRPORT_PAYLOAD)
 
     return r.json()["id"]
 
 
+# Tests
 def test_create_mission(client, airport_id):
     """test create mission"""
     response = client.post(
@@ -73,6 +28,15 @@ def test_create_mission(client, airport_id):
     assert data["name"] == "Test Mission"
     assert data["status"] == "DRAFT"
     assert data["airport_id"] == airport_id
+
+
+def test_create_mission_invalid_airport(client):
+    """test create mission with invalid airport id"""
+    response = client.post(
+        "/api/v1/missions",
+        json={"name": "Bad Mission", "airport_id": INVALID_AIRPORT_ID},
+    )
+    assert response.status_code == 400
 
 
 def test_list_missions(client):
@@ -122,7 +86,7 @@ def test_update_mission(client):
 
     response = client.put(
         f"/api/v1/missions/{mission_id}",
-        json={"name": "Updated Mission", "operator_notes": "test notes"},
+        json=MISSION_UPDATE_PAYLOAD,
     )
     assert response.status_code == 200
     assert response.json()["name"] == "Updated Mission"
@@ -147,7 +111,7 @@ def test_delete_mission(client, airport_id):
     mission_id = response.json()["id"]
 
     response = client.delete(f"/api/v1/missions/{mission_id}")
-    assert response.status_code == 204
+    assert response.status_code == 200
 
     response = client.get(f"/api/v1/missions/{mission_id}")
     assert response.status_code == 404
@@ -157,7 +121,7 @@ def test_add_inspection(client):
     """test add inspection to mission"""
     template = client.post(
         "/api/v1/inspection-templates",
-        json={"name": "Test Template", "methods": ["ANGULAR_SWEEP"]},
+        json=MISSION_TEMPLATE_PAYLOAD,
     ).json()
 
     missions = client.get("/api/v1/missions").json()["data"]
@@ -181,4 +145,4 @@ def test_delete_inspection(client):
         insp_id = detail["inspections"][0]["id"]
 
         response = client.delete(f"/api/v1/missions/{mission_id}/inspections/{insp_id}")
-        assert response.status_code == 204
+        assert response.status_code == 200

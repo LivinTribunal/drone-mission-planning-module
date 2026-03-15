@@ -3,11 +3,13 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.airport import Airport
 from app.models.inspection import Inspection, InspectionConfiguration
-from app.models.mission import Mission
-from app.services.geo import geojson_to_ewkt, wkb_to_geojson
+from app.models.mission import DroneProfile, Mission
+from app.schemas.mission import MissionCreate, MissionUpdate
+from app.services.geo import apply_schema_update, schema_to_model_data
 
-# status state machine - maps current status to allowed transitions
+# status state machine
 TRANSITIONS = {
     "DRAFT": ["PLANNED"],
     "PLANNED": ["VALIDATED"],
@@ -26,35 +28,13 @@ TRAJECTORY_FIELDS = {
     "landing_coordinate",
 }
 
-MISSION_GEOM = ["takeoff_coordinate", "landing_coordinate"]
 
+def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mission:
+    """validate and execute status transition"""
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        raise HTTPException(status_code=404, detail="mission not found")
 
-def _enrich(mission: Mission, db: Session) -> Mission:
-    """convert geometry fields and detach from session"""
-    tc = wkb_to_geojson(mission.takeoff_coordinate, db)
-    lc = wkb_to_geojson(mission.landing_coordinate, db)
-    db.expunge(mission)
-    mission.takeoff_coordinate = tc
-    mission.landing_coordinate = lc
-
-    return mission
-
-
-def _enrich_detail(mission: Mission, db: Session) -> Mission:
-    """convert geometry and keep inspections accessible"""
-    tc = wkb_to_geojson(mission.takeoff_coordinate, db)
-    lc = wkb_to_geojson(mission.landing_coordinate, db)
-    inspections = sorted(mission.inspections, key=lambda i: i.sequence_order)
-    db.expunge(mission)
-    mission.takeoff_coordinate = tc
-    mission.landing_coordinate = lc
-    mission.inspections = inspections
-
-    return mission
-
-
-def _transition(mission: Mission, target_status: str):
-    """validate and do a status transition"""
     allowed = TRANSITIONS.get(mission.status, [])
     if target_status not in allowed:
         raise HTTPException(
@@ -66,20 +46,12 @@ def _transition(mission: Mission, target_status: str):
                 "allowed_transitions": allowed,
             },
         )
+
     mission.status = target_status
-
-
-def _transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mission:
-    """load mission, do a status transition, commit, and return enriched"""
-    mission = db.query(Mission).filter(Mission.id == mission_id).first()
-    if not mission:
-        raise HTTPException(status_code=404, detail="mission not found")
-
-    _transition(mission, target_status)
     db.commit()
     db.refresh(mission)
 
-    return _enrich(mission, db)
+    return mission
 
 
 def list_missions(
@@ -100,7 +72,7 @@ def list_missions(
     total = query.count()
     missions = query.order_by(Mission.created_at.desc()).offset(offset).limit(limit).all()
 
-    return [_enrich(m, db) for m in missions], total
+    return missions, total
 
 
 def get_mission(db: Session, mission_id: UUID) -> Mission:
@@ -114,47 +86,48 @@ def get_mission(db: Session, mission_id: UUID) -> Mission:
     if not mission:
         raise HTTPException(status_code=404, detail="mission not found")
 
-    return _enrich_detail(mission, db)
+    return mission
 
 
-# TODO: add validation and create a data model for mission
-def create_mission(db: Session, data: dict) -> Mission:
+def create_mission(db: Session, schema: MissionCreate) -> Mission:
     """create mission in DRAFT status"""
-    mission = Mission()
-    for key, val in data.items():
-        if key in MISSION_GEOM and val is not None:
-            setattr(mission, key, geojson_to_ewkt(val))
-        else:
-            setattr(mission, key, val)
+    # validate airport exists
+    airport = db.query(Airport).filter(Airport.id == schema.airport_id).first()
+    if not airport:
+        raise HTTPException(status_code=400, detail="airport not found")
 
+    # validate drone profile if provided
+    if schema.drone_profile_id:
+        drone = db.query(DroneProfile).filter(DroneProfile.id == schema.drone_profile_id).first()
+        if not drone:
+            raise HTTPException(status_code=400, detail="drone profile not found")
+
+    mission = Mission(**schema_to_model_data(schema))
     db.add(mission)
     db.commit()
     db.refresh(mission)
 
-    return _enrich(mission, db)
+    return mission
 
 
-def update_mission(db: Session, mission_id: UUID, data: dict) -> Mission:
+def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Mission:
     """update mission - regresses VALIDATED -> PLANNED on trajectory changes"""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         raise HTTPException(status_code=404, detail="mission not found")
+
+    data = schema.model_dump(exclude_unset=True)
 
     # check if trajectory-affecting fields changed
     trajectory_changed = any(k in TRAJECTORY_FIELDS for k in data.keys())
     if trajectory_changed and mission.status == "VALIDATED":
         mission.status = "PLANNED"
 
-    for key, val in data.items():
-        if key in MISSION_GEOM and val is not None:
-            setattr(mission, key, geojson_to_ewkt(val))
-        else:
-            setattr(mission, key, val)
-
+    apply_schema_update(mission, schema)
     db.commit()
     db.refresh(mission)
 
-    return _enrich(mission, db)
+    return mission
 
 
 def delete_mission(db: Session, mission_id: UUID):
@@ -171,14 +144,13 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
     """duplicate mission as new DRAFT"""
     original = (
         db.query(Mission)
-        .options(joinedload(Mission.inspections))
+        .options(joinedload(Mission.inspections).joinedload(Inspection.config))
         .filter(Mission.id == mission_id)
         .first()
     )
     if not original:
         raise HTTPException(status_code=404, detail="mission not found")
 
-    # TODO: add validation and create a data model for mission
     copy = Mission(
         name=f"{original.name} (copy)",
         status="DRAFT",
@@ -194,7 +166,6 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
     db.flush()
 
     for insp in original.inspections:
-        # copy config if exists
         new_config_id = None
         if insp.config:
             new_config = InspectionConfiguration(
@@ -221,26 +192,4 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
     db.commit()
     db.refresh(copy)
 
-    return _enrich(copy, db)
-
-
-# status transitions
-# TODO: refactor these functions into one
-def validate_mission(db: Session, mission_id: UUID) -> Mission:
-    """PLANNED -> VALIDATED"""
-    return _transition_mission(db, mission_id, "VALIDATED")
-
-
-def export_mission(db: Session, mission_id: UUID) -> Mission:
-    """VALIDATED -> EXPORTED"""
-    return _transition_mission(db, mission_id, "EXPORTED")
-
-
-def complete_mission(db: Session, mission_id: UUID) -> Mission:
-    """EXPORTED -> COMPLETED"""
-    return _transition_mission(db, mission_id, "COMPLETED")
-
-
-def cancel_mission(db: Session, mission_id: UUID) -> Mission:
-    """EXPORTED -> CANCELLED"""
-    return _transition_mission(db, mission_id, "CANCELLED")
+    return copy
