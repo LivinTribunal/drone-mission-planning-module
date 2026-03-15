@@ -13,18 +13,23 @@ from app.schemas.airport import (
 )
 from app.schemas.infrastructure import (
     AGLCreate,
+    AGLListResponse,
     AGLResponse,
     AGLUpdate,
     LHACreate,
+    LHAListResponse,
     LHAResponse,
     LHAUpdate,
     ObstacleCreate,
+    ObstacleListResponse,
     ObstacleResponse,
     ObstacleUpdate,
     SafetyZoneCreate,
+    SafetyZoneListResponse,
     SafetyZoneResponse,
     SafetyZoneUpdate,
     SurfaceCreate,
+    SurfaceListResponse,
     SurfaceResponse,
     SurfaceUpdate,
 )
@@ -34,8 +39,6 @@ router = APIRouter(prefix="/api/v1/airports", tags=["airports"])
 
 
 # airports
-
-
 @router.get("", response_model=AirportListResponse)
 def list_airports(db: Session = Depends(get_db)):
     """list all avaible airports for user"""
@@ -69,15 +72,12 @@ def delete_airport(airport_id: UUID, db: Session = Depends(get_db)):
 
 
 # ground surfaces
-
-
-@router.get("/{airport_id}/surfaces")
+@router.get("/{airport_id}/surfaces", response_model=SurfaceListResponse)
 def list_surfaces(airport_id: UUID, db: Session = Depends(get_db)):
     """list all surfaces for airport"""
     surfaces = airport_service.list_surfaces(db, airport_id)
-    data = [SurfaceResponse.model_validate(s).model_dump() for s in surfaces]
 
-    return {"data": data, "meta": {"total": len(data)}}
+    return {"data": surfaces, "meta": {"total": len(surfaces)}}
 
 
 @router.post("/{airport_id}/surfaces", status_code=201, response_model=SurfaceResponse)
@@ -86,28 +86,27 @@ def create_surface(airport_id: UUID, body: SurfaceCreate, db: Session = Depends(
     return airport_service.create_surface(db, airport_id, body)
 
 
-@router.put("/surfaces/{surface_id}", response_model=SurfaceResponse)
-def update_surface(surface_id: UUID, body: SurfaceUpdate, db: Session = Depends(get_db)):
+@router.put("/{airport_id}/surfaces/{surface_id}", response_model=SurfaceResponse)
+def update_surface(
+    airport_id: UUID, surface_id: UUID, body: SurfaceUpdate, db: Session = Depends(get_db)
+):
     """update surface"""
-    return airport_service.update_surface(db, surface_id, body)
+    return airport_service.update_surface(db, airport_id, surface_id, body)
 
 
-@router.delete("/surfaces/{surface_id}", status_code=204)
-def delete_surface(surface_id: UUID, db: Session = Depends(get_db)):
+@router.delete("/{airport_id}/surfaces/{surface_id}", status_code=204)
+def delete_surface(airport_id: UUID, surface_id: UUID, db: Session = Depends(get_db)):
     """delete surface"""
-    airport_service.delete_surface(db, surface_id)
+    airport_service.delete_surface(db, airport_id, surface_id)
 
 
 # obstacles
-
-
-@router.get("/{airport_id}/obstacles")
+@router.get("/{airport_id}/obstacles", response_model=ObstacleListResponse)
 def list_obstacles(airport_id: UUID, db: Session = Depends(get_db)):
     """list all obstacles for airport"""
     obstacles = airport_service.list_obstacles(db, airport_id)
-    data = [ObstacleResponse.model_validate(o).model_dump() for o in obstacles]
 
-    return {"data": data, "meta": {"total": len(data)}}
+    return {"data": obstacles, "meta": {"total": len(obstacles)}}
 
 
 @router.post("/{airport_id}/obstacles", status_code=201, response_model=ObstacleResponse)
@@ -116,28 +115,27 @@ def create_obstacle(airport_id: UUID, body: ObstacleCreate, db: Session = Depend
     return airport_service.create_obstacle(db, airport_id, body)
 
 
-@router.put("/obstacles/{obstacle_id}", response_model=ObstacleResponse)
-def update_obstacle(obstacle_id: UUID, body: ObstacleUpdate, db: Session = Depends(get_db)):
+@router.put("/{airport_id}/obstacles/{obstacle_id}", response_model=ObstacleResponse)
+def update_obstacle(
+    airport_id: UUID, obstacle_id: UUID, body: ObstacleUpdate, db: Session = Depends(get_db)
+):
     """update obstacle"""
-    return airport_service.update_obstacle(db, obstacle_id, body)
+    return airport_service.update_obstacle(db, airport_id, obstacle_id, body)
 
 
-@router.delete("/obstacles/{obstacle_id}", status_code=204)
-def delete_obstacle(obstacle_id: UUID, db: Session = Depends(get_db)):
+@router.delete("/{airport_id}/obstacles/{obstacle_id}", status_code=204)
+def delete_obstacle(airport_id: UUID, obstacle_id: UUID, db: Session = Depends(get_db)):
     """delete obstacle"""
-    airport_service.delete_obstacle(db, obstacle_id)
+    airport_service.delete_obstacle(db, airport_id, obstacle_id)
 
 
 # safety zones
-
-
-@router.get("/{airport_id}/safety-zones")
+@router.get("/{airport_id}/safety-zones", response_model=SafetyZoneListResponse)
 def list_safety_zones(airport_id: UUID, db: Session = Depends(get_db)):
     """list all safety zones for airport"""
     zones = airport_service.list_safety_zones(db, airport_id)
-    data = [SafetyZoneResponse.model_validate(z).model_dump() for z in zones]
 
-    return {"data": data, "meta": {"total": len(data)}}
+    return {"data": zones, "meta": {"total": len(zones)}}
 
 
 @router.post("/{airport_id}/safety-zones", status_code=201, response_model=SafetyZoneResponse)
@@ -146,73 +144,105 @@ def create_safety_zone(airport_id: UUID, body: SafetyZoneCreate, db: Session = D
     return airport_service.create_safety_zone(db, airport_id, body)
 
 
-@router.put("/safety-zones/{zone_id}", response_model=SafetyZoneResponse)
-def update_safety_zone(zone_id: UUID, body: SafetyZoneUpdate, db: Session = Depends(get_db)):
+@router.put("/{airport_id}/safety-zones/{zone_id}", response_model=SafetyZoneResponse)
+def update_safety_zone(
+    airport_id: UUID, zone_id: UUID, body: SafetyZoneUpdate, db: Session = Depends(get_db)
+):
     """update safety zone"""
-    return airport_service.update_safety_zone(db, zone_id, body)
+    return airport_service.update_safety_zone(db, airport_id, zone_id, body)
 
 
-@router.delete("/safety-zones/{zone_id}", status_code=204)
-def delete_safety_zone(zone_id: UUID, db: Session = Depends(get_db)):
+@router.delete("/{airport_id}/safety-zones/{zone_id}", status_code=204)
+def delete_safety_zone(airport_id: UUID, zone_id: UUID, db: Session = Depends(get_db)):
     """delete safety zone"""
-    airport_service.delete_safety_zone(db, zone_id)
+    airport_service.delete_safety_zone(db, airport_id, zone_id)
 
 
 # AGLs
-
-
-@router.get("/surfaces/{surface_id}/agls")
-def list_agls(surface_id: UUID, db: Session = Depends(get_db)):
+@router.get("/{airport_id}/surfaces/{surface_id}/agls", response_model=AGLListResponse)
+def list_agls(airport_id: UUID, surface_id: UUID, db: Session = Depends(get_db)):
     """list all AGLs for surface"""
     agls = airport_service.list_agls(db, surface_id)
-    data = [AGLResponse.model_validate(a).model_dump() for a in agls]
 
-    return {"data": data, "meta": {"total": len(data)}}
+    return {"data": agls, "meta": {"total": len(agls)}}
 
 
-@router.post("/surfaces/{surface_id}/agls", status_code=201, response_model=AGLResponse)
-def create_agl(surface_id: UUID, body: AGLCreate, db: Session = Depends(get_db)):
+@router.post(
+    "/{airport_id}/surfaces/{surface_id}/agls", status_code=201, response_model=AGLResponse
+)
+def create_agl(airport_id: UUID, surface_id: UUID, body: AGLCreate, db: Session = Depends(get_db)):
     """create AGL for surface"""
     return airport_service.create_agl(db, surface_id, body)
 
 
-@router.put("/agls/{agl_id}", response_model=AGLResponse)
-def update_agl(agl_id: UUID, body: AGLUpdate, db: Session = Depends(get_db)):
+@router.put("/{airport_id}/surfaces/{surface_id}/agls/{agl_id}", response_model=AGLResponse)
+def update_agl(
+    airport_id: UUID,
+    surface_id: UUID,
+    agl_id: UUID,
+    body: AGLUpdate,
+    db: Session = Depends(get_db),
+):
     """update AGL"""
-    return airport_service.update_agl(db, agl_id, body)
+    return airport_service.update_agl(db, surface_id, agl_id, body)
 
 
-@router.delete("/agls/{agl_id}", status_code=204)
-def delete_agl(agl_id: UUID, db: Session = Depends(get_db)):
+@router.delete("/{airport_id}/surfaces/{surface_id}/agls/{agl_id}", status_code=204)
+def delete_agl(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = Depends(get_db)):
     """delete AGL"""
-    airport_service.delete_agl(db, agl_id)
+    airport_service.delete_agl(db, surface_id, agl_id)
 
 
 # LHAs
-
-
-@router.get("/agls/{agl_id}/lhas")
-def list_lhas(agl_id: UUID, db: Session = Depends(get_db)):
+@router.get(
+    "/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas", response_model=LHAListResponse
+)
+def list_lhas(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = Depends(get_db)):
     """list all LHAs for AGL"""
     lhas = airport_service.list_lhas(db, agl_id)
-    data = [LHAResponse.model_validate(lha).model_dump() for lha in lhas]
 
-    return {"data": data, "meta": {"total": len(data)}}
+    return {"data": lhas, "meta": {"total": len(lhas)}}
 
 
-@router.post("/agls/{agl_id}/lhas", status_code=201, response_model=LHAResponse)
-def create_lha(agl_id: UUID, body: LHACreate, db: Session = Depends(get_db)):
+@router.post(
+    "/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas",
+    status_code=201,
+    response_model=LHAResponse,
+)
+def create_lha(
+    airport_id: UUID,
+    surface_id: UUID,
+    agl_id: UUID,
+    body: LHACreate,
+    db: Session = Depends(get_db),
+):
     """create LHA for AGL"""
     return airport_service.create_lha(db, agl_id, body)
 
 
-@router.put("/lhas/{lha_id}", response_model=LHAResponse)
-def update_lha(lha_id: UUID, body: LHAUpdate, db: Session = Depends(get_db)):
+@router.put(
+    "/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/{lha_id}",
+    response_model=LHAResponse,
+)
+def update_lha(
+    airport_id: UUID,
+    surface_id: UUID,
+    agl_id: UUID,
+    lha_id: UUID,
+    body: LHAUpdate,
+    db: Session = Depends(get_db),
+):
     """update LHA"""
-    return airport_service.update_lha(db, lha_id, body)
+    return airport_service.update_lha(db, agl_id, lha_id, body)
 
 
-@router.delete("/lhas/{lha_id}", status_code=204)
-def delete_lha(lha_id: UUID, db: Session = Depends(get_db)):
+@router.delete("/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/{lha_id}", status_code=204)
+def delete_lha(
+    airport_id: UUID,
+    surface_id: UUID,
+    agl_id: UUID,
+    lha_id: UUID,
+    db: Session = Depends(get_db),
+):
     """delete LHA"""
-    airport_service.delete_lha(db, lha_id)
+    airport_service.delete_lha(db, agl_id, lha_id)

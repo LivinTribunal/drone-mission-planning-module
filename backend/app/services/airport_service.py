@@ -20,9 +20,8 @@ from app.schemas.infrastructure import (
 )
 from app.services.geo import apply_schema_update, schema_to_model_data
 
+
 # airports
-
-
 def list_airports(db: Session) -> list[Airport]:
     """list all airports"""
     return db.query(Airport).all()
@@ -80,8 +79,6 @@ def delete_airport(db: Session, airport_id: UUID):
 
 
 # surfaces
-
-
 def list_surfaces(db: Session, airport_id: UUID) -> list[AirfieldSurface]:
     """list surfaces for airport"""
     return (
@@ -103,9 +100,15 @@ def create_surface(db: Session, airport_id: UUID, schema: SurfaceCreate) -> Airf
     return surface
 
 
-def update_surface(db: Session, surface_id: UUID, schema: SurfaceUpdate) -> AirfieldSurface:
-    """update surface"""
-    surface = db.query(AirfieldSurface).filter(AirfieldSurface.id == surface_id).first()
+def update_surface(
+    db: Session, airport_id: UUID, surface_id: UUID, schema: SurfaceUpdate
+) -> AirfieldSurface:
+    """update surface, validates it belongs to airport"""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
     if not surface:
         raise HTTPException(status_code=404, detail="surface not found")
 
@@ -116,9 +119,13 @@ def update_surface(db: Session, surface_id: UUID, schema: SurfaceUpdate) -> Airf
     return surface
 
 
-def delete_surface(db: Session, surface_id: UUID):
-    """delete surface"""
-    surface = db.query(AirfieldSurface).filter(AirfieldSurface.id == surface_id).first()
+def delete_surface(db: Session, airport_id: UUID, surface_id: UUID):
+    """delete surface, validates it belongs to airport"""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
     if not surface:
         raise HTTPException(status_code=404, detail="surface not found")
 
@@ -127,8 +134,6 @@ def delete_surface(db: Session, surface_id: UUID):
 
 
 # obstacles
-
-
 def list_obstacles(db: Session, airport_id: UUID) -> list[Obstacle]:
     """list obstacles for airport"""
     return db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
@@ -145,9 +150,15 @@ def create_obstacle(db: Session, airport_id: UUID, schema: ObstacleCreate) -> Ob
     return obstacle
 
 
-def update_obstacle(db: Session, obstacle_id: UUID, schema: ObstacleUpdate) -> Obstacle:
-    """update obstacle"""
-    obstacle = db.query(Obstacle).filter(Obstacle.id == obstacle_id).first()
+def update_obstacle(
+    db: Session, airport_id: UUID, obstacle_id: UUID, schema: ObstacleUpdate
+) -> Obstacle:
+    """update obstacle, validates it belongs to airport"""
+    obstacle = (
+        db.query(Obstacle)
+        .filter(Obstacle.id == obstacle_id, Obstacle.airport_id == airport_id)
+        .first()
+    )
     if not obstacle:
         raise HTTPException(status_code=404, detail="obstacle not found")
 
@@ -158,9 +169,13 @@ def update_obstacle(db: Session, obstacle_id: UUID, schema: ObstacleUpdate) -> O
     return obstacle
 
 
-def delete_obstacle(db: Session, obstacle_id: UUID):
-    """delete obstacle"""
-    obstacle = db.query(Obstacle).filter(Obstacle.id == obstacle_id).first()
+def delete_obstacle(db: Session, airport_id: UUID, obstacle_id: UUID):
+    """delete obstacle, validates it belongs to airport"""
+    obstacle = (
+        db.query(Obstacle)
+        .filter(Obstacle.id == obstacle_id, Obstacle.airport_id == airport_id)
+        .first()
+    )
     if not obstacle:
         raise HTTPException(status_code=404, detail="obstacle not found")
 
@@ -169,8 +184,6 @@ def delete_obstacle(db: Session, obstacle_id: UUID):
 
 
 # safety zones
-
-
 def list_safety_zones(db: Session, airport_id: UUID) -> list[SafetyZone]:
     """list safety zones for airport"""
     return db.query(SafetyZone).filter(SafetyZone.airport_id == airport_id).all()
@@ -187,9 +200,15 @@ def create_safety_zone(db: Session, airport_id: UUID, schema: SafetyZoneCreate) 
     return zone
 
 
-def update_safety_zone(db: Session, zone_id: UUID, schema: SafetyZoneUpdate) -> SafetyZone:
-    """update safety zone"""
-    zone = db.query(SafetyZone).filter(SafetyZone.id == zone_id).first()
+def update_safety_zone(
+    db: Session, airport_id: UUID, zone_id: UUID, schema: SafetyZoneUpdate
+) -> SafetyZone:
+    """update safety zone, validates it belongs to airport"""
+    zone = (
+        db.query(SafetyZone)
+        .filter(SafetyZone.id == zone_id, SafetyZone.airport_id == airport_id)
+        .first()
+    )
     if not zone:
         raise HTTPException(status_code=404, detail="safety zone not found")
 
@@ -200,9 +219,13 @@ def update_safety_zone(db: Session, zone_id: UUID, schema: SafetyZoneUpdate) -> 
     return zone
 
 
-def delete_safety_zone(db: Session, zone_id: UUID):
-    """delete safety zone"""
-    zone = db.query(SafetyZone).filter(SafetyZone.id == zone_id).first()
+def delete_safety_zone(db: Session, airport_id: UUID, zone_id: UUID):
+    """delete safety zone, validates it belongs to airport"""
+    zone = (
+        db.query(SafetyZone)
+        .filter(SafetyZone.id == zone_id, SafetyZone.airport_id == airport_id)
+        .first()
+    )
     if not zone:
         raise HTTPException(status_code=404, detail="safety zone not found")
 
@@ -211,8 +234,6 @@ def delete_safety_zone(db: Session, zone_id: UUID):
 
 
 # AGLs
-
-
 def list_agls(db: Session, surface_id: UUID) -> list[AGL]:
     """list AGLs for surface"""
     return db.query(AGL).options(joinedload(AGL.lhas)).filter(AGL.surface_id == surface_id).all()
@@ -229,9 +250,9 @@ def create_agl(db: Session, surface_id: UUID, schema: AGLCreate) -> AGL:
     return agl
 
 
-def update_agl(db: Session, agl_id: UUID, schema: AGLUpdate) -> AGL:
-    """update AGL"""
-    agl = db.query(AGL).filter(AGL.id == agl_id).first()
+def update_agl(db: Session, surface_id: UUID, agl_id: UUID, schema: AGLUpdate) -> AGL:
+    """update AGL, validates it belongs to surface"""
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise HTTPException(status_code=404, detail="agl not found")
 
@@ -242,9 +263,9 @@ def update_agl(db: Session, agl_id: UUID, schema: AGLUpdate) -> AGL:
     return agl
 
 
-def delete_agl(db: Session, agl_id: UUID):
-    """delete AGL"""
-    agl = db.query(AGL).filter(AGL.id == agl_id).first()
+def delete_agl(db: Session, surface_id: UUID, agl_id: UUID):
+    """delete AGL, validates it belongs to surface"""
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise HTTPException(status_code=404, detail="agl not found")
 
@@ -253,8 +274,6 @@ def delete_agl(db: Session, agl_id: UUID):
 
 
 # LHAs
-
-
 def list_lhas(db: Session, agl_id: UUID) -> list[LHA]:
     """list LHAs for AGL"""
     return db.query(LHA).filter(LHA.agl_id == agl_id).all()
@@ -271,9 +290,9 @@ def create_lha(db: Session, agl_id: UUID, schema: LHACreate) -> LHA:
     return lha
 
 
-def update_lha(db: Session, lha_id: UUID, schema: LHAUpdate) -> LHA:
-    """update LHA"""
-    lha = db.query(LHA).filter(LHA.id == lha_id).first()
+def update_lha(db: Session, agl_id: UUID, lha_id: UUID, schema: LHAUpdate) -> LHA:
+    """update LHA, validates it belongs to AGL"""
+    lha = db.query(LHA).filter(LHA.id == lha_id, LHA.agl_id == agl_id).first()
     if not lha:
         raise HTTPException(status_code=404, detail="lha not found")
 
@@ -284,9 +303,9 @@ def update_lha(db: Session, lha_id: UUID, schema: LHAUpdate) -> LHA:
     return lha
 
 
-def delete_lha(db: Session, lha_id: UUID):
-    """delete LHA"""
-    lha = db.query(LHA).filter(LHA.id == lha_id).first()
+def delete_lha(db: Session, agl_id: UUID, lha_id: UUID):
+    """delete LHA, validates it belongs to AGL"""
+    lha = db.query(LHA).filter(LHA.id == lha_id, LHA.agl_id == agl_id).first()
     if not lha:
         raise HTTPException(status_code=404, detail="lha not found")
 

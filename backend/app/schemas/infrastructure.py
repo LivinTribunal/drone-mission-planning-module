@@ -202,3 +202,39 @@ class AGLResponse(BaseModel):
     lhas: list[LHAResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+# list responses
+class SurfaceListResponse(BaseModel):
+    """surface list response"""
+
+    data: list[SurfaceResponse]
+    meta: dict
+
+
+class ObstacleListResponse(BaseModel):
+    """obstacle list response"""
+
+    data: list[ObstacleResponse]
+    meta: dict
+
+
+class SafetyZoneListResponse(BaseModel):
+    """safety zone list response"""
+
+    data: list[SafetyZoneResponse]
+    meta: dict
+
+
+class AGLListResponse(BaseModel):
+    """AGL list response"""
+
+    data: list[AGLResponse]
+    meta: dict
+
+
+class LHAListResponse(BaseModel):
+    """LHA list response"""
+
+    data: list[LHAResponse]
+    meta: dict

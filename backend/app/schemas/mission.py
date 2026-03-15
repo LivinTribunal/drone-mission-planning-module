@@ -51,6 +51,12 @@ class ReorderRequest(BaseModel):
     inspection_ids: list[UUID]
 
 
+class ReorderResponse(BaseModel):
+    """reorder response"""
+
+    reordered: bool
+
+
 class MissionCreate(BaseModel):
     """create mission"""
 

@@ -1,18 +1,12 @@
 import pytest
 
+from tests.data.missions import STATUS_TEST_AIRPORT_PAYLOAD
+
 
 @pytest.fixture(scope="module")
 def airport_id(client):
     """create a test airport for status tests"""
-    r = client.post(
-        "/api/v1/airports",
-        json={
-            "icao_code": "LKVO",
-            "name": "Vodochody Airport",
-            "elevation": 280.0,
-            "location": {"type": "Point", "coordinates": [14.39, 50.22, 280.0]},
-        },
-    )
+    r = client.post("/api/v1/airports", json=STATUS_TEST_AIRPORT_PAYLOAD)
 
     return r.json()["id"]
 

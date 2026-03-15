@@ -81,11 +81,14 @@ def test_create_agl_and_lha(client):
     surfaces = client.get(f"/api/v1/airports/{airport_id}/surfaces").json()["data"]
     surface_id = surfaces[0]["id"]
 
-    r = client.post(f"/api/v1/airports/surfaces/{surface_id}/agls", json=AGL_PAYLOAD)
+    r = client.post(f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls", json=AGL_PAYLOAD)
     assert r.status_code == 201
     agl_id = r.json()["id"]
 
-    r = client.post(f"/api/v1/airports/agls/{agl_id}/lhas", json=LHA_PAYLOAD)
+    r = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas",
+        json=LHA_PAYLOAD,
+    )
     assert r.status_code == 201
     assert r.json()["unit_number"] == 1
 

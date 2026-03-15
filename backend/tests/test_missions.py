@@ -1,18 +1,12 @@
 import pytest
 
+from tests.data.missions import MISSION_AIRPORT_PAYLOAD
+
 
 @pytest.fixture(scope="module")
 def airport_id(client):
     """create a test airport for mission tests"""
-    r = client.post(
-        "/api/v1/airports",
-        json={
-            "icao_code": "LKMT",
-            "name": "Mosnov Airport",
-            "elevation": 260.0,
-            "location": {"type": "Point", "coordinates": [18.11, 49.69, 260.0]},
-        },
-    )
+    r = client.post("/api/v1/airports", json=MISSION_AIRPORT_PAYLOAD)
 
     return r.json()["id"]
 
