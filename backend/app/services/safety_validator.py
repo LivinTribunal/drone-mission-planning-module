@@ -7,8 +7,9 @@ from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
 from app.models.enums import ConstraintType, SafetyZoneType, SurfaceType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
+from app.schemas.geometry import parse_ewkb
 from app.services.geometry_converter import geojson_to_ewkt
-from app.services.trajectory_types import DEFAULT_RUNWAY_BUFFER, Violation
+from app.services.trajectory_types import DEFAULT_RUNWAY_BUFFER, Violation, WaypointData
 
 # spatial queries use parameterized text() with PostGIS functions
 # this is the data-layer spatial computation described in section 3.1.3
@@ -19,7 +20,7 @@ HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
 def validate_inspection_pass(
     db: Session,
-    waypoints: list,
+    waypoints: list[WaypointData],
     drone: DroneProfile | None,
     constraints: list[ConstraintRule],
     obstacles: list[Obstacle],
@@ -55,7 +56,7 @@ def validate_inspection_pass(
 
 def validate_flight_plan(
     db: Session,
-    waypoints: list,
+    waypoints: list[WaypointData],
     drone: DroneProfile | None,
     constraints: list[ConstraintRule],
     obstacles: list[Obstacle],
@@ -66,7 +67,7 @@ def validate_flight_plan(
     return validate_inspection_pass(db, waypoints, drone, constraints, obstacles, zones, surfaces)
 
 
-def check_drone_constraints(wp, drone: DroneProfile) -> Violation | None:
+def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation | None:
     if drone.max_altitude and wp.alt > drone.max_altitude:
         return Violation(
             is_warning=False,
@@ -87,7 +88,7 @@ def check_drone_constraints(wp, drone: DroneProfile) -> Violation | None:
     return None
 
 
-def check_obstacle(db: Session, wp, obstacle: Obstacle) -> Violation | None:
+def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violation | None:
     """spatial intersection test - section 3.3.5"""
     if not obstacle.geometry:
         return None
@@ -108,8 +109,6 @@ def check_obstacle(db: Session, wp, obstacle: Obstacle) -> Violation | None:
 
     obs_base_alt = 0.0
     if obstacle.position:
-        from app.schemas.geometry import parse_ewkb
-
         obs_pos = parse_ewkb(obstacle.position.data)
         obs_base_alt = obs_pos["coordinates"][2]
 
@@ -149,7 +148,7 @@ def check_battery(
     return None
 
 
-def check_safety_zone(db: Session, wp, zone: SafetyZone) -> Violation | None:
+def check_safety_zone(db: Session, wp: WaypointData, zone: SafetyZone) -> Violation | None:
     if not zone.geometry:
         return None
 
@@ -236,7 +235,7 @@ def segments_intersect_zone(
 
 def _check_constraint(
     db: Session,
-    wp,
+    wp: WaypointData,
     constraint: ConstraintRule,
     surfaces: list[AirfieldSurface],
 ) -> Violation | None:
@@ -285,7 +284,7 @@ def _check_constraint(
 
 def _check_runway_buffer(
     db: Session,
-    wp,
+    wp: WaypointData,
     constraint: ConstraintRule,
     surfaces: list[AirfieldSurface],
 ) -> Violation | None:

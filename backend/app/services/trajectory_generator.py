@@ -8,7 +8,7 @@ from app.models.agl import AGL
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.enums import CameraAction, InspectionMethod, SafetyZoneType, WaypointType
 from app.models.flight_plan import ConstraintRule, FlightPlan
-from app.models.inspection import Inspection, InspectionTemplate
+from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.geometry import parse_ewkb
 from app.services.flight_plan_service import persist_flight_plan
@@ -125,7 +125,7 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
 
 
 # phase 2 - config resolution and pre-checks
-def _overlay_config(result: ResolvedConfig, config) -> None:
+def _overlay_config(result: ResolvedConfig, config: InspectionConfiguration) -> None:
     """overlay non-None fields from an ORM config onto resolved config"""
     for key in CONFIG_FIELDS:
         val = getattr(config, key, None)
@@ -133,7 +133,7 @@ def _overlay_config(result: ResolvedConfig, config) -> None:
             setattr(result, key, val)
 
 
-def _resolve_with_defaults(inspection, template) -> ResolvedConfig:
+def _resolve_with_defaults(inspection: Inspection, template: InspectionTemplate) -> ResolvedConfig:
     """resolveWithDefaults - field-by-field merge: override > template > hardcoded"""
     result = ResolvedConfig()
 
@@ -146,7 +146,7 @@ def _resolve_with_defaults(inspection, template) -> ResolvedConfig:
     return result
 
 
-def _get_lha_positions(template) -> list[Point3D]:
+def _get_lha_positions(template: InspectionTemplate) -> list[Point3D]:
     positions = []
     for agl in template.targets:
         for lha in agl.lhas:
@@ -156,7 +156,7 @@ def _get_lha_positions(template) -> list[Point3D]:
     return positions
 
 
-def _get_lha_setting_angles(template) -> list[Degrees]:
+def _get_lha_setting_angles(template: InspectionTemplate) -> list[Degrees]:
     angles = []
     for agl in template.targets:
         for lha in agl.lhas:
@@ -166,7 +166,7 @@ def _get_lha_setting_angles(template) -> list[Degrees]:
     return sorted(angles)
 
 
-def _get_glide_slope_angle(template) -> Degrees:
+def _get_glide_slope_angle(template: InspectionTemplate) -> Degrees:
     for agl in template.targets:
         if agl.glide_slope_angle:
             return agl.glide_slope_angle
@@ -174,7 +174,7 @@ def _get_glide_slope_angle(template) -> Degrees:
     return DEFAULT_GLIDE_SLOPE
 
 
-def _get_runway_heading(template, surfaces) -> Degrees:
+def _get_runway_heading(template: InspectionTemplate, surfaces: list[AirfieldSurface]) -> Degrees:
     for agl in template.targets:
         for surface in surfaces:
             if surface.id == agl.surface_id and surface.heading:
@@ -431,7 +431,7 @@ def compute_measurement_trajectory(
 HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
 
-def _extract_polygon_vertices(geom_data) -> list[Point3D]:
+def _extract_polygon_vertices(geom_data: bytes) -> list[Point3D]:
     """extract vertices from a PostGIS polygon geometry"""
     try:
         geojson = parse_ewkb(geom_data)

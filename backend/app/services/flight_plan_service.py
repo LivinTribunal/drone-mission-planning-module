@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.enums import MissionStatus
 from app.models.flight_plan import (
     FlightPlan,
     ValidationResult,
@@ -79,7 +80,7 @@ def persist_flight_plan(
             )
 
     # set mission status to PLANNED
-    mission.status = "PLANNED"
+    mission.status = MissionStatus.PLANNED
     db.commit()
     db.refresh(flight_plan)
 

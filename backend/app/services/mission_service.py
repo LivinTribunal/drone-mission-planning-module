@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.airport import Airport
+from app.models.enums import MissionStatus
 from app.models.inspection import Inspection, InspectionConfiguration
 from app.models.mission import DroneProfile, Mission
 from app.schemas.mission import MissionCreate, MissionUpdate
@@ -120,8 +121,8 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
 
     # check if trajectory-affecting fields changed
     trajectory_changed = any(k in TRAJECTORY_FIELDS for k in data.keys())
-    if trajectory_changed and mission.status == "VALIDATED":
-        mission.status = "PLANNED"
+    if trajectory_changed and mission.status == MissionStatus.VALIDATED:
+        mission.status = MissionStatus.PLANNED
 
     apply_schema_update(mission, schema)
     db.commit()
@@ -153,7 +154,7 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
 
     copy = Mission(
         name=f"{original.name} (copy)",
-        status="DRAFT",
+        status=MissionStatus.DRAFT,
         airport_id=original.airport_id,
         drone_profile_id=original.drone_profile_id,
         operator_notes=original.operator_notes,

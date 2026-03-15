@@ -179,7 +179,8 @@ def test_vertical_path_hover_at_transitions():
     """HOVER waypoints inserted at LHA setting angle boundaries"""
     from app.services.trajectory_generator import calculate_vertical_path
 
-    config = ResolvedConfig(measurement_density=20, hover_duration=5.0)
+    # density=100 ensures step=0.046 degrees - within 0.05 HOVER_ANGLE_TOLERANCE
+    config = ResolvedConfig(measurement_density=100, hover_duration=5.0)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
     setting_angles = [3.0, 3.5, 4.0, 4.5]
 

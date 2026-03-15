@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.enums import MissionStatus
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.mission import InspectionCreate, InspectionUpdate
@@ -25,7 +26,7 @@ def _get_mission(db: Session, mission_id: UUID) -> Mission:
 def _regress_when_changed(mission: Mission):
     """regress VALIDATED -> PLANNED on inspection changes"""
     if mission.status == "VALIDATED":
-        mission.status = "PLANNED"
+        mission.status = MissionStatus.PLANNED
 
 
 def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> Inspection:
