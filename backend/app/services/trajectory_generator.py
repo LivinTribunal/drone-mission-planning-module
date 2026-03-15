@@ -95,29 +95,42 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
 
 
 # phase 2 helpers
+CONFIG_FIELDS = (
+    "altitude_offset",
+    "speed_override",
+    "measurement_density",
+    "custom_tolerances",
+    "density",
+    "hover_duration",
+)
+
+CONFIG_DEFAULTS = {
+    "altitude_offset": 0.0,
+    "speed_override": None,
+    "measurement_density": 8,
+    "custom_tolerances": None,
+    "density": None,
+    "hover_duration": None,
+}
+
+
+def _overlay_config(result: dict, config) -> None:
+    """overlay non-None fields from a config object onto result dict"""
+    for key in CONFIG_FIELDS:
+        val = getattr(config, key, None)
+        if val is not None:
+            result[key] = val
+
+
 def _resolve_with_defaults(inspection, template) -> dict:
     """resolveWithDefaults - field-by-field merge: override > template > default"""
-    defaults = {
-        "altitude_offset": 0.0,
-        "speed_override": None,
-        "measurement_density": 8,
-        "custom_tolerances": None,
-        "density": None,
-        "hover_duration": None,
-    }
-    result = dict(defaults)
+    result = dict(CONFIG_DEFAULTS)
 
     if template.default_config:
-        for key in defaults:
-            val = getattr(template.default_config, key, None)
-            if val is not None:
-                result[key] = val
+        _overlay_config(result, template.default_config)
 
     if inspection.config:
-        for key in defaults:
-            val = getattr(inspection.config, key, None)
-            if val is not None:
-                result[key] = val
+        _overlay_config(result, inspection.config)
 
     return result
 
