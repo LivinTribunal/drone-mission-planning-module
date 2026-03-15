@@ -46,6 +46,7 @@ def client(db_engine):
     app.dependency_overrides.clear()
 
 
+# TODO: create test data instead of doing it in a function
 @pytest.fixture(scope="module")
 def airport_id(client):
     """create a test airport and return its id"""

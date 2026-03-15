@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.inspection import Inspection, InspectionConfiguration
@@ -8,7 +9,7 @@ from app.models.mission import Mission
 
 
 def _get_mission(db: Session, mission_id: UUID) -> Mission:
-    """get mission or 404"""
+    """get mission or return 404"""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         raise HTTPException(status_code=404, detail="mission not found")
@@ -16,8 +17,8 @@ def _get_mission(db: Session, mission_id: UUID) -> Mission:
     return mission
 
 
-def _regress_if_needed(mission: Mission):
-    """regress VALIDATED -> PLANNED on inspection changes"""
+def _regress_when_changed(mission: Mission):
+    """regress mission status from VALIDATED to PLANNED on inspection changes"""
     if mission.status == "VALIDATED":
         mission.status = "PLANNED"
 
@@ -36,13 +37,12 @@ def add_inspection(db: Session, mission_id: UUID, data: dict) -> Inspection:
         config_id = config.id
 
     # next sequence order
-    max_order = (
-        db.query(Inspection.sequence_order)
+    # TODO: this is inefficient, can we do better?
+    next_order = (
+        db.query(func.coalesce(func.max(Inspection.sequence_order), 0) + 1)
         .filter(Inspection.mission_id == mission_id)
-        .order_by(Inspection.sequence_order.desc())
-        .first()
+        .scalar()
     )
-    next_order = (max_order[0] + 1) if max_order else 1
 
     inspection = Inspection(
         mission_id=mission_id,
@@ -53,7 +53,7 @@ def add_inspection(db: Session, mission_id: UUID, data: dict) -> Inspection:
     )
     db.add(inspection)
 
-    _regress_if_needed(mission)
+    _regress_when_changed(mission)
     db.commit()
     db.refresh(inspection)
 
@@ -87,7 +87,7 @@ def update_inspection(db: Session, mission_id: UUID, inspection_id: UUID, data: 
     for key, val in data.items():
         setattr(inspection, key, val)
 
-    _regress_if_needed(mission)
+    _regress_when_changed(mission)
     db.commit()
     db.refresh(inspection)
 
@@ -109,6 +109,7 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     db.flush()
 
     # reorder remaining
+    # TODO: this is inefficient, can we do better?
     remaining = (
         db.query(Inspection)
         .filter(Inspection.mission_id == mission_id)
@@ -118,7 +119,7 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     for i, insp in enumerate(remaining, start=1):
         insp.sequence_order = i
 
-    _regress_if_needed(mission)
+    _regress_when_changed(mission)
     db.commit()
 
 
@@ -137,5 +138,5 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
 
         inspection.sequence_order = i
 
-    _regress_if_needed(mission)
+    _regress_when_changed(mission)
     db.commit()

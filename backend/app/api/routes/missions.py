@@ -72,25 +72,25 @@ def duplicate_mission(mission_id: UUID, db: Session = Depends(get_db)):
 # status transitions
 @router.post("/{mission_id}/validate", response_model=MissionResponse)
 def validate_mission(mission_id: UUID, db: Session = Depends(get_db)):
-    """PLANNED -> VALIDATED"""
+    """change mission status from PLANNED to VALIDATED"""
     return mission_service.validate_mission(db, mission_id)
 
 
 @router.post("/{mission_id}/export", response_model=MissionResponse)
 def export_mission(mission_id: UUID, db: Session = Depends(get_db)):
-    """VALIDATED -> EXPORTED"""
+    """change mission status from VALIDATED to EXPORTED"""
     return mission_service.export_mission(db, mission_id)
 
 
 @router.post("/{mission_id}/complete", response_model=MissionResponse)
 def complete_mission(mission_id: UUID, db: Session = Depends(get_db)):
-    """EXPORTED -> COMPLETED"""
+    """change mission status from EXPORTED to COMPLETED"""
     return mission_service.complete_mission(db, mission_id)
 
 
 @router.post("/{mission_id}/cancel", response_model=MissionResponse)
 def cancel_mission(mission_id: UUID, db: Session = Depends(get_db)):
-    """EXPORTED -> CANCELLED"""
+    """change mission status from EXPORTED to CANCELLED"""
     return mission_service.cancel_mission(db, mission_id)
 
 

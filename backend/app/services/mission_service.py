@@ -54,7 +54,7 @@ def _enrich_detail(mission: Mission, db: Session) -> Mission:
 
 
 def _transition(mission: Mission, target_status: str):
-    """validate and apply status transition"""
+    """validate and do a status transition"""
     allowed = TRANSITIONS.get(mission.status, [])
     if target_status not in allowed:
         raise HTTPException(
@@ -70,7 +70,7 @@ def _transition(mission: Mission, target_status: str):
 
 
 def _transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mission:
-    """load mission, apply transition, commit, and return enriched"""
+    """load mission, do a status transition, commit, and return enriched"""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         raise HTTPException(status_code=404, detail="mission not found")
@@ -117,6 +117,7 @@ def get_mission(db: Session, mission_id: UUID) -> Mission:
     return _enrich_detail(mission, db)
 
 
+# TODO: add validation and create a data model for mission
 def create_mission(db: Session, data: dict) -> Mission:
     """create mission in DRAFT status"""
     mission = Mission()
@@ -177,6 +178,7 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
     if not original:
         raise HTTPException(status_code=404, detail="mission not found")
 
+    # TODO: add validation and create a data model for mission
     copy = Mission(
         name=f"{original.name} (copy)",
         status="DRAFT",
@@ -223,6 +225,7 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
 
 
 # status transitions
+# TODO: refactor these functions into one
 def validate_mission(db: Session, mission_id: UUID) -> Mission:
     """PLANNED -> VALIDATED"""
     return _transition_mission(db, mission_id, "VALIDATED")
