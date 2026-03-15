@@ -68,7 +68,10 @@ class InspectionPass:
 
 @dataclass
 class MissionData:
-    """all data loaded in phase 1 - no further entity reads after this"""
+    # all entities loaded in phase 1 - no further entity queries after this.
+    # spatial predicates (ST_Contains, ST_DWithin, ST_Intersects) still use
+    # the db session during validation, but these are computational operations
+    # on already-loaded geometry data, not entity lookups.
 
     mission: Mission
     airport: Airport
