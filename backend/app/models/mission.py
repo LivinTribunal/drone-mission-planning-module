@@ -38,6 +38,7 @@ class Mission(Base):
         default="DRAFT",
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    airport_id = Column(UUID, ForeignKey("airport.id", ondelete="CASCADE"), nullable=False)
     operator_notes = Column(String)
     drone_profile_id = Column(UUID, ForeignKey("drone_profile.id", ondelete="SET NULL"))
     date_time = Column(DateTime(timezone=True))
@@ -46,6 +47,7 @@ class Mission(Base):
     takeoff_coordinate = Column(Geometry("POINTZ", srid=4326))
     landing_coordinate = Column(Geometry("POINTZ", srid=4326))
 
+    airport = relationship("Airport")
     drone_profile = relationship("DroneProfile")
     inspections = relationship("Inspection", back_populates="mission", cascade="all, delete-orphan")
     flight_plan = relationship("FlightPlan", back_populates="mission", uselist=False)

@@ -9,6 +9,8 @@ from app.core.database import Base, get_db
 from app.main import app
 
 
+# TODO: refactor these tests to use a test database instead of a real postgres container
+# TODO: why not create a db_engine outside the test files because every test
 @pytest.fixture(scope="module")
 def db_engine():
     """db engine for testing"""
@@ -48,6 +50,7 @@ def client(db_engine):
 
 # Test Data
 # TODO: add more inspection templates
+# TODO: why not move the test data from all test files to files so its easy to add more templates
 TEMPLATE_PAYLOAD = {
     "name": "PAPI Angular Sweep",
     "description": "angular sweep for PAPI",
