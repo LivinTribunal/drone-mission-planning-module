@@ -191,10 +191,42 @@ def _get_runway_heading(template, surfaces) -> Degrees:
     return DEFAULT_HEADING
 
 
-def _check_speed_framerate(speed: MetersPerSecond, drone) -> str | None:
+def compute_optimal_speed(
+    path_distance: Meters,
+    density: int,
+    drone,
+) -> MetersPerSecond | None:
+    """compute speed that ensures camera captures at least one frame per waypoint spacing.
+    at speed v and frame_rate f, the camera captures every v/f meters.
+    for useful measurements, capture spacing must be <= waypoint spacing.
+    so: v <= waypoint_spacing * frame_rate"""
+    if not drone or not drone.camera_frame_rate or density < 2:
+        return None
+
+    waypoint_spacing = path_distance / (density - 1)
+    optimal = waypoint_spacing * drone.camera_frame_rate
+
+    # clamp to drone max speed with safety margin
+    if drone.max_speed:
+        optimal = min(optimal, drone.max_speed * SPEED_FRAMERATE_MARGIN)
+
+    return round(optimal, 1)
+
+
+def _check_speed_framerate(
+    speed: MetersPerSecond,
+    drone,
+    optimal_speed: MetersPerSecond | None = None,
+) -> str | None:
     """isSpeedCompatibleWithFrameRate - section 3.3.4"""
     if not drone.camera_frame_rate:
         return None
+
+    if optimal_speed and speed > optimal_speed:
+        return (
+            f"speed {speed:.1f} m/s exceeds optimal {optimal_speed:.1f} m/s "
+            f"for frame rate {drone.camera_frame_rate} fps"
+        )
 
     if drone.max_speed and speed > drone.max_speed * SPEED_FRAMERATE_MARGIN:
         return f"speed {speed:.1f} m/s may be too high for frame rate {drone.camera_frame_rate} fps"
@@ -222,6 +254,7 @@ def _check_sensor_fov(drone, lha_positions: list[Point3D], distance: Meters) -> 
 
 
 # phase 3 - trajectory computation (section 3.3.9 interface)
+# TODO: add switch instead of ifs
 def determine_start_position(
     center: Point3D,
     config: ResolvedConfig,
@@ -248,6 +281,7 @@ def determine_start_position(
     return Point3D(lon=lon, lat=lat, alt=alt)
 
 
+# TODO: add switch instead of ifs
 def determine_end_position(
     center: Point3D,
     config: ResolvedConfig,
@@ -769,12 +803,6 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         # phase 2 - resolve config and pre-checks
         config = _resolve_with_defaults(inspection, template)
-        speed = config.speed_override or default_speed
-
-        if drone:
-            warning = _check_speed_framerate(speed, drone)
-            if warning:
-                warnings.append(warning)
 
         lha_positions = _get_lha_positions(template)
         if not lha_positions:
@@ -785,6 +813,28 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         glide_slope = _get_glide_slope_angle(template)
         rwy_heading = _get_runway_heading(template, data.surfaces)
         setting_angles = _get_lha_setting_angles(template)
+
+        # compute optimal speed from path geometry and camera frame rate
+        start_pos = determine_start_position(
+            center, config, inspection.method, rwy_heading, glide_slope
+        )
+        end_pos = determine_end_position(
+            center, config, inspection.method, rwy_heading, glide_slope
+        )
+        path_dist = distance_between(start_pos.lon, start_pos.lat, end_pos.lon, end_pos.lat)
+        optimal_speed = compute_optimal_speed(path_dist, config.measurement_density, drone)
+
+        if config.speed_override:
+            speed = config.speed_override
+        elif optimal_speed:
+            speed = optimal_speed
+        else:
+            speed = default_speed
+
+        if drone:
+            warning = _check_speed_framerate(speed, drone, optimal_speed)
+            if warning:
+                warnings.append(warning)
 
         if drone:
             warning = _check_sensor_fov(drone, lha_positions, MIN_ARC_RADIUS)
