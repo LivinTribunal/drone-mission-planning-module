@@ -1,11 +1,11 @@
 import math
 
 from app.utils.geo import (
-    bearing,
+    bearing_between,
     centroid,
-    destination_point,
+    distance_between,
     elevation_angle,
-    haversine,
+    point_at_distance,
 )
 from tests.data.trajectory import (
     TRAJECTORY_AGL_PAYLOAD,
@@ -17,32 +17,32 @@ from tests.data.trajectory import (
 
 
 # geo utility tests
-def test_haversine_prague_brno():
-    """haversine between prague and brno - roughly 185km"""
-    dist = haversine(14.42, 50.08, 16.61, 49.19)
+def test_distance_prague_brno():
+    """distance between prague and brno - roughly 185km"""
+    dist = distance_between(14.42, 50.08, 16.61, 49.19)
 
     assert 180_000 < dist < 200_000
 
 
 def test_bearing_north():
     """bearing due north should be ~0 degrees"""
-    b = bearing(14.0, 50.0, 14.0, 51.0)
+    b = bearing_between(14.0, 50.0, 14.0, 51.0)
 
     assert abs(b) < 1.0 or abs(b - 360) < 1.0
 
 
 def test_bearing_east():
     """bearing due east should be ~90 degrees"""
-    b = bearing(14.0, 50.0, 15.0, 50.0)
+    b = bearing_between(14.0, 50.0, 15.0, 50.0)
 
     assert abs(b - 90) < 1.0
 
 
-def test_destination_point_roundtrip():
-    """destination point 1km east and back should return ~1km distance"""
+def test_point_at_distance_roundtrip():
+    """point 1km east and back should return ~1km distance"""
     lon, lat = 14.26, 50.10
-    lon2, lat2 = destination_point(lon, lat, 90, 1000)
-    dist = haversine(lon, lat, lon2, lat2)
+    lon2, lat2 = point_at_distance(lon, lat, 90, 1000)
+    dist = distance_between(lon, lat, lon2, lat2)
 
     assert abs(dist - 1000) < 1.0
 
@@ -93,7 +93,7 @@ def test_arc_path_radius():
     wps = calculate_arc_path(center, 243.0, 3.0, config, None, 5.0)
 
     for wp in wps:
-        dist = haversine(center[0], center[1], wp.lon, wp.lat)
+        dist = distance_between(center[0], center[1], wp.lon, wp.lat)
         assert dist >= MIN_ARC_RADIUS * 0.95
 
 
@@ -107,7 +107,7 @@ def test_arc_path_heading_towards_center():
     wps = calculate_arc_path(center, 243.0, 3.0, config, None, 5.0)
 
     for wp in wps:
-        expected = bearing(wp.lon, wp.lat, center[0], center[1])
+        expected = bearing_between(wp.lon, wp.lat, center[0], center[1])
         diff = abs(wp.heading - expected)
         if diff > 180:
             diff = 360 - diff

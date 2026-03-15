@@ -22,11 +22,11 @@ from app.services.safety_validator import (
 from app.utils.geo import (
     angular_span_at_distance,
     astar,
-    bearing,
+    bearing_between,
     centroid,
-    destination_point,
+    distance_between,
     elevation_angle,
-    haversine,
+    point_at_distance,
     total_path_distance,
 )
 
@@ -220,7 +220,7 @@ def _check_sensor_fov(drone, lha_positions, distance) -> str | None:
         return None
 
     center = centroid(lha_positions)
-    obs_lon, obs_lat = destination_point(center[0], center[1], 0.0, distance)
+    obs_lon, obs_lat = point_at_distance(center[0], center[1], 0.0, distance)
     span = angular_span_at_distance(lha_positions, obs_lon, obs_lat)
 
     if span > drone.sensor_fov:
@@ -246,7 +246,7 @@ def determine_start_position(
     if method == "ANGULAR_SWEEP":
         radius = max(MIN_ARC_RADIUS, 350.0)
         angle = runway_heading + math.degrees(math.radians(-DEFAULT_SWEEP_ANGLE))
-        lon, lat = destination_point(center[0], center[1], angle, radius)
+        lon, lat = point_at_distance(center[0], center[1], angle, radius)
         alt = center[2] + radius * math.tan(math.radians(glide_slope))
 
         return (lon, lat, alt + config["altitude_offset"])
@@ -254,7 +254,7 @@ def determine_start_position(
     # vertical profile
     distance = DEFAULT_HORIZONTAL_DISTANCE
     approach_heading = (runway_heading + 180) % 360
-    lon, lat = destination_point(center[0], center[1], approach_heading, distance)
+    lon, lat = point_at_distance(center[0], center[1], approach_heading, distance)
     alt = center[2] + distance * math.tan(math.radians(MIN_ELEVATION_ANGLE))
 
     return (lon, lat, alt)
@@ -271,14 +271,14 @@ def determine_end_position(
     if method == "ANGULAR_SWEEP":
         radius = max(MIN_ARC_RADIUS, 350.0)
         angle = runway_heading + math.degrees(math.radians(DEFAULT_SWEEP_ANGLE))
-        lon, lat = destination_point(center[0], center[1], angle, radius)
+        lon, lat = point_at_distance(center[0], center[1], angle, radius)
         alt = center[2] + radius * math.tan(math.radians(glide_slope))
 
         return (lon, lat, alt + config["altitude_offset"])
 
     distance = DEFAULT_HORIZONTAL_DISTANCE
     approach_heading = (runway_heading + 180) % 360
-    lon, lat = destination_point(center[0], center[1], approach_heading, distance)
+    lon, lat = point_at_distance(center[0], center[1], approach_heading, distance)
     alt = center[2] + distance * math.tan(math.radians(MAX_ELEVATION_ANGLE))
 
     return (lon, lat, alt)
@@ -308,8 +308,8 @@ def calculate_arc_path(
             theta = 0.0
 
         angle = runway_heading + math.degrees(theta)
-        lon, lat = destination_point(center[0], center[1], angle, radius)
-        heading_to_center = bearing(lon, lat, center[0], center[1])
+        lon, lat = point_at_distance(center[0], center[1], angle, radius)
+        heading_to_center = bearing_between(lon, lat, center[0], center[1])
 
         # gimbal pitch = elevation angle from drone to LHA center (section 3.3.1)
         pitch = elevation_angle(lon, lat, arc_alt, center[0], center[1], center[2])
@@ -346,8 +346,8 @@ def calculate_vertical_path(
     distance = DEFAULT_HORIZONTAL_DISTANCE
 
     approach_heading = (runway_heading + 180) % 360
-    lon, lat = destination_point(center[0], center[1], approach_heading, distance)
-    heading_to_center = bearing(lon, lat, center[0], center[1])
+    lon, lat = point_at_distance(center[0], center[1], approach_heading, distance)
+    heading_to_center = bearing_between(lon, lat, center[0], center[1])
 
     waypoints = []
     for i in range(density):
@@ -432,15 +432,15 @@ def reroute_path(
     obs_radius = (obstacle.radius or 15.0) * REROUTE_MARGIN
 
     # shift waypoint laterally away from obstacle
-    obs_bearing = bearing(wp.lon, wp.lat, obs_pos[0], obs_pos[1])
+    obs_bearing = bearing_between(wp.lon, wp.lat, obs_pos[0], obs_pos[1])
     away_bearing = (obs_bearing + 180) % 360
-    new_lon, new_lat = destination_point(wp.lon, wp.lat, away_bearing, obs_radius)
+    new_lon, new_lat = point_at_distance(wp.lon, wp.lat, away_bearing, obs_radius)
 
     # if we have a center (measurement wp), check the rerouted point
     # preserves the measurement distance within tolerance
     if center:
-        original_dist = haversine(wp.lon, wp.lat, center[0], center[1])
-        new_dist = haversine(new_lon, new_lat, center[0], center[1])
+        original_dist = distance_between(wp.lon, wp.lat, center[0], center[1])
+        new_dist = distance_between(new_lon, new_lat, center[0], center[1])
 
         if abs(new_dist - original_dist) / original_dist > 0.1:
             return None  # can't preserve measurement geometry
@@ -557,7 +557,7 @@ def compute_transit_path(
                 lon=to_point[0],
                 lat=to_point[1],
                 alt=to_point[2],
-                heading=bearing(
+                heading=bearing_between(
                     from_point[0],
                     from_point[1],
                     to_point[0],
@@ -615,7 +615,7 @@ def compute_transit_path(
                         break
 
             if not blocked:
-                dist = haversine(nodes[i][0], nodes[i][1], nodes[j][0], nodes[j][1])
+                dist = distance_between(nodes[i][0], nodes[i][1], nodes[j][0], nodes[j][1])
                 graph[i].append((j, dist))
                 graph[j].append((i, dist))
 
@@ -639,7 +639,7 @@ def compute_transit_path(
                 lon=node[0],
                 lat=node[1],
                 alt=node[2],
-                heading=bearing(prev[0], prev[1], node[0], node[1]),
+                heading=bearing_between(prev[0], prev[1], node[0], node[1]),
                 speed=speed,
                 waypoint_type="TRANSIT",
                 camera_action="NONE",
@@ -803,7 +803,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple:
                 lon=tc[0],
                 lat=tc[1],
                 alt=tc[2],
-                heading=bearing(tc[0], tc[1], first_wp.lon, first_wp.lat),
+                heading=bearing_between(tc[0], tc[1], first_wp.lon, first_wp.lat),
                 speed=default_speed,
                 waypoint_type="TAKEOFF",
                 camera_action="NONE",
@@ -856,7 +856,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple:
                     lon=lc[0],
                     lat=lc[1],
                     alt=lc[2],
-                    heading=bearing(last.lon, last.lat, lc[0], lc[1]),
+                    heading=bearing_between(last.lon, last.lat, lc[0], lc[1]),
                     speed=default_speed,
                     waypoint_type="LANDING",
                     camera_action="NONE",
@@ -870,7 +870,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple:
         if j > 0:
             prev = all_waypoints[j - 1]
             cur = all_waypoints[j]
-            seg = haversine(prev.lon, prev.lat, cur.lon, cur.lat)
+            seg = distance_between(prev.lon, prev.lat, cur.lon, cur.lat)
             dz = cur.alt - prev.alt
             d = math.sqrt(seg**2 + dz**2)
             total_dist += d
