@@ -39,6 +39,9 @@ REROUTE_SEARCH_RADIUS_MULTIPLIER = 3.0
 MAX_REROUTE_DEVIATION = 0.15
 MAX_TURN_ANGLE: Degrees = 60.0
 
+# safety validation
+DEFAULT_RUNWAY_BUFFER: Meters = 100.0
+
 
 @dataclass
 class Point3D:

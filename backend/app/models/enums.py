@@ -60,3 +60,16 @@ class LampType(str, enum.Enum):
 class PAPISide(str, enum.Enum):
     LEFT = "LEFT"
     RIGHT = "RIGHT"
+
+
+class ConstraintType(str, enum.Enum):
+    ALTITUDE = "ALTITUDE"
+    SPEED = "SPEED"
+    GEOFENCE = "GEOFENCE"
+    RUNWAY_BUFFER = "RUNWAY_BUFFER"
+    BATTERY = "BATTERY"
+
+
+class SurfaceType(str, enum.Enum):
+    RUNWAY = "RUNWAY"
+    TAXIWAY = "TAXIWAY"

@@ -4,15 +4,17 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
-from app.models.enums import SafetyZoneType
+from app.models.enums import ConstraintType, SafetyZoneType, SurfaceType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
 from app.services.geometry_converter import geojson_to_ewkt
-from app.services.trajectory_types import Violation
+from app.services.trajectory_types import DEFAULT_RUNWAY_BUFFER, Violation
 
 # spatial queries use parameterized text() with PostGIS functions
 # this is the data-layer spatial computation described in section 3.1.3
 # all inputs are bound parameters - no sql injection risk
+
+HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
 
 def validate_inspection_pass(
@@ -104,7 +106,6 @@ def check_obstacle(db: Session, wp, obstacle: Obstacle) -> Violation | None:
     if not contained:
         return None
 
-    # altitude check - obstacle extends from base to base + height
     obs_base_alt = 0.0
     if obstacle.position:
         from app.schemas.geometry import parse_ewkb
@@ -171,7 +172,7 @@ def check_safety_zone(db: Session, wp, zone: SafetyZone) -> Violation | None:
     if zone.altitude_ceiling is not None and wp.alt > zone.altitude_ceiling:
         return None
 
-    is_hard = zone.type in (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
+    is_hard = zone.type in HARD_ZONE_TYPES
 
     return Violation(
         is_warning=not is_hard,
@@ -216,7 +217,7 @@ def segments_intersect_zone(
     if not zone.geometry:
         return False
 
-    if zone.type not in (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY):
+    if zone.type not in HARD_ZONE_TYPES:
         return False
 
     line_ewkt = f"SRID=4326;LINESTRING({from_lon} {from_lat}, {to_lon} {to_lat})"
@@ -241,7 +242,7 @@ def _check_constraint(
 ) -> Violation | None:
     ctype = constraint.constraint_type
 
-    if ctype == "ALTITUDE":
+    if ctype == ConstraintType.ALTITUDE:
         if constraint.min_altitude and wp.alt < constraint.min_altitude:
             return _violation(
                 constraint,
@@ -253,14 +254,14 @@ def _check_constraint(
                 f"alt {wp.alt:.0f}m above max {constraint.max_altitude:.0f}m",
             )
 
-    elif ctype == "SPEED":
+    elif ctype == ConstraintType.SPEED:
         if constraint.max_horizontal_speed and wp.speed > constraint.max_horizontal_speed:
             return _violation(
                 constraint,
                 f"speed {wp.speed:.1f} exceeds max {constraint.max_horizontal_speed:.1f} m/s",
             )
 
-    elif ctype == "GEOFENCE" and constraint.boundary:
+    elif ctype == ConstraintType.GEOFENCE and constraint.boundary:
         wp_ewkt = _wp_to_ewkt(wp)
         contained = db.execute(
             text(
@@ -274,7 +275,7 @@ def _check_constraint(
         if not contained:
             return _violation(constraint, "waypoint outside geofence boundary")
 
-    elif ctype == "RUNWAY_BUFFER":
+    elif ctype == ConstraintType.RUNWAY_BUFFER:
         v = _check_runway_buffer(db, wp, constraint, surfaces)
         if v:
             return v
@@ -289,11 +290,11 @@ def _check_runway_buffer(
     surfaces: list[AirfieldSurface],
 ) -> Violation | None:
     """PostGIS ST_DWithin for runway buffer check - section 3.4.1"""
-    buffer_m = constraint.lateral_buffer or 100.0
+    buffer_m = constraint.lateral_buffer or DEFAULT_RUNWAY_BUFFER
     wp_ewkt = _wp_to_ewkt(wp)
 
     for surface in surfaces:
-        if surface.surface_type != "RUNWAY":
+        if surface.surface_type != SurfaceType.RUNWAY:
             continue
         if not surface.geometry:
             continue
