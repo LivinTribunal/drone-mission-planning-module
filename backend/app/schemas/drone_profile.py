@@ -62,3 +62,10 @@ class DroneProfileListResponse(BaseModel):
 
     data: list[DroneProfileResponse]
     meta: dict
+
+
+class DroneProfileDeleteResponse(BaseModel):
+    """drone profile delete response schema"""
+
+    deleted: bool
+    warnings: list[str] = []

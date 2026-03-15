@@ -21,6 +21,8 @@ router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
 
 
 # mission CRUD
+
+
 @router.get("", response_model=MissionListResponse)
 def list_missions(
     airport_id: UUID | None = Query(None),
@@ -46,15 +48,13 @@ def get_mission(mission_id: UUID, db: Session = Depends(get_db)):
 @router.post("", status_code=201, response_model=MissionResponse)
 def create_mission(body: MissionCreate, db: Session = Depends(get_db)):
     """create mission in DRAFT status"""
-    return mission_service.create_mission(db, body.model_dump(exclude_unset=True))
+    return mission_service.create_mission(db, body)
 
 
 @router.put("/{mission_id}", response_model=MissionResponse)
 def update_mission(mission_id: UUID, body: MissionUpdate, db: Session = Depends(get_db)):
     """update mission"""
-    data = body.model_dump(exclude_unset=True)
-
-    return mission_service.update_mission(db, mission_id, data)
+    return mission_service.update_mission(db, mission_id, body)
 
 
 @router.delete("/{mission_id}", status_code=204)
@@ -70,35 +70,39 @@ def duplicate_mission(mission_id: UUID, db: Session = Depends(get_db)):
 
 
 # status transitions
+
+
 @router.post("/{mission_id}/validate", response_model=MissionResponse)
 def validate_mission(mission_id: UUID, db: Session = Depends(get_db)):
-    """change mission status from PLANNED to VALIDATED"""
-    return mission_service.validate_mission(db, mission_id)
+    """PLANNED -> VALIDATED"""
+    return mission_service.transition_mission(db, mission_id, "VALIDATED")
 
 
 @router.post("/{mission_id}/export", response_model=MissionResponse)
 def export_mission(mission_id: UUID, db: Session = Depends(get_db)):
-    """change mission status from VALIDATED to EXPORTED"""
-    return mission_service.export_mission(db, mission_id)
+    """VALIDATED -> EXPORTED"""
+    return mission_service.transition_mission(db, mission_id, "EXPORTED")
 
 
 @router.post("/{mission_id}/complete", response_model=MissionResponse)
 def complete_mission(mission_id: UUID, db: Session = Depends(get_db)):
-    """change mission status from EXPORTED to COMPLETED"""
-    return mission_service.complete_mission(db, mission_id)
+    """EXPORTED -> COMPLETED"""
+    return mission_service.transition_mission(db, mission_id, "COMPLETED")
 
 
 @router.post("/{mission_id}/cancel", response_model=MissionResponse)
 def cancel_mission(mission_id: UUID, db: Session = Depends(get_db)):
-    """change mission status from EXPORTED to CANCELLED"""
-    return mission_service.cancel_mission(db, mission_id)
+    """EXPORTED -> CANCELLED"""
+    return mission_service.transition_mission(db, mission_id, "CANCELLED")
 
 
 # inspection endpoints
+
+
 @router.post("/{mission_id}/inspections", status_code=201, response_model=InspectionResponse)
 def add_inspection(mission_id: UUID, body: InspectionCreate, db: Session = Depends(get_db)):
     """add inspection to mission"""
-    return inspection_service.add_inspection(db, mission_id, body.model_dump())
+    return inspection_service.add_inspection(db, mission_id, body)
 
 
 @router.put("/{mission_id}/inspections/{inspection_id}", response_model=InspectionResponse)
@@ -109,9 +113,7 @@ def update_inspection(
     db: Session = Depends(get_db),
 ):
     """update inspection"""
-    data = body.model_dump(exclude_unset=True)
-
-    return inspection_service.update_inspection(db, mission_id, inspection_id, data)
+    return inspection_service.update_inspection(db, mission_id, inspection_id, body)
 
 
 @router.delete("/{mission_id}/inspections/{inspection_id}", status_code=204)
@@ -120,7 +122,7 @@ def delete_inspection(mission_id: UUID, inspection_id: UUID, db: Session = Depen
     inspection_service.delete_inspection(db, mission_id, inspection_id)
 
 
-@router.put("/{mission_id}/inspections/reorder")
+@router.put("/{mission_id}/inspections/reorder", response_model=dict)
 def reorder_inspections(mission_id: UUID, body: ReorderRequest, db: Session = Depends(get_db)):
     """reorder inspections by sequence"""
     inspection_service.reorder_inspections(db, mission_id, body.inspection_ids)

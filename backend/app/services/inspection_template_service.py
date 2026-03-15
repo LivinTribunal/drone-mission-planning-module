@@ -10,6 +10,7 @@ from app.models.inspection import (
     InspectionTemplate,
     insp_template_methods,
 )
+from app.schemas.inspection_template import InspectionTemplateCreate, InspectionTemplateUpdate
 
 
 def _enrich(template: InspectionTemplate, db: Session) -> InspectionTemplate:
@@ -37,7 +38,6 @@ def _load_template(db: Session, template_id: UUID) -> InspectionTemplate:
         .filter(InspectionTemplate.id == template_id)
         .first()
     )
-
     if not template:
         raise HTTPException(status_code=404, detail="template not found")
 
@@ -55,6 +55,7 @@ def list_templates(db: Session, airport_id: UUID | None = None) -> list[Inspecti
         query = query.filter(InspectionTemplate.targets.any(AGL.surface.has(airport_id=airport_id)))
 
     templates = query.all()
+
     return [_enrich(template, db) for template in templates]
 
 
@@ -63,13 +64,13 @@ def get_template(db: Session, template_id: UUID) -> InspectionTemplate:
     return _load_template(db, template_id)
 
 
-def create_template(db: Session, data: dict) -> InspectionTemplate:
+def create_template(db: Session, schema: InspectionTemplateCreate) -> InspectionTemplate:
     """create inspection template"""
+    data = schema.model_dump()
     config_data = data.pop("default_config", None)
     target_ids = data.pop("target_agl_ids", [])
     methods = data.pop("methods", [])
 
-    # create config if provided
     config = None
     if config_data:
         config = InspectionConfiguration(**config_data)
@@ -80,7 +81,6 @@ def create_template(db: Session, data: dict) -> InspectionTemplate:
     if config:
         template.default_config_id = config.id
 
-    # link target AGLs
     if target_ids:
         agls = db.query(AGL).filter(AGL.id.in_(target_ids)).all()
         template.targets = agls
@@ -88,15 +88,17 @@ def create_template(db: Session, data: dict) -> InspectionTemplate:
     db.add(template)
     db.flush()
 
-    # insert methods
     for method in methods:
         db.execute(insp_template_methods.insert().values(template_id=template.id, method=method))
 
     db.commit()
+
     return _load_template(db, template.id)
 
 
-def update_template(db: Session, template_id: UUID, data: dict) -> InspectionTemplate:
+def update_template(
+    db: Session, template_id: UUID, schema: InspectionTemplateUpdate
+) -> InspectionTemplate:
     """update inspection template"""
     template = (
         db.query(InspectionTemplate)
@@ -104,10 +106,10 @@ def update_template(db: Session, template_id: UUID, data: dict) -> InspectionTem
         .filter(InspectionTemplate.id == template_id)
         .first()
     )
-
     if not template:
         raise HTTPException(status_code=404, detail="template not found")
 
+    data = schema.model_dump(exclude_unset=True)
     target_ids = data.pop("target_agl_ids", None)
     methods = data.pop("methods", None)
 
@@ -128,6 +130,7 @@ def update_template(db: Session, template_id: UUID, data: dict) -> InspectionTem
             )
 
     db.commit()
+
     return _load_template(db, template_id)
 
 

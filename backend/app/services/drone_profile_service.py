@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.mission import DroneProfile, Mission
+from app.schemas.drone_profile import DroneProfileCreate, DroneProfileUpdate
 
 
 def list_drones(db: Session) -> list[DroneProfile]:
@@ -20,9 +21,9 @@ def get_drone(db: Session, drone_id: UUID) -> DroneProfile:
     return drone
 
 
-def create_drone(db: Session, data: dict) -> DroneProfile:
+def create_drone(db: Session, schema: DroneProfileCreate) -> DroneProfile:
     """create drone profile"""
-    drone = DroneProfile(**data)
+    drone = DroneProfile(**schema.model_dump())
     db.add(drone)
     db.commit()
     db.refresh(drone)
@@ -30,13 +31,13 @@ def create_drone(db: Session, data: dict) -> DroneProfile:
     return drone
 
 
-def update_drone(db: Session, drone_id: UUID, data: dict) -> DroneProfile:
+def update_drone(db: Session, drone_id: UUID, schema: DroneProfileUpdate) -> DroneProfile:
     """update drone profile"""
     drone = db.query(DroneProfile).filter(DroneProfile.id == drone_id).first()
     if not drone:
         raise HTTPException(status_code=404, detail="drone profile not found")
 
-    for key, val in data.items():
+    for key, val in schema.model_dump(exclude_unset=True).items():
         setattr(drone, key, val)
 
     db.commit()
@@ -46,7 +47,7 @@ def update_drone(db: Session, drone_id: UUID, data: dict) -> DroneProfile:
 
 
 def delete_drone(db: Session, drone_id: UUID) -> list[str]:
-    """delete drone profile"""
+    """delete drone profile, returns warnings for missions using it"""
     drone = db.query(DroneProfile).filter(DroneProfile.id == drone_id).first()
     if not drone:
         raise HTTPException(status_code=404, detail="drone profile not found")

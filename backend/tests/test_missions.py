@@ -1,54 +1,9 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from testcontainers.postgres import PostgresContainer
-
-import app.models  # noqa: F401
-from app.core.database import Base, get_db
-from app.main import app
-
-
-@pytest.fixture(scope="module")
-def db_engine():
-    """db engine for testing"""
-    with PostgresContainer(
-        image="postgis/postgis:16-3.4",
-        username="test",
-        password="test",
-        dbname="test",
-    ) as pg:
-        engine = create_engine(pg.get_connection_url())
-
-        with engine.connect() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-            conn.commit()
-
-        Base.metadata.create_all(engine)
-        yield engine
-        Base.metadata.drop_all(engine)
-
-
-@pytest.fixture(scope="module")
-def client(db_engine):
-    """client for testing"""
-    TestSession = sessionmaker(bind=db_engine)
-
-    def override_get_db():
-        db = TestSession()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="module")
 def airport_id(client):
-    """create a test airport and return its id"""
+    """create a test airport for mission tests"""
     r = client.post(
         "/api/v1/airports",
         json={
@@ -62,6 +17,7 @@ def airport_id(client):
     return r.json()["id"]
 
 
+# Tests
 def test_create_mission(client, airport_id):
     """test create mission"""
     response = client.post(
@@ -73,6 +29,15 @@ def test_create_mission(client, airport_id):
     assert data["name"] == "Test Mission"
     assert data["status"] == "DRAFT"
     assert data["airport_id"] == airport_id
+
+
+def test_create_mission_invalid_airport(client):
+    """test create mission with invalid airport id"""
+    response = client.post(
+        "/api/v1/missions",
+        json={"name": "Bad Mission", "airport_id": "00000000-0000-0000-0000-000000000000"},
+    )
+    assert response.status_code == 400
 
 
 def test_list_missions(client):
@@ -157,7 +122,7 @@ def test_add_inspection(client):
     """test add inspection to mission"""
     template = client.post(
         "/api/v1/inspection-templates",
-        json={"name": "Test Template", "methods": ["ANGULAR_SWEEP"]},
+        json={"name": "Mission Test Template", "methods": ["ANGULAR_SWEEP"]},
     ).json()
 
     missions = client.get("/api/v1/missions").json()["data"]

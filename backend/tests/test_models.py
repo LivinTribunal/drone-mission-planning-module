@@ -26,17 +26,6 @@ EXPECTED_TABLES = {
     "constraint_rule",
 }
 
-AIRPORT_PAYLOAD = {
-    "icao_code": "LZIB",
-    "name": "Bratislava Airport",
-    "elevation": 133.0,
-    "location": "SRID=4326;POINTZ(17.2127 48.1702 133)",
-}
-
-MISSION_PAYLOAD = {
-    "name": "Test Mission",
-}
-
 
 # Tests
 def test_all_19_tables_registered():
@@ -58,7 +47,12 @@ def test_airport_crud(db_session):
     """test airport CRUD operations"""
     from app.models.airport import Airport
 
-    airport = Airport(**AIRPORT_PAYLOAD)
+    airport = Airport(
+        icao_code="LZIB",
+        name="Bratislava Airport",
+        elevation=133.0,
+        location="SRID=4326;POINTZ(17.2127 48.1702 133)",
+    )
     db_session.add(airport)
     db_session.flush()
 
@@ -74,7 +68,12 @@ def test_mission_default_status(db_session):
 
     airport = db_session.query(Airport).filter_by(icao_code="LZIB").first()
     if not airport:
-        airport = Airport(**AIRPORT_PAYLOAD)
+        airport = Airport(
+            icao_code="LZIB",
+            name="Bratislava Airport",
+            elevation=133.0,
+            location="SRID=4326;POINTZ(17.2127 48.1702 133)",
+        )
         db_session.add(airport)
         db_session.flush()
 

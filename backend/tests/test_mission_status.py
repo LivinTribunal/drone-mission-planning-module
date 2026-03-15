@@ -1,55 +1,9 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from testcontainers.postgres import PostgresContainer
-
-import app.models  # noqa: F401
-from app.core.database import Base, get_db
-from app.main import app
 
 
-@pytest.fixture(scope="module")
-def db_engine():
-    """db engine for testing"""
-    with PostgresContainer(
-        image="postgis/postgis:16-3.4",
-        username="test",
-        password="test",
-        dbname="test",
-    ) as pg:
-        engine = create_engine(pg.get_connection_url())
-
-        with engine.connect() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-            conn.commit()
-
-        Base.metadata.create_all(engine)
-        yield engine
-        Base.metadata.drop_all(engine)
-
-
-@pytest.fixture(scope="module")
-def client(db_engine):
-    """client for testing"""
-    TestSession = sessionmaker(bind=db_engine)
-
-    def override_get_db():
-        db = TestSession()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
-    app.dependency_overrides.clear()
-
-
-# TODO: create test data instead of doing it in a function
 @pytest.fixture(scope="module")
 def airport_id(client):
-    """create a test airport and return its id"""
+    """create a test airport for status tests"""
     r = client.post(
         "/api/v1/airports",
         json={
@@ -70,6 +24,7 @@ def _create_mission(client, airport_id: str, name="Status Test") -> str:
     return response.json()["id"]
 
 
+# Tests
 def test_draft_cannot_validate(client, airport_id):
     """DRAFT -> VALIDATED should fail (must go through PLANNED first)"""
     mission_id = _create_mission(client, airport_id)
@@ -118,10 +73,9 @@ def test_invalid_transition_returns_allowed(client, airport_id):
 
 
 def test_update_regresses_validated_to_planned(client, airport_id):
-    """changing trajectory fields should regress VALIDATED -> PLANNED"""
+    """changing trajectory fields on DRAFT mission should still work"""
     mission_id = _create_mission(client, airport_id)
 
-    # update with trajectory field on a DRAFT mission - should not fail
     response = client.put(
         f"/api/v1/missions/{mission_id}",
         json={"default_speed": 10.0},
