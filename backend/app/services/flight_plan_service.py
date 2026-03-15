@@ -21,7 +21,8 @@ def _waypoint_to_model(wp, flight_plan_id, sequence_order: int) -> Waypoint:
     """convert WaypointData to ORM model"""
     target_ewkt = None
     if wp.camera_target:
-        target_ewkt = _to_point_ewkt(*wp.camera_target)
+        ct = wp.camera_target
+        target_ewkt = _to_point_ewkt(ct.lon, ct.lat, ct.alt)
 
     return Waypoint(
         flight_plan_id=flight_plan_id,

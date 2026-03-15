@@ -1,9 +1,42 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from uuid import UUID
 
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
+from app.models.enums import CameraAction, WaypointType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile, Mission
+
+
+@dataclass
+class Point3D:
+    """3D geographic point (lon, lat, alt in meters)"""
+
+    lon: float
+    lat: float
+    alt: float
+
+    def to_tuple(self) -> tuple[float, float, float]:
+        return (self.lon, self.lat, self.alt)
+
+    @staticmethod
+    def from_tuple(t: tuple[float, float, float]) -> Point3D:
+        return Point3D(lon=t[0], lat=t[1], alt=t[2])
+
+
+@dataclass
+class ResolvedConfig:
+    """merged inspection config: operator override > template default > hardcoded"""
+
+    altitude_offset: float = 0.0
+    speed_override: float | None = None
+    measurement_density: int = 8
+    custom_tolerances: dict | None = None
+    density: float | None = None
+    hover_duration: float | None = None
+    horizontal_distance: float | None = None
+    sweep_angle: float | None = None
 
 
 @dataclass
@@ -15,9 +48,9 @@ class WaypointData:
     alt: float
     heading: float = 0.0
     speed: float = 5.0
-    waypoint_type: str = "MEASUREMENT"
-    camera_action: str = "PHOTO_CAPTURE"
-    camera_target: tuple[float, float, float] | None = None
+    waypoint_type: WaypointType = WaypointType.MEASUREMENT
+    camera_action: CameraAction = CameraAction.PHOTO_CAPTURE
+    camera_target: Point3D | None = None
     inspection_id: UUID | None = None
     hover_duration: float | None = None
     gimbal_pitch: float | None = None

@@ -1,5 +1,7 @@
 import math
 
+from app.models.enums import CameraAction, InspectionMethod, WaypointType
+from app.services.trajectory_types import Point3D, ResolvedConfig, WaypointData
 from app.utils.geo import (
     bearing_between,
     center_of_points,
@@ -74,26 +76,26 @@ def test_arc_path_count():
     """arc path should generate measurement_density waypoints"""
     from app.services.trajectory_generator import calculate_arc_path
 
-    config = {"measurement_density": 10, "altitude_offset": 0.0}
-    center = (14.274, 50.098, 380.0)
+    config = ResolvedConfig(measurement_density=10)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
 
     wps = calculate_arc_path(center, 243.0, 3.0, config, None, 5.0)
 
     assert len(wps) == 10
-    assert all(wp.waypoint_type == "MEASUREMENT" for wp in wps)
+    assert all(wp.waypoint_type == WaypointType.MEASUREMENT for wp in wps)
 
 
 def test_arc_path_radius():
     """all arc waypoints should be >= 350m from center"""
     from app.services.trajectory_generator import MIN_ARC_RADIUS, calculate_arc_path
 
-    config = {"measurement_density": 8, "altitude_offset": 0.0}
-    center = (14.274, 50.098, 380.0)
+    config = ResolvedConfig(measurement_density=8)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
 
     wps = calculate_arc_path(center, 243.0, 3.0, config, None, 5.0)
 
     for wp in wps:
-        dist = distance_between(center[0], center[1], wp.lon, wp.lat)
+        dist = distance_between(center.lon, center.lat, wp.lon, wp.lat)
         assert dist >= MIN_ARC_RADIUS * 0.95
 
 
@@ -101,13 +103,13 @@ def test_arc_path_heading_towards_center():
     """measurement waypoints should point at LHA center"""
     from app.services.trajectory_generator import calculate_arc_path
 
-    config = {"measurement_density": 5, "altitude_offset": 0.0}
-    center = (14.274, 50.098, 380.0)
+    config = ResolvedConfig(measurement_density=5)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
 
     wps = calculate_arc_path(center, 243.0, 3.0, config, None, 5.0)
 
     for wp in wps:
-        expected = bearing_between(wp.lon, wp.lat, center[0], center[1])
+        expected = bearing_between(wp.lon, wp.lat, center.lon, center.lat)
         diff = abs(wp.heading - expected)
         if diff > 180:
             diff = 360 - diff
@@ -119,12 +121,12 @@ def test_arc_path_altitude_uses_glide_slope():
     """arc altitude = center_alt + r * tan(glide_slope) + offset"""
     from app.services.trajectory_generator import MIN_ARC_RADIUS, calculate_arc_path
 
-    config = {"measurement_density": 3, "altitude_offset": 5.0}
-    center = (14.274, 50.098, 380.0)
+    config = ResolvedConfig(measurement_density=3, altitude_offset=5.0)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
     glide_slope = 3.0
     radius = MIN_ARC_RADIUS
 
-    expected_alt = center[2] + radius * math.tan(math.radians(glide_slope)) + 5.0
+    expected_alt = center.alt + radius * math.tan(math.radians(glide_slope)) + 5.0
 
     wps = calculate_arc_path(center, 243.0, glide_slope, config, None, 5.0)
 
@@ -137,8 +139,8 @@ def test_vertical_path_count():
     """vertical path should generate measurement_density waypoints"""
     from app.services.trajectory_generator import calculate_vertical_path
 
-    config = {"measurement_density": 8, "hover_duration": None}
-    center = (14.274, 50.098, 380.0)
+    config = ResolvedConfig(measurement_density=8)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
 
     wps = calculate_vertical_path(center, 243.0, config, None, 3.0, [])
 
@@ -149,8 +151,8 @@ def test_vertical_path_altitude_increases():
     """altitude should increase from min to max elevation angle"""
     from app.services.trajectory_generator import calculate_vertical_path
 
-    config = {"measurement_density": 6, "hover_duration": None}
-    center = (14.274, 50.098, 380.0)
+    config = ResolvedConfig(measurement_density=6)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
 
     wps = calculate_vertical_path(center, 243.0, config, None, 3.0, [])
     alts = [wp.alt for wp in wps]
@@ -163,8 +165,8 @@ def test_vertical_path_same_horizontal():
     """all vertical profile waypoints at same lon/lat"""
     from app.services.trajectory_generator import calculate_vertical_path
 
-    config = {"measurement_density": 5, "hover_duration": None}
-    center = (14.274, 50.098, 380.0)
+    config = ResolvedConfig(measurement_density=5)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
 
     wps = calculate_vertical_path(center, 243.0, config, None, 3.0, [])
 
@@ -177,23 +179,14 @@ def test_vertical_path_hover_at_transitions():
     """HOVER waypoints inserted at LHA setting angle boundaries"""
     from app.services.trajectory_generator import calculate_vertical_path
 
-    config = {"measurement_density": 20, "hover_duration": 5.0}
-    center = (14.274, 50.098, 380.0)
-    # setting angles from seed data: 3.0, 3.5, 4.0, 4.5
+    config = ResolvedConfig(measurement_density=20, hover_duration=5.0)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
     setting_angles = [3.0, 3.5, 4.0, 4.5]
 
-    wps = calculate_vertical_path(
-        center,
-        243.0,
-        config,
-        None,
-        3.0,
-        setting_angles,
-    )
+    wps = calculate_vertical_path(center, 243.0, config, None, 3.0, setting_angles)
 
-    hover_wps = [wp for wp in wps if wp.waypoint_type == "HOVER"]
+    hover_wps = [wp for wp in wps if wp.waypoint_type == WaypointType.HOVER]
 
-    # should have at least some HOVER waypoints near transition angles
     assert len(hover_wps) >= 1
 
     for hwp in hover_wps:
@@ -212,22 +205,17 @@ def test_resolve_with_defaults_merge():
         altitude_offset=2.0,
     )
 
-    # mock template with default_config
     template = type("T", (), {"default_config": template_config})()
 
-    override_config = InspectionConfiguration(
-        measurement_density=15,
-    )
+    override_config = InspectionConfiguration(measurement_density=15)
 
     inspection = type("I", (), {"config": override_config})()
 
     result = _resolve_with_defaults(inspection, template)
 
-    # override takes precedence
-    assert result["measurement_density"] == 15
-    # template default fills gaps
-    assert result["speed_override"] == 5.0
-    assert result["altitude_offset"] == 2.0
+    assert result.measurement_density == 15
+    assert result.speed_override == 5.0
+    assert result.altitude_offset == 2.0
 
 
 def test_resolve_with_defaults_no_configs():
@@ -239,44 +227,40 @@ def test_resolve_with_defaults_no_configs():
 
     result = _resolve_with_defaults(inspection, template)
 
-    assert result["measurement_density"] == 8
-    assert result["altitude_offset"] == 0.0
+    assert result.measurement_density == 8
+    assert result.altitude_offset == 0.0
 
 
 # camera action tests
 def test_lead_in_lead_out_none():
     """first and last waypoints should have NONE camera action"""
     from app.services.trajectory_generator import _apply_camera_actions
-    from app.services.trajectory_types import WaypointData
 
     wps = [
-        WaypointData(lon=0, lat=0, alt=0, camera_action="PHOTO_CAPTURE"),
-        WaypointData(lon=0, lat=0, alt=0, camera_action="PHOTO_CAPTURE"),
-        WaypointData(lon=0, lat=0, alt=0, camera_action="PHOTO_CAPTURE"),
+        WaypointData(lon=0, lat=0, alt=0),
+        WaypointData(lon=0, lat=0, alt=0),
+        WaypointData(lon=0, lat=0, alt=0),
     ]
 
     _apply_camera_actions(wps)
 
-    assert wps[0].camera_action == "NONE"
-    assert wps[1].camera_action == "PHOTO_CAPTURE"
-    assert wps[2].camera_action == "NONE"
+    assert wps[0].camera_action == CameraAction.NONE
+    assert wps[1].camera_action == CameraAction.PHOTO_CAPTURE
+    assert wps[2].camera_action == CameraAction.NONE
 
 
 # gimbal pitch tests
-
-
 def test_arc_path_has_gimbal_pitch():
     """arc waypoints should have gimbal pitch computed"""
     from app.services.trajectory_generator import calculate_arc_path
 
-    config = {"measurement_density": 5, "altitude_offset": 0.0}
-    center = (14.274, 50.098, 380.0)
+    config = ResolvedConfig(measurement_density=5)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
 
     wps = calculate_arc_path(center, 243.0, 3.0, config, None, 5.0)
 
     for wp in wps:
         assert wp.gimbal_pitch is not None
-        # pitch should be negative since drone is above center
         assert wp.gimbal_pitch < 0
 
 
@@ -284,8 +268,8 @@ def test_vertical_path_has_gimbal_pitch():
     """vertical profile waypoints should have gimbal pitch"""
     from app.services.trajectory_generator import calculate_vertical_path
 
-    config = {"measurement_density": 5, "hover_duration": None}
-    center = (14.274, 50.098, 380.0)
+    config = ResolvedConfig(measurement_density=5)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
 
     wps = calculate_vertical_path(center, 243.0, config, None, 3.0, [])
 
@@ -294,8 +278,6 @@ def test_vertical_path_has_gimbal_pitch():
 
 
 # A* pathfinding tests
-
-
 def test_astar_direct_path():
     """A* should find direct path when no obstacles"""
     from app.utils.geo import astar
@@ -312,7 +294,6 @@ def test_astar_around_obstacle():
     """A* should route around when direct path blocked"""
     from app.utils.geo import astar
 
-    # 0 -> 1 is blocked, must go through 2
     nodes = [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (1.0, 1.0, 0.0)]
     graph = {
         0: [(2, 1.5)],
@@ -338,23 +319,65 @@ def test_astar_no_path():
 
 
 # interface methods
-
-
 def test_determine_start_end_positions():
     """determineStartPosition / determineEndPosition per section 3.3.9"""
-    from app.services.trajectory_generator import (
-        determine_end_position,
-        determine_start_position,
+    from app.services.trajectory_generator import determine_end_position, determine_start_position
+
+    config = ResolvedConfig(measurement_density=8)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
+
+    start = determine_start_position(center, config, InspectionMethod.ANGULAR_SWEEP, 243.0, 3.0)
+    end = determine_end_position(center, config, InspectionMethod.ANGULAR_SWEEP, 243.0, 3.0)
+
+    assert start.lon != end.lon or start.lat != end.lat
+    assert abs(start.alt - end.alt) < 0.01
+
+
+# config override tests
+def test_config_override_sweep_angle():
+    """arc path uses overridden sweep angle"""
+    from app.services.trajectory_generator import calculate_arc_path
+
+    default_config = ResolvedConfig(measurement_density=5)
+    wide_config = ResolvedConfig(measurement_density=5, sweep_angle=20.0)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
+
+    default_wps = calculate_arc_path(center, 243.0, 3.0, default_config, None, 5.0)
+    wide_wps = calculate_arc_path(center, 243.0, 3.0, wide_config, None, 5.0)
+
+    # wider sweep = more spread between first and last waypoint
+    default_spread = distance_between(
+        default_wps[0].lon, default_wps[0].lat, default_wps[-1].lon, default_wps[-1].lat
+    )
+    wide_spread = distance_between(
+        wide_wps[0].lon, wide_wps[0].lat, wide_wps[-1].lon, wide_wps[-1].lat
     )
 
-    config = {"measurement_density": 8, "altitude_offset": 0.0}
-    center = (14.274, 50.098, 380.0)
+    assert wide_spread > default_spread
 
-    start = determine_start_position(center, config, "ANGULAR_SWEEP", 243.0, 3.0)
-    end = determine_end_position(center, config, "ANGULAR_SWEEP", 243.0, 3.0)
 
-    assert start[0] != end[0] or start[1] != end[1]
-    assert start[2] == end[2]  # same altitude for arc
+def test_config_override_horizontal_distance():
+    """vertical path uses overridden horizontal distance"""
+    from app.services.trajectory_generator import calculate_vertical_path
+
+    default_config = ResolvedConfig(measurement_density=5)
+    far_config = ResolvedConfig(measurement_density=5, horizontal_distance=600.0)
+    center = Point3D(lon=14.274, lat=50.098, alt=380.0)
+
+    default_wps = calculate_vertical_path(center, 243.0, default_config, None, 3.0, [])
+    far_wps = calculate_vertical_path(center, 243.0, far_config, None, 3.0, [])
+
+    # farther distance = higher altitudes (same elevation angle, more distance)
+    assert far_wps[0].alt > default_wps[0].alt
+
+
+# Point3D tests
+def test_point3d_roundtrip():
+    """Point3D to_tuple and from_tuple"""
+    p = Point3D(lon=14.26, lat=50.10, alt=380.0)
+
+    assert p.to_tuple() == (14.26, 50.10, 380.0)
+    assert Point3D.from_tuple(p.to_tuple()) == p
 
 
 # full pipeline e2e test
@@ -392,7 +415,6 @@ def test_full_pipeline(client):
 
     drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
 
-    # create mission
     mission = client.post(
         "/api/v1/missions",
         json={
@@ -404,13 +426,11 @@ def test_full_pipeline(client):
     ).json()
     mission_id = mission["id"]
 
-    # add inspection
     client.post(
         f"/api/v1/missions/{mission_id}/inspections",
         json={"template_id": template["id"], "method": "ANGULAR_SWEEP"},
     )
 
-    # generate trajectory
     response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     assert response.status_code == 200
     data = response.json()
@@ -422,19 +442,15 @@ def test_full_pipeline(client):
     assert fp["total_distance"] > 0
     assert fp["estimated_duration"] > 0
 
-    # check waypoint types
     types = [wp["waypoint_type"] for wp in fp["waypoints"]]
     assert "MEASUREMENT" in types
 
-    # check some waypoints have NONE camera action (lead-in/lead-out)
     camera_actions = [wp["camera_action"] for wp in fp["waypoints"]]
     assert "NONE" in camera_actions
 
-    # mission should be PLANNED
     m = client.get(f"/api/v1/missions/{mission_id}").json()
     assert m["status"] == "PLANNED"
 
-    # get flight plan endpoint
     fp2 = client.get(f"/api/v1/missions/{mission_id}/flight-plan")
     assert fp2.status_code == 200
     assert len(fp2.json()["waypoints"]) == len(fp["waypoints"])

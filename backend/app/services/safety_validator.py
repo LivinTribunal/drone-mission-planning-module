@@ -4,6 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
+from app.models.enums import SafetyZoneType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
 from app.services.geometry_converter import geojson_to_ewkt
@@ -181,7 +182,7 @@ def check_safety_zone(db: Session, wp, zone: SafetyZone) -> dict | None:
     if zone.altitude_ceiling is not None and wp.alt > zone.altitude_ceiling:
         return None
 
-    is_hard = zone.type in ("PROHIBITED", "TEMPORARY_NO_FLY")
+    is_hard = zone.type in (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
     return {
         "is_warning": not is_hard,
@@ -229,7 +230,7 @@ def segments_intersect_zone(
     if not zone.geometry:
         return False
 
-    if zone.type not in ("PROHIBITED", "TEMPORARY_NO_FLY"):
+    if zone.type not in (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY):
         return False
 
     line_ewkt = f"SRID=4326;LINESTRING({from_lon} {from_lat}, {to_lon} {to_lat})"
@@ -252,45 +253,45 @@ def _check_constraint(
     constraint: ConstraintRule,
     surfaces: list[AirfieldSurface],
 ) -> dict | None:
-    ctype = constraint.constraint_type
+    match constraint.constraint_type:
+        case "ALTITUDE":
+            if constraint.min_altitude and wp.alt < constraint.min_altitude:
+                return _violation(
+                    constraint,
+                    f"alt {wp.alt:.0f}m below min {constraint.min_altitude:.0f}m",
+                )
+            if constraint.max_altitude and wp.alt > constraint.max_altitude:
+                return _violation(
+                    constraint,
+                    f"alt {wp.alt:.0f}m above max {constraint.max_altitude:.0f}m",
+                )
 
-    if ctype == "ALTITUDE":
-        if constraint.min_altitude and wp.alt < constraint.min_altitude:
-            return _violation(
-                constraint,
-                f"alt {wp.alt:.0f}m below min {constraint.min_altitude:.0f}m",
-            )
-        if constraint.max_altitude and wp.alt > constraint.max_altitude:
-            return _violation(
-                constraint,
-                f"alt {wp.alt:.0f}m above max {constraint.max_altitude:.0f}m",
-            )
+        case "SPEED":
+            if constraint.max_horizontal_speed and wp.speed > constraint.max_horizontal_speed:
+                return _violation(
+                    constraint,
+                    f"speed {wp.speed:.1f} exceeds max {constraint.max_horizontal_speed:.1f} m/s",
+                )
 
-    if ctype == "SPEED":
-        if constraint.max_horizontal_speed and wp.speed > constraint.max_horizontal_speed:
-            return _violation(
-                constraint,
-                f"speed {wp.speed:.1f} exceeds max {constraint.max_horizontal_speed:.1f} m/s",
-            )
+        case "GEOFENCE":
+            if constraint.boundary:
+                wp_ewkt = _wp_to_ewkt(wp)
+                contained = db.execute(
+                    text(
+                        "SELECT ST_Contains("
+                        "ST_Force2D(:boundary::geometry), "
+                        "ST_Force2D(ST_GeomFromEWKT(:point)))"
+                    ),
+                    {"boundary": constraint.boundary, "point": wp_ewkt},
+                ).scalar()
 
-    if ctype == "GEOFENCE" and constraint.boundary:
-        wp_ewkt = _wp_to_ewkt(wp)
-        contained = db.execute(
-            text(
-                "SELECT ST_Contains("
-                "ST_Force2D(:boundary::geometry), "
-                "ST_Force2D(ST_GeomFromEWKT(:point)))"
-            ),
-            {"boundary": constraint.boundary, "point": wp_ewkt},
-        ).scalar()
+                if not contained:
+                    return _violation(constraint, "waypoint outside geofence boundary")
 
-        if not contained:
-            return _violation(constraint, "waypoint outside geofence boundary")
-
-    if ctype == "RUNWAY_BUFFER":
-        v = _check_runway_buffer(db, wp, constraint, surfaces)
-        if v:
-            return v
+        case "RUNWAY_BUFFER":
+            v = _check_runway_buffer(db, wp, constraint, surfaces)
+            if v:
+                return v
 
     return None
 
