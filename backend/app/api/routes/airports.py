@@ -71,7 +71,7 @@ def delete_airport(airport_id: UUID, db: Session = Depends(get_db)):
     """delete airport"""
     airport_service.delete_airport(db, airport_id)
 
-    return {"deleted": True}
+    return DeleteResponse(deleted=True)
 
 
 # ground surfaces
@@ -102,7 +102,7 @@ def delete_surface(airport_id: UUID, surface_id: UUID, db: Session = Depends(get
     """delete surface for airport"""
     airport_service.delete_surface(db, airport_id, surface_id)
 
-    return {"deleted": True}
+    return DeleteResponse(deleted=True)
 
 
 # obstacles
@@ -133,7 +133,7 @@ def delete_obstacle(airport_id: UUID, obstacle_id: UUID, db: Session = Depends(g
     """delete obstacle"""
     airport_service.delete_obstacle(db, airport_id, obstacle_id)
 
-    return {"deleted": True}
+    return DeleteResponse(deleted=True)
 
 
 # safety zones
@@ -164,7 +164,7 @@ def delete_safety_zone(airport_id: UUID, zone_id: UUID, db: Session = Depends(ge
     """delete safety zone"""
     airport_service.delete_safety_zone(db, airport_id, zone_id)
 
-    return {"deleted": True}
+    return DeleteResponse(deleted=True)
 
 
 # AGLs
@@ -201,7 +201,7 @@ def delete_agl(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = D
     """delete AGL"""
     airport_service.delete_agl(db, surface_id, agl_id)
 
-    return {"deleted": True}
+    return DeleteResponse(deleted=True)
 
 
 # LHAs
@@ -261,4 +261,4 @@ def delete_lha(
     """delete LHA"""
     airport_service.delete_lha(db, agl_id, lha_id)
 
-    return {"deleted": True}
+    return DeleteResponse(deleted=True)

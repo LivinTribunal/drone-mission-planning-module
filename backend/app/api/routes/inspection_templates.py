@@ -52,4 +52,4 @@ def delete_template(template_id: UUID, db: Session = Depends(get_db)):
     """delete inspection template"""
     inspection_template_service.delete_template(db, template_id)
 
-    return {"deleted": True}
+    return DeleteResponse(deleted=True)

@@ -62,7 +62,7 @@ def delete_mission(mission_id: UUID, db: Session = Depends(get_db)):
     """delete mission"""
     mission_service.delete_mission(db, mission_id)
 
-    return {"deleted": True}
+    return DeleteResponse(deleted=True)
 
 
 @router.post("/{mission_id}/duplicate", status_code=201, response_model=MissionResponse)
@@ -119,7 +119,7 @@ def delete_inspection(mission_id: UUID, inspection_id: UUID, db: Session = Depen
     """delete inspection"""
     inspection_service.delete_inspection(db, mission_id, inspection_id)
 
-    return {"deleted": True}
+    return DeleteResponse(deleted=True)
 
 
 @router.put("/{mission_id}/inspections/reorder", response_model=ReorderResponse)
@@ -127,4 +127,4 @@ def reorder_inspections(mission_id: UUID, body: ReorderRequest, db: Session = De
     """reorder inspections by sequence"""
     inspection_service.reorder_inspections(db, mission_id, body.inspection_ids)
 
-    return {"reordered": True}
+    return ReorderResponse(reordered=True)

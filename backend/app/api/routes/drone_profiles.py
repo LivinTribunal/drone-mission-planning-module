@@ -47,4 +47,4 @@ def delete_drone(drone_id: UUID, db: Session = Depends(get_db)):
     """delete drone profile - returns warnings if missions use it"""
     warnings = drone_profile_service.delete_drone(db, drone_id)
 
-    return {"deleted": True, "warnings": warnings}
+    return DeleteResponse(deleted=True, warnings=warnings)
