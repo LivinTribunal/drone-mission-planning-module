@@ -56,7 +56,6 @@ class MissionCreate(BaseModel):
 
     name: str
     drone_profile_id: UUID | None = None
-    airport_id: UUID | None = None
     operator_notes: str | None = None
     default_speed: float | None = None
     default_altitude_offset: float | None = None

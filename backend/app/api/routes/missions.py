@@ -21,20 +21,15 @@ router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
 
 
 # mission CRUD
-
-
 @router.get("", response_model=MissionListResponse)
 def list_missions(
-    airport_id: UUID | None = Query(None),
     status: str | None = Query(None),
     limit: int = Query(20, le=200),
     offset: int = Query(0),
     db: Session = Depends(get_db),
 ):
     """list missions with filters and pagination"""
-    missions, total = mission_service.list_missions(
-        db, airport_id=airport_id, status=status, limit=limit, offset=offset
-    )
+    missions, total = mission_service.list_missions(db, status=status, limit=limit, offset=offset)
 
     return {"data": missions, "meta": {"total": total, "limit": limit, "offset": offset}}
 
@@ -72,8 +67,6 @@ def duplicate_mission(mission_id: UUID, db: Session = Depends(get_db)):
 
 
 # status transitions
-
-
 @router.post("/{mission_id}/validate", response_model=MissionResponse)
 def validate_mission(mission_id: UUID, db: Session = Depends(get_db)):
     """PLANNED -> VALIDATED"""
@@ -99,8 +92,6 @@ def cancel_mission(mission_id: UUID, db: Session = Depends(get_db)):
 
 
 # inspection endpoints
-
-
 @router.post("/{mission_id}/inspections", status_code=201, response_model=InspectionResponse)
 def add_inspection(mission_id: UUID, body: InspectionCreate, db: Session = Depends(get_db)):
     """add inspection to mission"""

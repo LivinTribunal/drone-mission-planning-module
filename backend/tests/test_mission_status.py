@@ -53,30 +53,6 @@ def _create_mission(client, name="Status Test") -> str:
     return response.json()["id"]
 
 
-def _force_status(client, mission_id: str, target: str):
-    """helper - walk through transitions to reach target status"""
-    transitions = {
-        "PLANNED": ["validate"],
-        "VALIDATED": ["validate"],
-        "EXPORTED": ["validate", "export"],
-        "COMPLETED": ["validate", "export", "complete"],
-        "CANCELLED": ["validate", "export", "cancel"],
-    }
-    steps = transitions.get(target, [])
-
-    for step in steps:
-        # need to go DRAFT -> PLANNED first (set status directly via update won't work)
-        # DRAFT -> PLANNED is automatic after trajectory generation
-        # for testing, we manually set it
-        pass
-
-    # for status tests we need to manipulate db directly
-    # instead, let's use the transition endpoints starting from appropriate states
-
-
-# Tests - valid transitions
-
-
 def test_draft_cannot_validate(client):
     """DRAFT -> VALIDATED should fail (must go through PLANNED first)"""
     mission_id = _create_mission(client)

@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.inspection import Inspection, InspectionConfiguration
 from app.models.mission import Mission
@@ -22,7 +22,7 @@ def _regress_if_needed(mission: Mission):
         mission.status = "PLANNED"
 
 
-def add_inspection(db: Session, mission_id: UUID, data: dict) -> dict:
+def add_inspection(db: Session, mission_id: UUID, data: dict) -> Inspection:
     """add inspection to mission from template"""
     mission = _get_mission(db, mission_id)
 
@@ -57,21 +57,15 @@ def add_inspection(db: Session, mission_id: UUID, data: dict) -> dict:
     db.commit()
     db.refresh(inspection)
 
-    return {
-        "id": inspection.id,
-        "mission_id": inspection.mission_id,
-        "template_id": inspection.template_id,
-        "config_id": inspection.config_id,
-        "method": inspection.method,
-        "sequence_order": inspection.sequence_order,
-    }
+    return inspection
 
 
-def update_inspection(db: Session, mission_id: UUID, inspection_id: UUID, data: dict) -> dict:
+def update_inspection(db: Session, mission_id: UUID, inspection_id: UUID, data: dict) -> Inspection:
     """update inspection config/sequence/method"""
     mission = _get_mission(db, mission_id)
     inspection = (
         db.query(Inspection)
+        .options(joinedload(Inspection.config))
         .filter(Inspection.id == inspection_id, Inspection.mission_id == mission_id)
         .first()
     )
@@ -97,14 +91,7 @@ def update_inspection(db: Session, mission_id: UUID, inspection_id: UUID, data: 
     db.commit()
     db.refresh(inspection)
 
-    return {
-        "id": inspection.id,
-        "mission_id": inspection.mission_id,
-        "template_id": inspection.template_id,
-        "config_id": inspection.config_id,
-        "method": inspection.method,
-        "sequence_order": inspection.sequence_order,
-    }
+    return inspection
 
 
 def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
