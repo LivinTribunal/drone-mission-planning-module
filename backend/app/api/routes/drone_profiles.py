@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
+from app.schemas.common import DeleteResponse
 from app.schemas.drone_profile import (
     DroneProfileCreate,
-    DroneProfileDeleteResponse,
     DroneProfileListResponse,
     DroneProfileResponse,
     DroneProfileUpdate,
@@ -42,7 +42,7 @@ def update_drone(drone_id: UUID, body: DroneProfileUpdate, db: Session = Depends
     return drone_profile_service.update_drone(db, drone_id, body)
 
 
-@router.delete("/{drone_id}", response_model=DroneProfileDeleteResponse)
+@router.delete("/{drone_id}", response_model=DeleteResponse)
 def delete_drone(drone_id: UUID, db: Session = Depends(get_db)):
     """delete drone profile - returns warnings if missions use it"""
     warnings = drone_profile_service.delete_drone(db, drone_id)

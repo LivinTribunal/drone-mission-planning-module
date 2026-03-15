@@ -11,6 +11,7 @@ from app.schemas.airport import (
     AirportResponse,
     AirportUpdate,
 )
+from app.schemas.common import DeleteResponse
 from app.schemas.infrastructure import (
     AGLCreate,
     AGLListResponse,
@@ -65,10 +66,12 @@ def update_airport(airport_id: UUID, body: AirportUpdate, db: Session = Depends(
     return airport_service.update_airport(db, airport_id, body)
 
 
-@router.delete("/{airport_id}", status_code=204)
+@router.delete("/{airport_id}", response_model=DeleteResponse)
 def delete_airport(airport_id: UUID, db: Session = Depends(get_db)):
     """delete airport"""
     airport_service.delete_airport(db, airport_id)
+
+    return {"deleted": True}
 
 
 # ground surfaces
@@ -90,14 +93,16 @@ def create_surface(airport_id: UUID, body: SurfaceCreate, db: Session = Depends(
 def update_surface(
     airport_id: UUID, surface_id: UUID, body: SurfaceUpdate, db: Session = Depends(get_db)
 ):
-    """update surface"""
+    """update surface for airport"""
     return airport_service.update_surface(db, airport_id, surface_id, body)
 
 
-@router.delete("/{airport_id}/surfaces/{surface_id}", status_code=204)
+@router.delete("/{airport_id}/surfaces/{surface_id}", response_model=DeleteResponse)
 def delete_surface(airport_id: UUID, surface_id: UUID, db: Session = Depends(get_db)):
-    """delete surface"""
+    """delete surface for airport"""
     airport_service.delete_surface(db, airport_id, surface_id)
+
+    return {"deleted": True}
 
 
 # obstacles
@@ -123,10 +128,12 @@ def update_obstacle(
     return airport_service.update_obstacle(db, airport_id, obstacle_id, body)
 
 
-@router.delete("/{airport_id}/obstacles/{obstacle_id}", status_code=204)
+@router.delete("/{airport_id}/obstacles/{obstacle_id}", response_model=DeleteResponse)
 def delete_obstacle(airport_id: UUID, obstacle_id: UUID, db: Session = Depends(get_db)):
     """delete obstacle"""
     airport_service.delete_obstacle(db, airport_id, obstacle_id)
+
+    return {"deleted": True}
 
 
 # safety zones
@@ -152,10 +159,12 @@ def update_safety_zone(
     return airport_service.update_safety_zone(db, airport_id, zone_id, body)
 
 
-@router.delete("/{airport_id}/safety-zones/{zone_id}", status_code=204)
+@router.delete("/{airport_id}/safety-zones/{zone_id}", response_model=DeleteResponse)
 def delete_safety_zone(airport_id: UUID, zone_id: UUID, db: Session = Depends(get_db)):
     """delete safety zone"""
     airport_service.delete_safety_zone(db, airport_id, zone_id)
+
+    return {"deleted": True}
 
 
 # AGLs
@@ -187,10 +196,12 @@ def update_agl(
     return airport_service.update_agl(db, surface_id, agl_id, body)
 
 
-@router.delete("/{airport_id}/surfaces/{surface_id}/agls/{agl_id}", status_code=204)
+@router.delete("/{airport_id}/surfaces/{surface_id}/agls/{agl_id}", response_model=DeleteResponse)
 def delete_agl(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = Depends(get_db)):
     """delete AGL"""
     airport_service.delete_agl(db, surface_id, agl_id)
+
+    return {"deleted": True}
 
 
 # LHAs
@@ -236,7 +247,10 @@ def update_lha(
     return airport_service.update_lha(db, agl_id, lha_id, body)
 
 
-@router.delete("/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/{lha_id}", status_code=204)
+@router.delete(
+    "/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/{lha_id}",
+    response_model=DeleteResponse,
+)
 def delete_lha(
     airport_id: UUID,
     surface_id: UUID,
@@ -246,3 +260,5 @@ def delete_lha(
 ):
     """delete LHA"""
     airport_service.delete_lha(db, agl_id, lha_id)
+
+    return {"deleted": True}

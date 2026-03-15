@@ -56,4 +56,4 @@ def test_delete_template(client):
     template_id = response.json()["id"]
 
     response = client.delete(f"/api/v1/inspection-templates/{template_id}")
-    assert response.status_code == 204
+    assert response.status_code == 200

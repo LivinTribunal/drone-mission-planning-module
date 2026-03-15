@@ -106,7 +106,7 @@ def test_delete_airport(client):
     airport_id = r.json()["id"]
 
     r = client.delete(f"/api/v1/airports/{airport_id}")
-    assert r.status_code == 204
+    assert r.status_code == 200
 
     r = client.get(f"/api/v1/airports/{airport_id}")
     assert r.status_code == 404

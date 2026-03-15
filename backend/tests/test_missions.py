@@ -106,7 +106,7 @@ def test_delete_mission(client, airport_id):
     mission_id = response.json()["id"]
 
     response = client.delete(f"/api/v1/missions/{mission_id}")
-    assert response.status_code == 204
+    assert response.status_code == 200
 
     response = client.get(f"/api/v1/missions/{mission_id}")
     assert response.status_code == 404
@@ -140,4 +140,4 @@ def test_delete_inspection(client):
         insp_id = detail["inspections"][0]["id"]
 
         response = client.delete(f"/api/v1/missions/{mission_id}/inspections/{insp_id}")
-        assert response.status_code == 204
+        assert response.status_code == 200

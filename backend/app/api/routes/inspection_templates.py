@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
+from app.schemas.common import DeleteResponse
 from app.schemas.inspection_template import (
     InspectionTemplateCreate,
     InspectionTemplateListResponse,
@@ -46,7 +47,9 @@ def update_template(
     return inspection_template_service.update_template(db, template_id, body)
 
 
-@router.delete("/{template_id}", status_code=204)
+@router.delete("/{template_id}", response_model=DeleteResponse)
 def delete_template(template_id: UUID, db: Session = Depends(get_db)):
     """delete inspection template"""
     inspection_template_service.delete_template(db, template_id)
+
+    return {"deleted": True}

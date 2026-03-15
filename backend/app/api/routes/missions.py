@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
+from app.schemas.common import DeleteResponse
 from app.schemas.mission import (
     InspectionCreate,
     InspectionResponse,
@@ -21,9 +22,7 @@ from app.services import inspection_service, mission_service
 router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
 
 
-# mission CRUD
-
-
+# missions
 @router.get("", response_model=MissionListResponse)
 def list_missions(
     airport_id: UUID | None = Query(None),
@@ -58,10 +57,12 @@ def update_mission(mission_id: UUID, body: MissionUpdate, db: Session = Depends(
     return mission_service.update_mission(db, mission_id, body)
 
 
-@router.delete("/{mission_id}", status_code=204)
+@router.delete("/{mission_id}", response_model=DeleteResponse)
 def delete_mission(mission_id: UUID, db: Session = Depends(get_db)):
     """delete mission"""
     mission_service.delete_mission(db, mission_id)
+
+    return {"deleted": True}
 
 
 @router.post("/{mission_id}/duplicate", status_code=201, response_model=MissionResponse)
@@ -71,8 +72,6 @@ def duplicate_mission(mission_id: UUID, db: Session = Depends(get_db)):
 
 
 # status transitions
-
-
 @router.post("/{mission_id}/validate", response_model=MissionResponse)
 def validate_mission(mission_id: UUID, db: Session = Depends(get_db)):
     """PLANNED -> VALIDATED"""
@@ -97,9 +96,7 @@ def cancel_mission(mission_id: UUID, db: Session = Depends(get_db)):
     return mission_service.transition_mission(db, mission_id, "CANCELLED")
 
 
-# inspection endpoints
-
-
+# inspections
 @router.post("/{mission_id}/inspections", status_code=201, response_model=InspectionResponse)
 def add_inspection(mission_id: UUID, body: InspectionCreate, db: Session = Depends(get_db)):
     """add inspection to mission"""
@@ -117,10 +114,12 @@ def update_inspection(
     return inspection_service.update_inspection(db, mission_id, inspection_id, body)
 
 
-@router.delete("/{mission_id}/inspections/{inspection_id}", status_code=204)
+@router.delete("/{mission_id}/inspections/{inspection_id}", response_model=DeleteResponse)
 def delete_inspection(mission_id: UUID, inspection_id: UUID, db: Session = Depends(get_db)):
     """delete inspection"""
     inspection_service.delete_inspection(db, mission_id, inspection_id)
+
+    return {"deleted": True}
 
 
 @router.put("/{mission_id}/inspections/reorder", response_model=ReorderResponse)
