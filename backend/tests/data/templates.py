@@ -1,3 +1,10 @@
+TEMPLATE_UPDATE_PAYLOAD = {
+    "name": "Updated Sweep",
+    "methods": ["ANGULAR_SWEEP", "VERTICAL_PROFILE"],
+}
+
+THROWAWAY_TEMPLATE_PAYLOAD = {"name": "Temp Template", "methods": []}
+
 TEMPLATE_PAYLOAD = {
     "name": "PAPI Angular Sweep",
     "description": "angular sweep for PAPI",

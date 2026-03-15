@@ -1,4 +1,8 @@
-from tests.data.templates import TEMPLATE_PAYLOAD
+from tests.data.templates import (
+    TEMPLATE_PAYLOAD,
+    TEMPLATE_UPDATE_PAYLOAD,
+    THROWAWAY_TEMPLATE_PAYLOAD,
+)
 
 
 # Tests
@@ -39,7 +43,7 @@ def test_update_template(client):
 
     response = client.put(
         f"/api/v1/inspection-templates/{template_id}",
-        json={"name": "Updated Sweep", "methods": ["ANGULAR_SWEEP", "VERTICAL_PROFILE"]},
+        json=TEMPLATE_UPDATE_PAYLOAD,
     )
     assert response.status_code == 200
     data = response.json()
@@ -51,8 +55,7 @@ def test_update_template(client):
 def test_delete_template(client):
     """test delete inspection template"""
     # create throwaway
-    payload = {"name": "Temp Template", "methods": []}
-    response = client.post("/api/v1/inspection-templates", json=payload)
+    response = client.post("/api/v1/inspection-templates", json=THROWAWAY_TEMPLATE_PAYLOAD)
     template_id = response.json()["id"]
 
     response = client.delete(f"/api/v1/inspection-templates/{template_id}")

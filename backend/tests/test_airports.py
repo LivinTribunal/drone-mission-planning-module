@@ -1,10 +1,12 @@
 from tests.data.airports import (
     AGL_PAYLOAD,
     AIRPORT_PAYLOAD,
+    AIRPORT_UPDATE_PAYLOAD,
     LHA_PAYLOAD,
     OBSTACLE_PAYLOAD,
     SAFETY_ZONE_PAYLOAD,
     SURFACE_PAYLOAD,
+    THROWAWAY_AIRPORT_PAYLOAD,
 )
 
 
@@ -42,7 +44,7 @@ def test_update_airport(client):
     airports = client.get("/api/v1/airports").json()["data"]
     airport_id = airports[0]["id"]
 
-    r = client.put(f"/api/v1/airports/{airport_id}", json={"name": "Vaclav Havel"})
+    r = client.put(f"/api/v1/airports/{airport_id}", json=AIRPORT_UPDATE_PAYLOAD)
     assert r.status_code == 200
     assert r.json()["name"] == "Vaclav Havel"
 
@@ -94,14 +96,7 @@ def test_create_agl_and_lha(client):
 
 
 def test_delete_airport(client):
-    # create a throwaway airport to delete
-    payload = {
-        "icao_code": "LKTB",
-        "name": "Brno Airport",
-        "elevation": 241.0,
-        "location": {"type": "Point", "coordinates": [16.69, 49.15, 241.0]},
-    }
-    r = client.post("/api/v1/airports", json=payload)
+    r = client.post("/api/v1/airports", json=THROWAWAY_AIRPORT_PAYLOAD)
     assert r.status_code == 201
     airport_id = r.json()["id"]
 

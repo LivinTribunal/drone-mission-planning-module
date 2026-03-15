@@ -1,4 +1,4 @@
-from tests.data.drones import DRONE_PAYLOAD
+from tests.data.drones import DRONE_PAYLOAD, DRONE_UPDATE_PAYLOAD, THROWAWAY_DRONE_PAYLOAD
 
 
 # Tests
@@ -37,14 +37,14 @@ def test_update_drone(client):
     drones = client.get("/api/v1/drone-profiles").json()["data"]
     drone_id = drones[0]["id"]
 
-    response = client.put(f"/api/v1/drone-profiles/{drone_id}", json={"max_speed": 25.0})
+    response = client.put(f"/api/v1/drone-profiles/{drone_id}", json=DRONE_UPDATE_PAYLOAD)
     assert response.status_code == 200
     assert response.json()["max_speed"] == 25.0
 
 
 def test_delete_drone(client):
     # create a throwaway drone
-    r = client.post("/api/v1/drone-profiles", json={"name": "Test Drone"})
+    r = client.post("/api/v1/drone-profiles", json=THROWAWAY_DRONE_PAYLOAD)
     drone_id = r.json()["id"]
 
     r = client.delete(f"/api/v1/drone-profiles/{drone_id}")

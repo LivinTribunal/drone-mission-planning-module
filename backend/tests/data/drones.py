@@ -1,3 +1,7 @@
+DRONE_UPDATE_PAYLOAD = {"max_speed": 25.0}
+
+THROWAWAY_DRONE_PAYLOAD = {"name": "Test Drone"}
+
 DRONE_PAYLOAD = {
     "name": "DJI Matrice 300 RTK",
     "manufacturer": "DJI",

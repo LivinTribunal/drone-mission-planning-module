@@ -1,6 +1,6 @@
 import pytest
 
-from tests.data.missions import STATUS_TEST_AIRPORT_PAYLOAD
+from tests.data.missions import MISSION_SPEED_UPDATE_PAYLOAD, STATUS_TEST_AIRPORT_PAYLOAD
 
 
 @pytest.fixture(scope="module")
@@ -72,7 +72,7 @@ def test_update_regresses_validated_to_planned(client, airport_id):
 
     response = client.put(
         f"/api/v1/missions/{mission_id}",
-        json={"default_speed": 10.0},
+        json=MISSION_SPEED_UPDATE_PAYLOAD,
     )
     assert response.status_code == 200
     assert response.json()["default_speed"] == 10.0

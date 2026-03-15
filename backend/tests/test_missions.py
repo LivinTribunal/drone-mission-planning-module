@@ -1,6 +1,11 @@
 import pytest
 
-from tests.data.missions import MISSION_AIRPORT_PAYLOAD
+from tests.data.missions import (
+    INVALID_AIRPORT_ID,
+    MISSION_AIRPORT_PAYLOAD,
+    MISSION_TEMPLATE_PAYLOAD,
+    MISSION_UPDATE_PAYLOAD,
+)
 
 
 @pytest.fixture(scope="module")
@@ -29,7 +34,7 @@ def test_create_mission_invalid_airport(client):
     """test create mission with invalid airport id"""
     response = client.post(
         "/api/v1/missions",
-        json={"name": "Bad Mission", "airport_id": "00000000-0000-0000-0000-000000000000"},
+        json={"name": "Bad Mission", "airport_id": INVALID_AIRPORT_ID},
     )
     assert response.status_code == 400
 
@@ -81,7 +86,7 @@ def test_update_mission(client):
 
     response = client.put(
         f"/api/v1/missions/{mission_id}",
-        json={"name": "Updated Mission", "operator_notes": "test notes"},
+        json=MISSION_UPDATE_PAYLOAD,
     )
     assert response.status_code == 200
     assert response.json()["name"] == "Updated Mission"
@@ -116,7 +121,7 @@ def test_add_inspection(client):
     """test add inspection to mission"""
     template = client.post(
         "/api/v1/inspection-templates",
-        json={"name": "Mission Test Template", "methods": ["ANGULAR_SWEEP"]},
+        json=MISSION_TEMPLATE_PAYLOAD,
     ).json()
 
     missions = client.get("/api/v1/missions").json()["data"]

@@ -70,3 +70,12 @@ LHA_PAYLOAD = {
     "lamp_type": "HALOGEN",
     "position": {"type": "Point", "coordinates": [14.2743, 50.0978, 380]},
 }
+
+AIRPORT_UPDATE_PAYLOAD = {"name": "Vaclav Havel"}
+
+THROWAWAY_AIRPORT_PAYLOAD = {
+    "icao_code": "LKTB",
+    "name": "Brno Airport",
+    "elevation": 241.0,
+    "location": {"type": "Point", "coordinates": [16.69, 49.15, 241.0]},
+}

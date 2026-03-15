@@ -11,6 +11,7 @@ from app.models.inspection import (
     insp_template_methods,
 )
 from app.schemas.inspection_template import InspectionTemplateCreate, InspectionTemplateUpdate
+from app.services.geo import apply_dict_update
 
 
 def _enrich(template: InspectionTemplate, db: Session) -> InspectionTemplate:
@@ -113,8 +114,7 @@ def update_template(
     target_ids = data.pop("target_agl_ids", None)
     methods = data.pop("methods", None)
 
-    for key, val in data.items():
-        setattr(template, key, val)
+    apply_dict_update(template, data)
 
     if target_ids is not None:
         agls = db.query(AGL).filter(AGL.id.in_(target_ids)).all()

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.mission import InspectionCreate, InspectionUpdate
-from app.services.geo import schema_to_model_data
+from app.services.geo import apply_dict_update, schema_to_model_data
 
 # max number of inspections per mission
 MAX_INSPECTIONS = 10
@@ -98,17 +98,14 @@ def update_inspection(
 
     if config_data:
         if inspection.config:
-            for key, val in config_data.items():
-                setattr(inspection.config, key, val)
+            apply_dict_update(inspection.config, config_data)
         else:
             config = InspectionConfiguration(**schema_to_model_data(schema.config))
             db.add(config)
             db.flush()
             inspection.config_id = config.id
 
-    for key in ("method", "sequence_order"):
-        if key in data:
-            setattr(inspection, key, data[key])
+    apply_dict_update(inspection, data)
 
     _regress_when_changed(mission)
     db.commit()

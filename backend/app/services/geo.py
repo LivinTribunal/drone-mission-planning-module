@@ -50,7 +50,12 @@ def schema_to_model_data(schema: BaseModel) -> dict:
 
 def apply_schema_update(obj, schema: BaseModel):
     """apply pydantic update schema to ORM model, converting geometry to EWKT"""
-    for key, val in schema.model_dump(exclude_unset=True).items():
+    apply_dict_update(obj, schema.model_dump(exclude_unset=True))
+
+
+def apply_dict_update(obj, data: dict):
+    """apply dict to ORM model, converting geometry fields to EWKT"""
+    for key, val in data.items():
         if key in GEOM_FIELDS and val is not None:
             setattr(obj, key, geojson_to_ewkt(val))
         else:
