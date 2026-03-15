@@ -44,6 +44,7 @@ from app.services.trajectory_types import (
     MissionData,
     Point3D,
     ResolvedConfig,
+    Violation,
     WaypointData,
 )
 from app.utils.geo import (
@@ -717,7 +718,9 @@ def _apply_camera_actions(waypoints: list[WaypointData]):
         waypoints[-1].camera_action = CameraAction.NONE
 
 
-def apply_constraints(db, waypoints, drone, constraints, obstacles, zones, surfaces) -> list[dict]:
+def apply_constraints(
+    db, waypoints, drone, constraints, obstacles, zones, surfaces
+) -> list[Violation]:
     """applyConstraints - section 3.3.9 interface"""
     return validate_inspection_pass(db, waypoints, drone, constraints, obstacles, zones, surfaces)
 
@@ -855,9 +858,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         )
 
         obstacle_violations = [
-            v
-            for v in violations
-            if not v["is_warning"] and "obstacle" in v.get("message", "").lower()
+            v for v in violations if not v.is_warning and "obstacle" in (v.message or "").lower()
         ]
 
         if obstacle_violations:
@@ -876,15 +877,18 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 data.surfaces,
             )
 
-        hard = [v for v in violations if not v["is_warning"]]
+        hard = [v for v in violations if not v.is_warning]
         if hard:
             raise HTTPException(
                 status_code=400,
-                detail={"error": "hard constraint violation", "violations": hard},
+                detail={
+                    "error": "hard constraint violation",
+                    "violations": [{"message": v.message} for v in hard],
+                },
             )
 
-        soft = [v for v in violations if v["is_warning"]]
-        warnings.extend([v["message"] for v in soft])
+        soft = [v for v in violations if v.is_warning]
+        warnings.extend([v.message for v in soft])
 
         # phase 4 - post-inspection processing
         _apply_camera_actions(pass_wps)
@@ -903,7 +907,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         if drone:
             bw = check_battery(cumulative_duration, drone, DEFAULT_RESERVE_MARGIN)
             if bw:
-                warnings.append(bw["message"])
+                warnings.append(bw.message)
 
         inspection_passes.append(InspectionPass(waypoints=pass_wps, inspection_id=inspection.id))
 
@@ -981,15 +985,18 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         data.safety_zones,
         data.surfaces,
     )
-    final_hard = [v for v in final_violations if not v["is_warning"]]
+    final_hard = [v for v in final_violations if not v.is_warning]
     if final_hard:
         raise HTTPException(
             status_code=400,
-            detail={"error": "final validation failed", "violations": final_hard},
+            detail={
+                "error": "final validation failed",
+                "violations": [{"message": v.message} for v in final_hard],
+            },
         )
 
-    final_soft = [v for v in final_violations if v["is_warning"]]
-    warnings.extend([v["message"] for v in final_soft])
+    final_soft = [v for v in final_violations if v.is_warning]
+    warnings.extend([v.message for v in final_soft])
 
     # compute final totals per-segment
     total_dist = 0.0

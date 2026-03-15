@@ -8,6 +8,7 @@ from app.models.enums import SafetyZoneType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
 from app.services.geometry_converter import geojson_to_ewkt
+from app.services.trajectory_types import Violation
 
 # spatial queries use parameterized text() with PostGIS functions
 # this is the data-layer spatial computation described in section 3.1.3
@@ -22,7 +23,7 @@ def validate_inspection_pass(
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface],
-) -> list[dict]:
+) -> list[Violation]:
     """validate all waypoints in an inspection pass"""
     violations = []
 
@@ -58,43 +59,33 @@ def validate_flight_plan(
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface],
-) -> list[dict]:
+) -> list[Violation]:
     """validate entire flight plan - section 3.4.2"""
-    return validate_inspection_pass(
-        db,
-        waypoints,
-        drone,
-        constraints,
-        obstacles,
-        zones,
-        surfaces,
-    )
+    return validate_inspection_pass(db, waypoints, drone, constraints, obstacles, zones, surfaces)
 
 
-def check_drone_constraints(wp, drone: DroneProfile) -> dict | None:
+def check_drone_constraints(wp, drone: DroneProfile) -> Violation | None:
     if drone.max_altitude and wp.alt > drone.max_altitude:
-        return {
-            "is_warning": False,
-            "message": (
+        return Violation(
+            is_warning=False,
+            message=(
                 f"waypoint alt {wp.alt:.0f}m exceeds drone max altitude {drone.max_altitude:.0f}m"
             ),
-            "constraint_id": None,
-        }
+        )
 
     if drone.max_speed and wp.speed > drone.max_speed:
-        return {
-            "is_warning": False,
-            "message": (
-                f"waypoint speed {wp.speed:.1f} m/s exceeds drone max "
-                f"speed {drone.max_speed:.1f} m/s"
+        return Violation(
+            is_warning=False,
+            message=(
+                f"waypoint speed {wp.speed:.1f} m/s exceeds "
+                f"drone max speed {drone.max_speed:.1f} m/s"
             ),
-            "constraint_id": None,
-        }
+        )
 
     return None
 
 
-def check_obstacle(db: Session, wp, obstacle: Obstacle) -> dict | None:
+def check_obstacle(db: Session, wp, obstacle: Obstacle) -> Violation | None:
     """spatial intersection test - section 3.3.5"""
     if not obstacle.geometry:
         return None
@@ -124,14 +115,13 @@ def check_obstacle(db: Session, wp, obstacle: Obstacle) -> dict | None:
     obs_top = obs_base_alt + (obstacle.height or 0)
 
     if wp.alt <= obs_top:
-        return {
-            "is_warning": False,
-            "message": (
+        return Violation(
+            is_warning=False,
+            message=(
                 f"waypoint at {wp.alt:.0f}m intersects obstacle "
                 f"'{obstacle.name}' (top: {obs_top:.0f}m)"
             ),
-            "constraint_id": None,
-        }
+        )
 
     return None
 
@@ -140,26 +130,25 @@ def check_battery(
     cumulative_duration_s: float,
     drone: DroneProfile | None,
     reserve_margin: float = 0.15,
-) -> dict | None:
+) -> Violation | None:
     if not drone or not drone.endurance_minutes:
         return None
 
     available_s = drone.endurance_minutes * 60 * (1 - reserve_margin)
     if cumulative_duration_s > available_s:
-        return {
-            "is_warning": True,
-            "message": (
+        return Violation(
+            is_warning=True,
+            message=(
                 f"estimated flight time {cumulative_duration_s:.0f}s exceeds "
                 f"battery capacity {available_s:.0f}s "
                 f"(with {reserve_margin:.0%} reserve)"
             ),
-            "constraint_id": None,
-        }
+        )
 
     return None
 
 
-def check_safety_zone(db: Session, wp, zone: SafetyZone) -> dict | None:
+def check_safety_zone(db: Session, wp, zone: SafetyZone) -> Violation | None:
     if not zone.geometry:
         return None
 
@@ -184,16 +173,13 @@ def check_safety_zone(db: Session, wp, zone: SafetyZone) -> dict | None:
 
     is_hard = zone.type in (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
-    return {
-        "is_warning": not is_hard,
-        "message": f"waypoint inside {zone.type} zone: {zone.name}",
-        "constraint_id": None,
-    }
+    return Violation(
+        is_warning=not is_hard,
+        message=f"waypoint inside {zone.type} zone: {zone.name}",
+    )
 
 
 # segment intersection for visibility graph edge validation (section 3.3.7)
-
-
 def segments_intersect_obstacle(
     db: Session,
     from_lon: float,
@@ -252,7 +238,7 @@ def _check_constraint(
     wp,
     constraint: ConstraintRule,
     surfaces: list[AirfieldSurface],
-) -> dict | None:
+) -> Violation | None:
     ctype = constraint.constraint_type
 
     if ctype == "ALTITUDE":
@@ -301,7 +287,7 @@ def _check_runway_buffer(
     wp,
     constraint: ConstraintRule,
     surfaces: list[AirfieldSurface],
-) -> dict | None:
+) -> Violation | None:
     """PostGIS ST_DWithin for runway buffer check - section 3.4.1"""
     buffer_m = constraint.lateral_buffer or 100.0
     wp_ewkt = _wp_to_ewkt(wp)
@@ -339,9 +325,9 @@ def _wp_to_ewkt(wp) -> str:
     return geojson_to_ewkt({"type": "Point", "coordinates": [wp.lon, wp.lat, wp.alt]})
 
 
-def _violation(constraint: ConstraintRule, message: str) -> dict:
-    return {
-        "is_warning": not constraint.is_hard_constraint,
-        "message": message,
-        "constraint_id": str(constraint.id),
-    }
+def _violation(constraint: ConstraintRule, message: str) -> Violation:
+    return Violation(
+        is_warning=not constraint.is_hard_constraint,
+        message=message,
+        constraint_id=str(constraint.id),
+    )

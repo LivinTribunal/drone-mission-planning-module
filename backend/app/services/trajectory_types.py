@@ -57,6 +57,15 @@ class Point3D:
 
 
 @dataclass
+class Violation:
+    """constraint violation from safety validation"""
+
+    is_warning: bool
+    message: str
+    constraint_id: str | None = None
+
+
+@dataclass
 class ResolvedConfig:
     """merged inspection config: operator override > template default > hardcoded"""
 

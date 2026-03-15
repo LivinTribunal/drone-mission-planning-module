@@ -22,8 +22,8 @@ def test_altitude_above_max():
     result = _check_constraint(None, wp, constraint, [])
 
     assert result is not None
-    assert not result["is_warning"]
-    assert "above max" in result["message"]
+    assert not result.is_warning
+    assert "above max" in result.message
 
 
 def test_altitude_below_min():
@@ -45,7 +45,7 @@ def test_altitude_below_min():
     result = _check_constraint(None, wp, constraint, [])
 
     assert result is not None
-    assert "below min" in result["message"]
+    assert "below min" in result.message
 
 
 # speed constraint
@@ -69,7 +69,7 @@ def test_speed_exceeds_max():
     result = _check_constraint(None, wp, constraint, [])
 
     assert result is not None
-    assert result["is_warning"]
+    assert result.is_warning
 
 
 # drone constraints
