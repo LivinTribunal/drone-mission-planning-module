@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.mission import DroneProfile, Mission
 from app.schemas.drone_profile import DroneProfileCreate, DroneProfileUpdate
+from app.services.geo import apply_schema_update, schema_to_model_data
 
 
 def list_drones(db: Session) -> list[DroneProfile]:
@@ -23,7 +24,7 @@ def get_drone(db: Session, drone_id: UUID) -> DroneProfile:
 
 def create_drone(db: Session, schema: DroneProfileCreate) -> DroneProfile:
     """create drone profile"""
-    drone = DroneProfile(**schema.model_dump())
+    drone = DroneProfile(**schema_to_model_data(schema))
     db.add(drone)
     db.commit()
     db.refresh(drone)
@@ -37,8 +38,7 @@ def update_drone(db: Session, drone_id: UUID, schema: DroneProfileUpdate) -> Dro
     if not drone:
         raise HTTPException(status_code=404, detail="drone profile not found")
 
-    for key, val in schema.model_dump(exclude_unset=True).items():
-        setattr(drone, key, val)
+    apply_schema_update(drone, schema)
 
     db.commit()
     db.refresh(drone)
