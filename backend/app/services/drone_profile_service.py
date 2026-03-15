@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.mission import DroneProfile, Mission
 from app.schemas.drone_profile import DroneProfileCreate, DroneProfileUpdate
-from app.services.geo import apply_schema_update, schema_to_model_data
+from app.services.geometry_converter import apply_schema_update, schema_to_model_data
 
 
 def list_drones(db: Session) -> list[DroneProfile]:

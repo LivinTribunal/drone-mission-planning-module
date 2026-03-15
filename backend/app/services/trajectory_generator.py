@@ -829,21 +829,38 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple:
 
         all_waypoints.extend(ipass.waypoints)
 
-    # landing
+    # landing - route through A* like all other transit segments (section 3.3.7)
     if mission.landing_coordinate:
         lc = parse_ewkb(mission.landing_coordinate.data)["coordinates"]
         last = all_waypoints[-1]
-        all_waypoints.append(
-            WaypointData(
-                lon=lc[0],
-                lat=lc[1],
-                alt=lc[2],
-                heading=bearing(last.lon, last.lat, lc[0], lc[1]),
-                speed=default_speed,
-                waypoint_type="LANDING",
-                camera_action="NONE",
-            )
+        from_pt = (last.lon, last.lat, last.alt)
+        to_pt = (lc[0], lc[1], lc[2])
+
+        landing_transit = compute_transit_path(
+            db,
+            from_pt,
+            to_pt,
+            data.obstacles,
+            data.safety_zones,
+            default_speed,
         )
+
+        # replace the last transit wp with LANDING type
+        if landing_transit:
+            landing_transit[-1].waypoint_type = "LANDING"
+            all_waypoints.extend(landing_transit)
+        else:
+            all_waypoints.append(
+                WaypointData(
+                    lon=lc[0],
+                    lat=lc[1],
+                    alt=lc[2],
+                    heading=bearing(last.lon, last.lat, lc[0], lc[1]),
+                    speed=default_speed,
+                    waypoint_type="LANDING",
+                    camera_action="NONE",
+                )
+            )
 
     # final totals per-segment
     total_dist = 0.0

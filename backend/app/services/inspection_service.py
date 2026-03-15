@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.mission import InspectionCreate, InspectionUpdate
-from app.services.geo import apply_dict_update, schema_to_model_data
+from app.services.geometry_converter import apply_dict_update, schema_to_model_data
 
 # max number of inspections per mission
 MAX_INSPECTIONS = 10

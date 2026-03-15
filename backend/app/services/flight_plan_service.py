@@ -10,7 +10,7 @@ from app.models.flight_plan import (
     Waypoint,
 )
 from app.models.mission import Mission
-from app.services.geo import geojson_to_ewkt
+from app.services.geometry_converter import geojson_to_ewkt
 
 
 def persist_flight_plan(

@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
-from app.services.geo import geojson_to_ewkt
+from app.services.geometry_converter import geojson_to_ewkt
+
+# spatial queries use parameterized text() with PostGIS functions
+# this is the data-layer spatial computation described in section 3.1.3
+# all inputs are bound parameters - no sql injection risk
 
 
 def validate_inspection_pass(
@@ -32,7 +36,6 @@ def validate_inspection_pass(
             if v:
                 violations.append(v)
 
-        # obstacle collision detection (section 3.3.5)
         for obstacle in obstacles:
             v = check_obstacle(db, wp, obstacle)
             if v:
@@ -68,7 +71,6 @@ def validate_flight_plan(
 
 
 def check_drone_constraints(wp, drone: DroneProfile) -> dict | None:
-    """check waypoint against drone physical limits"""
     if drone.max_altitude and wp.alt > drone.max_altitude:
         return {
             "is_warning": False,
@@ -93,13 +95,12 @@ def check_drone_constraints(wp, drone: DroneProfile) -> dict | None:
 
 
 def check_obstacle(db: Session, wp, obstacle: Obstacle) -> dict | None:
-    """check if waypoint intersects obstacle volume - section 3.3.5"""
+    """spatial intersection test - section 3.3.5"""
     if not obstacle.geometry:
         return None
 
     wp_ewkt = _wp_to_ewkt(wp)
 
-    # 2D containment check against obstacle polygon
     contained = db.execute(
         text(
             "SELECT ST_Contains("
@@ -112,8 +113,7 @@ def check_obstacle(db: Session, wp, obstacle: Obstacle) -> dict | None:
     if not contained:
         return None
 
-    # altitude check - waypoint is inside the obstacle's 2D footprint
-    # obstacle extends from ground to ground + height
+    # altitude check - obstacle extends from base to base + height
     obs_base_alt = 0.0
     if obstacle.position:
         from app.schemas.geometry import parse_ewkb
@@ -141,7 +141,6 @@ def check_battery(
     drone: DroneProfile | None,
     reserve_margin: float = 0.15,
 ) -> dict | None:
-    """check if cumulative flight time exceeds battery capacity"""
     if not drone or not drone.endurance_minutes:
         return None
 
@@ -161,7 +160,6 @@ def check_battery(
 
 
 def check_safety_zone(db: Session, wp, zone: SafetyZone) -> dict | None:
-    """check if waypoint is inside an active safety zone"""
     if not zone.geometry:
         return None
 
@@ -193,7 +191,7 @@ def check_safety_zone(db: Session, wp, zone: SafetyZone) -> dict | None:
     }
 
 
-# segment intersection for visibility graph edge validation
+# segment intersection for visibility graph edge validation (section 3.3.7)
 
 
 def segments_intersect_obstacle(
@@ -204,13 +202,12 @@ def segments_intersect_obstacle(
     to_lat: float,
     obstacle,
 ) -> bool:
-    """check if straight line between two points intersects an obstacle"""
     if not obstacle.geometry:
         return False
 
     line_ewkt = f"SRID=4326;LINESTRING({from_lon} {from_lat}, {to_lon} {to_lat})"
 
-    intersects = db.execute(
+    result = db.execute(
         text(
             "SELECT ST_Intersects("
             "ST_Force2D(:obs_geom::geometry), "
@@ -219,7 +216,7 @@ def segments_intersect_obstacle(
         {"obs_geom": obstacle.geometry, "line": line_ewkt},
     ).scalar()
 
-    return bool(intersects)
+    return bool(result)
 
 
 def segments_intersect_zone(
@@ -230,7 +227,6 @@ def segments_intersect_zone(
     to_lat: float,
     zone,
 ) -> bool:
-    """check if straight line intersects a prohibited/no-fly zone"""
     if not zone.geometry:
         return False
 
@@ -239,7 +235,7 @@ def segments_intersect_zone(
 
     line_ewkt = f"SRID=4326;LINESTRING({from_lon} {from_lat}, {to_lon} {to_lat})"
 
-    intersects = db.execute(
+    result = db.execute(
         text(
             "SELECT ST_Intersects("
             "ST_Force2D(:zone_geom::geometry), "
@@ -248,7 +244,7 @@ def segments_intersect_zone(
         {"zone_geom": zone.geometry, "line": line_ewkt},
     ).scalar()
 
-    return bool(intersects)
+    return bool(result)
 
 
 def _check_constraint(
@@ -257,7 +253,6 @@ def _check_constraint(
     constraint: ConstraintRule,
     surfaces: list[AirfieldSurface],
 ) -> dict | None:
-    """check single waypoint against single constraint"""
     ctype = constraint.constraint_type
 
     if ctype == "ALTITUDE":
@@ -307,7 +302,7 @@ def _check_runway_buffer(
     constraint: ConstraintRule,
     surfaces: list[AirfieldSurface],
 ) -> dict | None:
-    """check if waypoint is too close to a runway"""
+    """PostGIS ST_DWithin for runway buffer check - section 3.4.1"""
     buffer_m = constraint.lateral_buffer or 100.0
     wp_ewkt = _wp_to_ewkt(wp)
 

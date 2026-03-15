@@ -7,7 +7,7 @@ from app.models.airport import Airport
 from app.models.inspection import Inspection, InspectionConfiguration
 from app.models.mission import DroneProfile, Mission
 from app.schemas.mission import MissionCreate, MissionUpdate
-from app.services.geo import apply_schema_update, schema_to_model_data
+from app.services.geometry_converter import apply_schema_update, schema_to_model_data
 
 # status state machine
 TRANSITIONS = {
