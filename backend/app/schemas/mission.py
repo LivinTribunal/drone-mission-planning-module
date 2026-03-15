@@ -55,6 +55,7 @@ class MissionCreate(BaseModel):
     """create mission"""
 
     name: str
+    airport_id: UUID
     drone_profile_id: UUID | None = None
     operator_notes: str | None = None
     default_speed: float | None = None
@@ -82,6 +83,7 @@ class MissionResponse(BaseModel):
     id: UUID
     name: str
     status: str
+    airport_id: UUID
     created_at: datetime
     operator_notes: str | None = None
     drone_profile_id: UUID | None = None

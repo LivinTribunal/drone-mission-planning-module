@@ -84,6 +84,7 @@ def _transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mi
 
 def list_missions(
     db: Session,
+    airport_id: UUID | None = None,
     status: str | None = None,
     limit: int = 20,
     offset: int = 0,
@@ -91,6 +92,8 @@ def list_missions(
     """list missions with optional filters and pagination"""
     query = db.query(Mission)
 
+    if airport_id:
+        query = query.filter(Mission.airport_id == airport_id)
     if status:
         query = query.filter(Mission.status == status)
 
@@ -177,6 +180,7 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
     copy = Mission(
         name=f"{original.name} (copy)",
         status="DRAFT",
+        airport_id=original.airport_id,
         drone_profile_id=original.drone_profile_id,
         operator_notes=original.operator_notes,
         default_speed=original.default_speed,
