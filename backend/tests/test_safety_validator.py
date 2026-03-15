@@ -1,4 +1,4 @@
-from app.services.trajectory_generator import WaypointData
+from app.services.trajectory_types import WaypointData
 
 # altitude constraint
 

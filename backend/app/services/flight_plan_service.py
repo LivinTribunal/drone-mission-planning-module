@@ -13,6 +13,31 @@ from app.models.mission import Mission
 from app.services.geometry_converter import geojson_to_ewkt
 
 
+def _to_point_ewkt(lon: float, lat: float, alt: float) -> str:
+    return geojson_to_ewkt({"type": "Point", "coordinates": [lon, lat, alt]})
+
+
+def _waypoint_to_model(wp, flight_plan_id, sequence_order: int) -> Waypoint:
+    """convert WaypointData to ORM model"""
+    target_ewkt = None
+    if wp.camera_target:
+        target_ewkt = _to_point_ewkt(*wp.camera_target)
+
+    return Waypoint(
+        flight_plan_id=flight_plan_id,
+        inspection_id=wp.inspection_id,
+        sequence_order=sequence_order,
+        position=_to_point_ewkt(wp.lon, wp.lat, wp.alt),
+        heading=wp.heading,
+        speed=wp.speed,
+        hover_duration=wp.hover_duration,
+        camera_action=wp.camera_action,
+        waypoint_type=wp.waypoint_type,
+        camera_target=target_ewkt,
+        gimbal_pitch=wp.gimbal_pitch,
+    )
+
+
 def persist_flight_plan(
     db: Session,
     mission: Mission,
@@ -31,26 +56,8 @@ def persist_flight_plan(
     db.add(flight_plan)
     db.flush()
 
-    # persist waypoints
     for i, wp in enumerate(all_waypoints, start=1):
-        target_ewkt = None
-        if wp.camera_target:
-            target_ewkt = geojson_to_ewkt({"type": "Point", "coordinates": list(wp.camera_target)})
-
-        db_wp = Waypoint(
-            flight_plan_id=flight_plan.id,
-            inspection_id=wp.inspection_id,
-            sequence_order=i,
-            position=geojson_to_ewkt({"type": "Point", "coordinates": [wp.lon, wp.lat, wp.alt]}),
-            heading=wp.heading,
-            speed=wp.speed,
-            hover_duration=wp.hover_duration,
-            camera_action=wp.camera_action,
-            waypoint_type=wp.waypoint_type,
-            camera_target=target_ewkt,
-            gimbal_pitch=wp.gimbal_pitch,
-        )
-        db.add(db_wp)
+        db.add(_waypoint_to_model(wp, flight_plan.id, i))
 
     # validation result with soft warnings
     if warnings:

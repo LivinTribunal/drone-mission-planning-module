@@ -1,5 +1,4 @@
 import math
-from dataclasses import dataclass, field
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -9,7 +8,7 @@ from app.models.agl import AGL
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.flight_plan import ConstraintRule
 from app.models.inspection import Inspection, InspectionTemplate
-from app.models.mission import DroneProfile, Mission
+from app.models.mission import Mission
 from app.schemas.geometry import parse_ewkb
 from app.services.flight_plan_service import persist_flight_plan
 from app.services.safety_validator import (
@@ -19,11 +18,12 @@ from app.services.safety_validator import (
     segments_intersect_zone,
     validate_inspection_pass,
 )
+from app.services.trajectory_types import InspectionPass, MissionData, WaypointData
 from app.utils.geo import (
     angular_span_at_distance,
     astar,
     bearing_between,
-    centroid,
+    center_of_points,
     distance_between,
     elevation_angle,
     point_at_distance,
@@ -32,60 +32,16 @@ from app.utils.geo import (
 
 # arc sweep defaults
 MIN_ARC_RADIUS = 350.0
-DEFAULT_SWEEP_ANGLE = 10.0  # degrees each side of centerline
+DEFAULT_SWEEP_ANGLE = 15.0  # degrees each side of centerline (ZEPHYR manual)
 DEFAULT_HORIZONTAL_DISTANCE = 400.0
 MIN_ELEVATION_ANGLE = 1.9
 MAX_ELEVATION_ANGLE = 6.5
 DEFAULT_RESERVE_MARGIN = 0.15
-HOVER_ANGLE_TOLERANCE = 0.3  # degrees
+HOVER_ANGLE_TOLERANCE = 0.05  # degrees - 3 arc minutes per ZEPHYR spec
 REROUTE_MARGIN = 1.2  # multiplier for obstacle radius when rerouting
 
 
-@dataclass
-class WaypointData:
-    """intermediate waypoint before persisting"""
-
-    lon: float
-    lat: float
-    alt: float
-    heading: float = 0.0
-    speed: float = 5.0
-    waypoint_type: str = "MEASUREMENT"
-    camera_action: str = "PHOTO_CAPTURE"
-    camera_target: tuple[float, float, float] | None = None
-    inspection_id: UUID | None = None
-    hover_duration: float | None = None
-    gimbal_pitch: float | None = None
-
-
-@dataclass
-class InspectionPass:
-    """waypoints from a single inspection"""
-
-    waypoints: list[WaypointData] = field(default_factory=list)
-    inspection_id: UUID | None = None
-
-
-@dataclass
-class MissionData:
-    # all entities loaded in phase 1 - no further entity queries after this.
-    # spatial predicates (ST_Contains, ST_DWithin, ST_Intersects) still use
-    # the db session during validation, but these are computational operations
-    # on already-loaded geometry data, not entity lookups.
-
-    mission: Mission
-    airport: Airport
-    drone: DroneProfile | None
-    obstacles: list[Obstacle]
-    safety_zones: list[SafetyZone]
-    surfaces: list[AirfieldSurface]
-    constraints: list[ConstraintRule]
-    default_speed: float
-
-
 # phase 1
-
-
 def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     mission = (
         db.query(Mission)
@@ -139,8 +95,6 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
 
 
 # phase 2 helpers
-
-
 def _resolve_with_defaults(inspection, template) -> dict:
     """resolveWithDefaults - field-by-field merge: override > template > default"""
     defaults = {
@@ -219,7 +173,7 @@ def _check_sensor_fov(drone, lha_positions, distance) -> str | None:
     if not drone.sensor_fov or len(lha_positions) < 2:
         return None
 
-    center = centroid(lha_positions)
+    center = center_of_points(lha_positions)
     obs_lon, obs_lat = point_at_distance(center[0], center[1], 0.0, distance)
     span = angular_span_at_distance(lha_positions, obs_lon, obs_lat)
 
@@ -689,7 +643,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple:
             warnings.append(f"inspection {inspection.id}: no LHA positions")
             continue
 
-        center = centroid(lha_positions)
+        center = center_of_points(lha_positions)
         glide_slope = _get_glide_slope_angle(template)
         rwy_heading = _get_runway_heading(template, data.surfaces)
         setting_angles = _get_lha_setting_angles(template)

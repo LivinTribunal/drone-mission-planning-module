@@ -60,7 +60,7 @@ def point_at_distance(
     return math.degrees(dest_lon), math.degrees(dest_lat)
 
 
-def centroid(
+def center_of_points(
     points: list[tuple[float, float, float]],
 ) -> tuple[float, float, float]:
     """arithmetic mean of 3D points - (lon, lat, alt)"""

@@ -2,7 +2,7 @@ import math
 
 from app.utils.geo import (
     bearing_between,
-    centroid,
+    center_of_points,
     distance_between,
     elevation_angle,
     point_at_distance,
@@ -49,14 +49,14 @@ def test_point_at_distance_roundtrip():
 
 def test_centroid_single_point():
     """centroid of one point is the point"""
-    c = centroid([(14.26, 50.10, 380.0)])
+    c = center_of_points([(14.26, 50.10, 380.0)])
 
     assert c == (14.26, 50.10, 380.0)
 
 
 def test_centroid_symmetric():
     """centroid of symmetric triangle"""
-    c = centroid([(0.0, 0.0, 100.0), (2.0, 0.0, 100.0), (1.0, 1.0, 100.0)])
+    c = center_of_points([(0.0, 0.0, 100.0), (2.0, 0.0, 100.0), (1.0, 1.0, 100.0)])
 
     assert abs(c[0] - 1.0) < 0.01
     assert abs(c[2] - 100.0) < 0.01
@@ -246,7 +246,8 @@ def test_resolve_with_defaults_no_configs():
 # camera action tests
 def test_lead_in_lead_out_none():
     """first and last waypoints should have NONE camera action"""
-    from app.services.trajectory_generator import WaypointData, _apply_camera_actions
+    from app.services.trajectory_generator import _apply_camera_actions
+    from app.services.trajectory_types import WaypointData
 
     wps = [
         WaypointData(lon=0, lat=0, alt=0, camera_action="PHOTO_CAPTURE"),
