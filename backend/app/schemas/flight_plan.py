@@ -20,6 +20,7 @@ class WaypointResponse(BaseModel):
     camera_action: str | None = None
     waypoint_type: str
     camera_target: PointZ | None = None
+    gimbal_pitch: float | None = None
 
     model_config = {"from_attributes": True}
 

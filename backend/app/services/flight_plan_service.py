@@ -48,6 +48,7 @@ def persist_flight_plan(
             camera_action=wp.camera_action,
             waypoint_type=wp.waypoint_type,
             camera_target=target_ewkt,
+            gimbal_pitch=wp.gimbal_pitch,
         )
         db.add(db_wp)
 

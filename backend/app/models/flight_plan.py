@@ -65,6 +65,7 @@ class Waypoint(Base):
     camera_action = Column(String(20))
     waypoint_type = Column(String(20), nullable=False)
     camera_target = Column(Geometry("POINTZ", srid=4326))
+    gimbal_pitch = Column(Float)
 
     flight_plan = relationship("FlightPlan", back_populates="waypoints")
     inspection = relationship("Inspection")

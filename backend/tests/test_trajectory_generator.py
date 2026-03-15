@@ -261,6 +261,101 @@ def test_lead_in_lead_out_none():
     assert wps[2].camera_action == "NONE"
 
 
+# gimbal pitch tests
+
+
+def test_arc_path_has_gimbal_pitch():
+    """arc waypoints should have gimbal pitch computed"""
+    from app.services.trajectory_generator import calculate_arc_path
+
+    config = {"measurement_density": 5, "altitude_offset": 0.0}
+    center = (14.274, 50.098, 380.0)
+
+    wps = calculate_arc_path(center, 243.0, 3.0, config, None, 5.0)
+
+    for wp in wps:
+        assert wp.gimbal_pitch is not None
+        # pitch should be negative since drone is above center
+        assert wp.gimbal_pitch < 0
+
+
+def test_vertical_path_has_gimbal_pitch():
+    """vertical profile waypoints should have gimbal pitch"""
+    from app.services.trajectory_generator import calculate_vertical_path
+
+    config = {"measurement_density": 5, "hover_duration": None}
+    center = (14.274, 50.098, 380.0)
+
+    wps = calculate_vertical_path(center, 243.0, config, None, 3.0, [])
+
+    for wp in wps:
+        assert wp.gimbal_pitch is not None
+
+
+# A* pathfinding tests
+
+
+def test_astar_direct_path():
+    """A* should find direct path when no obstacles"""
+    from app.utils.geo import astar
+
+    nodes = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]
+    graph = {0: [(1, 1.0)], 1: [(0, 1.0)]}
+
+    path = astar(graph, 0, 1, nodes)
+
+    assert path == [0, 1]
+
+
+def test_astar_around_obstacle():
+    """A* should route around when direct path blocked"""
+    from app.utils.geo import astar
+
+    # 0 -> 1 is blocked, must go through 2
+    nodes = [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (1.0, 1.0, 0.0)]
+    graph = {
+        0: [(2, 1.5)],
+        1: [(2, 1.5)],
+        2: [(0, 1.5), (1, 1.5)],
+    }
+
+    path = astar(graph, 0, 1, nodes)
+
+    assert path == [0, 2, 1]
+
+
+def test_astar_no_path():
+    """A* should return None when no path exists"""
+    from app.utils.geo import astar
+
+    nodes = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]
+    graph = {0: [], 1: []}
+
+    path = astar(graph, 0, 1, nodes)
+
+    assert path is None
+
+
+# interface methods
+
+
+def test_determine_start_end_positions():
+    """determineStartPosition / determineEndPosition per section 3.3.9"""
+    from app.services.trajectory_generator import (
+        determine_end_position,
+        determine_start_position,
+    )
+
+    config = {"measurement_density": 8, "altitude_offset": 0.0}
+    center = (14.274, 50.098, 380.0)
+
+    start = determine_start_position(center, config, "ANGULAR_SWEEP", 243.0, 3.0)
+    end = determine_end_position(center, config, "ANGULAR_SWEEP", 243.0, 3.0)
+
+    assert start[0] != end[0] or start[1] != end[1]
+    assert start[2] == end[2]  # same altitude for arc
+
+
 # full pipeline e2e test
 def test_full_pipeline(client):
     """end-to-end trajectory generation with real PostGIS"""

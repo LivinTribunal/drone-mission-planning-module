@@ -1,3 +1,4 @@
+import heapq
 import math
 
 EARTH_RADIUS_M = 6371000.0
@@ -79,7 +80,7 @@ def elevation_angle(
     to_lat: float,
     to_alt: float,
 ) -> float:
-    """elevation angle in degrees from one 3D point to another"""
+    """elevation angle in degrees from one 3D point to another (gimbal pitch)"""
     h_dist = haversine(from_lon, from_lat, to_lon, to_lat)
     dz = to_alt - from_alt
 
@@ -100,7 +101,6 @@ def angular_span_at_distance(
 
     bearings = [bearing(observer_lon, observer_lat, p[0], p[1]) for p in points]
 
-    # handle wrap-around
     min_b = min(bearings)
     max_b = max(bearings)
     span = max_b - min_b
@@ -109,3 +109,45 @@ def angular_span_at_distance(
         span = 360 - span
 
     return span
+
+
+# A* pathfinding on visibility graph
+
+
+def astar(
+    graph: dict[int, list[tuple[int, float]]],
+    start: int,
+    goal: int,
+    positions: list[tuple[float, float, float]],
+) -> list[int] | None:
+    """A* shortest path on a weighted graph - returns node indices or None"""
+    open_set = [(0.0, start)]
+    came_from: dict[int, int] = {}
+    g_score: dict[int, float] = {start: 0.0}
+
+    while open_set:
+        _, current = heapq.heappop(open_set)
+
+        if current == goal:
+            path = [current]
+            while current in came_from:
+                current = came_from[current]
+                path.append(current)
+
+            return list(reversed(path))
+
+        for neighbor, weight in graph.get(current, []):
+            tentative = g_score[current] + weight
+
+            if tentative < g_score.get(neighbor, float("inf")):
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative
+                h = haversine(
+                    positions[neighbor][0],
+                    positions[neighbor][1],
+                    positions[goal][0],
+                    positions[goal][1],
+                )
+                heapq.heappush(open_set, (tentative + h, neighbor))
+
+    return None
