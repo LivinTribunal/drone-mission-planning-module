@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.mission import InspectionCreate, InspectionUpdate
+from app.services.geo import schema_to_model_data
 
+# max number of inspections per mission
 MAX_INSPECTIONS = 10
 
 
@@ -54,6 +56,7 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
         db.flush()
         config_id = config.id
 
+    # TODO: consider saving last sequence number on mission model
     next_order = (
         db.query(func.coalesce(func.max(Inspection.sequence_order), 0) + 1)
         .filter(Inspection.mission_id == mission_id)
@@ -98,13 +101,14 @@ def update_inspection(
             for key, val in config_data.items():
                 setattr(inspection.config, key, val)
         else:
-            config = InspectionConfiguration(**config_data)
+            config = InspectionConfiguration(**schema_to_model_data(schema.config))
             db.add(config)
             db.flush()
             inspection.config_id = config.id
 
-    for key, val in data.items():
-        setattr(inspection, key, val)
+    for key in ("method", "sequence_order"):
+        if key in data:
+            setattr(inspection, key, data[key])
 
     _regress_when_changed(mission)
     db.commit()
