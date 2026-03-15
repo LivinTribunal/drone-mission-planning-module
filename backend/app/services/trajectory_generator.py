@@ -401,36 +401,145 @@ def compute_measurement_trajectory(
     return []
 
 
-# phase 3 - A* obstacle rerouting (section 3.3.5)
-def has_line_of_sight(
-    db: Session, point: Point3D, target: Point3D, obstacles: list[Obstacle]
-) -> bool:
-    """check if the line from point to target is unobstructed by any obstacle"""
-    for obs in obstacles:
-        if segments_intersect_obstacle(db, point.lon, point.lat, target.lon, target.lat, obs):
-            return False
-
-    return True
+# shared visibility graph infrastructure
+HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
 
-def _nearby_obstacles(
-    obstacles: list[Obstacle], center_lon: float, center_lat: float, search_radius: float
-) -> list[Obstacle]:
-    """collect obstacles within search_radius meters of a point"""
-    nearby = []
+def _extract_polygon_vertices(geom_data) -> list[Point3D]:
+    """extract vertices from a PostGIS polygon geometry"""
+    try:
+        geojson = parse_ewkb(geom_data)
+        if geojson["type"] == "Polygon":
+            return [
+                Point3D(lon=c[0], lat=c[1], alt=c[2] if len(c) > 2 else 0.0)
+                for c in geojson["coordinates"][0]
+            ]
+    except Exception:
+        pass
+
+    return []
+
+
+def _collect_nearby_objects(
+    obstacles: list[Obstacle],
+    zones: list[SafetyZone],
+    center_lon: float,
+    center_lat: float,
+    search_radius: Meters,
+) -> tuple[list[Obstacle], list[SafetyZone]]:
+    """collect obstacles and hard safety zones within search_radius"""
+    nearby_obs = []
     for obs in obstacles:
         if not obs.position:
             continue
         obs_pos = parse_ewkb(obs.position.data)["coordinates"]
-        dist = distance_between(center_lon, center_lat, obs_pos[0], obs_pos[1])
-        if dist <= search_radius:
-            nearby.append(obs)
+        if distance_between(center_lon, center_lat, obs_pos[0], obs_pos[1]) <= search_radius:
+            nearby_obs.append(obs)
 
-    return nearby
+    nearby_zones = []
+    for zone in zones:
+        if not zone.geometry or zone.type not in HARD_ZONE_TYPES:
+            continue
+        # approximate zone distance by checking if zone center is within range
+        verts = _extract_polygon_vertices(zone.geometry.data)
+        if verts:
+            zone_center = center_of_points([v.to_tuple() for v in verts])
+            zone_dist = distance_between(center_lon, center_lat, zone_center[0], zone_center[1])
+            if zone_dist <= search_radius:
+                nearby_zones.append(zone)
+
+    return nearby_obs, nearby_zones
+
+
+def _is_segment_blocked(
+    db: Session,
+    from_pt: Point3D,
+    to_pt: Point3D,
+    obstacles: list[Obstacle],
+    zones: list[SafetyZone],
+) -> bool:
+    """check if a straight-line segment is blocked by obstacles or hard zones"""
+    for obs in obstacles:
+        if segments_intersect_obstacle(db, from_pt.lon, from_pt.lat, to_pt.lon, to_pt.lat, obs):
+            return True
+
+    for zone in zones:
+        if segments_intersect_zone(db, from_pt.lon, from_pt.lat, to_pt.lon, to_pt.lat, zone):
+            return True
+
+    return False
+
+
+def _build_visibility_graph(
+    db: Session,
+    nodes: list[Point3D],
+    obstacles: list[Obstacle],
+    zones: list[SafetyZone],
+) -> dict[int, list[tuple[int, float]]]:
+    """build adjacency list - edge between nodes if segment is unobstructed"""
+    graph: dict[int, list[tuple[int, float]]] = {i: [] for i in range(len(nodes))}
+
+    for i in range(len(nodes)):
+        for j in range(i + 1, len(nodes)):
+            if not _is_segment_blocked(db, nodes[i], nodes[j], obstacles, zones):
+                dist = distance_between(nodes[i].lon, nodes[i].lat, nodes[j].lon, nodes[j].lat)
+                graph[i].append((j, dist))
+                graph[j].append((i, dist))
+
+    return graph
+
+
+def _collect_graph_nodes(
+    endpoints: list[Point3D],
+    obstacles: list[Obstacle],
+    zones: list[SafetyZone],
+) -> list[Point3D]:
+    """collect all nodes for visibility graph: endpoints + obstacle/zone vertices"""
+    nodes = list(endpoints)
+
+    for obs in obstacles:
+        if obs.geometry:
+            nodes.extend(_extract_polygon_vertices(obs.geometry.data))
+
+    for zone in zones:
+        if zone.geometry and zone.type in HARD_ZONE_TYPES:
+            nodes.extend(_extract_polygon_vertices(zone.geometry.data))
+
+    return nodes
+
+
+def _run_astar(
+    db: Session,
+    from_point: Point3D,
+    to_point: Point3D,
+    obstacles: list[Obstacle],
+    zones: list[SafetyZone],
+) -> list[Point3D] | None:
+    """build visibility graph and run A* - returns path as Point3D list or None"""
+    nodes = _collect_graph_nodes([from_point, to_point], obstacles, zones)
+    graph = _build_visibility_graph(db, nodes, obstacles, zones)
+    node_tuples = [n.to_tuple() for n in nodes]
+
+    path_indices = astar(graph, 0, 1, node_tuples)
+    if path_indices is None:
+        return None
+
+    return [nodes[idx] for idx in path_indices]
+
+
+def has_line_of_sight(
+    db: Session,
+    point: Point3D,
+    target: Point3D,
+    obstacles: list[Obstacle],
+    zones: list[SafetyZone],
+) -> bool:
+    """check if line from point to target is clear of obstacles and hard zones"""
+    return not _is_segment_blocked(db, point, target, obstacles, zones)
 
 
 def _max_turn_angle(waypoints: list[WaypointData]) -> Degrees:
-    """compute maximum turn angle between consecutive waypoint headings"""
+    """max turn angle between consecutive waypoint headings"""
     max_angle = 0.0
     for i in range(1, len(waypoints)):
         diff = abs(waypoints[i].heading - waypoints[i - 1].heading)
@@ -441,15 +550,16 @@ def _max_turn_angle(waypoints: list[WaypointData]) -> Degrees:
     return max_angle
 
 
+# phase 3 - A* inspection rerouting (section 3.3.5)
 def reroute_measurement_pass(
     db: Session,
     waypoints: list[WaypointData],
     obstacles: list[Obstacle],
+    zones: list[SafetyZone],
     center: Point3D,
 ) -> list[WaypointData]:
-    """A*-based rerouting around obstacles while preserving measurement geometry"""
-    # find which waypoints collide with obstacles
-    # TODO: this should be helper function
+    """A*-based rerouting around obstacles and safety zones"""
+    # find colliding waypoints
     collisions = [False] * len(waypoints)
     for i, wp in enumerate(waypoints):
         for obs in obstacles:
@@ -462,20 +572,19 @@ def reroute_measurement_pass(
 
     # find contiguous collision segments
     segments: list[tuple[int, int]] = []
-    start = None
+    seg_start = None
     for i, hit in enumerate(collisions):
-        if hit and start is None:
-            start = i
-        elif not hit and start is not None:
-            segments.append((start, i - 1))
-            start = None
-    if start is not None:
-        segments.append((start, len(waypoints) - 1))
+        if hit and seg_start is None:
+            seg_start = i
+        elif not hit and seg_start is not None:
+            segments.append((seg_start, i - 1))
+            seg_start = None
+    if seg_start is not None:
+        segments.append((seg_start, len(waypoints) - 1))
 
     result = list(waypoints)
 
     for seg_start, seg_end in segments:
-        # anchor points: last clear wp before and first clear wp after
         if seg_start == 0 or seg_end == len(waypoints) - 1:
             raise HTTPException(
                 status_code=400,
@@ -487,53 +596,34 @@ def reroute_measurement_pass(
         from_pt = Point3D(lon=anchor_before.lon, lat=anchor_before.lat, alt=anchor_before.alt)
         to_pt = Point3D(lon=anchor_after.lon, lat=anchor_after.lat, alt=anchor_after.alt)
 
-        # collect all obstacles in search radius around the collision zone
+        # collect nearby obstacles AND safety zones
         mid_lon = (from_pt.lon + to_pt.lon) / 2
         mid_lat = (from_pt.lat + to_pt.lat) / 2
         max_radius = max((obs.radius or DEFAULT_OBSTACLE_RADIUS) for obs in obstacles)
         search_radius = max_radius * REROUTE_SEARCH_RADIUS_MULTIPLIER
-        nearby = _nearby_obstacles(obstacles, mid_lon, mid_lat, search_radius)
+        nearby_obs, nearby_zones = _collect_nearby_objects(
+            obstacles, zones, mid_lon, mid_lat, search_radius
+        )
 
-        # build local visibility graph
-        nodes = [from_pt, to_pt]
-        for obs in nearby:
-            if obs.geometry:
-                verts = _extract_polygon_vertices(obs.geometry.data)
-                nodes.extend(verts)
-
-        # build adjacency - edge exists if segment is clear
-        node_tuples = [n.to_tuple() for n in nodes]
-        graph: dict[int, list[tuple[int, float]]] = {i: [] for i in range(len(nodes))}
-
-        for i in range(len(nodes)):
-            for j in range(i + 1, len(nodes)):
-                blocked = False
-                for obs in nearby:
-                    if segments_intersect_obstacle(
-                        db, nodes[i].lon, nodes[i].lat, nodes[j].lon, nodes[j].lat, obs
-                    ):
-                        blocked = True
-                        break
-
-                if not blocked:
-                    dist = distance_between(nodes[i].lon, nodes[i].lat, nodes[j].lon, nodes[j].lat)
-                    graph[i].append((j, dist))
-                    graph[j].append((i, dist))
-
-        path = astar(graph, 0, 1, node_tuples)
+        # A* through local visibility graph
+        path = _run_astar(db, from_pt, to_pt, nearby_obs, nearby_zones)
         if path is None:
             raise HTTPException(
                 status_code=400,
                 detail="no obstacle-free reroute path found",
             )
 
-        # build rerouted waypoints from A* path (skip anchor nodes 0 and 1)
+        # build rerouted waypoints (skip anchors at index 0 and -1)
         rerouted_wps = []
-        for idx in path[1:-1]:
-            node = nodes[idx]
+        for node in path[1:-1]:
             heading = bearing_between(node.lon, node.lat, center.lon, center.lat)
             pitch = elevation_angle(
-                node.lon, node.lat, node.alt, center.lon, center.lat, center.alt
+                node.lon,
+                node.lat,
+                node.alt,
+                center.lon,
+                center.lat,
+                center.alt,
             )
 
             rerouted_wps.append(
@@ -551,7 +641,7 @@ def reroute_measurement_pass(
                 )
             )
 
-        # validate rerouted path
+        # validate: path deviation
         original_pts = [
             (result[k].lon, result[k].lat, result[k].alt) for k in range(seg_start, seg_end + 1)
         ]
@@ -564,27 +654,26 @@ def reroute_measurement_pass(
                 status_code=400,
                 detail=(
                     f"rerouted path {rerouted_dist:.0f}m exceeds "
-                    f"{MAX_REROUTE_DEVIATION:.0%} deviation from original {original_dist:.0f}m"
+                    f"{MAX_REROUTE_DEVIATION:.0%} deviation"
                 ),
             )
 
-        # every rerouted point must have line-of-sight to center (camera can see PAPI)
+        # validate: line-of-sight to PAPI center
         for wp in rerouted_wps:
             wp_pt = Point3D(lon=wp.lon, lat=wp.lat, alt=wp.alt)
-            if not has_line_of_sight(db, wp_pt, center, nearby):
+            if not has_line_of_sight(db, wp_pt, center, nearby_obs, nearby_zones):
                 raise HTTPException(
                     status_code=400,
                     detail="rerouted path blocks camera line-of-sight to PAPI",
                 )
 
-        # check max turn angle
+        # validate: turn angle
         if rerouted_wps and _max_turn_angle(rerouted_wps) > MAX_TURN_ANGLE:
             raise HTTPException(
                 status_code=400,
-                detail=f"rerouted path exceeds max turn angle {MAX_TURN_ANGLE}°",
+                detail=f"rerouted path exceeds max turn angle {MAX_TURN_ANGLE}",
             )
 
-        # replace collision segment with rerouted waypoints
         result[seg_start : seg_end + 1] = rerouted_wps
 
     return result
@@ -603,41 +692,7 @@ def apply_constraints(db, waypoints, drone, constraints, obstacles, zones, surfa
     return validate_inspection_pass(db, waypoints, drone, constraints, obstacles, zones, surfaces)
 
 
-# phase 5 - visibility graph + A* transit (section 3.3.7)
-def _extract_polygon_vertices(geom_data) -> list[Point3D]:
-    """extract vertices from a PostGIS polygon geometry"""
-    try:
-        geojson = parse_ewkb(geom_data)
-        if geojson["type"] == "Polygon":
-            return [
-                Point3D(lon=c[0], lat=c[1], alt=c[2] if len(c) > 2 else 0.0)
-                for c in geojson["coordinates"][0]
-            ]
-    except Exception:
-        pass
-
-    return []
-
-
-def _is_path_blocked(
-    db: Session,
-    from_pt: Point3D,
-    to_pt: Point3D,
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
-) -> bool:
-    """check if a straight-line segment is blocked by obstacles or prohibited zones"""
-    for obs in obstacles:
-        if segments_intersect_obstacle(db, from_pt.lon, from_pt.lat, to_pt.lon, to_pt.lat, obs):
-            return True
-
-    for zone in zones:
-        if segments_intersect_zone(db, from_pt.lon, from_pt.lat, to_pt.lon, to_pt.lat, zone):
-            return True
-
-    return False
-
-
+# phase 5 - A* transit between inspection passes (section 3.3.7)
 def compute_transit_path(
     db: Session,
     from_point: Point3D,
@@ -646,9 +701,9 @@ def compute_transit_path(
     zones: list[SafetyZone],
     speed: MetersPerSecond,
 ) -> list[WaypointData]:
-    """A* pathfinding on visibility graph - section 3.3.7"""
+    """A* transit path - shortest obstacle-free route"""
     # straight-line if path is clear
-    if not _is_path_blocked(db, from_point, to_point, obstacles, zones):
+    if not _is_segment_blocked(db, from_point, to_point, obstacles, zones):
         return [
             WaypointData(
                 lon=to_point.lon,
@@ -661,60 +716,24 @@ def compute_transit_path(
             )
         ]
 
-    # build visibility graph
-    nodes: list[Point3D] = [from_point, to_point]
-
-    for obs in obstacles:
-        if obs.geometry:
-            nodes.extend(_extract_polygon_vertices(obs.geometry.data))
-
-    for zone in zones:
-        hard_zones = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
-        if zone.geometry and zone.type in hard_zones:
-            nodes.extend(_extract_polygon_vertices(zone.geometry.data))
-
-    # adjacency list - edge exists if segment doesn't intersect obstacles/zones
-    node_tuples = [n.to_tuple() for n in nodes]
-    graph: dict[int, list[tuple[int, float]]] = {i: [] for i in range(len(nodes))}
-
-    for i in range(len(nodes)):
-        for j in range(i + 1, len(nodes)):
-            ni, nj = nodes[i], nodes[j]
-            blocked = any(
-                segments_intersect_obstacle(db, ni.lon, ni.lat, nj.lon, nj.lat, obs)
-                for obs in obstacles
-            )
-
-            if not blocked:
-                blocked = any(
-                    segments_intersect_zone(db, ni.lon, ni.lat, nj.lon, nj.lat, zone)
-                    for zone in zones
-                )
-
-            if not blocked:
-                dist = distance_between(nodes[i].lon, nodes[i].lat, nodes[j].lon, nodes[j].lat)
-                graph[i].append((j, dist))
-                graph[j].append((i, dist))
-
-    path = astar(graph, 0, 1, node_tuples)
+    # A* through visibility graph
+    path = _run_astar(db, from_point, to_point, obstacles, zones)
     if path is None:
         raise HTTPException(
             status_code=400,
-            detail="no obstacle-free transit path found between inspection segments",
+            detail="no obstacle-free transit path found",
         )
 
-    # convert path to TRANSIT waypoints (skip from_point at index 0)
+    # convert to TRANSIT waypoints (skip from_point at index 0)
     transit_wps = []
-    for k, idx in enumerate(path[1:]):
-        prev_idx = path[k]  # k is offset by 1 since we skip index 0
+    for k in range(1, len(path)):
+        prev, cur = path[k - 1], path[k]
         transit_wps.append(
             WaypointData(
-                lon=nodes[idx].lon,
-                lat=nodes[idx].lat,
-                alt=nodes[idx].alt,
-                heading=bearing_between(
-                    nodes[prev_idx].lon, nodes[prev_idx].lat, nodes[idx].lon, nodes[idx].lat
-                ),
+                lon=cur.lon,
+                lat=cur.lat,
+                alt=cur.alt,
+                heading=bearing_between(prev.lon, prev.lat, cur.lon, cur.lat),
                 speed=speed,
                 waypoint_type=WaypointType.TRANSIT,
                 camera_action=CameraAction.NONE,
@@ -789,7 +808,9 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         ]
 
         if obstacle_violations:
-            pass_wps = reroute_measurement_pass(db, pass_wps, data.obstacles, center)
+            pass_wps = reroute_measurement_pass(
+                db, pass_wps, data.obstacles, data.safety_zones, center
+            )
 
             # re-validate after rerouting
             violations = validate_inspection_pass(
@@ -896,6 +917,26 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                     camera_action=CameraAction.NONE,
                 )
             )
+
+    # final validation of assembled path (section 3.4.2)
+    final_violations = validate_inspection_pass(
+        db,
+        all_waypoints,
+        drone,
+        data.constraints,
+        data.obstacles,
+        data.safety_zones,
+        data.surfaces,
+    )
+    final_hard = [v for v in final_violations if not v["is_warning"]]
+    if final_hard:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "final validation failed", "violations": final_hard},
+        )
+
+    final_soft = [v for v in final_violations if v["is_warning"]]
+    warnings.extend([v["message"] for v in final_soft])
 
     # compute final totals per-segment
     total_dist = 0.0
