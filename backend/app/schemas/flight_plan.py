@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.models.enums import CameraAction, WaypointType
 from app.schemas.geometry import PointZ
 
 
@@ -17,8 +18,8 @@ class WaypointResponse(BaseModel):
     heading: float | None = None
     speed: float | None = None
     hover_duration: float | None = None
-    camera_action: str | None = None
-    waypoint_type: str
+    camera_action: CameraAction | None = None
+    waypoint_type: WaypointType
     camera_target: PointZ | None = None
     gimbal_pitch: float | None = None
 
