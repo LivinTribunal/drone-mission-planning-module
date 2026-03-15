@@ -69,9 +69,16 @@ def test_airport_crud(db_session):
 
 def test_mission_default_status(db_session):
     """test mission default status"""
+    from app.models.airport import Airport
     from app.models.mission import Mission
 
-    mission = Mission(**MISSION_PAYLOAD)
+    airport = db_session.query(Airport).filter_by(icao_code="LZIB").first()
+    if not airport:
+        airport = Airport(**AIRPORT_PAYLOAD)
+        db_session.add(airport)
+        db_session.flush()
+
+    mission = Mission(name="Test Mission", airport_id=airport.id)
     db_session.add(mission)
     db_session.flush()
 
