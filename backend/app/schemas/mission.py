@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
 
 
@@ -112,4 +113,4 @@ class MissionListResponse(BaseModel):
     """mission list response"""
 
     data: list[MissionResponse]
-    meta: dict
+    meta: ListMeta

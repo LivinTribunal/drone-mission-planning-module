@@ -6,3 +6,11 @@ class DeleteResponse(BaseModel):
 
     deleted: bool
     warnings: list[str] = []
+
+
+class ListMeta(BaseModel):
+    """shared list metadata"""
+
+    total: int
+    limit: int | None = None
+    offset: int | None = None

@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.common import ListMeta
+
 
 class InspectionConfigCreate(BaseModel):
     """inspection config create schema"""
@@ -69,4 +71,4 @@ class InspectionTemplateListResponse(BaseModel):
     """inspection template list response schema"""
 
     data: list[InspectionTemplateResponse]
-    meta: dict
+    meta: ListMeta

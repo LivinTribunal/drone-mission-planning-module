@@ -8,6 +8,7 @@ def _ensure_bytes(data) -> bytes:
     """convert hex string or memoryview to bytes"""
     if isinstance(data, (bytes, memoryview)):
         return bytes(data)
+
     if isinstance(data, str):
         return bytes.fromhex(data)
 

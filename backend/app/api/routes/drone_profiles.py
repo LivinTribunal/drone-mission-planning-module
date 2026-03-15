@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
-from app.schemas.common import DeleteResponse
+from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.drone_profile import (
     DroneProfileCreate,
     DroneProfileListResponse,
@@ -21,7 +21,7 @@ def list_drones(db: Session = Depends(get_db)):
     """list all drone profiles"""
     drones = drone_profile_service.list_drones(db)
 
-    return {"data": drones, "meta": {"total": len(drones)}}
+    return DroneProfileListResponse(data=drones, meta=ListMeta(total=len(drones)))
 
 
 @router.get("/{drone_id}", response_model=DroneProfileResponse)

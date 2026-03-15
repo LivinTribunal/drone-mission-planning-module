@@ -11,7 +11,7 @@ from app.schemas.airport import (
     AirportResponse,
     AirportUpdate,
 )
-from app.schemas.common import DeleteResponse
+from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.infrastructure import (
     AGLCreate,
     AGLListResponse,
@@ -45,7 +45,7 @@ def list_airports(db: Session = Depends(get_db)):
     """list all avaible airports for user"""
     airports = airport_service.list_airports(db)
 
-    return {"data": airports, "meta": {"total": len(airports)}}
+    return AirportListResponse(data=airports, meta=ListMeta(total=len(airports)))
 
 
 @router.get("/{airport_id}", response_model=AirportDetailResponse)
@@ -80,7 +80,7 @@ def list_surfaces(airport_id: UUID, db: Session = Depends(get_db)):
     """list all surfaces for airport"""
     surfaces = airport_service.list_surfaces(db, airport_id)
 
-    return {"data": surfaces, "meta": {"total": len(surfaces)}}
+    return SurfaceListResponse(data=surfaces, meta=ListMeta(total=len(surfaces)))
 
 
 @router.post("/{airport_id}/surfaces", status_code=201, response_model=SurfaceResponse)
@@ -111,7 +111,7 @@ def list_obstacles(airport_id: UUID, db: Session = Depends(get_db)):
     """list all obstacles for airport"""
     obstacles = airport_service.list_obstacles(db, airport_id)
 
-    return {"data": obstacles, "meta": {"total": len(obstacles)}}
+    return ObstacleListResponse(data=obstacles, meta=ListMeta(total=len(obstacles)))
 
 
 @router.post("/{airport_id}/obstacles", status_code=201, response_model=ObstacleResponse)
@@ -142,7 +142,7 @@ def list_safety_zones(airport_id: UUID, db: Session = Depends(get_db)):
     """list all safety zones for airport"""
     zones = airport_service.list_safety_zones(db, airport_id)
 
-    return {"data": zones, "meta": {"total": len(zones)}}
+    return SafetyZoneListResponse(data=zones, meta=ListMeta(total=len(zones)))
 
 
 @router.post("/{airport_id}/safety-zones", status_code=201, response_model=SafetyZoneResponse)
@@ -173,7 +173,7 @@ def list_agls(airport_id: UUID, surface_id: UUID, db: Session = Depends(get_db))
     """list all AGLs for surface"""
     agls = airport_service.list_agls(db, surface_id)
 
-    return {"data": agls, "meta": {"total": len(agls)}}
+    return AGLListResponse(data=agls, meta=ListMeta(total=len(agls)))
 
 
 @router.post(
@@ -212,7 +212,7 @@ def list_lhas(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = De
     """list all LHAs for AGL"""
     lhas = airport_service.list_lhas(db, agl_id)
 
-    return {"data": lhas, "meta": {"total": len(lhas)}}
+    return LHAListResponse(data=lhas, meta=ListMeta(total=len(lhas)))
 
 
 @router.post(

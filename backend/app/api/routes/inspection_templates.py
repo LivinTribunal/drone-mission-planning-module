@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
-from app.schemas.common import DeleteResponse
+from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.inspection_template import (
     InspectionTemplateCreate,
     InspectionTemplateListResponse,
@@ -24,7 +24,7 @@ def list_templates(
     """list inspection templates, optionally filtered by airport"""
     templates = inspection_template_service.list_templates(db, airport_id=airport_id)
 
-    return {"data": templates, "meta": {"total": len(templates)}}
+    return InspectionTemplateListResponse(data=templates, meta=ListMeta(total=len(templates)))
 
 
 @router.get("/{template_id}", response_model=InspectionTemplateResponse)

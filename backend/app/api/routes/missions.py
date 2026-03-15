@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
-from app.schemas.common import DeleteResponse
+from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.mission import (
     InspectionCreate,
     InspectionResponse,
@@ -36,7 +36,9 @@ def list_missions(
         db, airport_id=airport_id, status=status, limit=limit, offset=offset
     )
 
-    return {"data": missions, "meta": {"total": total, "limit": limit, "offset": offset}}
+    return MissionListResponse(
+        data=missions, meta=ListMeta(total=total, limit=limit, offset=offset)
+    )
 
 
 @router.get("/{mission_id}", response_model=MissionDetailResponse)
