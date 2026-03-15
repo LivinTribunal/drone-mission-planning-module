@@ -12,7 +12,6 @@ from app.main import app
 @pytest.fixture(scope="module")
 def db_engine():
     """db engine for testing"""
-    # TODO: use testcontainers-postgres
     with PostgresContainer(
         image="postgis/postgis:16-3.4",
         username="test",

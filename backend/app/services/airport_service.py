@@ -17,6 +17,7 @@ LHA_GEOM = ["position"]
 
 
 # helper functions
+# TODO: why don't we use models for data in all services?
 def _set_fields(obj, data: dict, geom_fields: list[str]):
     """set fields of an object"""
     for key, val in data.items():
