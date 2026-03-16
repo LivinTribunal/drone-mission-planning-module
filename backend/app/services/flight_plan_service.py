@@ -70,7 +70,7 @@ def persist_flight_plan(
         db.add(val_result)
         db.flush()
 
-        for w in warnings:
+        for w in dict.fromkeys(warnings):  # deduplicate preserving order
             db.add(
                 ValidationViolation(
                     validation_result_id=val_result.id,
