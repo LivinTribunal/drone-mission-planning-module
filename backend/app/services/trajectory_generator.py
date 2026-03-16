@@ -832,7 +832,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         lha_positions = _get_lha_positions(template)
         if not lha_positions:
-            warnings.append(f"inspection {inspection.id}: no LHA positions")
+            warnings.append(f"{template.name} #{inspection.sequence_order}: no LHA positions")
             continue
 
         center = Point3D.from_tuple(center_of_points([p.to_tuple() for p in lha_positions]))
@@ -847,7 +847,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             if inspection.config:
                 inspection.config.measurement_density = optimal_density
             warnings.append(
-                f"inspection {inspection.id}: density auto-set to "
+                f"{template.name} #{inspection.sequence_order}: density auto-set to "
                 f"{optimal_density} to capture all transition angles"
             )
 
@@ -869,7 +869,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             if inspection.config:
                 inspection.config.speed_override = optimal_speed
             warnings.append(
-                f"inspection {inspection.id}: speed auto-set to "
+                f"{template.name} #{inspection.sequence_order}: speed auto-set to "
                 f"{optimal_speed:.1f} m/s based on path geometry and frame rate"
             )
         else:
