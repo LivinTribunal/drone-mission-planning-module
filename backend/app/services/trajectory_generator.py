@@ -1114,6 +1114,26 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             if bw:
                 warnings.append(bw.message)
 
+        # for vertical profiles, add descent waypoint back to start altitude
+        # so transit doesn't start from the top of the vertical sweep
+        if (
+            inspection.method == InspectionMethod.VERTICAL_PROFILE
+            and len(pass_wps) >= 2
+            and abs(pass_wps[0].lon - pass_wps[-1].lon) < 0.0001
+            and abs(pass_wps[0].lat - pass_wps[-1].lat) < 0.0001
+        ):
+            pass_wps.append(
+                WaypointData(
+                    lon=pass_wps[0].lon,
+                    lat=pass_wps[0].lat,
+                    alt=pass_wps[0].alt,
+                    heading=pass_wps[-1].heading,
+                    speed=speed,
+                    waypoint_type=WaypointType.TRANSIT,
+                    camera_action=CameraAction.NONE,
+                )
+            )
+
         inspection_passes.append(InspectionPass(waypoints=pass_wps, inspection_id=inspection.id))
 
     if not inspection_passes:
@@ -1184,7 +1204,13 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         # transit to point above landing spot
         landing_transit = compute_transit_path(
-            db, from_pt, above_landing, data.obstacles, data.safety_zones, default_speed
+            db,
+            from_pt,
+            above_landing,
+            data.obstacles,
+            data.safety_zones,
+            default_speed,
+            data.surfaces,
         )
         all_waypoints.extend(landing_transit)
 
