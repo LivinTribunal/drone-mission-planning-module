@@ -6,7 +6,13 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.agl import AGL
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
-from app.models.enums import CameraAction, InspectionMethod, SafetyZoneType, WaypointType
+from app.models.enums import (
+    CameraAction,
+    InspectionMethod,
+    SafetyZoneType,
+    SurfaceType,
+    WaypointType,
+)
 from app.models.flight_plan import ConstraintRule, FlightPlan
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
@@ -593,12 +599,60 @@ def _build_visibility_graph(
     return graph
 
 
+def _runway_crossing_points(surface: AirfieldSurface) -> list[Point3D]:
+    """generate perpendicular crossing points on both sides of a runway.
+    places nodes at the midpoints of the runway short edges (threshold ends)
+    so A* can route to the narrowest crossing point."""
+    if not surface.geometry or not surface.width:
+        return []
+
+    geojson = parse_ewkb(surface.geometry.data)
+    if geojson["type"] != "LineString" or len(geojson["coordinates"]) < 2:
+        return []
+
+    coords = geojson["coordinates"]
+    start = coords[0]
+    end = coords[-1]
+    half_width = (surface.width / 2.0) + VERTEX_BUFFER_M
+
+    # heading perpendicular to runway
+    rwy_bearing = bearing_between(start[0], start[1], end[0], end[1])
+    perp_left = (rwy_bearing + 90) % 360
+    perp_right = (rwy_bearing - 90) % 360
+
+    points = []
+    # midpoint of runway
+    mid_lon = (start[0] + end[0]) / 2
+    mid_lat = (start[1] + end[1]) / 2
+    mid_alt = (start[2] + end[2]) / 2 if len(start) > 2 and len(end) > 2 else 0.0
+
+    # crossing points on both sides at midpoint
+    lon_l, lat_l = point_at_distance(mid_lon, mid_lat, perp_left, half_width)
+    lon_r, lat_r = point_at_distance(mid_lon, mid_lat, perp_right, half_width)
+    points.append(Point3D(lon=lon_l, lat=lat_l, alt=mid_alt))
+    points.append(Point3D(lon=lon_r, lat=lat_r, alt=mid_alt))
+
+    # crossing points at 1/4 and 3/4 along runway
+    for frac in (0.25, 0.75):
+        q_lon = start[0] + (end[0] - start[0]) * frac
+        q_lat = start[1] + (end[1] - start[1]) * frac
+        q_alt = mid_alt
+
+        lon_l, lat_l = point_at_distance(q_lon, q_lat, perp_left, half_width)
+        lon_r, lat_r = point_at_distance(q_lon, q_lat, perp_right, half_width)
+        points.append(Point3D(lon=lon_l, lat=lat_l, alt=q_alt))
+        points.append(Point3D(lon=lon_r, lat=lat_r, alt=q_alt))
+
+    return points
+
+
 def _collect_graph_nodes(
     endpoints: list[Point3D],
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
+    surfaces: list[AirfieldSurface] | None = None,
 ) -> list[Point3D]:
-    """collect all nodes for visibility graph: endpoints + obstacle/zone vertices"""
+    """collect nodes: endpoints + obstacle vertices + zone vertices + runway crossing points"""
     nodes = list(endpoints)
 
     for obs in obstacles:
@@ -608,6 +662,12 @@ def _collect_graph_nodes(
     for zone in zones:
         if zone.geometry and zone.type in HARD_ZONE_TYPES:
             nodes.extend(_extract_polygon_vertices(zone.geometry.data))
+
+    # add perpendicular crossing points for runways
+    if surfaces:
+        for surface in surfaces:
+            if surface.surface_type == SurfaceType.RUNWAY:
+                nodes.extend(_runway_crossing_points(surface))
 
     return nodes
 
@@ -621,7 +681,7 @@ def _run_astar(
     surfaces: list[AirfieldSurface] | None = None,
 ) -> list[Point3D] | None:
     """build visibility graph and run A* - returns path as Point3D list or None"""
-    nodes = _collect_graph_nodes([from_point, to_point], obstacles, zones)
+    nodes = _collect_graph_nodes([from_point, to_point], obstacles, zones, surfaces)
     graph = _build_visibility_graph(db, nodes, obstacles, zones, surfaces)
     node_tuples = [n.to_tuple() for n in nodes]
 
