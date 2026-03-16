@@ -98,7 +98,7 @@ def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violati
     contained = db.execute(
         text(
             "SELECT ST_Contains("
-            "ST_Force2D(:obs_geom::geometry), "
+            "ST_Force2D(CAST(:obs_geom AS geometry)), "
             "ST_Force2D(ST_GeomFromEWKT(:point)))"
         ),
         {"obs_geom": obstacle.geometry, "point": wp_ewkt},
@@ -157,7 +157,7 @@ def check_safety_zone(db: Session, wp: WaypointData, zone: SafetyZone) -> Violat
     contained = db.execute(
         text(
             "SELECT ST_Contains("
-            "ST_Force2D(:zone_geom::geometry), "
+            "ST_Force2D(CAST(:zone_geom AS geometry)), "
             "ST_Force2D(ST_GeomFromEWKT(:point)))"
         ),
         {"zone_geom": zone.geometry, "point": wp_ewkt},
@@ -196,7 +196,7 @@ def segments_intersect_obstacle(
     result = db.execute(
         text(
             "SELECT ST_Intersects("
-            "ST_Force2D(:obs_geom::geometry), "
+            "ST_Force2D(CAST(:obs_geom AS geometry)), "
             "ST_Force2D(ST_GeomFromEWKT(:line)))"
         ),
         {"obs_geom": obstacle.geometry, "line": line_ewkt},
@@ -224,7 +224,7 @@ def segments_intersect_zone(
     result = db.execute(
         text(
             "SELECT ST_Intersects("
-            "ST_Force2D(:zone_geom::geometry), "
+            "ST_Force2D(CAST(:zone_geom AS geometry)), "
             "ST_Force2D(ST_GeomFromEWKT(:line)))"
         ),
         {"zone_geom": zone.geometry, "line": line_ewkt},
@@ -265,7 +265,7 @@ def _check_constraint(
         contained = db.execute(
             text(
                 "SELECT ST_Contains("
-                "ST_Force2D(:boundary::geometry), "
+                "ST_Force2D(CAST(:boundary AS geometry)), "
                 "ST_Force2D(ST_GeomFromEWKT(:point)))"
             ),
             {"boundary": constraint.boundary, "point": wp_ewkt},
@@ -301,8 +301,8 @@ def _check_runway_buffer(
         too_close = db.execute(
             text(
                 "SELECT ST_DWithin("
-                "ST_Force2D(:rwy_geom::geometry)::geography, "
-                "ST_Force2D(ST_GeomFromEWKT(:point))::geography, "
+                "ST_Force2D(CAST(:rwy_geom AS geometry))::geography, "
+                "ST_Force2D(CAST(ST_GeomFromEWKT(:point) AS geography), "
                 ":buffer)"
             ),
             {
