@@ -10,7 +10,6 @@ from app.models.enums import (
     CameraAction,
     InspectionMethod,
     SafetyZoneType,
-    SurfaceType,
     WaypointType,
 )
 from app.models.flight_plan import ConstraintRule, FlightPlan
@@ -599,75 +598,70 @@ def _build_visibility_graph(
     return graph
 
 
-def _runway_crossing_points(surface: AirfieldSurface) -> list[Point3D]:
-    """generate perpendicular crossing points on both sides of a runway.
-    places nodes at the midpoints of the runway short edges (threshold ends)
-    so A* can route to the narrowest crossing point."""
-    if not surface.geometry or not surface.width:
-        return []
-
-    geojson = parse_ewkb(surface.geometry.data)
-    if geojson["type"] != "LineString" or len(geojson["coordinates"]) < 2:
-        return []
-
-    coords = geojson["coordinates"]
-    start = coords[0]
-    end = coords[-1]
-    half_width = (surface.width / 2.0) + VERTEX_BUFFER_M
-
-    # heading perpendicular to runway
-    rwy_bearing = bearing_between(start[0], start[1], end[0], end[1])
-    perp_left = (rwy_bearing + 90) % 360
-    perp_right = (rwy_bearing - 90) % 360
-
-    points = []
-    # midpoint of runway
-    mid_lon = (start[0] + end[0]) / 2
-    mid_lat = (start[1] + end[1]) / 2
-    mid_alt = (start[2] + end[2]) / 2 if len(start) > 2 and len(end) > 2 else 0.0
-
-    # crossing points on both sides at midpoint
-    lon_l, lat_l = point_at_distance(mid_lon, mid_lat, perp_left, half_width)
-    lon_r, lat_r = point_at_distance(mid_lon, mid_lat, perp_right, half_width)
-    points.append(Point3D(lon=lon_l, lat=lat_l, alt=mid_alt))
-    points.append(Point3D(lon=lon_r, lat=lat_r, alt=mid_alt))
-
-    # crossing points at 1/4 and 3/4 along runway
-    for frac in (0.25, 0.75):
-        q_lon = start[0] + (end[0] - start[0]) * frac
-        q_lat = start[1] + (end[1] - start[1]) * frac
-        q_alt = mid_alt
-
-        lon_l, lat_l = point_at_distance(q_lon, q_lat, perp_left, half_width)
-        lon_r, lat_r = point_at_distance(q_lon, q_lat, perp_right, half_width)
-        points.append(Point3D(lon=lon_l, lat=lat_l, alt=q_alt))
-        points.append(Point3D(lon=lon_r, lat=lat_r, alt=q_alt))
-
-    return points
+MIN_SEARCH_RADIUS: Meters = 200.0
+SEARCH_RADIUS_MARGIN = 1.2
+SEARCH_RADIUS_EXPANSION = 1.5
+MAX_ASTAR_RETRIES = 3
 
 
-def _collect_graph_nodes(
+def _collect_graph_nodes_in_circle(
     endpoints: list[Point3D],
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
-    surfaces: list[AirfieldSurface] | None = None,
+    surfaces: list[AirfieldSurface] | None,
+    center: Point3D,
+    radius: Meters,
 ) -> list[Point3D]:
-    """collect nodes: endpoints + obstacle vertices + zone vertices + runway crossing points"""
+    """collect nodes within search circle: endpoints + nearby vertices from
+    obstacles, hard zones, and runway/taxiway surfaces."""
     nodes = list(endpoints)
+
+    def in_circle(pt: Point3D) -> bool:
+        return distance_between(center.lon, center.lat, pt.lon, pt.lat) <= radius
 
     for obs in obstacles:
         if obs.geometry:
-            nodes.extend(_extract_polygon_vertices(obs.geometry.data))
+            for v in _extract_polygon_vertices(obs.geometry.data):
+                if in_circle(v):
+                    nodes.append(v)
 
     for zone in zones:
         if zone.geometry and zone.type in HARD_ZONE_TYPES:
-            nodes.extend(_extract_polygon_vertices(zone.geometry.data))
+            for v in _extract_polygon_vertices(zone.geometry.data):
+                if in_circle(v):
+                    nodes.append(v)
 
-    # add perpendicular crossing points for runways
+    # runway/taxiway surface centerline endpoints as graph nodes
     if surfaces:
         for surface in surfaces:
-            if surface.surface_type == SurfaceType.RUNWAY:
-                nodes.extend(_runway_crossing_points(surface))
+            if not surface.geometry:
+                continue
+            geojson = parse_ewkb(surface.geometry.data)
+            if geojson["type"] != "LineString":
+                continue
+
+            coords = geojson["coordinates"]
+            half_w = ((surface.width or 45.0) / 2.0) + VERTEX_BUFFER_M
+            rwy_brng = bearing_between(coords[0][0], coords[0][1], coords[-1][0], coords[-1][1])
+            perp_l = (rwy_brng + 90) % 360
+            perp_r = (rwy_brng - 90) % 360
+
+            # place nodes on both sides at start, middle, and end of surface
+            for frac in (0.0, 0.25, 0.5, 0.75, 1.0):
+                idx = int(frac * (len(coords) - 1))
+                c = coords[idx]
+                alt = c[2] if len(c) > 2 else 0.0
+
+                lon_l, lat_l = point_at_distance(c[0], c[1], perp_l, half_w)
+                lon_r, lat_r = point_at_distance(c[0], c[1], perp_r, half_w)
+
+                pt_l = Point3D(lon=lon_l, lat=lat_l, alt=alt)
+                pt_r = Point3D(lon=lon_r, lat=lat_r, alt=alt)
+
+                if in_circle(pt_l):
+                    nodes.append(pt_l)
+                if in_circle(pt_r):
+                    nodes.append(pt_r)
 
     return nodes
 
@@ -680,16 +674,31 @@ def _run_astar(
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface] | None = None,
 ) -> list[Point3D] | None:
-    """build visibility graph and run A* - returns path as Point3D list or None"""
-    nodes = _collect_graph_nodes([from_point, to_point], obstacles, zones, surfaces)
-    graph = _build_visibility_graph(db, nodes, obstacles, zones, surfaces)
-    node_tuples = [n.to_tuple() for n in nodes]
+    """circle-based A* - builds visibility graph within a search circle
+    centered on the midpoint of from→to. expands radius on failure."""
+    mid = Point3D(
+        lon=(from_point.lon + to_point.lon) / 2,
+        lat=(from_point.lat + to_point.lat) / 2,
+        alt=(from_point.alt + to_point.alt) / 2,
+    )
+    base_dist = distance_between(from_point.lon, from_point.lat, to_point.lon, to_point.lat)
+    radius = max(base_dist * SEARCH_RADIUS_MARGIN / 2, MIN_SEARCH_RADIUS)
 
-    path_indices = astar(graph, 0, 1, node_tuples)
-    if path_indices is None:
-        return None
+    for attempt in range(MAX_ASTAR_RETRIES):
+        nodes = _collect_graph_nodes_in_circle(
+            [from_point, to_point], obstacles, zones, surfaces, mid, radius
+        )
+        graph = _build_visibility_graph(db, nodes, obstacles, zones, surfaces)
+        node_tuples = [n.to_tuple() for n in nodes]
 
-    return [nodes[idx] for idx in path_indices]
+        path_indices = astar(graph, 0, 1, node_tuples)
+        if path_indices is not None:
+            return [nodes[idx] for idx in path_indices]
+
+        # expand search radius and retry
+        radius *= SEARCH_RADIUS_EXPANSION
+
+    return None
 
 
 def has_line_of_sight(
