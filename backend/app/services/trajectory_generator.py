@@ -1101,6 +1101,23 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         # phase 4 - post-inspection processing
         _apply_camera_actions(pass_wps)
 
+        # check camera line-of-sight to PAPI for each measurement waypoint
+        obstructed_wps = []
+        for wp_idx, wp in enumerate(pass_wps):
+            if wp.waypoint_type not in (WaypointType.MEASUREMENT, WaypointType.HOVER):
+                continue
+            wp_pt = Point3D(lon=wp.lon, lat=wp.lat, alt=wp.alt)
+            if not has_line_of_sight(db, wp_pt, center, data.obstacles, data.safety_zones):
+                obstructed_wps.append(wp_idx + 1)
+
+        if obstructed_wps:
+            label = f"{template.name} #{inspection.sequence_order}"
+            if len(obstructed_wps) <= 3:
+                wp_str = ", ".join(str(i) for i in obstructed_wps)
+            else:
+                wp_str = f"{min(obstructed_wps)}-{max(obstructed_wps)}"
+            warnings.append(f"{label} (wp {wp_str}): camera view to PAPI obstructed")
+
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
         seg_dur = seg_dist / max(speed, 0.1)
