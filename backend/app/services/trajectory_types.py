@@ -40,6 +40,12 @@ MAX_TURN_ANGLE: Degrees = 60.0
 # takeoff/landing safety
 TAKEOFF_SAFE_ALTITUDE: Meters = 10.0
 
+# runway crossing penalty for transit A*
+# penalty per meter of crossing - makes A* prefer routes around runways
+# perpendicular crossing (~45m for standard runway) costs 45*10=450m equivalent
+# parallel crossing (~3700m for LKPR) costs 3700*10=37000m - strongly avoided
+RUNWAY_CROSSING_PENALTY_PER_METER = 10.0
+
 # safety validation
 DEFAULT_RUNWAY_BUFFER: Meters = 100.0
 

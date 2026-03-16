@@ -237,6 +237,41 @@ def segments_intersect_zone(
     return bool(result)
 
 
+def segment_runway_crossing_length(
+    db: Session,
+    from_lon: float,
+    from_lat: float,
+    to_lon: float,
+    to_lat: float,
+    surface: AirfieldSurface,
+) -> float:
+    """length in meters of segment inside a runway's buffered area.
+    uses ST_Buffer on the centerline with half the runway width to create
+    the runway polygon on-the-fly. returns 0 if no crossing."""
+    if not surface.geometry:
+        return 0.0
+
+    half_width = (surface.width or 45.0) / 2.0
+    line_ewkt = f"SRID=4326;LINESTRING({from_lon} {from_lat}, {to_lon} {to_lat})"
+
+    # buffer the centerline by half width to get runway polygon, then intersect
+    result = db.execute(
+        text(
+            "SELECT ST_Length(ST_Intersection("
+            "ST_Buffer(ST_Force2D(ST_GeomFromEWKT(:surf_geom))::geography, :half_width)::geometry, "
+            "ST_Force2D(ST_GeomFromEWKT(:line))"
+            ")::geography)"
+        ),
+        {
+            "surf_geom": _geom_to_ewkt(surface.geometry),
+            "line": line_ewkt,
+            "half_width": half_width,
+        },
+    ).scalar()
+
+    return float(result) if result else 0.0
+
+
 def _check_constraint(
     db: Session,
     wp: WaypointData,

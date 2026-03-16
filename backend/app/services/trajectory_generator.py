@@ -15,6 +15,7 @@ from app.services.flight_plan_service import persist_flight_plan
 from app.services.safety_validator import (
     check_battery,
     check_obstacle,
+    segment_runway_crossing_length,
     segments_intersect_obstacle,
     segments_intersect_zone,
     validate_inspection_pass,
@@ -36,6 +37,7 @@ from app.services.trajectory_types import (
     MIN_LHA_FOR_FOV_CHECK,
     NORTH_BEARING,
     REROUTE_SEARCH_RADIUS_MULTIPLIER,
+    RUNWAY_CROSSING_PENALTY_PER_METER,
     SPEED_FRAMERATE_MARGIN,
     TAKEOFF_SAFE_ALTITUDE,
     Degrees,
@@ -557,16 +559,36 @@ def _build_visibility_graph(
     nodes: list[Point3D],
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
+    surfaces: list[AirfieldSurface] | None = None,
 ) -> dict[int, list[tuple[int, float]]]:
-    """build adjacency list - edge between nodes if segment is unobstructed"""
+    """build adjacency list - edge between nodes if segment is unobstructed.
+    edges crossing runways get a distance penalty proportional to crossing length,
+    making A* prefer routes that go around runways or cross perpendicularly."""
     graph: dict[int, list[tuple[int, float]]] = {i: [] for i in range(len(nodes))}
 
     for i in range(len(nodes)):
         for j in range(i + 1, len(nodes)):
-            if not _is_segment_blocked(db, nodes[i], nodes[j], obstacles, zones):
-                dist = distance_between(nodes[i].lon, nodes[i].lat, nodes[j].lon, nodes[j].lat)
-                graph[i].append((j, dist))
-                graph[j].append((i, dist))
+            if _is_segment_blocked(db, nodes[i], nodes[j], obstacles, zones):
+                continue
+
+            dist = distance_between(nodes[i].lon, nodes[i].lat, nodes[j].lon, nodes[j].lat)
+
+            # add penalty for runway crossing
+            if surfaces:
+                for surface in surfaces:
+                    crossing = segment_runway_crossing_length(
+                        db,
+                        nodes[i].lon,
+                        nodes[i].lat,
+                        nodes[j].lon,
+                        nodes[j].lat,
+                        surface,
+                    )
+                    if crossing > 0:
+                        dist += crossing * RUNWAY_CROSSING_PENALTY_PER_METER
+
+            graph[i].append((j, dist))
+            graph[j].append((i, dist))
 
     return graph
 
@@ -596,10 +618,11 @@ def _run_astar(
     to_point: Point3D,
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
+    surfaces: list[AirfieldSurface] | None = None,
 ) -> list[Point3D] | None:
     """build visibility graph and run A* - returns path as Point3D list or None"""
     nodes = _collect_graph_nodes([from_point, to_point], obstacles, zones)
-    graph = _build_visibility_graph(db, nodes, obstacles, zones)
+    graph = _build_visibility_graph(db, nodes, obstacles, zones, surfaces)
     node_tuples = [n.to_tuple() for n in nodes]
 
     path_indices = astar(graph, 0, 1, node_tuples)
@@ -788,24 +811,44 @@ def compute_transit_path(
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
     speed: MetersPerSecond,
+    surfaces: list[AirfieldSurface] | None = None,
 ) -> list[WaypointData]:
-    """A* transit path - shortest obstacle-free route"""
-    # straight-line if path is clear
+    """A* transit path - shortest obstacle-free route, penalizes runway crossing"""
+    # straight-line if path is clear and doesn't cross runway
     if not _is_segment_blocked(db, from_point, to_point, obstacles, zones):
-        return [
-            WaypointData(
-                lon=to_point.lon,
-                lat=to_point.lat,
-                alt=to_point.alt,
-                heading=bearing_between(from_point.lon, from_point.lat, to_point.lon, to_point.lat),
-                speed=speed,
-                waypoint_type=WaypointType.TRANSIT,
-                camera_action=CameraAction.NONE,
-            )
-        ]
+        crosses_runway = False
+        if surfaces:
+            for surface in surfaces:
+                crossing = segment_runway_crossing_length(
+                    db,
+                    from_point.lon,
+                    from_point.lat,
+                    to_point.lon,
+                    to_point.lat,
+                    surface,
+                )
+                if crossing > 0:
+                    crosses_runway = True
+                    break
 
-    # A* through visibility graph
-    path = _run_astar(db, from_point, to_point, obstacles, zones)
+        # if direct path crosses runway, still use A* to find a better route
+        if not crosses_runway:
+            return [
+                WaypointData(
+                    lon=to_point.lon,
+                    lat=to_point.lat,
+                    alt=to_point.alt,
+                    heading=bearing_between(
+                        from_point.lon, from_point.lat, to_point.lon, to_point.lat
+                    ),
+                    speed=speed,
+                    waypoint_type=WaypointType.TRANSIT,
+                    camera_action=CameraAction.NONE,
+                )
+            ]
+
+    # A* through visibility graph with runway penalties
+    path = _run_astar(db, from_point, to_point, obstacles, zones, surfaces)
     if path is None:
         raise HTTPException(
             status_code=400,
@@ -1042,7 +1085,13 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             to_pt = Point3D(lon=start.lon, lat=start.lat, alt=start.alt)
 
             transit_wps = compute_transit_path(
-                db, from_pt, to_pt, data.obstacles, data.safety_zones, default_speed
+                db,
+                from_pt,
+                to_pt,
+                data.obstacles,
+                data.safety_zones,
+                default_speed,
+                data.surfaces,
             )
             all_waypoints.extend(transit_wps)
 
@@ -1074,6 +1123,29 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 camera_action=CameraAction.NONE,
             )
         )
+
+    # check for runway/taxiway crossings and add warnings
+    for j in range(1, len(all_waypoints)):
+        prev_wp = all_waypoints[j - 1]
+        cur_wp = all_waypoints[j]
+        for surface in data.surfaces:
+            crossing = segment_runway_crossing_length(
+                db,
+                prev_wp.lon,
+                prev_wp.lat,
+                cur_wp.lon,
+                cur_wp.lat,
+                surface,
+            )
+            if crossing > 0:
+                wp_type = cur_wp.waypoint_type
+                msg = (
+                    f"wp {j}-{j + 1} ({wp_type}): crosses "
+                    f"{surface.surface_type} {surface.identifier} "
+                    f"({crossing:.0f}m)"
+                )
+                if msg not in warnings:
+                    warnings.append(msg)
 
     # final validation of assembled path (section 3.4.2)
     final_violations = validate_inspection_pass(
