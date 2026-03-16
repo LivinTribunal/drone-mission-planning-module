@@ -36,7 +36,12 @@ class FlightPlan(Base):
 
     mission = relationship("Mission", back_populates="flight_plan")
     airport = relationship("Airport")
-    waypoints = relationship("Waypoint", back_populates="flight_plan", cascade="all, delete-orphan")
+    waypoints = relationship(
+        "Waypoint",
+        back_populates="flight_plan",
+        cascade="all, delete-orphan",
+        order_by="Waypoint.sequence_order",
+    )
     validation_result = relationship(
         "ValidationResult",
         back_populates="flight_plan",
