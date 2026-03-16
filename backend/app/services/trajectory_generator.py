@@ -465,15 +465,36 @@ def compute_measurement_trajectory(
 HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
 
+# buffer to push obstacle vertices outward so A* nodes are outside the polygon
+# vertices ON the boundary are detected as intersecting by ST_Intersects
+VERTEX_BUFFER_M: Meters = 5.0
+
+
 def _extract_polygon_vertices(geom_data: bytes) -> list[Point3D]:
-    """extract vertices from a PostGIS polygon geometry"""
+    """extract vertices from polygon, offset outward so they're outside the boundary"""
     try:
         geojson = parse_ewkb(geom_data)
-        if geojson["type"] == "Polygon":
-            return [
-                Point3D(lon=c[0], lat=c[1], alt=c[2] if len(c) > 2 else 0.0)
-                for c in geojson["coordinates"][0]
-            ]
+        if geojson["type"] != "Polygon":
+            return []
+
+        coords = geojson["coordinates"][0]
+        if len(coords) < 3:
+            return []
+
+        # compute centroid for offset direction
+        cx = sum(c[0] for c in coords) / len(coords)
+        cy = sum(c[1] for c in coords) / len(coords)
+
+        vertices = []
+        for c in coords:
+            alt = c[2] if len(c) > 2 else 0.0
+            # push vertex away from centroid by VERTEX_BUFFER_M
+            brng = bearing_between(cx, cy, c[0], c[1])
+            lon, lat = point_at_distance(c[0], c[1], brng, VERTEX_BUFFER_M)
+            vertices.append(Point3D(lon=lon, lat=lat, alt=alt))
+
+        return vertices
+
     except Exception:
         pass
 
