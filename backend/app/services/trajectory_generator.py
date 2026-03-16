@@ -925,8 +925,9 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 },
             )
 
-        # deduplicate soft warnings (e.g. "inside CTR zone" for every waypoint)
-        soft = {v.message for v in violations if v.is_warning}
+        # deduplicate and label soft warnings with inspection context
+        label = f"{template.name} #{inspection.sequence_order}"
+        soft = {f"{label}: {v.message}" for v in violations if v.is_warning}
         warnings.extend(soft - set(warnings))
 
         # phase 4 - post-inspection processing
@@ -1034,7 +1035,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             },
         )
 
-    final_soft = {v.message for v in final_violations if v.is_warning}
+    final_soft = {f"final validation: {v.message}" for v in final_violations if v.is_warning}
     warnings.extend(final_soft - set(warnings))
 
     # compute final totals per-segment
