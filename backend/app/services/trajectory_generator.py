@@ -932,6 +932,9 @@ def compute_transit_path(
             detail="no obstacle-free transit path found",
         )
 
+    # transit altitude = max of endpoints so drone never goes underground
+    transit_alt = max(from_point.alt, to_point.alt)
+
     # convert to TRANSIT waypoints (skip from_point at index 0)
     transit_wps = []
     for k in range(1, len(path)):
@@ -940,7 +943,7 @@ def compute_transit_path(
             WaypointData(
                 lon=cur.lon,
                 lat=cur.lat,
-                alt=cur.alt,
+                alt=transit_alt,
                 heading=bearing_between(prev.lon, prev.lat, cur.lon, cur.lat),
                 speed=speed,
                 waypoint_type=WaypointType.TRANSIT,
