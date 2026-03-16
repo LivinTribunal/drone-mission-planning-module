@@ -37,6 +37,7 @@ from app.services.trajectory_types import (
     NORTH_BEARING,
     REROUTE_SEARCH_RADIUS_MULTIPLIER,
     SPEED_FRAMERATE_MARGIN,
+    TAKEOFF_SAFE_ALTITUDE,
     Degrees,
     InspectionPass,
     Meters,
@@ -281,11 +282,14 @@ def determine_start_position(
     glide_slope: Degrees,
 ) -> Point3D:
     """compute start position of inspection pass"""
+    # arc sweep is on the approach side (facing the PAPI front)
+    approach = (runway_heading + 180) % 360
+
     match method:
         case InspectionMethod.ANGULAR_SWEEP:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
             half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
-            angle = runway_heading - half_sweep
+            angle = approach - half_sweep
             lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
             alt = center.alt + radius * math.tan(math.radians(glide_slope))
 
@@ -293,7 +297,6 @@ def determine_start_position(
 
         case _:
             distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
-            approach = (runway_heading + 180) % 360
             lon, lat = point_at_distance(center.lon, center.lat, approach, distance)
             alt = center.alt + distance * math.tan(math.radians(MIN_ELEVATION_ANGLE))
 
@@ -308,11 +311,13 @@ def determine_end_position(
     glide_slope: Degrees,
 ) -> Point3D:
     """compute end position of inspection pass"""
+    approach = (runway_heading + 180) % 360
+
     match method:
         case InspectionMethod.ANGULAR_SWEEP:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
             half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
-            angle = runway_heading + half_sweep
+            angle = approach + half_sweep
             lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
             alt = center.alt + radius * math.tan(math.radians(glide_slope))
 
@@ -320,7 +325,6 @@ def determine_end_position(
 
         case _:
             distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
-            approach = (runway_heading + 180) % 360
             lon, lat = point_at_distance(center.lon, center.lat, approach, distance)
             alt = center.alt + distance * math.tan(math.radians(MAX_ELEVATION_ANGLE))
 
@@ -335,12 +339,15 @@ def calculate_arc_path(
     inspection_id: UUID | None,
     speed: MetersPerSecond,
 ) -> list[WaypointData]:
-    """equation 3.1 - angular sweep arc path"""
+    """equation 3.1 - angular sweep arc path on approach side"""
     density = config.measurement_density
     radius = config.horizontal_distance or MIN_ARC_RADIUS
     half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
     glide_height = radius * math.tan(math.radians(glide_slope_angle))
     arc_alt = center.alt + glide_height + config.altitude_offset
+
+    # arc centered on approach heading (facing PAPI front)
+    approach = (runway_heading + 180) % 360
 
     waypoints = []
     for i in range(density):
@@ -348,10 +355,10 @@ def calculate_arc_path(
         if density > 1:
             theta = math.radians(-half_sweep + (2 * half_sweep / (density - 1)) * i)
         else:
-            # single measurement at runway centerline
+            # single measurement on approach centerline
             theta = 0.0
 
-        angle = runway_heading + math.degrees(theta)
+        angle = approach + math.degrees(theta)
         lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
         heading_to_center = bearing_between(lon, lat, center.lon, center.lat)
 
@@ -974,7 +981,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     # phase 5 - final assembly with A* transit
     all_waypoints: list[WaypointData] = []
 
-    # takeoff
+    # takeoff + climb to safe altitude before transit
     if mission.takeoff_coordinate:
         tc = parse_ewkb(mission.takeoff_coordinate.data)["coordinates"]
         first_wp = inspection_passes[0].waypoints[0]
@@ -986,6 +993,21 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 heading=bearing_between(tc[0], tc[1], first_wp.lon, first_wp.lat),
                 speed=default_speed,
                 waypoint_type=WaypointType.TAKEOFF,
+                camera_action=CameraAction.NONE,
+            )
+        )
+
+        # TODO: this should be configurable in mission config
+        # vertical climb to safe altitude before starting transit
+        safe_alt = tc[2] + TAKEOFF_SAFE_ALTITUDE
+        all_waypoints.append(
+            WaypointData(
+                lon=tc[0],
+                lat=tc[1],
+                alt=safe_alt,
+                heading=bearing_between(tc[0], tc[1], first_wp.lon, first_wp.lat),
+                speed=default_speed,
+                waypoint_type=WaypointType.TRANSIT,
                 camera_action=CameraAction.NONE,
             )
         )

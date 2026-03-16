@@ -37,6 +37,9 @@ REROUTE_SEARCH_RADIUS_MULTIPLIER = 3.0
 MAX_REROUTE_DEVIATION = 0.15
 MAX_TURN_ANGLE: Degrees = 60.0
 
+# takeoff/landing safety
+TAKEOFF_SAFE_ALTITUDE: Meters = 10.0
+
 # safety validation
 DEFAULT_RUNWAY_BUFFER: Meters = 100.0
 
