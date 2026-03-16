@@ -64,6 +64,7 @@ class Violation:
     is_warning: bool
     message: str
     constraint_id: str | None = None
+    waypoint_index: int | None = None
 
 
 @dataclass

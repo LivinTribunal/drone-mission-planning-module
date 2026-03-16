@@ -925,10 +925,27 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 },
             )
 
-        # deduplicate and label soft warnings with inspection context
+        # group soft warnings by message, show affected waypoint range
         label = f"{template.name} #{inspection.sequence_order}"
-        soft = {f"{label}: {v.message}" for v in violations if v.is_warning}
-        warnings.extend(soft - set(warnings))
+        soft_groups: dict[str, list[int]] = {}
+        for v in violations:
+            if not v.is_warning:
+                continue
+            indices = soft_groups.setdefault(v.message, [])
+            if v.waypoint_index is not None:
+                indices.append(v.waypoint_index + 1)
+
+        for msg, indices in soft_groups.items():
+            if indices:
+                if len(indices) <= 3:
+                    wp_str = ", ".join(str(i) for i in sorted(indices))
+                else:
+                    wp_str = f"{min(indices)}-{max(indices)}"
+                full = f"{label} (wp {wp_str}): {msg}"
+            else:
+                full = f"{label}: {msg}"
+            if full not in warnings:
+                warnings.append(full)
 
         # phase 4 - post-inspection processing
         _apply_camera_actions(pass_wps)
@@ -1035,8 +1052,25 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             },
         )
 
-    final_soft = {f"final validation: {v.message}" for v in final_violations if v.is_warning}
-    warnings.extend(final_soft - set(warnings))
+    final_groups: dict[str, list[int]] = {}
+    for v in final_violations:
+        if not v.is_warning:
+            continue
+        indices = final_groups.setdefault(v.message, [])
+        if v.waypoint_index is not None:
+            indices.append(v.waypoint_index + 1)
+
+    for msg, indices in final_groups.items():
+        if indices:
+            if len(indices) <= 3:
+                wp_str = ", ".join(str(i) for i in sorted(indices))
+            else:
+                wp_str = f"{min(indices)}-{max(indices)}"
+            full = f"final validation (wp {wp_str}): {msg}"
+        else:
+            full = f"final validation: {msg}"
+        if full not in warnings:
+            warnings.append(full)
 
     # compute final totals per-segment
     total_dist = 0.0

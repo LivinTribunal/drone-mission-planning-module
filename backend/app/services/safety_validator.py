@@ -30,25 +30,29 @@ def validate_inspection_pass(
     """validate all waypoints in an inspection pass"""
     violations = []
 
-    for wp in waypoints:
+    for i, wp in enumerate(waypoints):
         if drone:
             v = check_drone_constraints(wp, drone)
             if v:
+                v.waypoint_index = i
                 violations.append(v)
 
         for constraint in constraints:
             v = _check_constraint(db, wp, constraint, surfaces)
             if v:
+                v.waypoint_index = i
                 violations.append(v)
 
         for obstacle in obstacles:
             v = check_obstacle(db, wp, obstacle)
             if v:
+                v.waypoint_index = i
                 violations.append(v)
 
         for zone in zones:
             v = check_safety_zone(db, wp, zone)
             if v:
+                v.waypoint_index = i
                 violations.append(v)
 
     return violations
