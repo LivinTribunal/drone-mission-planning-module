@@ -40,6 +40,9 @@ MAX_TURN_ANGLE: Degrees = 60.0
 # takeoff/landing safety
 TAKEOFF_SAFE_ALTITUDE: Meters = 10.0
 
+# surface edge node spacing for visibility graph
+SURFACE_NODE_SPACING: Meters = 200.0
+
 # runway crossing penalty for transit A*
 # penalty per meter of crossing - makes A* prefer routes around runways
 # perpendicular crossing (~45m for standard runway) costs 45*10=450m equivalent

@@ -44,6 +44,7 @@ from app.services.trajectory_types import (
     REROUTE_SEARCH_RADIUS_MULTIPLIER,
     RUNWAY_CROSSING_PENALTY_PER_METER,
     SPEED_FRAMERATE_MARGIN,
+    SURFACE_NODE_SPACING,
     TAKEOFF_SAFE_ALTITUDE,
     Degrees,
     InspectionPass,
@@ -631,7 +632,7 @@ def _collect_graph_nodes_in_circle(
                 if in_circle(v):
                     nodes.append(v)
 
-    # runway/taxiway surface centerline endpoints as graph nodes
+    # surface edge nodes - spaced along centerline at SURFACE_NODE_SPACING
     if surfaces:
         for surface in surfaces:
             if not surface.geometry:
@@ -641,19 +642,26 @@ def _collect_graph_nodes_in_circle(
                 continue
 
             coords = geojson["coordinates"]
+            start = coords[0]
+            end = coords[-1]
+            length = surface.length or distance_between(start[0], start[1], end[0], end[1])
             half_w = ((surface.width or 45.0) / 2.0) + VERTEX_BUFFER_M
-            rwy_brng = bearing_between(coords[0][0], coords[0][1], coords[-1][0], coords[-1][1])
+            rwy_brng = bearing_between(start[0], start[1], end[0], end[1])
             perp_l = (rwy_brng + 90) % 360
             perp_r = (rwy_brng - 90) % 360
 
-            # place nodes on both sides at start, middle, and end of surface
-            for frac in (0.0, 0.25, 0.5, 0.75, 1.0):
-                idx = int(frac * (len(coords) - 1))
-                c = coords[idx]
-                alt = c[2] if len(c) > 2 else 0.0
+            # walk along centerline at spacing intervals
+            num_points = max(2, int(length / SURFACE_NODE_SPACING) + 1)
+            for i in range(num_points):
+                frac = i / (num_points - 1)
+                lon = start[0] + (end[0] - start[0]) * frac
+                lat = start[1] + (end[1] - start[1]) * frac
+                alt_s = start[2] if len(start) > 2 else 0.0
+                alt_e = end[2] if len(end) > 2 else 0.0
+                alt = alt_s + (alt_e - alt_s) * frac
 
-                lon_l, lat_l = point_at_distance(c[0], c[1], perp_l, half_w)
-                lon_r, lat_r = point_at_distance(c[0], c[1], perp_r, half_w)
+                lon_l, lat_l = point_at_distance(lon, lat, perp_l, half_w)
+                lon_r, lat_r = point_at_distance(lon, lat, perp_r, half_w)
 
                 pt_l = Point3D(lon=lon_l, lat=lat_l, alt=alt)
                 pt_r = Point3D(lon=lon_r, lat=lat_r, alt=alt)
