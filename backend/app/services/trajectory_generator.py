@@ -1048,32 +1048,32 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         all_waypoints.extend(ipass.waypoints)
 
-    # landing via A* transit (section 3.3.7)
+    # landing: transit to safe altitude above landing spot, then descend
     if mission.landing_coordinate:
         lc = parse_ewkb(mission.landing_coordinate.data)["coordinates"]
+        safe_alt = lc[2] + TAKEOFF_SAFE_ALTITUDE
         last = all_waypoints[-1]
         from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)
-        to_pt = Point3D(lon=lc[0], lat=lc[1], alt=lc[2])
+        above_landing = Point3D(lon=lc[0], lat=lc[1], alt=safe_alt)
 
+        # transit to point above landing spot
         landing_transit = compute_transit_path(
-            db, from_pt, to_pt, data.obstacles, data.safety_zones, default_speed
+            db, from_pt, above_landing, data.obstacles, data.safety_zones, default_speed
         )
+        all_waypoints.extend(landing_transit)
 
-        if landing_transit:
-            landing_transit[-1].waypoint_type = WaypointType.LANDING
-            all_waypoints.extend(landing_transit)
-        else:
-            all_waypoints.append(
-                WaypointData(
-                    lon=lc[0],
-                    lat=lc[1],
-                    alt=lc[2],
-                    heading=bearing_between(last.lon, last.lat, lc[0], lc[1]),
-                    speed=default_speed,
-                    waypoint_type=WaypointType.LANDING,
-                    camera_action=CameraAction.NONE,
-                )
+        # vertical descent to landing
+        all_waypoints.append(
+            WaypointData(
+                lon=lc[0],
+                lat=lc[1],
+                alt=lc[2],
+                heading=all_waypoints[-1].heading,
+                speed=default_speed,
+                waypoint_type=WaypointType.LANDING,
+                camera_action=CameraAction.NONE,
             )
+        )
 
     # final validation of assembled path (section 3.4.2)
     final_violations = validate_inspection_pass(
