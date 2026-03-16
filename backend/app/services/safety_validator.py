@@ -98,10 +98,10 @@ def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violati
     contained = db.execute(
         text(
             "SELECT ST_Contains("
-            "ST_Force2D(CAST(:obs_geom AS geometry)), "
+            "ST_Force2D(ST_GeomFromEWKT(:obs_geom)), "
             "ST_Force2D(ST_GeomFromEWKT(:point)))"
         ),
-        {"obs_geom": obstacle.geometry, "point": wp_ewkt},
+        {"obs_geom": _geom_to_ewkt(obstacle.geometry), "point": wp_ewkt},
     ).scalar()
 
     if not contained:
@@ -157,10 +157,10 @@ def check_safety_zone(db: Session, wp: WaypointData, zone: SafetyZone) -> Violat
     contained = db.execute(
         text(
             "SELECT ST_Contains("
-            "ST_Force2D(CAST(:zone_geom AS geometry)), "
+            "ST_Force2D(ST_GeomFromEWKT(:zone_geom)), "
             "ST_Force2D(ST_GeomFromEWKT(:point)))"
         ),
-        {"zone_geom": zone.geometry, "point": wp_ewkt},
+        {"zone_geom": _geom_to_ewkt(zone.geometry), "point": wp_ewkt},
     ).scalar()
 
     if not contained:
@@ -196,10 +196,10 @@ def segments_intersect_obstacle(
     result = db.execute(
         text(
             "SELECT ST_Intersects("
-            "ST_Force2D(CAST(:obs_geom AS geometry)), "
+            "ST_Force2D(ST_GeomFromEWKT(:obs_geom)), "
             "ST_Force2D(ST_GeomFromEWKT(:line)))"
         ),
-        {"obs_geom": obstacle.geometry, "line": line_ewkt},
+        {"obs_geom": _geom_to_ewkt(obstacle.geometry), "line": line_ewkt},
     ).scalar()
 
     return bool(result)
@@ -224,10 +224,10 @@ def segments_intersect_zone(
     result = db.execute(
         text(
             "SELECT ST_Intersects("
-            "ST_Force2D(CAST(:zone_geom AS geometry)), "
+            "ST_Force2D(ST_GeomFromEWKT(:zone_geom)), "
             "ST_Force2D(ST_GeomFromEWKT(:line)))"
         ),
-        {"zone_geom": zone.geometry, "line": line_ewkt},
+        {"zone_geom": _geom_to_ewkt(zone.geometry), "line": line_ewkt},
     ).scalar()
 
     return bool(result)
@@ -265,10 +265,10 @@ def _check_constraint(
         contained = db.execute(
             text(
                 "SELECT ST_Contains("
-                "ST_Force2D(CAST(:boundary AS geometry)), "
+                "ST_Force2D(ST_GeomFromEWKT(:boundary)), "
                 "ST_Force2D(ST_GeomFromEWKT(:point)))"
             ),
-            {"boundary": constraint.boundary, "point": wp_ewkt},
+            {"boundary": _geom_to_ewkt(constraint.boundary), "point": wp_ewkt},
         ).scalar()
 
         if not contained:
@@ -301,12 +301,12 @@ def _check_runway_buffer(
         too_close = db.execute(
             text(
                 "SELECT ST_DWithin("
-                "ST_Force2D(CAST(:rwy_geom AS geometry))::geography, "
-                "ST_Force2D(CAST(ST_GeomFromEWKT(:point) AS geography), "
+                "ST_Force2D(ST_GeomFromEWKT(:rwy_geom))::geography, "
+                "ST_Force2D(ST_Force2D(ST_GeomFromEWKT(:point))::geography, "
                 ":buffer)"
             ),
             {
-                "rwy_geom": surface.geometry,
+                "rwy_geom": _geom_to_ewkt(surface.geometry),
                 "point": wp_ewkt,
                 "buffer": buffer_m,
             },
@@ -323,6 +323,12 @@ def _check_runway_buffer(
 
 def _wp_to_ewkt(wp) -> str:
     return geojson_to_ewkt({"type": "Point", "coordinates": [wp.lon, wp.lat, wp.alt]})
+
+
+def _geom_to_ewkt(geom) -> str:
+    """convert WKBElement to EWKT string for use in text() queries"""
+    geojson = parse_ewkb(geom.data)
+    return geojson_to_ewkt(geojson)
 
 
 def _violation(constraint: ConstraintRule, message: str) -> Violation:
