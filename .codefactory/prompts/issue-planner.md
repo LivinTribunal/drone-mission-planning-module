@@ -45,6 +45,15 @@ Step-by-step description of the implementation approach. Be specific about:
 - **Dependencies**: New dependencies required (if any)
 - **Human review required**: Yes for Tier 3 (trajectory, safety_validator, flight_plan, migrations)
 
+## DDD-Lite Planning Rules
+
+When planning changes, consider:
+1. Identify which aggregate root (Mission, Airport) is affected by the change.
+2. Plan business logic on entity methods, not service functions.
+3. Plan value objects for new domain primitives (coordinates, speeds, altitudes).
+4. Verify changes go through aggregate root methods (e.g., child entity creation via `airport.add_surface()`).
+5. Status transitions must use `Mission.transition_to()`, never direct assignment.
+
 ## Guidelines
 
 - Keep the plan focused on the minimal changes needed to satisfy the issue

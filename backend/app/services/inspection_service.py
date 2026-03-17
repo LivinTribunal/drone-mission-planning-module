@@ -4,33 +4,28 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.enums import MissionStatus
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.mission import InspectionCreate, InspectionUpdate
 from app.services.geometry_converter import apply_dict_update, schema_to_model_data
 
-# max number of inspections per mission
-MAX_INSPECTIONS = 10
-
 
 def _get_mission(db: Session, mission_id: UUID) -> Mission:
-    """get mission or 404"""
-    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    """get mission or 404."""
+    mission = (
+        db.query(Mission)
+        .options(joinedload(Mission.inspections))
+        .filter(Mission.id == mission_id)
+        .first()
+    )
     if not mission:
         raise HTTPException(status_code=404, detail="mission not found")
 
     return mission
 
 
-def _regress_when_changed(mission: Mission):
-    """regress VALIDATED -> PLANNED on inspection changes"""
-    if mission.status == "VALIDATED":
-        mission.status = MissionStatus.PLANNED
-
-
 def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> Inspection:
-    """add inspection to mission from template"""
+    """add inspection to mission via aggregate root."""
     mission = _get_mission(db, mission_id)
 
     # validate template exists
@@ -39,14 +34,6 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
     )
     if not template:
         raise HTTPException(status_code=400, detail="template not found")
-
-    # check max inspections limit
-    count = db.query(Inspection).filter(Inspection.mission_id == mission_id).count()
-    if count >= MAX_INSPECTIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"mission already has {MAX_INSPECTIONS} inspections (max limit)",
-        )
 
     config_data = schema.config.model_dump() if schema.config else None
     config_id = None
@@ -57,7 +44,6 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
         db.flush()
         config_id = config.id
 
-    # TODO: consider saving last sequence number on mission model
     next_order = (
         db.query(func.coalesce(func.max(Inspection.sequence_order), 0) + 1)
         .filter(Inspection.mission_id == mission_id)
@@ -65,15 +51,18 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
     )
 
     inspection = Inspection(
-        mission_id=mission_id,
         template_id=schema.template_id,
         method=schema.method,
         config_id=config_id,
         sequence_order=next_order,
     )
-    db.add(inspection)
 
-    _regress_when_changed(mission)
+    try:
+        mission.add_inspection(inspection)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    mission.regress_if_validated()
     db.commit()
     db.refresh(inspection)
 
@@ -83,7 +72,7 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
 def update_inspection(
     db: Session, mission_id: UUID, inspection_id: UUID, schema: InspectionUpdate
 ) -> Inspection:
-    """update inspection config/sequence/method"""
+    """update inspection config/sequence/method."""
     mission = _get_mission(db, mission_id)
     inspection = (
         db.query(Inspection)
@@ -108,7 +97,7 @@ def update_inspection(
 
     apply_dict_update(inspection, data)
 
-    _regress_when_changed(mission)
+    mission.regress_if_validated()
     db.commit()
     db.refresh(inspection)
 
@@ -116,17 +105,17 @@ def update_inspection(
 
 
 def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
-    """delete inspection and reorder remaining"""
+    """delete inspection and reorder remaining."""
     mission = _get_mission(db, mission_id)
-    inspection = (
-        db.query(Inspection)
-        .filter(Inspection.id == inspection_id, Inspection.mission_id == mission_id)
-        .first()
-    )
-    if not inspection:
+
+    try:
+        mission.remove_inspection(inspection_id)
+    except ValueError as e:
+        detail = str(e)
+        if "DRAFT" in detail:
+            raise HTTPException(status_code=409, detail=detail)
         raise HTTPException(status_code=404, detail="inspection not found")
 
-    db.delete(inspection)
     db.flush()
 
     # reorder remaining
@@ -139,12 +128,12 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     for i, insp in enumerate(remaining, start=1):
         insp.sequence_order = i
 
-    _regress_when_changed(mission)
+    mission.regress_if_validated()
     db.commit()
 
 
 def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID]):
-    """reorder inspections by provided id list"""
+    """reorder inspections by provided id list."""
     mission = _get_mission(db, mission_id)
 
     for i, insp_id in enumerate(inspection_ids, start=1):
@@ -158,5 +147,5 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
 
         inspection.sequence_order = i
 
-    _regress_when_changed(mission)
+    mission.regress_if_validated()
     db.commit()

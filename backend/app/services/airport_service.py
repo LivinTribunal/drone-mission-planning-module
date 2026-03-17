@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
+from app.models.value_objects import IcaoCode
 from app.schemas.airport import AirportCreate, AirportUpdate
 from app.schemas.infrastructure import (
     AGLCreate,
@@ -46,7 +47,12 @@ def get_airport(db: Session, airport_id: UUID) -> Airport:
 
 
 def create_airport(db: Session, schema: AirportCreate) -> Airport:
-    """create airport"""
+    """create airport with ICAO code validation."""
+    try:
+        IcaoCode(schema.icao_code)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     airport = Airport(**schema_to_model_data(schema))
     db.add(airport)
     db.commit()
@@ -90,10 +96,14 @@ def list_surfaces(db: Session, airport_id: UUID) -> list[AirfieldSurface]:
 
 
 def create_surface(db: Session, airport_id: UUID, schema: SurfaceCreate) -> AirfieldSurface:
-    """create surface for airport"""
+    """create surface via airport aggregate root."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise HTTPException(status_code=404, detail="airport not found")
+
     data = schema_to_model_data(schema)
-    surface = AirfieldSurface(airport_id=airport_id, **data)
-    db.add(surface)
+    surface = AirfieldSurface(**data)
+    airport.add_surface(surface)
     db.commit()
     db.refresh(surface)
 
@@ -140,10 +150,14 @@ def list_obstacles(db: Session, airport_id: UUID) -> list[Obstacle]:
 
 
 def create_obstacle(db: Session, airport_id: UUID, schema: ObstacleCreate) -> Obstacle:
-    """create obstacle for airport"""
+    """create obstacle via airport aggregate root."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise HTTPException(status_code=404, detail="airport not found")
+
     data = schema_to_model_data(schema)
-    obstacle = Obstacle(airport_id=airport_id, **data)
-    db.add(obstacle)
+    obstacle = Obstacle(**data)
+    airport.add_obstacle(obstacle)
     db.commit()
     db.refresh(obstacle)
 
@@ -190,10 +204,14 @@ def list_safety_zones(db: Session, airport_id: UUID) -> list[SafetyZone]:
 
 
 def create_safety_zone(db: Session, airport_id: UUID, schema: SafetyZoneCreate) -> SafetyZone:
-    """create safety zone for airport"""
+    """create safety zone via airport aggregate root."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise HTTPException(status_code=404, detail="airport not found")
+
     data = schema_to_model_data(schema)
-    zone = SafetyZone(airport_id=airport_id, **data)
-    db.add(zone)
+    zone = SafetyZone(**data)
+    airport.add_safety_zone(zone)
     db.commit()
     db.refresh(zone)
 

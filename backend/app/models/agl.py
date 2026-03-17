@@ -9,6 +9,8 @@ from app.core.database import Base
 
 
 class AGL(Base):
+    """approach guidance light group with child LHA units."""
+
     __tablename__ = "agl"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -24,8 +26,27 @@ class AGL(Base):
     surface = relationship("AirfieldSurface", back_populates="agls")
     lhas = relationship("LHA", back_populates="agl", cascade="all, delete-orphan")
 
+    def calculate_lha_center_point(self) -> tuple[float, float, float]:
+        """compute centroid (lon, lat, alt) of all LHA positions."""
+        from app.schemas.geometry import parse_ewkb
+
+        if not self.lhas:
+            raise ValueError("no LHA units to compute center from")
+
+        lons, lats, alts = [], [], []
+        for lha in self.lhas:
+            c = parse_ewkb(lha.position.data)["coordinates"]
+            lons.append(c[0])
+            lats.append(c[1])
+            alts.append(c[2])
+
+        n = len(lons)
+        return (sum(lons) / n, sum(lats) / n, sum(alts) / n)
+
 
 class LHA(Base):
+    """light housing assembly - individual light unit within an AGL."""
+
     __tablename__ = "lha"
 
     id = Column(UUID, primary_key=True, default=uuid4)

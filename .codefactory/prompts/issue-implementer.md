@@ -37,6 +37,13 @@ CRITICAL PATHS — extra care required:
 - **/migrations/versions/* — database schema changes
 If you touch these paths, add thorough test coverage.
 
+DDD-LITE RULES:
+1. New business rules go on entity methods, not service functions.
+2. Use value objects for new coordinate/speed/altitude fields (see `backend/app/models/value_objects.py`).
+3. Child entity creation goes through aggregate root methods (e.g., `airport.add_surface()`, `mission.add_inspection()`).
+4. Status transitions use `Mission.transition_to()`, never direct status assignment.
+5. Business logic belongs on models, not in services. Services handle DB access and HTTP concerns only.
+
 OUTPUT:
 - Make all necessary file changes to implement the issue.
 - Do not create PR descriptions, commit messages, or branch names — the CI handles that.

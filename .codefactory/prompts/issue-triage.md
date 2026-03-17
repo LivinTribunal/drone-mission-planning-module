@@ -42,6 +42,13 @@ If the issue references any of these paths, flag `estimatedComplexity` as `"high
 - Flight plan output generation
 - Database migrations
 
+### 6. DDD-Lite Complexity
+
+Changes touching aggregate root behavior are medium complexity minimum:
+- Mission state machine (status transitions, inspection management)
+- Airport child management (surfaces, obstacles, safety zones via aggregate methods)
+- Value object changes (Coordinate, Speed, AltitudeRange, IcaoCode)
+
 ## Bug Reproduction
 
 If the issue appears to be a **UI bug** or **visual bug** and includes reproduction steps:

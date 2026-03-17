@@ -39,3 +39,4 @@ from app.models.inspection import (  # noqa: F401
     insp_template_targets,
 )
 from app.models.mission import DroneProfile, Mission  # noqa: F401
+from app.models.value_objects import AltitudeRange, Coordinate, IcaoCode, Speed  # noqa: F401

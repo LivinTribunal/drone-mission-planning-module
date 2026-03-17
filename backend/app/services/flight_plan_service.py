@@ -3,7 +3,6 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.enums import MissionStatus
 from app.models.flight_plan import (
     FlightPlan,
     ValidationResult,
@@ -53,9 +52,8 @@ def persist_flight_plan(
     flight_plan = FlightPlan(
         mission_id=mission.id,
         airport_id=mission.airport_id,
-        total_distance=total_distance,
-        estimated_duration=estimated_duration,
     )
+    flight_plan.compile(total_distance, estimated_duration)
     db.add(flight_plan)
     db.flush()
 
@@ -80,8 +78,8 @@ def persist_flight_plan(
                 )
             )
 
-    # set mission status to PLANNED
-    mission.status = MissionStatus.PLANNED
+    # transition mission via aggregate root
+    mission.transition_to("PLANNED")
     db.commit()
     db.refresh(flight_plan)
 

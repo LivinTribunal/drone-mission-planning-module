@@ -51,14 +51,16 @@ def overlay_config(result: ResolvedConfig, config) -> None:
 
 
 def resolve_with_defaults(inspection, template) -> ResolvedConfig:
-    """Field-by-field merge: override > template > hardcoded."""
+    """field-by-field merge: override > template > hardcoded, delegates to model."""
     result = ResolvedConfig()
 
-    if template.default_config:
-        overlay_config(result, template.default_config)
-
     if inspection.config:
-        overlay_config(result, inspection.config)
+        merged = inspection.config.resolve_with_defaults(template.default_config)
+        for key, val in merged.items():
+            if val is not None:
+                setattr(result, key, val)
+    elif template.default_config:
+        overlay_config(result, template.default_config)
 
     return result
 

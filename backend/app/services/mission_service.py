@@ -6,49 +6,30 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.airport import Airport
 from app.models.enums import MissionStatus
 from app.models.inspection import Inspection, InspectionConfiguration
-from app.models.mission import DroneProfile, Mission
+from app.models.mission import TRAJECTORY_FIELDS, DroneProfile, Mission
 from app.schemas.mission import MissionCreate, MissionUpdate
 from app.services.geometry_converter import apply_schema_update, schema_to_model_data
 
-# status state machine
-TRANSITIONS = {
-    "DRAFT": ["PLANNED"],
-    "PLANNED": ["VALIDATED"],
-    "VALIDATED": ["EXPORTED"],
-    "EXPORTED": ["COMPLETED", "CANCELLED"],
-    "COMPLETED": [],
-    "CANCELLED": [],
-}
-
-# fields that affect trajectory - changing these regresses VALIDATED -> PLANNED
-TRAJECTORY_FIELDS = {
-    "drone_profile_id",
-    "default_speed",
-    "default_altitude_offset",
-    "takeoff_coordinate",
-    "landing_coordinate",
-}
-
 
 def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mission:
-    """validate and execute status transition"""
+    """validate and execute status transition via aggregate root."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         raise HTTPException(status_code=404, detail="mission not found")
 
-    allowed = TRANSITIONS.get(mission.status, [])
-    if target_status not in allowed:
+    try:
+        mission.transition_to(target_status)
+    except ValueError as e:
         raise HTTPException(
             status_code=409,
             detail={
                 "error": "invalid status transition",
                 "current_status": mission.status,
                 "target_status": target_status,
-                "allowed_transitions": allowed,
+                "message": str(e),
             },
         )
 
-    mission.status = target_status
     db.commit()
     db.refresh(mission)
 
@@ -62,7 +43,7 @@ def list_missions(
     limit: int = 20,
     offset: int = 0,
 ) -> tuple[list[Mission], int]:
-    """list missions with optional filters and pagination"""
+    """list missions with optional filters and pagination."""
     query = db.query(Mission)
 
     if airport_id:
@@ -77,7 +58,7 @@ def list_missions(
 
 
 def get_mission(db: Session, mission_id: UUID) -> Mission:
-    """get mission with inspections"""
+    """get mission with inspections."""
     mission = (
         db.query(Mission)
         .options(joinedload(Mission.inspections))
@@ -91,13 +72,11 @@ def get_mission(db: Session, mission_id: UUID) -> Mission:
 
 
 def create_mission(db: Session, schema: MissionCreate) -> Mission:
-    """create mission in DRAFT status"""
-    # validate airport exists
+    """create mission in DRAFT status."""
     airport = db.query(Airport).filter(Airport.id == schema.airport_id).first()
     if not airport:
         raise HTTPException(status_code=400, detail="airport not found")
 
-    # validate drone profile if provided
     if schema.drone_profile_id:
         drone = db.query(DroneProfile).filter(DroneProfile.id == schema.drone_profile_id).first()
         if not drone:
@@ -112,7 +91,7 @@ def create_mission(db: Session, schema: MissionCreate) -> Mission:
 
 
 def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Mission:
-    """update mission - regresses VALIDATED -> PLANNED on trajectory changes"""
+    """update mission - regresses VALIDATED -> PLANNED on trajectory changes."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         raise HTTPException(status_code=404, detail="mission not found")
@@ -121,8 +100,8 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
 
     # check if trajectory-affecting fields changed
     trajectory_changed = any(k in TRAJECTORY_FIELDS for k in data.keys())
-    if trajectory_changed and mission.status == MissionStatus.VALIDATED:
-        mission.status = MissionStatus.PLANNED
+    if trajectory_changed:
+        mission.regress_if_validated()
 
     apply_schema_update(mission, schema)
     db.commit()
@@ -132,7 +111,7 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
 
 
 def delete_mission(db: Session, mission_id: UUID):
-    """delete mission"""
+    """delete mission."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         raise HTTPException(status_code=404, detail="mission not found")
@@ -142,7 +121,7 @@ def delete_mission(db: Session, mission_id: UUID):
 
 
 def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
-    """duplicate mission as new DRAFT"""
+    """duplicate mission as new DRAFT."""
     original = (
         db.query(Mission)
         .options(joinedload(Mission.inspections).joinedload(Inspection.config))

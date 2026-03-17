@@ -38,6 +38,8 @@ insp_template_methods = Table(
 
 
 class InspectionConfiguration(Base):
+    """operator overrides for inspection parameters."""
+
     __tablename__ = "inspection_configuration"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -50,8 +52,31 @@ class InspectionConfiguration(Base):
     horizontal_distance = Column(Float)
     sweep_angle = Column(Float)
 
+    # config fields that can be overridden per-inspection
+    _MERGE_FIELDS = (
+        "altitude_offset",
+        "speed_override",
+        "measurement_density",
+        "custom_tolerances",
+        "density",
+        "hover_duration",
+        "horizontal_distance",
+        "sweep_angle",
+    )
+
+    def resolve_with_defaults(self, template_config):
+        """merge this config over template defaults, returning field dict."""
+        merged = {}
+        for key in self._MERGE_FIELDS:
+            template_val = getattr(template_config, key, None) if template_config else None
+            override_val = getattr(self, key, None)
+            merged[key] = override_val if override_val is not None else template_val
+        return merged
+
 
 class InspectionTemplate(Base):
+    """reusable inspection template with default config and targets."""
+
     __tablename__ = "inspection_template"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -70,6 +95,8 @@ class InspectionTemplate(Base):
 
 
 class Inspection(Base):
+    """single inspection pass within a mission."""
+
     __tablename__ = "inspection"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -82,3 +109,19 @@ class Inspection(Base):
     mission = relationship("Mission", back_populates="inspections")
     template = relationship("InspectionTemplate")
     config = relationship("InspectionConfiguration")
+
+    def is_speed_compatible_with_frame_rate(self, drone_profile, speed: float) -> bool:
+        """check if speed is compatible with camera frame rate at measurement density."""
+        if not drone_profile or not drone_profile.camera_frame_rate:
+            return True
+        if not self.config or not self.config.measurement_density:
+            return True
+        density = self.config.measurement_density
+        if density < 2:
+            return True
+
+        # max speed check against drone limit
+        if drone_profile.max_speed and speed > drone_profile.max_speed:
+            return False
+
+        return True

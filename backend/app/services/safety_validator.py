@@ -7,6 +7,7 @@ from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
 from app.models.enums import ConstraintType, SafetyZoneType, SurfaceType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
+from app.models.value_objects import Speed
 from app.schemas.geometry import parse_ewkb
 from app.services.geometry_converter import geojson_to_ewkt
 from app.services.trajectory_types import DEFAULT_RUNWAY_BUFFER, Violation, WaypointData
@@ -71,7 +72,7 @@ def validate_flight_plan(
 
 
 def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation | None:
-    """check if waypoint exceeds drone altitude or speed limits"""
+    """check if waypoint exceeds drone altitude or speed limits."""
     if drone.max_altitude and wp.alt > drone.max_altitude:
         return Violation(
             is_warning=False,
@@ -79,6 +80,12 @@ def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation 
                 f"waypoint alt {wp.alt:.0f}m exceeds drone max altitude {drone.max_altitude:.0f}m"
             ),
         )
+
+    # validate speed as value object
+    try:
+        Speed(wp.speed)
+    except ValueError:
+        return Violation(is_warning=False, message=f"invalid speed value: {wp.speed}")
 
     if drone.max_speed and wp.speed > drone.max_speed:
         return Violation(

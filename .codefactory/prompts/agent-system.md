@@ -14,4 +14,10 @@ CODE STYLE RULES:
 - Vary style slightly between files.
 - PR descriptions: 1-2 sentences max.
 
+DDD-LITE PATTERNS:
+- This codebase uses DDD-lite patterns. Business logic lives on SQLAlchemy model methods. Services are thin orchestration layers. See CLAUDE.md for details.
+- Aggregate roots: Mission (owns inspections, controls status transitions), Airport (owns surfaces, obstacles, safety zones).
+- Value objects in `backend/app/models/value_objects.py`: Coordinate, Speed, AltitudeRange, IcaoCode.
+- Status transitions use `Mission.transition_to()`, never direct status assignment.
+
 Read CLAUDE.md in the repo root for full project context.

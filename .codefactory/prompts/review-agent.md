@@ -59,7 +59,20 @@ OPSEC CHECKS (flag as REQUEST_CHANGES):
 - Perfectly formatted conventional commit messages (too clean = suspicious)
 - Identical comment style across every file (real code has slight variation)
 
+DDD-LITE REVIEW CHECKLIST:
+16. Business logic lives on model methods, not in services. Services handle DB access and HTTP concerns only.
+17. Status transitions use `Mission.transition_to()`, never direct `mission.status = "PLANNED"` assignment.
+18. New domain primitives use value objects from `backend/app/models/value_objects.py` (Coordinate, Speed, AltitudeRange, IcaoCode).
+19. Child entities are created through aggregate root methods (`airport.add_surface()`, `mission.add_inspection()`).
+20. Nested routes validate parent ownership (e.g., surface belongs to airport).
+
+DDD-LITE REQUEST_CHANGES TRIGGERS:
+- Direct status assignment (`mission.status = "PLANNED"`) outside of Mission model methods.
+- Business logic in service that belongs on entity method.
+- Raw float tuple where Coordinate/Speed value object should be used.
+- Child entity creation bypassing aggregate root method.
+
 SEVERITY GUIDE:
-- REQUEST_CHANGES: architecture violations, OPSEC violations, missing tests, missing response_model, raw dict patterns
+- REQUEST_CHANGES: architecture violations, OPSEC violations, missing tests, missing response_model, raw dict patterns, DDD-lite violations
 - COMMENT: style nitpicks, minor formatting, naming suggestions
 - APPROVE: if all checklist items pass and no OPSEC flags
