@@ -14,6 +14,9 @@ class InspectionConfigCreate(BaseModel):
     measurement_density: int | None = None
     custom_tolerances: dict | None = None
     density: float | None = None
+    hover_duration: float | None = None
+    horizontal_distance: float | None = None
+    sweep_angle: float | None = None
 
 
 class InspectionConfigResponse(BaseModel):
@@ -25,6 +28,9 @@ class InspectionConfigResponse(BaseModel):
     measurement_density: int | None = None
     custom_tolerances: dict | None = None
     density: float | None = None
+    hover_duration: float | None = None
+    horizontal_distance: float | None = None
+    sweep_angle: float | None = None
 
     model_config = {"from_attributes": True}
 

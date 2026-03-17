@@ -18,7 +18,7 @@ from app.schemas.infrastructure import (
     SurfaceCreate,
     SurfaceUpdate,
 )
-from app.services.geo import apply_schema_update, schema_to_model_data
+from app.services.geometry_converter import apply_schema_update, schema_to_model_data
 
 
 # airports
