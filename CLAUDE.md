@@ -69,6 +69,36 @@ docker compose up -d
 - **UUIDs**: `Column(UUID, primary_key=True, default=uuid4)` for all primary keys
 - **Geometry**: GeoAlchemy2 `Geometry("POINTZ", srid=4326)` for all coordinates
 
+## Project Structure
+
+```
+drone-mission-planning-module/
+├── backend/
+│   ├── app/
+│   │   ├── api/routes/     # FastAPI routers — HTTP layer only
+│   │   ├── core/           # config, database, auth, dependencies
+│   │   ├── models/         # SQLAlchemy + GeoAlchemy2 ORM models
+│   │   ├── schemas/        # Pydantic v2 request/response DTOs
+│   │   ├── services/       # All business logic
+│   │   └── main.py         # FastAPI app + CORS + middleware
+│   ├── migrations/         # Alembic migration files
+│   ├── tests/              # pytest test files
+│   └── requirements.txt    # Pinned deps (PROTECTED)
+├── frontend/
+│   ├── src/
+│   │   ├── pages/          # operator-center/ and coordinator-center/ routes
+│   │   ├── components/     # Reusable React components
+│   │   ├── api/            # Axios client + API functions
+│   │   └── types/          # TypeScript interfaces matching Pydantic schemas
+│   └── package.json
+├── .codefactory/prompts/   # Agent prompt files
+├── .github/workflows/      # CI + agent automation workflows
+├── scripts/                # CI helper scripts + guard scripts
+├── docs/                   # Architecture, conventions, specs
+├── harness.config.json     # Risk tier definitions
+└── docker-compose.yml      # PostgreSQL 16 + PostGIS 3.4
+```
+
 ## Architecture Overview
 
 ```
@@ -98,6 +128,14 @@ Changes to these paths:
 - Should include browser evidence if they affect UI
 - Are classified as **Tier 3 (high risk)** per `harness.config.json`
 
+## Testing
+
+- **Backend**: pytest + httpx for async API tests, real PostGIS via docker service container in CI
+- **Frontend**: Vitest + React Testing Library
+- **Test location**: `backend/tests/test_{module}.py`, frontend co-located `{Component}.test.tsx`
+- **Fixtures**: shared in `conftest.py`, test data in `tests/data/` modules
+- **T3 paths** (trajectory, safety_validator, flight_plan, migrations) require thorough test coverage
+
 ## Security Constraints
 
 - Never commit secrets, API keys, or `.env` files
@@ -113,14 +151,68 @@ Changes to these paths:
 - **Frontend**: `npm install <pkg>` — always commit `package-lock.json`
 - Do not upgrade major versions without explicit instruction
 
-## Harness System Reference
+## CodeFactory Automation
 
-- Risk tiers defined in `harness.config.json` (T1: docs, T2: source, T3: critical paths)
-- CI gates enforce risk-appropriate checks on every PR
-- A review agent automatically reviews PRs
-- Pre-commit hooks enforce local quality checks
-- **Chrome DevTools MCP**: `.mcp.json` at project root configures `@modelcontextprotocol/server-puppeteer` for browser-driven validation
-- Protected files (`.github/workflows/**`, `harness.config.json`, `requirements.txt`) — agents must never modify
+This repo uses [CodeFactory](https://github.com/yasha-dev1/codefactory) for automated issue lifecycle. Humans steer, agents execute.
+
+### Issue Lifecycle
+
+1. **Create issue** on GitHub using the feature template (`.github/ISSUE_TEMPLATE/feature.md`)
+2. **Triage** — add label `agent:plan` or manually label `agent:implement`
+   - `issue-triage.yml` runs automatically on new issues, evaluates actionability
+   - If actionable, it adds `agent:plan` label
+3. **Plan** — `issue-planner.yml` triggers on `agent:plan` label
+   - Reads this file (CLAUDE.md) + `.codefactory/prompts/issue-planner.md`
+   - Posts a structured implementation plan as an issue comment
+   - Adds `agent:implement` label when done
+4. **Implement** — `issue-implementer.yml` triggers on `agent:implement` label
+   - Reads this file (CLAUDE.md) + `.codefactory/prompts/issue-implementer.md`
+   - Creates branch `feat/<short-name>`, writes code, runs quality checks, opens PR
+5. **Review** — `code-review-agent.yml` triggers on PR opened/synced
+   - Reads `scripts/review-prompt.md` for review instructions
+   - Posts review with APPROVE, REQUEST_CHANGES, or ESCALATE verdict
+6. **Remediation** — if REQUEST_CHANGES, `remediation-agent.yml` auto-fixes (max 3 cycles)
+7. **Human merge** — you review, make OPSEC edits, squash merge
+
+### Agent Prompt Files
+
+- `.codefactory/prompts/agent-system.md` — identity rules, OPSEC, commit style
+- `.codefactory/prompts/issue-triage.md` — how issues get evaluated
+- `.codefactory/prompts/issue-planner.md` — how implementation plans are produced
+- `.codefactory/prompts/issue-implementer.md` — how the coding agent works
+- `.codefactory/prompts/review-agent.md` — how PRs get auto-reviewed
+
+### GitHub Labels for Automation
+
+- `agent:plan` — triggers issue-planner workflow
+- `agent:implement` — triggers issue-implementer workflow
+- `agent-pr` — marks PRs created by agents
+- `agent:needs-judgment` — agent cannot proceed without human input
+- `needs-more-info` — issue needs more detail
+- `needs-human-review` — requires human review
+
+### Risk Tiers
+
+Defined in `harness.config.json`:
+
+| Tier | Patterns | CI Checks |
+|------|----------|-----------|
+| T1 (low) | `docs/**`, `*.md` | lint |
+| T2 (medium) | `backend/app/**`, `frontend/src/**`, tests | lint, test, build, structural-tests |
+| T3 (high) | `**/trajectory*`, `**/safety_validator*`, `**/flight_plan*`, `**/migrations/*` | all T2 + manual approval |
+
+### Protected Files
+
+Agents must never modify:
+- `.github/workflows/**` — CI pipeline definitions
+- `harness.config.json` — risk tier configuration
+- `CLAUDE.md` — agent instructions
+- `backend/requirements.txt` — Python dependencies
+- `frontend/package-lock.json` — npm lockfile
+
+### Chrome DevTools MCP
+
+`.mcp.json` at project root configures `@modelcontextprotocol/server-puppeteer` for browser-driven validation.
 
 ## PR Conventions
 

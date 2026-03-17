@@ -256,7 +256,7 @@ The agent reads CLAUDE.md, writes code following architecture rules, runs linter
 
 ### Gate 3 - Review agent (automatic, on PR)
 
-Config: `.codefactory/prompts/review-agent.md`
+Config: `scripts/review-prompt.md` (loaded by `code-review-agent.yml`)
 
 Reviews every PR for architecture compliance, schema usage, test presence, migration inclusion, OPSEC violations.
 
@@ -307,15 +307,11 @@ Defined in `harness.config.json`:
 
 ## OPSEC Rules
 
-### Rule 1 - No AI artifacts in the remote repo
+### Rule 1 - No AI artifacts in public repos
 
-Files that stay local only (gitignored):
-- `CLAUDE.md`, `KIRO.md`, `CODEX.md`
-- `harness.config.json`
-- `.codefactory/`
-- `.mcp.json`
+This repo is **private** — `CLAUDE.md`, `harness.config.json`, `.codefactory/`, and `.mcp.json` are committed so that CI workflows and agents can read them. If the repo ever becomes public, add these to `.gitignore` immediately.
 
-Agent workflows (issue-triage, issue-planner, issue-implementer, review-agent) should be run locally or in a private repo. CI pipeline workflows (lint, test, build) are safe to push.
+Never include AI attribution in commits, PR descriptions, or code comments regardless of repo visibility.
 
 ### Rule 2 - Git history must look human
 
