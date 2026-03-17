@@ -11,7 +11,7 @@ from app.models.inspection import (
     insp_template_methods,
 )
 from app.schemas.inspection_template import InspectionTemplateCreate, InspectionTemplateUpdate
-from app.services.geo import apply_dict_update
+from app.services.geometry_converter import apply_dict_update
 
 
 def _enrich(template: InspectionTemplate, db: Session) -> InspectionTemplate:

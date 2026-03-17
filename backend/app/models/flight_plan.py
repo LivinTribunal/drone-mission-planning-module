@@ -36,7 +36,12 @@ class FlightPlan(Base):
 
     mission = relationship("Mission", back_populates="flight_plan")
     airport = relationship("Airport")
-    waypoints = relationship("Waypoint", back_populates="flight_plan", cascade="all, delete-orphan")
+    waypoints = relationship(
+        "Waypoint",
+        back_populates="flight_plan",
+        cascade="all, delete-orphan",
+        order_by="Waypoint.sequence_order",
+    )
     validation_result = relationship(
         "ValidationResult",
         back_populates="flight_plan",
@@ -65,6 +70,7 @@ class Waypoint(Base):
     camera_action = Column(String(20))
     waypoint_type = Column(String(20), nullable=False)
     camera_target = Column(Geometry("POINTZ", srid=4326))
+    gimbal_pitch = Column(Float)
 
     flight_plan = relationship("FlightPlan", back_populates="waypoints")
     inspection = relationship("Inspection")
