@@ -1,15 +1,13 @@
 ## Summary
-<!-- Brief description of what this PR does and why. Link to the issue if applicable. -->
+<!-- 1-2 sentences. Link the issue: Closes #N -->
 
 ## Risk Tier
 <!-- The risk-policy-gate auto-detects the tier, but classify here for reviewer context. -->
-<!-- See harness.config.json for full pattern definitions. -->
-- [ ] **Tier 1 (Low)**: Docs, comments, `.md`/`.txt` files, `.gitignore`, `.editorconfig`, `.prettierrc`, `.vscode/`
-- [ ] **Tier 2 (Medium)**: Source in `src/ui/`, `src/utils/`, `src/prompts/`, `src/providers/`, `tests/`
-- [ ] **Tier 3 (High)**: Entry points, core engine, harness registry, build/CI infra (`src/index.ts`, `src/cli.ts`, `src/commands/`, `src/core/`, `src/harnesses/index.ts`, `src/harnesses/types.ts`, `package.json`, `tsconfig.json`, `tsup.config.ts`, `vitest.config.ts`, `eslint.config.js`)
+- [ ] **Tier 1 (Low)**: Docs, comments, `*.md`, `*.txt`, `.gitignore`
+- [ ] **Tier 2 (Medium)**: Source in `backend/app/**`, `frontend/src/**`, `backend/tests/**`, config files
+- [ ] **Tier 3 (High)**: Critical paths (`**/trajectory*`, `**/safety_validator*`, `**/flight_plan*`, `**/migrations/versions/*`)
 
 ## Changes
-<!-- Group modified files by logical concern. -->
 
 ### Added
 -
@@ -21,36 +19,37 @@
 -
 
 ## Testing
-<!-- How were these changes validated? -->
 - [ ] Unit tests added/updated
 - [ ] Integration tests added/updated
 - [ ] Manual testing completed
 - [ ] All checks pass locally:
   ```
-  npm run lint && npm run typecheck && npm test
+  cd backend && ruff check . && ruff format --check . && pytest
+  cd frontend && npm run lint && npx vitest run && npm run build
   ```
 
 ## Evidence
-<!-- Tier 1: none required. Tier 2: tests-pass, lint-clean, type-check-clean. Tier 3: all of Tier 2 + manual-review. -->
+<!-- T1: none. T2: tests-pass, lint-clean. T3: all T2 + manual-review. -->
 
 | Check | Result |
 |-------|--------|
-| `eslint src/` | <!-- PASS / FAIL --> |
-| `tsc --noEmit` | <!-- PASS / FAIL --> |
-| `vitest run` | <!-- PASS / FAIL --> |
-| `tsup` (build) | <!-- PASS / FAIL --> |
+| `ruff check .` | <!-- PASS / FAIL --> |
+| `ruff format --check .` | <!-- PASS / FAIL --> |
+| `pytest` | <!-- PASS / FAIL --> |
+| `npm run lint` | <!-- PASS / FAIL --> |
+| `npm run build` | <!-- PASS / FAIL --> |
 
 ## Architectural Compliance
 <!-- Confirm layer boundaries are respected (see docs/layers.md). -->
 - [ ] No circular imports introduced
-- [ ] Import rules followed: `utils` imports nothing; `core` imports only `utils`; etc.
-- [ ] No imports from `commands` or `harnesses` inside `core`
+- [ ] Dependency rule: routes -> services -> models/schemas
+- [ ] Routes never import models directly
+- [ ] No business logic in route handlers
 
 ## Review Checklist
 - [ ] Code follows project conventions (`docs/conventions.md`, `CLAUDE.md`)
-- [ ] ESM imports use `.js` extensions for local files
-- [ ] `import type` used for type-only imports
+- [ ] Every `def` and `class` has a docstring
+- [ ] Pydantic schemas used for all API responses
 - [ ] No secrets, API keys, or `.env` files committed
-- [ ] No ESLint rules or TypeScript strict mode disabled
-- [ ] Documentation updated if public API changed
+- [ ] No Ruff rules or TypeScript strict mode disabled
 - [ ] Risk tier accurately reflects scope of changes
