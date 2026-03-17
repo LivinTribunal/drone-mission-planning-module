@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Activity Diagram — Flight Plan Review</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&family=Source+Serif+4:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #21262d;
+    --text: #c9d1d9;
+    --text-dim: #484f58;
+    --text-bright: #f0f6fc;
+    --pk: #f0883e;
+    --fk: #58a6ff;
+    --nn: #f85149;
+    --uq: #bc8cff;
+    --type: #39d2c0;
+    --geo: #56d364;
+    --accent: #58a6ff;
+    --c-orange: #f0883e;
+    --c-green: #3fb950;
+    --c-purple: #bc8cff;
+    --c-blue: #58a6ff;
+    --c-cyan: #39d2c0;
+    --c-red: #f47067;
+    --shadow: rgba(0,0,0,0.5);
+    --shadow-hover: rgba(88,166,255,0.12);
+  }
+
+  html.light {
+    --bg: #ffffff;
+    --surface: #f6f8fa;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --text-dim: #656d76;
+    --text-bright: #1f2328;
+    --pk: #cf6518;
+    --fk: #0969da;
+    --nn: #cf222e;
+    --uq: #8250df;
+    --type: #1a7f72;
+    --geo: #1a7f37;
+    --accent: #0969da;
+    --c-orange: #cf6518;
+    --c-green: #1a7f37;
+    --c-purple: #8250df;
+    --c-blue: #0969da;
+    --c-cyan: #1a7f72;
+    --c-red: #cf222e;
+    --shadow: rgba(0,0,0,0.12);
+    --shadow-hover: rgba(9,105,218,0.12);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+    transition: background 0.3s, color 0.3s;
+  }
+
+  .bar {
+    position: fixed; top:0; left:0; right:0; z-index:200;
+    background: var(--bg); backdrop-filter: blur(12px);
+    padding: 14px 28px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .bar-left { display: flex; align-items: baseline; gap: 14px; }
+  .bar h1 { font-family:'Inter',sans-serif; font-size:16px; font-weight:600; color:var(--fk); letter-spacing:1.5px; text-transform:uppercase; }
+  .bar .sub { font-family:'Inter',sans-serif; font-size:11px; color:var(--text-dim); }
+  .bar-author { font-family:'Inter',sans-serif; font-size:11px; color:var(--text-dim); }
+
+  .theme-toggle {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    font-family: 'Inter', sans-serif; transition: all 0.2s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .theme-toggle:hover { border-color: var(--fk); }
+  .theme-toggle svg { width: 16px; height: 16px; fill: currentColor; }
+
+  .ctrls {
+    position: fixed; bottom:14px; right:14px; z-index:200;
+    display:flex; gap:5px;
+  }
+  .ctrls button {
+    background:var(--surface); border:1px solid var(--border); color:var(--text);
+    width:34px; height:34px; border-radius:8px; cursor:pointer; font-size:17px;
+    display:flex; align-items:center; justify-content:center;
+    transition: all 0.2s;
+  }
+  .ctrls button:hover { background:rgba(88,166,255,0.08); border-color:var(--fk); }
+
+  .wrap { width:100vw; height:100vh; overflow:hidden; cursor:grab; padding-top:54px; }
+  .wrap:active { cursor:grabbing; }
+
+  .world { transform-origin:0 0; position:relative; width:3000px; height:2200px; }
+
+  svg.rels {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    pointer-events: none; z-index: 5;
+  }
+  svg.rels line, svg.rels polyline, svg.rels path { pointer-events: none; }
+
+  /* Activity Frame */
+  .activity-frame {
+    position: absolute; z-index: 1; pointer-events: none;
+    border: 1.5px dashed rgba(88,166,255,0.2);
+    border-radius: 4px;
+    transition: border-color 0.3s;
+  }
+  html.light .activity-frame { border-color: rgba(9,105,218,0.2); }
+
+  .activity-frame-label {
+    position: absolute; z-index: 2; pointer-events: none;
+    font-family: 'Inter', sans-serif; font-size: 11px;
+    color: rgba(88,166,255,0.4); letter-spacing: 0.5px;
+    white-space: nowrap;
+    transition: color 0.3s;
+  }
+  html.light .activity-frame-label { color: rgba(9,105,218,0.4); }
+
+  /* Swim Lanes */
+  .swim-lane {
+    position: absolute; z-index: 1; pointer-events: none;
+    transition: background 0.3s;
+  }
+  .swim-lane-divider {
+    position: absolute; z-index: 2; pointer-events: none;
+    height: 1px; background: rgba(88,166,255,0.15);
+    transition: background 0.3s;
+  }
+  html.light .swim-lane-divider { background: rgba(9,105,218,0.12); }
+
+  .swim-lane-label {
+    position: absolute; z-index: 3; pointer-events: none;
+    font-family: 'Source Serif 4', serif; font-size: 14px;
+    color: rgba(88,166,255,0.6);
+    white-space: nowrap;
+    transform: rotate(-90deg);
+    transform-origin: center center;
+    transition: color 0.3s;
+  }
+  html.light .swim-lane-label { color: rgba(9,105,218,0.5); }
+
+  /* Action Node */
+  .action-node {
+    position: absolute; cursor: default; z-index: 10;
+    background: var(--surface); border: 1px solid rgba(88,166,255,0.3);
+    border-radius: 20px; padding: 8px 18px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--text-bright); white-space: nowrap;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.4);
+    transition: all 0.3s;
+  }
+  html.light .action-node { border-color: rgba(9,105,218,0.3); box-shadow: 0 1px 8px rgba(0,0,0,0.12); }
+
+  .action-node.destructive { border-color: rgba(248,81,73,0.3); color: #f85149; }
+  html.light .action-node.destructive { color: #cf222e; border-color: rgba(207,34,46,0.3); }
+
+  /* Decision Node */
+  .decision-node {
+    position: absolute; cursor: default; z-index: 10;
+    width: 36px; height: 36px;
+    background: var(--surface); border: 1.5px solid rgba(88,166,255,0.4);
+    transform: rotate(45deg);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+    transition: all 0.3s;
+  }
+  html.light .decision-node { border-color: rgba(9,105,218,0.4); box-shadow: 0 1px 6px rgba(0,0,0,0.12); }
+
+  .decision-label {
+    position: absolute; z-index: 14; pointer-events: none;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    color: rgba(88,166,255,0.7); white-space: nowrap;
+    padding: 2px 4px; border-radius: 3px;
+    transition: color 0.3s;
+  }
+  html.light .decision-label { color: rgba(9,105,218,0.7); }
+
+  /* Initial Node */
+  .initial-node {
+    position: absolute; cursor: default; z-index: 10;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--text-bright);
+    box-shadow: 0 0 6px rgba(240,246,252,0.3);
+    transition: all 0.3s;
+  }
+
+  /* Final Node */
+  .final-node {
+    position: absolute; cursor: default; z-index: 10;
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 2px solid var(--text-bright);
+    display: flex; align-items: center; justify-content: center;
+    background: transparent;
+    transition: all 0.3s;
+  }
+  .final-node::after {
+    content: ''; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--text-bright);
+  }
+
+  /* Note Box */
+  .note-box {
+    position: absolute; cursor: default; z-index: 10;
+    background: rgba(240,136,62,0.06); border: 1.5px dashed rgba(240,136,62,0.4);
+    padding: 8px 14px; font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: rgba(240,136,62,0.8); max-width: 200px;
+    line-height: 1.4;
+    transition: all 0.3s;
+  }
+  html.light .note-box { background: rgba(207,101,24,0.06); border-color: rgba(207,101,24,0.4); color: rgba(207,101,24,0.8); }
+
+  .note-box::before {
+    content: ''; position: absolute; top: 0; right: 0;
+    width: 12px; height: 12px;
+    background: linear-gradient(225deg, var(--bg) 50%, rgba(240,136,62,0.3) 50%);
+  }
+
+  /* Branch Labels */
+  .branch-label {
+    position: absolute; z-index: 14; pointer-events: none;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    color: rgba(88,166,255,0.55); white-space: nowrap;
+    letter-spacing: 0.3px; padding: 2px 4px; border-radius: 3px;
+    transition: color 0.3s;
+  }
+  html.light .branch-label { color: rgba(9,105,218,0.55); }
+
+  /* Legend panel */
+  .legend-panel {
+    position: absolute;
+    z-index: 10;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 30px 40px;
+    pointer-events: none;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .legend-panel h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-bright);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .legend-section { margin-bottom: 20px; }
+  .legend-section:last-child { margin-bottom: 0; }
+  .legend-section-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 10px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    color: var(--text);
+  }
+  .legend-item:last-child { margin-bottom: 0; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .legend-line { width: 36px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar-left">
+    <h1>UML Activity Diagram - Flight Plan Review</h1>
+    <span class="sub">- Design and Implementation of a Drone Mission Planning Module for Airport Lighting Inspection</span>
+    <span class="bar-author">- &Scaron;tefan Morav&iacute;k</span>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">
+    <svg id="themeIcon" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zm11.394-5.834a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/></svg>
+    <span id="themeTxt">Dark</span>
+  </button>
+</div>
+
+<div class="ctrls">
+  <button onclick="sc=Math.min(1.5,sc+.1);snapBack();">+</button>
+  <button onclick="sc=Math.max(.12,sc-.1);snapBack();">&#8722;</button>
+  <button onclick="fitToScreen();snapBack();">&#8865;</button>
+</div>
+
+<div class="wrap" id="W">
+<div class="world" id="C">
+
+<!-- SVG for arrows -->
+<svg class="rels" id="S"></svg>
+
+<!-- Branch label layer -->
+<div id="labelLayer"></div>
+
+<!-- Activity Frame -->
+<div class="activity-frame" style="left:30px;top:30px;width:1070px;height:510px;"></div>
+<div class="activity-frame-label" style="left:40px;top:12px;">Flight Plan Review, Export and Completion Activity</div>
+
+<!-- Swim Lane Backgrounds -->
+<div class="swim-lane" style="left:30px;top:30px;width:1070px;height:155px;background:rgba(88,166,255,0.04);border-radius:4px 4px 0 0;"></div>
+<div class="swim-lane" style="left:30px;top:185px;width:1070px;height:160px;background:rgba(88,166,255,0.06);"></div>
+<div class="swim-lane" style="left:30px;top:345px;width:1070px;height:195px;background:rgba(88,166,255,0.04);border-radius:0 0 4px 4px;"></div>
+
+<!-- Swim Lane Dividers -->
+<div class="swim-lane-divider" style="left:30px;top:185px;width:1070px;"></div>
+<div class="swim-lane-divider" style="left:30px;top:345px;width:1070px;"></div>
+
+<!-- Swim Lane Labels (rotated 90 CCW, centered vertically in each lane) -->
+<div class="swim-lane-label" style="left:2px;top:107px;">Flight Plan Review</div>
+<div class="swim-lane-label" style="left:5px;top:265px;">Edit Flight Plan</div>
+<div class="swim-lane-label" style="left:2px;top:443px;">Export Flight Plan</div>
+
+<!-- LANE 1: Flight Plan Review -->
+<div class="initial-node" id="initial" style="left:78px;top:60px;"></div>
+<div class="action-node" id="a-display-summary" style="left:185px;top:52px;">Display Flight Plan Summary</div>
+<div class="action-node" id="a-display-warnings" style="left:218px;top:122px;">Display Warnings</div>
+<div class="action-node" id="a-render-3d" style="left:390px;top:122px;">Render 3D Visualization</div>
+<div class="decision-node" id="d-accept" style="left:610px;top:120px;"></div>
+<div class="decision-label" id="dl-accept" style="left:530px;top:85px;">Does the operator accept the plan?</div>
+<div class="action-node destructive" id="a-delete" style="left:759px;top:52px;">Delete Flight Plan</div>
+<div class="action-node" id="a-validated" style="left:720px;top:122px;">Set Mission Status to VALIDATED</div>
+
+<!-- LANE 2: Edit Flight Plan -->
+<div class="action-node" id="a-modify" style="left:215px;top:230px;">Modify Parameters</div>
+<div class="action-node" id="a-regenerate" style="left:200px;top:288px;">Regenerate Flight Plan</div>
+<div class="note-box" id="note-trigger" style="left:384px;top:225px;">Triggers Generate Flight<br>Trajectory Activity</div>
+
+<!-- EDIT WAYPOINTS branch -->
+<div class="action-node" id="a-edit-waypoints" style="left:650px;top:225px;">Edit Waypoints on Map</div>
+<div class="action-node" id="a-revalidate" style="left:645px;top:288px;">Revalidate Flight Plan</div>
+<div class="note-box" id="note-revalidate" style="left:820px;top:230px;">Runs SafetyValidator on<br>current waypoints without<br>regenerating trajectory</div>
+
+<!-- LANE 3: Export Flight Plan -->
+<div class="action-node" id="a-select-format" style="left:197px;top:368px;">Select Export Format(s)</div>
+<div class="action-node" id="a-export" style="left:212px;top:458px;">Export Flight Plan</div>
+<div class="action-node" id="a-exported" style="left:420px;top:458px;">Set Mission Status to EXPORTED</div>
+<div class="decision-node" id="d-outcome" style="left:680px;top:456px;"></div>
+<div class="decision-label" id="dl-outcome" style="left:653px;top:504px;">Mission outcome?</div>
+<div class="action-node" id="a-completed" style="left:586px;top:368px;">Set Mission Status to COMPLETED</div>
+<div class="action-node" id="a-cancelled" style="left:858px;top:458px;">Set Mission Status to CANCELLED</div>
+<div class="final-node" id="final" style="left:960px;top:374px;"></div>
+
+<!-- Legend panel -->
+<div class="legend-panel" style="left:1130px; top:40px;">
+  <h3>Legend</h3>
+  <div class="legend-section">
+    <div class="legend-section-title">Node Types</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--fk)"></div>Action</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--fk);transform:rotate(45deg);border-radius:0;border:1.5px solid var(--fk);background:var(--surface)"></div>Decision</div>
+    <div class="legend-item"><div style="width:14px;height:14px;border-radius:50%;background:var(--text-bright);flex-shrink:0"></div>Initial</div>
+    <div class="legend-item"><div style="width:16px;height:16px;border-radius:50%;border:2px solid var(--text-bright);display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:8px;height:8px;border-radius:50%;background:var(--text-bright)"></div></div>Final</div>
+    <div class="legend-item">
+      <svg viewBox="0 0 24 18" width="24" height="18">
+        <rect x="1" y="1" width="22" height="16" fill="rgba(240,136,62,0.06)" stroke="rgba(240,136,62,0.4)" stroke-width="1" stroke-dasharray="3,2"/>
+        <polygon points="18,1 23,1 23,6" fill="var(--bg)"/>
+        <polyline points="18,1 18,6 23,6" fill="none" stroke="rgba(240,136,62,0.4)" stroke-width="0.8"/>
+      </svg>
+      Note
+    </div>
+  </div>
+  <div class="legend-section">
+    <div class="legend-section-title">Connections</div>
+    <div class="legend-item">
+      <svg viewBox="0 0 36 10" width="36" height="10">
+        <line x1="0" y1="5" x2="26" y2="5" stroke="rgba(88,166,255,0.35)" stroke-width="1.5"/>
+        <polygon points="24,2 32,5 24,8" fill="rgba(88,166,255,0.6)"/>
+      </svg>
+      Control Flow
+    </div>
+    <div class="legend-item">
+      <svg viewBox="0 0 36 4" width="36" height="4">
+        <line x1="0" y1="2" x2="36" y2="2" stroke="rgba(240,136,62,0.4)" stroke-width="1.5" stroke-dasharray="5,4"/>
+      </svg>
+      Note Reference
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<script>
+const W = document.getElementById('W');
+const C = document.getElementById('C');
+const S = document.getElementById('S');
+const labelLayer = document.getElementById('labelLayer');
+
+let sc, px, py;
+let isPanning = false, panSX, panSY;
+
+const up = () => C.style.transform = `translate(${px}px,${py}px) scale(${sc})`;
+
+// Canvas boundary system
+const CONTENT = { left: 0, top: 0, right: 1400, bottom: 560 };
+const EDGE_MARGIN = 150;
+
+// Fit entire diagram on screen initially
+function fitToScreen() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight - 54;
+  const cw = CONTENT.right - CONTENT.left;
+  const ch = CONTENT.bottom - CONTENT.top;
+  const pad = 40;
+  sc = Math.min((vw - pad * 2) / cw, (vh - pad * 2) / ch);
+  sc = Math.round(sc * 100) / 100;
+  px = (vw - cw * sc) / 2 - CONTENT.left * sc;
+  py = 54 + (vh - ch * sc) / 2 - CONTENT.top * sc;
+}
+fitToScreen();
+up();
+
+function clampedPx() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight - 54;
+  const minPx = EDGE_MARGIN - CONTENT.right * sc;
+  const maxPx = vw - EDGE_MARGIN - CONTENT.left * sc;
+  const minPy = EDGE_MARGIN - CONTENT.bottom * sc + 54;
+  const maxPy = vh - EDGE_MARGIN - CONTENT.top * sc + 54;
+  return {
+    x: Math.max(minPx, Math.min(maxPx, px)),
+    y: Math.max(minPy, Math.min(maxPy, py))
+  };
+}
+
+function snapBack() {
+  const target = clampedPx();
+  const dx = target.x - px;
+  const dy = target.y - py;
+  if(Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) { px = target.x; py = target.y; up(); return; }
+  C.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+  px = target.x;
+  py = target.y;
+  up();
+  setTimeout(() => { C.style.transition = ''; }, 320);
+}
+
+// Theme toggle with sun/moon icons
+const sunPath = 'M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zm11.394-5.834a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z';
+const moonPath = 'M21.752 15.002A9.718 9.718 0 0112.478 3.68a.75.75 0 00-.927-.905 9.75 9.75 0 109.674 12.227.75.75 0 00-.473-1z';
+
+function toggleTheme() {
+  document.documentElement.classList.toggle('light');
+  const isLight = document.documentElement.classList.contains('light');
+  document.getElementById('themeTxt').textContent = isLight ? 'Dark' : 'Light';
+  document.getElementById('themeIcon').innerHTML = `<path d="${isLight ? sunPath : moonPath}"/>`;
+  render();
+}
+
+/* ===== CONNECTION DATA ===== */
+const connections = [
+  { from:'initial', to:'a-display-summary', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[], label:'', labelPos:null },
+  { from:'a-display-summary', to:'a-display-warnings', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.5, bends:[], label:'', labelPos:null },
+  { from:'a-display-warnings', to:'a-render-3d', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[], label:'', labelPos:null },
+  { from:'a-render-3d', to:'d-accept', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[], label:'', labelPos:null },
+  { from:'d-accept', to:'a-delete', fromSide:'T', fromPct:0.5, toSide:'L', toPct:0.625, bends:[{x:628,y:72}], label:'REJECT', labelPos:{x:665,y:51} },
+  { from:'d-accept', to:'a-validated', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[], label:'ACCEPT', labelPos:{x:658,y:119} },
+  { from:'a-delete', to:'final', fromSide:'R', fromPct:0.563, toSide:'R', toPct:0.5, bends:[{x:1000,y:70},{x:1000,y:384}], label:'', labelPos:null },
+  { from:'a-validated', to:'a-select-format', fromSide:'B', fromPct:0.5, toSide:'L', toPct:0.625, bends:[{x:832,y:175},{x:140,y:175},{x:140,y:387}], label:'', labelPos:null },
+  { from:'a-modify', to:'a-regenerate', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.5, bends:[], label:'', labelPos:null },
+  { from:'a-regenerate', to:'a-display-summary', fromSide:'L', fromPct:0.646, toSide:'L', toPct:0.5, bends:[{x:122,y:309},{x:122,y:69}], label:'', labelPos:null },
+  { from:'a-select-format', to:'a-export', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.5, bends:[], label:'', labelPos:null },
+  { from:'a-export', to:'a-exported', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[], label:'', labelPos:null },
+  { from:'a-exported', to:'d-outcome', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[], label:'', labelPos:null },
+  { from:'d-outcome', to:'a-completed', fromSide:'T', fromPct:0.5, toSide:'B', toPct:0.5, bends:[], label:'COMPLETED', labelPos:{x:700,y:418} },
+  { from:'d-outcome', to:'a-cancelled', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[], label:'CANCELLED', labelPos:{x:760,y:448} },
+  { from:'a-completed', to:'final', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[], label:'', labelPos:null },
+  { from:'a-cancelled', to:'final', fromSide:'T', fromPct:0.5, toSide:'B', toPct:0.5, bends:[{x:970,y:428},{x:970,y:458}], label:'', labelPos:null },
+  // Both EDIT paths after validated line so only one jump arc appears
+  { from:'d-accept', to:'a-modify', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.498, bends:[{x:628,y:200},{x:285,y:200}], label:'EDIT PARAMETERS', labelPos:{x:430,y:203} },
+  { from:'d-accept', to:'a-edit-waypoints', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.488, bends:[{x:628,y:200},{x:730,y:200}], label:'EDIT WAYPOINTS', labelPos:{x:637,y:202} },
+  { from:'a-edit-waypoints', to:'a-revalidate', fromSide:'B', fromPct:0.488, toSide:'T', toPct:0.5, bends:[], label:'', labelPos:null },
+  { from:'a-revalidate', to:'a-display-summary', fromSide:'L', fromPct:0.5, toSide:'L', toPct:0.5, bends:[{x:628,y:304},{x:628,y:339},{x:110,y:340},{x:108,y:68}], label:'', labelPos:null },
+  // Dashed note connectors
+  { from:'a-regenerate', to:'note-trigger', fromSide:'R', fromPct:0.563, toSide:'B', toPct:0.49, bends:[], label:'', labelPos:null, noteStyle:true },
+  { from:'a-revalidate', to:'note-revalidate', fromSide:'R', fromPct:0.5, toSide:'B', toPct:0.485, bends:[], label:'', labelPos:null, noteStyle:true },
+];
+
+/* ===== ANCHOR POSITION ===== */
+function getAnchorPos(id, side, pct) {
+  const el = document.getElementById(id);
+  if (!el) return { x: 0, y: 0 };
+  const x = el.offsetLeft, y = el.offsetTop, w = el.offsetWidth, h = el.offsetHeight;
+  const isDiamond = el.classList.contains('decision-node');
+  const isCircle = el.classList.contains('initial-node') || el.classList.contains('final-node');
+  if (isDiamond) {
+    const cx = x + w / 2, cy = y + h / 2, r = w * Math.SQRT2 / 2;
+    switch (side) {
+      case 'T': return { x: cx, y: cy - r };
+      case 'B': return { x: cx, y: cy + r };
+      case 'L': return { x: cx - r, y: cy };
+      case 'R': return { x: cx + r, y: cy };
+    }
+  }
+  if (isCircle) {
+    const cx = x + w / 2, cy = y + h / 2, r = w / 2;
+    switch (side) {
+      case 'T': return { x: cx, y: cy - r };
+      case 'B': return { x: cx, y: cy + r };
+      case 'L': return { x: cx - r, y: cy };
+      case 'R': return { x: cx + r, y: cy };
+    }
+  }
+  pct = pct ?? 0.5;
+  switch (side) {
+    case 'T': return { x: x + w * pct, y: y };
+    case 'B': return { x: x + w * pct, y: y + h };
+    case 'L': return { x: x, y: y + h * pct };
+    case 'R': return { x: x + w, y: y + h * pct };
+  }
+  return { x: x + w / 2, y: y + h / 2 };
+}
+
+function getAllPoints(conn) {
+  return [
+    getAnchorPos(conn.from, conn.fromSide, conn.fromPct),
+    ...conn.bends,
+    getAnchorPos(conn.to, conn.toSide, conn.toPct)
+  ];
+}
+
+/* ===== LINE CROSSING ARC JUMPS ===== */
+const JUMP_RADIUS = 7;
+
+function segmentIntersection(a1, a2, b1, b2) {
+  const d1x = a2.x - a1.x, d1y = a2.y - a1.y;
+  const d2x = b2.x - b1.x, d2y = b2.y - b1.y;
+  const denom = d1x * d2y - d1y * d2x;
+  if (Math.abs(denom) < 1e-6) return null;
+  const t = ((b1.x - a1.x) * d2y - (b1.y - a1.y) * d2x) / denom;
+  const u = ((b1.x - a1.x) * d1y - (b1.y - a1.y) * d1x) / denom;
+  if (t > 0.02 && t < 0.98 && u > 0.02 && u < 0.98) {
+    return { x: a1.x + t * d1x, y: a1.y + t * d1y };
+  }
+  return null;
+}
+
+function buildJumpPath(p1, p2, crossings, color, strokeWidth, isLast) {
+  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1) return '';
+  const ux = dx / len, uy = dy / len;
+  let d = `M ${p1.x} ${p1.y}`;
+  for (const c of crossings) {
+    const bx = c.x - JUMP_RADIUS * ux;
+    const by = c.y - JUMP_RADIUS * uy;
+    const ax = c.x + JUMP_RADIUS * ux;
+    const ay = c.y + JUMP_RADIUS * uy;
+    d += ` L ${bx} ${by} A ${JUMP_RADIUS} ${JUMP_RADIUS} 0 0 1 ${ax} ${ay}`;
+  }
+  d += ` L ${p2.x} ${p2.y}`;
+  let s = `<path d="${d}" stroke="${color}" stroke-width="${strokeWidth}" fill="none"`;
+  if (isLast) s += ' marker-end="url(#arrow-flow)"';
+  s += '/>';
+  return s;
+}
+
+/* ===== RENDER ===== */
+function render() {
+  let svg = `<defs>
+    <marker id="arrow-flow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <polygon points="1,1 9,3.5 1,6" fill="rgba(88,166,255,0.5)" />
+    </marker>
+  </defs>`;
+
+  // 1. Pre-compute all segments
+  const allConnPts = connections.map(c => getAllPoints(c));
+  const allSegs = [];
+  allConnPts.forEach((pts, ci) => {
+    for (let i = 0; i < pts.length - 1; i++)
+      allSegs.push({ ci, si: i, p1: pts[i], p2: pts[i+1] });
+  });
+
+  // 2. Detect crossings — later connections jump over earlier ones
+  const crossingMap = {};
+  for (let a = 0; a < allSegs.length; a++) {
+    for (let b = a + 1; b < allSegs.length; b++) {
+      if (allSegs[a].ci === allSegs[b].ci) continue;
+      const hit = segmentIntersection(allSegs[a].p1, allSegs[a].p2, allSegs[b].p1, allSegs[b].p2);
+      if (hit) {
+        const seg = allSegs[b];
+        const key = `${seg.ci}-${seg.si}`;
+        if (!crossingMap[key]) crossingMap[key] = [];
+        const sdx = seg.p2.x - seg.p1.x, sdy = seg.p2.y - seg.p1.y;
+        const slen = sdx * sdx + sdy * sdy;
+        const t = slen > 0 ? ((hit.x - seg.p1.x) * sdx + (hit.y - seg.p1.y) * sdy) / slen : 0.5;
+        crossingMap[key].push({ x: hit.x, y: hit.y, t });
+      }
+    }
+  }
+  for (const key in crossingMap) crossingMap[key].sort((a, b) => a.t - b.t);
+
+  // 3. Render with arc jumps where needed
+  connections.forEach((conn, ci) => {
+    const pts = allConnPts[ci];
+    const color = conn.noteStyle ? 'rgba(240,136,62,0.3)' : 'rgba(88,166,255,0.35)';
+    const dash = conn.noteStyle ? ' stroke-dasharray="5,4"' : '';
+    const sw = 1.5;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const isLast = i === pts.length - 2;
+      const crossings = crossingMap[`${ci}-${i}`] || [];
+      if (crossings.length > 0) {
+        svg += buildJumpPath(pts[i], pts[i+1], crossings, color, sw, isLast && !conn.noteStyle);
+      } else {
+        svg += `<line x1="${pts[i].x}" y1="${pts[i].y}" x2="${pts[i+1].x}" y2="${pts[i+1].y}" stroke="${color}" stroke-width="${sw}"${dash}${isLast && !conn.noteStyle ? ' marker-end="url(#arrow-flow)"' : ''}/>`;
+      }
+    }
+  });
+  S.innerHTML = svg;
+
+  // Render branch labels
+  labelLayer.innerHTML = '';
+  connections.forEach((conn) => {
+    if (!conn.label) return;
+    const lbl = document.createElement('div');
+    lbl.className = 'branch-label';
+    lbl.textContent = conn.label;
+    if (conn.labelPos) {
+      lbl.style.left = conn.labelPos.x + 'px';
+      lbl.style.top = conn.labelPos.y + 'px';
+    } else {
+      // Auto-position near source anchor
+      const fp = getAnchorPos(conn.from, conn.fromSide, conn.fromPct);
+      let lx, ly;
+      if (conn.fromSide === 'T') { lx = fp.x + 6; ly = fp.y - 16; }
+      else if (conn.fromSide === 'B') { lx = fp.x + 6; ly = fp.y + 4; }
+      else if (conn.fromSide === 'R') { lx = fp.x + 6; ly = fp.y - 14; }
+      else { lx = fp.x - 50; ly = fp.y - 14; }
+      lbl.style.left = lx + 'px';
+      lbl.style.top = ly + 'px';
+    }
+    labelLayer.appendChild(lbl);
+  });
+}
+
+/* ===== PAN ===== */
+W.addEventListener('mousedown', (e) => {
+  if(e.target.closest('.ctrls') || e.target.closest('.bar')) return;
+  isPanning = true;
+  panSX = e.clientX - px;
+  panSY = e.clientY - py;
+});
+
+window.addEventListener('mousemove', (e) => {
+  if(isPanning) {
+    px = e.clientX - panSX;
+    py = e.clientY - panSY;
+    up();
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  if(isPanning) {
+    isPanning = false;
+    snapBack();
+  }
+});
+
+W.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  sc = Math.max(.12, Math.min(1.5, sc + (e.deltaY > 0 ? -.04 : .04)));
+  snapBack();
+});
+
+/* ===== INIT ===== */
+setTimeout(render, 100);
+</script>
+
+</body>
+</html>

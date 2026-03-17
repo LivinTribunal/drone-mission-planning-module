@@ -74,7 +74,7 @@ def test_elevation_angle_above():
 # arc path tests
 def test_arc_path_count():
     """arc path should generate measurement_density waypoints"""
-    from app.services.trajectory_generator import calculate_arc_path
+    from app.services.trajectory_computation import calculate_arc_path
 
     config = ResolvedConfig(measurement_density=10)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -87,7 +87,8 @@ def test_arc_path_count():
 
 def test_arc_path_radius():
     """all arc waypoints should be >= 350m from center"""
-    from app.services.trajectory_generator import MIN_ARC_RADIUS, calculate_arc_path
+    from app.services.trajectory_computation import calculate_arc_path
+    from app.services.trajectory_types import MIN_ARC_RADIUS
 
     config = ResolvedConfig(measurement_density=8)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -101,7 +102,7 @@ def test_arc_path_radius():
 
 def test_arc_path_heading_towards_center():
     """measurement waypoints should point at LHA center"""
-    from app.services.trajectory_generator import calculate_arc_path
+    from app.services.trajectory_computation import calculate_arc_path
 
     config = ResolvedConfig(measurement_density=5)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -119,7 +120,8 @@ def test_arc_path_heading_towards_center():
 
 def test_arc_path_altitude_uses_glide_slope():
     """arc altitude = center_alt + r * tan(glide_slope) + offset"""
-    from app.services.trajectory_generator import MIN_ARC_RADIUS, calculate_arc_path
+    from app.services.trajectory_computation import calculate_arc_path
+    from app.services.trajectory_types import MIN_ARC_RADIUS
 
     config = ResolvedConfig(measurement_density=3, altitude_offset=5.0)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -137,7 +139,7 @@ def test_arc_path_altitude_uses_glide_slope():
 # vertical path tests
 def test_vertical_path_count():
     """vertical path should generate measurement_density waypoints"""
-    from app.services.trajectory_generator import calculate_vertical_path
+    from app.services.trajectory_computation import calculate_vertical_path
 
     config = ResolvedConfig(measurement_density=8)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -149,7 +151,7 @@ def test_vertical_path_count():
 
 def test_vertical_path_altitude_increases():
     """altitude should increase from min to max elevation angle"""
-    from app.services.trajectory_generator import calculate_vertical_path
+    from app.services.trajectory_computation import calculate_vertical_path
 
     config = ResolvedConfig(measurement_density=6)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -163,7 +165,7 @@ def test_vertical_path_altitude_increases():
 
 def test_vertical_path_same_horizontal():
     """all vertical profile waypoints at same lon/lat"""
-    from app.services.trajectory_generator import calculate_vertical_path
+    from app.services.trajectory_computation import calculate_vertical_path
 
     config = ResolvedConfig(measurement_density=5)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -177,7 +179,7 @@ def test_vertical_path_same_horizontal():
 
 def test_vertical_path_hover_at_transitions():
     """HOVER waypoints inserted at LHA setting angle boundaries"""
-    from app.services.trajectory_generator import calculate_vertical_path
+    from app.services.trajectory_computation import calculate_vertical_path
 
     # optimal density for 0.05 tolerance over 4.6 range = ceil(4.6/0.1)+1 = 47
     # use 50 to be safe
@@ -199,7 +201,7 @@ def test_vertical_path_hover_at_transitions():
 def test_resolve_with_defaults_merge():
     """field-by-field merge: override > template > hardcoded"""
     from app.models.inspection import InspectionConfiguration
-    from app.services.trajectory_generator import _resolve_with_defaults
+    from app.services.trajectory_computation import resolve_with_defaults as _resolve_with_defaults
 
     template_config = InspectionConfiguration(
         measurement_density=10,
@@ -222,7 +224,7 @@ def test_resolve_with_defaults_merge():
 
 def test_resolve_with_defaults_no_configs():
     """hardcoded defaults when no config provided"""
-    from app.services.trajectory_generator import _resolve_with_defaults
+    from app.services.trajectory_computation import resolve_with_defaults as _resolve_with_defaults
 
     template = type("T", (), {"default_config": None})()
     inspection = type("I", (), {"config": None})()
@@ -236,7 +238,7 @@ def test_resolve_with_defaults_no_configs():
 # camera action tests
 def test_lead_in_lead_out_none():
     """first and last waypoints should have NONE camera action"""
-    from app.services.trajectory_generator import _apply_camera_actions
+    from app.services.trajectory_orchestrator import _apply_camera_actions
 
     wps = [
         WaypointData(lon=0, lat=0, alt=0),
@@ -254,7 +256,7 @@ def test_lead_in_lead_out_none():
 # gimbal pitch tests
 def test_arc_path_has_gimbal_pitch():
     """arc waypoints should have gimbal pitch computed"""
-    from app.services.trajectory_generator import calculate_arc_path
+    from app.services.trajectory_computation import calculate_arc_path
 
     config = ResolvedConfig(measurement_density=5)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -268,7 +270,7 @@ def test_arc_path_has_gimbal_pitch():
 
 def test_vertical_path_has_gimbal_pitch():
     """vertical profile waypoints should have gimbal pitch"""
-    from app.services.trajectory_generator import calculate_vertical_path
+    from app.services.trajectory_computation import calculate_vertical_path
 
     config = ResolvedConfig(measurement_density=5)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -322,8 +324,8 @@ def test_astar_no_path():
 
 # interface methods
 def test_determine_start_end_positions():
-    """determineStartPosition / determineEndPosition per section 3.3.9"""
-    from app.services.trajectory_generator import determine_end_position, determine_start_position
+    """start and end positions should differ for angular sweep"""
+    from app.services.trajectory_computation import determine_end_position, determine_start_position
 
     config = ResolvedConfig(measurement_density=8)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -338,7 +340,7 @@ def test_determine_start_end_positions():
 # config override tests
 def test_config_override_sweep_angle():
     """arc path uses overridden sweep angle"""
-    from app.services.trajectory_generator import calculate_arc_path
+    from app.services.trajectory_computation import calculate_arc_path
 
     default_config = ResolvedConfig(measurement_density=5)
     wide_config = ResolvedConfig(measurement_density=5, sweep_angle=20.0)
@@ -360,7 +362,7 @@ def test_config_override_sweep_angle():
 
 def test_config_override_horizontal_distance():
     """vertical path uses overridden horizontal distance"""
-    from app.services.trajectory_generator import calculate_vertical_path
+    from app.services.trajectory_computation import calculate_vertical_path
 
     default_config = ResolvedConfig(measurement_density=5)
     far_config = ResolvedConfig(measurement_density=5, horizontal_distance=600.0)
@@ -385,7 +387,7 @@ def test_point3d_roundtrip():
 # optimal density tests
 def test_compute_optimal_density_vertical():
     """optimal density for vertical profile covers all transition angles"""
-    from app.services.trajectory_generator import compute_optimal_density
+    from app.services.trajectory_computation import compute_optimal_density
 
     config = ResolvedConfig()
     setting_angles = [3.0, 3.5, 4.0, 4.5]
@@ -399,7 +401,7 @@ def test_compute_optimal_density_vertical():
 
 def test_compute_optimal_density_arc():
     """optimal density for arc provides at least one point per degree"""
-    from app.services.trajectory_generator import compute_optimal_density
+    from app.services.trajectory_computation import compute_optimal_density
 
     config = ResolvedConfig()
 
@@ -408,6 +410,97 @@ def test_compute_optimal_density_arc():
     assert density is not None
     # 2 * 15 degrees + 1 = 31
     assert density >= 31
+
+
+# line-of-sight tests (requires PostGIS for spatial queries)
+def test_line_of_sight_clear(client, db_engine):
+    """clear path between two points when obstacle is far away"""
+    from sqlalchemy.orm import Session
+
+    from app.models.airport import Obstacle
+    from app.services.trajectory_pathfinding import has_line_of_sight
+
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LOSC"},
+    ).json()
+    airport_id = airport["id"]
+
+    client.post(
+        f"/api/v1/airports/{airport_id}/obstacles",
+        json={
+            "name": "Far Tower",
+            "type": "TOWER",
+            "height": 50.0,
+            "radius": 10.0,
+            "position": {"type": "Point", "coordinates": [14.30, 50.15, 300]},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [14.2995, 50.1495, 300],
+                        [14.3005, 50.1495, 300],
+                        [14.3005, 50.1505, 300],
+                        [14.2995, 50.1505, 300],
+                        [14.2995, 50.1495, 300],
+                    ]
+                ],
+            },
+        },
+    )
+
+    with Session(db_engine) as db:
+        obstacles = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
+        point = Point3D(lon=14.26, lat=50.10, alt=400.0)
+        target = Point3D(lon=14.28, lat=50.10, alt=300.0)
+
+        assert has_line_of_sight(db, point, target, obstacles, []) is True
+
+
+def test_line_of_sight_blocked(client, db_engine):
+    """obstacle polygon between point and target blocks line-of-sight"""
+    from sqlalchemy.orm import Session
+
+    from app.models.airport import Obstacle
+    from app.services.trajectory_pathfinding import has_line_of_sight
+
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LOSB"},
+    ).json()
+    airport_id = airport["id"]
+
+    obs_resp = client.post(
+        f"/api/v1/airports/{airport_id}/obstacles",
+        json={
+            "name": "Blocking Wall",
+            "type": "BUILDING",
+            "height": 500.0,
+            "radius": 50.0,
+            "position": {"type": "Point", "coordinates": [14.27, 50.10, 300]},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [14.269, 50.095, 300],
+                        [14.271, 50.095, 300],
+                        [14.271, 50.105, 300],
+                        [14.269, 50.105, 300],
+                        [14.269, 50.095, 300],
+                    ]
+                ],
+            },
+        },
+    )
+    assert obs_resp.status_code in (200, 201), obs_resp.json()
+
+    with Session(db_engine) as db:
+        obstacles = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
+        assert len(obstacles) == 1
+        point = Point3D(lon=14.26, lat=50.10, alt=400.0)
+        target = Point3D(lon=14.28, lat=50.10, alt=300.0)
+
+        assert has_line_of_sight(db, point, target, obstacles, []) is False
 
 
 # full pipeline e2e test

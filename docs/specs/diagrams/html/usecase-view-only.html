@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UML Use Case Diagram — Mission Planning Module</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:wght@400;600&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #0a0e17;
+  --surface: #131b2b;
+  --border: #1e2736;
+  --text: #c9d1d9;
+  --text-dim: #484f58;
+  --text-bright: #f0f6fc;
+  --accent: #58a6ff;
+  --amber: #f99e0b;
+}
+
+html.light {
+  --bg: #ffffff;
+  --surface: #f6f8fa;
+  --border: #d0d7de;
+  --text: #24292f;
+  --text-dim: #656d76;
+  --text-bright: #1f2328;
+  --accent: #0969da;
+  --amber: #9a6700;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  user-select: none;
+  transition: background 0.3s, color 0.3s;
+}
+
+.bar {
+  position: fixed; top:0; left:0; right:0; z-index:200;
+  background: rgba(10,14,23,0.94); backdrop-filter: blur(12px);
+  padding: 14px 28px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  transition: background 0.3s, border-color 0.3s;
+}
+html.light .bar { background: rgba(255,255,255,0.94); }
+.bar h1 { font-family:'Inter',sans-serif; font-size:16px; font-weight:600; color:var(--accent); letter-spacing:1.5px; text-transform:uppercase; white-space:nowrap; transition: color 0.3s; }
+.bar .sub { font-family:'Inter',sans-serif; font-size:11px; color:var(--text-dim); white-space:nowrap; transition: color 0.3s; }
+.bar-author { font-family:'Inter',sans-serif; font-size:11px; color:var(--text-dim); white-space:nowrap; transition: color 0.3s; }
+.bar-left { display:flex; align-items:baseline; gap:14px; }
+
+.theme-toggle {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  font-family: 'Inter', sans-serif; transition: all 0.2s;
+  display: flex; align-items: center; gap: 8px;
+}
+.theme-toggle:hover { border-color: var(--accent); }
+.theme-toggle svg { width: 16px; height: 16px; fill: currentColor; }
+
+.ctrls {
+  position: fixed; bottom: 14px; right: 14px; z-index: 200;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.ctrls button {
+  width: 34px; height: 34px; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 17px;
+  display: flex; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;
+  transition: all 0.2s;
+}
+.ctrls button:hover { background: rgba(88,166,255,0.08); border-color: var(--accent); }
+html.light .ctrls button:hover { background: rgba(9,105,218,0.08); border-color: var(--accent); }
+
+.wrap { width:100vw; height:100vh; overflow:hidden; cursor:grab; padding-top:54px; }
+.wrap:active { cursor:grabbing; }
+.world { transform-origin:0 0; position:relative; width:3500px; height:2800px; }
+svg.rels { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+svg.rels line, svg.rels path { pointer-events:none; }
+
+.uc {
+  position: absolute; width: 200px; height: 55px; border-radius: 50%;
+  border: 1px solid rgba(88,166,255,0.4); background: rgba(88,166,255,0.08);
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text);
+  padding: 4px 18px; line-height: 1.25; overflow-wrap: break-word;
+  cursor: default; z-index: 10; transition: box-shadow 0.15s, border-color 0.3s, background 0.3s, color 0.3s;
+}
+html.light .uc { border-color: rgba(9,105,218,0.4); background: rgba(9,105,218,0.08); }
+.uc:hover { border-color: rgba(88,166,255,0.7); box-shadow: 0 0 12px rgba(88,166,255,0.15); }
+html.light .uc:hover { border-color: rgba(9,105,218,0.7); box-shadow: 0 0 12px rgba(9,105,218,0.15); }
+
+.uc.uc-ext { height: 80px; flex-direction: column; gap: 0; padding: 6px 18px; }
+.uc-name { font-size: 10.5px; }
+.uc-divider { width: 65%; height: 1px; background: rgba(88,166,255,0.3); margin: 3px 0 2px; transition: background 0.3s; }
+html.light .uc-divider { background: rgba(9,105,218,0.3); }
+.uc-ext-section { text-align: center; }
+.uc-ext-label { font-size: 8px; font-weight: 600; color: var(--text-dim); transition: color 0.3s; }
+.uc-ext-item { font-size: 9px; color: var(--text); transition: color 0.3s; }
+
+.actor {
+  position: absolute; cursor: default; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  transition: filter 0.15s;
+}
+.actor:hover { filter: drop-shadow(0 0 8px rgba(88,166,255,0.2)); }
+html.light .actor:hover { filter: drop-shadow(0 0 8px rgba(9,105,218,0.2)); }
+.actor-name { font-size: 11px; color: var(--text); white-space: nowrap; text-align: center; transition: color 0.3s; }
+.actor-stereotype { font-size: 9px; color: var(--text-dim); font-style: italic; margin-top: -2px; transition: color 0.3s; }
+.actor svg circle, .actor svg line { stroke: var(--text); transition: stroke 0.3s; }
+
+.sys-boundary {
+  position: absolute; border: 1px solid; border-radius: 8px;
+  z-index: 1; pointer-events: none;
+  border-color: rgba(88,166,255,0.2); background: rgba(88,166,255,0.03);
+  transition: border-color 0.3s, background 0.3s;
+}
+html.light .sys-boundary { border-color: rgba(9,105,218,0.2); background: rgba(9,105,218,0.03); }
+.sys-label {
+  position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+  font-family: 'Source Serif 4', serif; font-size: 16px; color: rgba(88,166,255,0.5);
+  background: var(--bg); padding: 0 12px; white-space: nowrap;
+  transition: color 0.3s, background 0.3s;
+}
+html.light .sys-label { color: rgba(9,105,218,0.5); }
+
+.note-box {
+  position: absolute; cursor: default; z-index: 10;
+  background: rgba(240,136,62,0.06); border: 1.5px dashed rgba(240,136,62,0.4);
+  padding: 12px 18px; font-family: 'JetBrains Mono', monospace;
+  font-size: 14px; color: rgba(240,136,62,0.8); max-width: 300px;
+  line-height: 1.4; transition: all 0.3s;
+}
+html.light .note-box {
+  background: rgba(207,101,24,0.06);
+  border-color: rgba(207,101,24,0.4);
+  color: rgba(207,101,24,0.8);
+}
+.note-box::before {
+  content: ''; position: absolute; top: 0; right: 0;
+  width: 12px; height: 12px;
+  background: linear-gradient(225deg, var(--bg) 50%, rgba(240,136,62,0.3) 50%);
+}
+
+.rel-label {
+  position: absolute; transform: translate(-50%, -50%);
+  background: rgba(10, 14, 23, 0.9); padding: 1px 6px; border-radius: 3px;
+  font-size: 9px; color: rgba(88,166,255,0.6); font-family: 'JetBrains Mono', monospace;
+  font-style: italic; white-space: nowrap; pointer-events: none; z-index: 60;
+  transition: background 0.3s, color 0.3s;
+}
+html.light .rel-label { background: rgba(255, 255, 255, 0.9); color: rgba(9,105,218,0.6); }
+
+.legend-panel {
+  position: absolute; z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 30px 40px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+  pointer-events: none;
+  transition: background 0.3s, border-color 0.3s;
+}
+html.light .legend-panel { box-shadow: 0 8px 40px rgba(0,0,0,0.08); }
+.legend-panel h3 {
+  font-family: 'Inter', sans-serif;
+  font-size: 18px; font-weight: 600;
+  color: var(--text-bright);
+  letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 20px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.legend-section { margin-bottom: 20px; }
+.legend-section:last-child { margin-bottom: 0; }
+.legend-section-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 500;
+  color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 1.2px;
+  margin-bottom: 10px;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 8px;
+  font-family: 'Inter', sans-serif; font-size: 16px;
+  color: var(--text); white-space: nowrap;
+}
+.legend-item:last-child { margin-bottom: 0; }
+.legend-item svg { flex-shrink: 0; }
+.legend-item svg circle, .legend-item svg line, .legend-item svg polyline { stroke: var(--text-dim); }
+.legend-item svg ellipse { stroke: var(--accent); stroke-opacity: 0.5; }
+.legend-item svg rect { stroke: var(--accent); stroke-opacity: 0.3; }
+.legend-line-svg { stroke: var(--accent); stroke-opacity: 0.4; }
+
+@media print {
+  .bar, .ctrls { display: none !important; }
+  body { overflow: visible; }
+  .wrap { overflow: visible; padding-top: 0; cursor: default; }
+  .world { transform: none !important; }
+  @page { size: landscape; margin: 1cm; }
+}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar-left">
+    <h1>UML Use Case Diagram</h1>
+    <span class="sub">- Design and Implementation of a Drone Mission Planning Module for Airport Lighting Inspection</span>
+    <span class="bar-author">- Štefan Moravík</span>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">
+    <svg id="themeIcon" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zm11.394-5.834a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/></svg>
+    <span id="themeTxt">Dark</span>
+  </button>
+</div>
+
+<div class="ctrls">
+  <button onclick="sc=Math.min(1.5,sc+.1);snapBack();">+</button>
+  <button onclick="sc=Math.max(.12,sc-.1);snapBack();">&#8722;</button>
+  <button onclick="fitToScreen();snapBack();">&#8865;</button>
+</div>
+
+<div class="wrap" id="W">
+<div class="world" id="C">
+<svg id="S" class="rels"></svg>
+<div id="labelLayer"></div>
+
+<!-- System Boundary -->
+<div class="sys-boundary" style="left:120px;top:55px;width:1020px;height:1090px;">
+  <div class="sys-label">Mission Planning Module</div>
+</div>
+
+<!-- Use Cases -->
+<div class="uc" id="uc-1" data-shape="ellipse" style="left:420px;top:190px;">Select Airport and Runway</div>
+<div class="uc" id="uc-2" data-shape="ellipse" style="left:660px;top:270px;">Load Airport Data</div>
+<div class="uc" id="uc-3" data-shape="ellipse" style="left:190px;top:360px;">Choose Flight Plan Export Format</div>
+<div class="uc" id="uc-4" data-shape="ellipse" style="left:660px;top:440px;">Select Inspection Method(s)</div>
+<div class="uc" id="uc-5" data-shape="ellipse" style="left:190px;top:270px;">Configure Inspection Parameters</div>
+<div class="uc" id="uc-6" data-shape="ellipse" style="left:670px;top:200px;">Modify Flight Parameters</div>
+<div class="uc" id="uc-7" data-shape="ellipse" style="left:420px;top:90px;">Generate Flight Plan</div>
+<div class="uc uc-ext" id="uc-8" data-shape="ellipse" style="left:730px;top:80px;">
+  <div class="uc-name">Compute Trajectory</div>
+  <div class="uc-divider"></div>
+  <div class="uc-ext-section">
+    <div class="uc-ext-label">extension points</div>
+    <div class="uc-ext-item">Modify Flight Parameters</div>
+  </div>
+</div>
+<div class="uc" id="uc-9" data-shape="ellipse" style="left:910px;top:200px;">Validate Safety Constraints</div>
+<div class="uc" id="uc-10" data-shape="ellipse" style="left:420px;top:450px;">Visualize Flight Plan in 3D</div>
+<div class="uc" id="uc-11" data-shape="ellipse" style="left:190px;top:540px;">Export Flight Plan</div>
+<div class="uc" id="uc-12" data-shape="ellipse" style="left:570px;top:640px;">Define Airport and Runway</div>
+<div class="uc" id="uc-13" data-shape="ellipse" style="left:570px;top:710px;">Define Safety Zones</div>
+<div class="uc" id="uc-14" data-shape="ellipse" style="left:570px;top:780px;">Define Airport Infrastructure</div>
+<div class="uc" id="uc-15" data-shape="ellipse" style="left:570px;top:850px;">Define Inspection Targets</div>
+<div class="uc" id="uc-16" data-shape="ellipse" style="left:570px;top:920px;">Define Inspection Plan</div>
+<div class="uc" id="uc-17" data-shape="ellipse" style="left:190px;top:450px;">Define Mission</div>
+<div class="uc" id="uc-18" data-shape="ellipse" style="left:420px;top:540px;">Review Flight Plan</div>
+<div class="uc" id="uc-19" data-shape="ellipse" style="left:660px;top:530px;">Delete Flight Plan</div>
+<div class="uc" id="uc-20" data-shape="ellipse" style="left:420px;top:360px;">Complete/Cancel Mission</div>
+<div class="uc" id="uc-21" data-shape="ellipse" style="left:660px;top:360px;">Select Drone Profile</div>
+<div class="uc" id="uc-22" data-shape="ellipse" style="left:420px;top:270px;">View Warnings</div>
+<div class="uc" id="uc-23" data-shape="ellipse" style="left:570px;top:1060px;">Define Obstacles</div>
+<div class="uc" id="uc-24" data-shape="ellipse" style="left:570px;top:990px;">Define Drone Profile</div>
+<div class="uc" id="uc-25" data-shape="ellipse" style="left:190px;top:90px;">Edit Waypoints</div>
+
+<!-- Actors -->
+<div class="actor" id="actor-operator" data-shape="actor" style="left:10px;top:380px;">
+  <svg viewBox="0 0 60 66" width="60" height="66"><circle cx="30" cy="8" r="7" fill="none" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="15" x2="30" y2="42" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="26" x2="14" y2="36" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="26" x2="46" y2="36" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="42" x2="16" y2="60" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="42" x2="44" y2="60" stroke="#c9d1d9" stroke-width="1.5"/></svg>
+  <div class="actor-name">Drone Operator</div>
+</div>
+
+<div class="actor" id="actor-coordinator" data-shape="actor" style="left:20px;top:850px;">
+  <svg viewBox="0 0 60 66" width="60" height="66"><circle cx="30" cy="8" r="7" fill="none" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="15" x2="30" y2="42" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="26" x2="14" y2="36" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="26" x2="46" y2="36" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="42" x2="16" y2="60" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="42" x2="44" y2="60" stroke="#c9d1d9" stroke-width="1.5"/></svg>
+  <div class="actor-name">Coordinator</div>
+</div>
+
+<div class="actor" id="actor-database" data-shape="actor" style="left:1170px;top:750px;">
+  <svg viewBox="0 0 60 66" width="60" height="66"><circle cx="30" cy="8" r="7" fill="none" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="15" x2="30" y2="42" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="26" x2="14" y2="36" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="26" x2="46" y2="36" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="42" x2="16" y2="60" stroke="#c9d1d9" stroke-width="1.5"/><line x1="30" y1="42" x2="44" y2="60" stroke="#c9d1d9" stroke-width="1.5"/></svg>
+  <div class="actor-stereotype">&laquo;system&raquo;</div>
+  <div class="actor-name">Airport Database</div>
+</div>
+
+<!-- Note Box -->
+<div class="note-box" id="note-1" data-shape="rect" style="left:1170px;top:60px;max-width:none;">
+  Define &ndash; Create, Modify or Delete
+</div>
+
+<!-- Legend -->
+<div class="legend-panel" style="left:1170px;top:140px;">
+  <h3>Legend</h3>
+  <div class="legend-section">
+    <div class="legend-section-title">Elements</div>
+    <div class="legend-item">
+      <svg viewBox="0 0 20 30" width="20" height="30"><circle cx="10" cy="4" r="3.5" fill="none" stroke-width="1"/><line x1="10" y1="7.5" x2="10" y2="19" stroke-width="1"/><line x1="10" y1="12" x2="4" y2="16" stroke-width="1"/><line x1="10" y1="12" x2="16" y2="16" stroke-width="1"/><line x1="10" y1="19" x2="5" y2="28" stroke-width="1"/><line x1="10" y1="19" x2="15" y2="28" stroke-width="1"/></svg>
+      <span>Actor</span>
+    </div>
+    <div class="legend-item">
+      <svg viewBox="0 0 36 16" width="36" height="16"><ellipse cx="18" cy="8" rx="17" ry="7" fill="none" stroke-width="1"/></svg>
+      <span>Use Case</span>
+    </div>
+    <div class="legend-item">
+      <svg viewBox="0 0 36 18" width="36" height="18"><rect x="1" y="1" width="34" height="16" rx="3" fill="none" stroke-width="1"/></svg>
+      <span>System Boundary</span>
+    </div>
+    <div class="legend-item">
+      <svg viewBox="0 0 24 18" width="24" height="18">
+        <rect x="1" y="1" width="22" height="16" fill="rgba(240,136,62,0.06)" stroke="rgba(240,136,62,0.4)" stroke-width="1" stroke-dasharray="3,2"/>
+        <polygon points="18,1 23,1 23,6" fill="var(--bg)"/>
+        <polyline points="18,1 18,6 23,6" fill="none" stroke="rgba(240,136,62,0.4)" stroke-width="0.8"/>
+      </svg>
+      <span>Note</span>
+    </div>
+  </div>
+  <div class="legend-section">
+    <div class="legend-section-title">Connections</div>
+    <div class="legend-item">
+      <svg viewBox="0 0 36 4" width="36" height="4"><line x1="0" y1="2" x2="36" y2="2" class="legend-line" stroke-width="1.5"/></svg>
+      <span>Association</span>
+    </div>
+    <div class="legend-item">
+      <svg viewBox="0 0 36 10" width="36" height="10"><line x1="0" y1="5" x2="26" y2="5" class="legend-line" stroke-width="1.5" stroke-dasharray="6,3"/><polyline points="22,2 30,5 22,8" fill="none" stroke-width="1"/></svg>
+      <span>&laquo;Include&raquo;</span>
+    </div>
+    <div class="legend-item">
+      <svg viewBox="0 0 36 10" width="36" height="10"><line x1="0" y1="5" x2="26" y2="5" class="legend-line" stroke-width="1.5" stroke-dasharray="6,3"/><polyline points="22,2 30,5 22,8" fill="none" stroke-width="1"/></svg>
+      <span>&laquo;Extend&raquo;</span>
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<script>
+const W=document.getElementById('W'), C=document.getElementById('C'), S=document.getElementById('S');
+const labelLayer=document.getElementById('labelLayer');
+
+let sc, px, py;
+let isPanning=false, panSX, panSY;
+
+const up=()=>C.style.transform=`translate(${px}px,${py}px) scale(${sc})`;
+
+const CONTENT = { left: 0, top: 40, right: 1400, bottom: 1160 };
+const EDGE_MARGIN = 150;
+
+function fitToScreen() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight - 54;
+  const cw = CONTENT.right - CONTENT.left;
+  const ch = CONTENT.bottom - CONTENT.top;
+  const pad = 40;
+  sc = Math.min((vw - pad * 2) / cw, (vh - pad * 2) / ch);
+  sc = Math.round(sc * 100) / 100;
+  px = (vw - cw * sc) / 2 - CONTENT.left * sc;
+  py = 54 + (vh - ch * sc) / 2 - CONTENT.top * sc;
+}
+
+function clampedPx() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight - 54;
+  const minPx = EDGE_MARGIN - CONTENT.right * sc;
+  const maxPx = vw - EDGE_MARGIN - CONTENT.left * sc;
+  const minPy = EDGE_MARGIN - CONTENT.bottom * sc + 54;
+  const maxPy = vh - EDGE_MARGIN - CONTENT.top * sc + 54;
+  return {
+    x: Math.max(minPx, Math.min(maxPx, px)),
+    y: Math.max(minPy, Math.min(maxPy, py))
+  };
+}
+
+function snapBack() {
+  const target = clampedPx();
+  const dx = target.x - px;
+  const dy = target.y - py;
+  if(Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) { px = target.x; py = target.y; up(); return; }
+  C.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+  px = target.x;
+  py = target.y;
+  up();
+  setTimeout(() => { C.style.transition = ''; }, 320);
+}
+
+// ── Connection data ──
+const rels=[
+  {from:'actor-operator',to:'uc-1',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:220},{x:300,y:220}]},
+  {from:'actor-operator',to:'uc-3',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:390}]},
+  {from:'actor-operator',to:'uc-4',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:420},{x:640,y:420},{x:640,y:470}]},
+  {from:'actor-operator',to:'uc-5',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:300}]},
+  {from:'actor-operator',to:'uc-7',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:200},{x:400,y:200},{x:400,y:120}]},
+  {from:'actor-operator',to:'uc-10',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:440},{x:400,y:440},{x:400,y:480}]},
+  {from:'actor-operator',to:'uc-11',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:570}]},
+  {from:'actor-operator',to:'uc-17',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:480}]},
+  {from:'actor-operator',to:'uc-18',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:530},{x:400,y:530},{x:400,y:570}]},
+  {from:'actor-operator',to:'uc-19',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:510},{x:640,y:510},{x:640,y:560}]},
+  {from:'actor-operator',to:'uc-20',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:350},{x:400,y:350},{x:400,y:390}]},
+  {from:'actor-operator',to:'uc-21',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:330},{x:640,y:330},{x:640,y:390}]},
+  {from:'actor-operator',to:'uc-22',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:240},{x:300,y:240},{x:400,y:240},{x:400,y:300}]},
+  {from:'actor-operator',to:'uc-25',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:160,y:180},{x:160,y:120}]},
+  {from:'actor-coordinator',to:'uc-12',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:450,y:670}]},
+  {from:'actor-coordinator',to:'uc-13',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:450,y:740}]},
+  {from:'actor-coordinator',to:'uc-14',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:450,y:810}]},
+  {from:'actor-coordinator',to:'uc-15',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:450,y:880}]},
+  {from:'actor-coordinator',to:'uc-16',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:450,y:950}]},
+  {from:'actor-coordinator',to:'uc-23',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:450,y:1090}]},
+  {from:'actor-coordinator',to:'uc-24',type:'assoc',label:'',fromAnchor:{side:'R',pct:0.5},toAnchor:{side:'L',pct:0.545},bends:[{x:450,y:1020}]},
+  {from:'actor-database',to:'uc-2',type:'assoc',label:'',fromAnchor:{side:'L',pct:0.5},toAnchor:{side:'R',pct:0.533},bends:[{x:970,y:630},{x:970,y:300}]},
+  {from:'actor-database',to:'uc-12',type:'assoc',label:'',fromAnchor:{side:'L',pct:0.5},toAnchor:{side:'R',pct:0.545},bends:[{x:950,y:670}]},
+  {from:'actor-database',to:'uc-13',type:'assoc',label:'',fromAnchor:{side:'L',pct:0.5},toAnchor:{side:'R',pct:0.545},bends:[{x:950,y:740}]},
+  {from:'actor-database',to:'uc-14',type:'assoc',label:'',fromAnchor:{side:'L',pct:0.5},toAnchor:{side:'R',pct:0.533},bends:[{x:950,y:810}]},
+  {from:'actor-database',to:'uc-15',type:'assoc',label:'',fromAnchor:{side:'L',pct:0.5},toAnchor:{side:'R',pct:0.545},bends:[{x:950,y:880}]},
+  {from:'actor-database',to:'uc-16',type:'assoc',label:'',fromAnchor:{side:'L',pct:0.5},toAnchor:{side:'R',pct:0.533},bends:[{x:950,y:950}]},
+  {from:'actor-database',to:'uc-9',type:'assoc',label:'',fromAnchor:{side:'L',pct:0.5},toAnchor:{side:'B',pct:0.5},bends:[{x:1010,y:610}]},
+  {from:'actor-database',to:'uc-23',type:'assoc',label:'',fromAnchor:{side:'L',pct:0.5},toAnchor:{side:'R',pct:0.543},bends:[{x:950,y:1090}]},
+  {from:'actor-database',to:'uc-24',type:'assoc',label:'',fromAnchor:{side:'L',pct:0.5},toAnchor:{side:'R',pct:0.545},bends:[{x:950,y:1020}]},
+  {from:'uc-1',to:'uc-2',type:'include',label:'\u00ABInclude\u00BB',fromAnchor:{side:'R',pct:0.551},toAnchor:{side:'L',pct:0.533},bends:[]},
+  {from:'uc-7',to:'uc-8',type:'include',label:'\u00ABInclude\u00BB',fromAnchor:{side:'R',pct:0.545},toAnchor:{side:'L',pct:0.508},bends:[]},
+  {from:'uc-8',to:'uc-9',type:'include',label:'\u00ABInclude\u00BB',fromAnchor:{side:'B',pct:0.69},toAnchor:{side:'T',pct:0.44},bends:[]},
+  {from:'uc-6',to:'uc-8',type:'extend',label:'\u00ABExtend\u00BB',fromAnchor:{side:'T',pct:0.49},toAnchor:{side:'B',pct:0.37},bends:[]},
+];
+
+// ── Element geometry helpers ──
+function getCenterOf(el){
+  const s=el.dataset.shape;
+  if(s==='actor') return{x:el.offsetLeft+el.offsetWidth/2,y:el.offsetTop+33};
+  return{x:el.offsetLeft+el.offsetWidth/2,y:el.offsetTop+el.offsetHeight/2};
+}
+
+function getAnchorPos(id,anchor){
+  const el=document.getElementById(id);
+  if(!el)return{x:0,y:0};
+  const x=el.offsetLeft,y=el.offsetTop,w=el.offsetWidth,h=el.offsetHeight;
+  const shape=el.dataset.shape||'rect';
+  if(shape==='actor'){
+    const acx=x+w/2, acy=y+33;
+    switch(anchor.side){
+      case'T':return{x:acx+(anchor.pct-0.5)*60,y:acy-33};
+      case'B':return{x:acx+(anchor.pct-0.5)*60,y:acy+33};
+      case'L':return{x:acx-30,y:acy+(anchor.pct-0.5)*66};
+      case'R':return{x:acx+30,y:acy+(anchor.pct-0.5)*66};
+    }
+    return{x:acx,y:acy};
+  }
+  if(shape==='ellipse'){
+    const cx=x+w/2,cy=y+h/2,a=w/2,b=h/2;
+    let bx,by;
+    switch(anchor.side){
+      case'T':bx=x+w*anchor.pct;by=y;break;
+      case'B':bx=x+w*anchor.pct;by=y+h;break;
+      case'L':bx=x;by=y+h*anchor.pct;break;
+      case'R':bx=x+w;by=y+h*anchor.pct;break;
+    }
+    const dx=bx-cx,dy=by-cy,len=Math.sqrt(dx*dx+dy*dy);
+    if(len<0.5)return{x:cx+a,y:cy};
+    const ux=dx/len,uy=dy/len;
+    const dn=(ux*ux)/(a*a)+(uy*uy)/(b*b);
+    if(dn<0.0001)return{x:cx+a,y:cy};
+    const t=1/Math.sqrt(dn);
+    return{x:cx+ux*t,y:cy+uy*t};
+  }
+  switch(anchor.side){
+    case'T':return{x:x+w*anchor.pct,y:y};
+    case'B':return{x:x+w*anchor.pct,y:y+h};
+    case'L':return{x:x,y:y+h*anchor.pct};
+    case'R':return{x:x+w,y:y+h*anchor.pct};
+  }
+  return{x:x+w/2,y:y+h/2};
+}
+
+function getAllPoints(rel){
+  return[getAnchorPos(rel.from,rel.fromAnchor),...rel.bends,getAnchorPos(rel.to,rel.toAnchor)];
+}
+
+// ── Auto-initialize anchors ──
+function initAnchors(){
+  rels.forEach(r=>{
+    if(r.fromAnchor)return;
+    const fe=document.getElementById(r.from),te=document.getElementById(r.to);
+    if(!fe||!te)return;
+    const fi=getCenterOf(fe),ti=getCenterOf(te);
+    const dx=ti.x-fi.x,dy=ti.y-fi.y;
+    let fs,ts;
+    if(fe.dataset.shape==='actor'){fs=dx>0?'R':'L';}
+    else{fs=Math.abs(dx)>Math.abs(dy)?(dx>0?'R':'L'):(dy>0?'B':'T');}
+    if(te.dataset.shape==='actor'){ts=dx>0?'L':'R';}
+    else{ts=Math.abs(dx)>Math.abs(dy)?(dx>0?'L':'R'):(dy>0?'T':'B');}
+    r.fromAnchor={side:fs,pct:0.5};
+    r.toAnchor={side:ts,pct:0.5};
+    r.bends=r.bends||[];
+  });
+  ['from','to'].forEach(end=>{
+    const groups={};
+    rels.forEach(r=>{
+      const a=end==='from'?r.fromAnchor:r.toAnchor;
+      const eid=end==='from'?r.from:r.to;
+      const k=eid+':'+a.side;
+      if(!groups[k])groups[k]=[];
+      groups[k].push({rel:r,anchor:a,end});
+    });
+    for(const items of Object.values(groups)){
+      if(items.length<=1)continue;
+      const eid0=items[0].end==='from'?items[0].rel.from:items[0].rel.to;
+      const el0=document.getElementById(eid0);
+      if(el0&&el0.dataset.shape==='actor')continue;
+      const side=items[0].anchor.side;
+      items.sort((a,b)=>{
+        const aOther=a.end==='from'?a.rel.to:a.rel.from;
+        const bOther=b.end==='from'?b.rel.to:b.rel.from;
+        const ae=document.getElementById(aOther),be=document.getElementById(bOther);
+        if(!ae||!be)return 0;
+        const ac=getCenterOf(ae),bc=getCenterOf(be);
+        return(side==='L'||side==='R')?ac.y-bc.y:ac.x-bc.x;
+      });
+      items.forEach((it,i)=>{
+        it.anchor.pct=items.length===1?0.5:0.08+0.84*i/(items.length-1);
+      });
+    }
+  });
+}
+
+// ── Theme colors ──
+function getThemeColors(){
+  const cs=getComputedStyle(document.documentElement);
+  return {
+    isLight: document.documentElement.classList.contains('light'),
+    accent: cs.getPropertyValue('--accent').trim()
+  };
+}
+
+// ── Render ──
+function render(){
+  const tc=getThemeColors();
+  const lineColor=tc.isLight ? 'rgba(9,105,218,0.25)' : 'rgba(88,166,255,0.25)';
+  const arrowColor=tc.isLight ? 'rgba(9,105,218,0.5)' : 'rgba(88,166,255,0.5)';
+
+  let svgStr=`<defs><marker id="arrowhead" markerWidth="14" markerHeight="10" refX="13" refY="5" orient="auto" markerUnits="userSpaceOnUse"><polyline points="2,1 13,5 2,9" fill="none" stroke="${arrowColor}" stroke-width="1.5" stroke-linejoin="round"/></marker></defs>`;
+  labelLayer.innerHTML='';
+
+  rels.forEach(rel=>{
+    const pts=getAllPoints(rel);
+    const isDashed=rel.type==='include'||rel.type==='extend';
+    for(let i=0;i<pts.length-1;i++){
+      const isLast=(i===pts.length-2);
+      let a=`x1="${pts[i].x}" y1="${pts[i].y}" x2="${pts[i+1].x}" y2="${pts[i+1].y}" stroke="${lineColor}" stroke-width="1.2"`;
+      if(isDashed)a+=' stroke-dasharray="8,5"';
+      if(isDashed&&isLast)a+=' marker-end="url(#arrowhead)"';
+      svgStr+=`<line ${a}/>`;
+    }
+    if(rel.label){
+      const midIdx=Math.floor(pts.length/2);
+      const lx=pts.length%2===0?(pts[midIdx-1].x+pts[midIdx].x)/2:pts[midIdx].x;
+      const ly=pts.length%2===0?(pts[midIdx-1].y+pts[midIdx].y)/2:pts[midIdx].y;
+      const lbl=document.createElement('div');
+      lbl.className='rel-label';
+      lbl.style.left=lx+'px';lbl.style.top=ly+'px';
+      lbl.textContent=rel.label;
+      labelLayer.appendChild(lbl);
+    }
+  });
+
+  S.innerHTML=svgStr;
+}
+
+// ── Pan ──
+W.addEventListener('mousedown',(e)=>{
+  if(e.target.closest('.uc')||e.target.closest('.actor')||e.target.closest('.note-box')||e.target.closest('.legend-box'))return;
+  isPanning=true;panSX=e.clientX-px;panSY=e.clientY-py;
+});
+window.addEventListener('mousemove',(e)=>{
+  if(isPanning){px=e.clientX-panSX;py=e.clientY-panSY;up();}
+});
+window.addEventListener('mouseup',()=>{if(isPanning){isPanning=false;snapBack();}});
+
+// ── Zoom ──
+W.addEventListener('wheel',(e)=>{e.preventDefault();sc=Math.max(0.12,Math.min(1.5,sc+(e.deltaY>0?-0.04:0.04)));snapBack();},{passive:false});
+
+// ── Theme toggle ──
+const sunPath='M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zm11.394-5.834a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z';
+const moonPath='M21.752 15.002A9.718 9.718 0 0112.478 3.68a.75.75 0 00-.927-.905 9.75 9.75 0 109.674 12.227.75.75 0 00-.473-1z';
+function toggleTheme(){
+  document.documentElement.classList.toggle('light');
+  const isLight=document.documentElement.classList.contains('light');
+  document.getElementById('themeTxt').textContent=isLight?'Dark':'Light';
+  document.getElementById('themeIcon').innerHTML=`<path d="${isLight?sunPath:moonPath}"/>`;
+  render();
+}
+
+// ── Init ──
+initAnchors();
+fitToScreen();
+up();
+setTimeout(render,100);
+
+// Match note box width to legend panel
+setTimeout(()=>{
+  const note=document.getElementById('note-1');
+  const legend=document.querySelector('.legend-panel');
+  if(note&&legend){note.style.width=legend.offsetWidth+'px';note.style.maxWidth='none';}
+},120);
+</script>
+</body>
+</html>

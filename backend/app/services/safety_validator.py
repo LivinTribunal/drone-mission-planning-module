@@ -12,7 +12,6 @@ from app.services.geometry_converter import geojson_to_ewkt
 from app.services.trajectory_types import DEFAULT_RUNWAY_BUFFER, Violation, WaypointData
 
 # spatial queries use parameterized text() with PostGIS functions
-# this is the data-layer spatial computation described in section 3.1.3
 # all inputs are bound parameters - no sql injection risk
 
 HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
@@ -67,11 +66,12 @@ def validate_flight_plan(
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface],
 ) -> list[Violation]:
-    """validate entire flight plan - section 3.4.2"""
+    """validate entire flight plan against all constraints and obstacles"""
     return validate_inspection_pass(db, waypoints, drone, constraints, obstacles, zones, surfaces)
 
 
 def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation | None:
+    """check if waypoint exceeds drone altitude or speed limits"""
     if drone.max_altitude and wp.alt > drone.max_altitude:
         return Violation(
             is_warning=False,
@@ -93,7 +93,7 @@ def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation 
 
 
 def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violation | None:
-    """spatial intersection test - section 3.3.5"""
+    """check if waypoint is inside an obstacle's geometry below its height"""
     if not obstacle.geometry:
         return None
 
@@ -135,6 +135,7 @@ def check_battery(
     drone: DroneProfile | None,
     reserve_margin: float = 0.15,
 ) -> Violation | None:
+    """soft warning if cumulative flight time exceeds battery capacity"""
     if not drone or not drone.endurance_minutes:
         return None
 
@@ -153,6 +154,7 @@ def check_battery(
 
 
 def check_safety_zone(db: Session, wp: WaypointData, zone: SafetyZone) -> Violation | None:
+    """check if waypoint is inside a safety zone's geometry and altitude band"""
     if not zone.geometry:
         return None
 
@@ -183,7 +185,7 @@ def check_safety_zone(db: Session, wp: WaypointData, zone: SafetyZone) -> Violat
     )
 
 
-# segment intersection for visibility graph edge validation (section 3.3.7)
+# segment intersection for visibility graph edge validation
 def segments_intersect_obstacle(
     db: Session,
     from_lon: float,
@@ -192,6 +194,7 @@ def segments_intersect_obstacle(
     to_lat: float,
     obstacle,
 ) -> bool:
+    """check if a line segment intersects an obstacle's 2D footprint"""
     if not obstacle.geometry:
         return False
 
@@ -217,6 +220,7 @@ def segments_intersect_zone(
     to_lat: float,
     zone,
 ) -> bool:
+    """check if a line segment intersects a hard safety zone's 2D footprint"""
     if not zone.geometry:
         return False
 
@@ -278,6 +282,7 @@ def _check_constraint(
     constraint: ConstraintRule,
     surfaces: list[AirfieldSurface],
 ) -> Violation | None:
+    """dispatch waypoint check based on constraint type"""
     ctype = constraint.constraint_type
 
     if ctype == ConstraintType.ALTITUDE:
@@ -327,7 +332,7 @@ def _check_runway_buffer(
     constraint: ConstraintRule,
     surfaces: list[AirfieldSurface],
 ) -> Violation | None:
-    """PostGIS ST_DWithin for runway buffer check - section 3.4.1"""
+    """check if waypoint is within lateral buffer of a runway centerline"""
     buffer_m = constraint.lateral_buffer or DEFAULT_RUNWAY_BUFFER
     wp_ewkt = _wp_to_ewkt(wp)
 
@@ -361,6 +366,7 @@ def _check_runway_buffer(
 
 
 def _wp_to_ewkt(wp) -> str:
+    """convert waypoint position to EWKT point string"""
     return geojson_to_ewkt({"type": "Point", "coordinates": [wp.lon, wp.lat, wp.alt]})
 
 
@@ -371,6 +377,7 @@ def _geom_to_ewkt(geom) -> str:
 
 
 def _violation(constraint: ConstraintRule, message: str) -> Violation:
+    """create a violation from a constraint, inheriting its hard/soft flag"""
     return Violation(
         is_warning=not constraint.is_hard_constraint,
         message=message,
