@@ -39,6 +39,10 @@ MAX_TURN_ANGLE: Degrees = 60.0
 
 # takeoff/landing safety
 TAKEOFF_SAFE_ALTITUDE: Meters = 10.0
+LANDING_SAFE_ALTITUDE: Meters = 10.0
+
+# minimum speed floor for duration calculation - prevents division by zero
+MIN_SPEED_FLOOR: MetersPerSecond = 0.1
 
 # surface edge node spacing for visibility graph
 SURFACE_NODE_SPACING: Meters = 200.0
@@ -62,11 +66,25 @@ class Point3D:
     alt: Meters
 
     def to_tuple(self) -> tuple[float, float, float]:
+        """convert to (lon, lat, alt) tuple for geo utility functions"""
         return (self.lon, self.lat, self.alt)
 
     @staticmethod
     def from_tuple(t: tuple[float, float, float]) -> Point3D:
+        """create from (lon, lat, alt) tuple"""
         return Point3D(lon=t[0], lat=t[1], alt=t[2])
+
+    @staticmethod
+    def center(points: list[Point3D]) -> Point3D:
+        """arithmetic mean of a list of 3D points"""
+        n = len(points)
+        if n == 0:
+            raise ValueError("no points for center")
+        return Point3D(
+            lon=sum(p.lon for p in points) / n,
+            lat=sum(p.lat for p in points) / n,
+            alt=sum(p.alt for p in points) / n,
+        )
 
 
 @dataclass
@@ -120,10 +138,9 @@ class InspectionPass:
 
 @dataclass
 class MissionData:
-    # all entities loaded in phase 1 - no further entity queries after this.
-    # spatial predicates (ST_Contains, ST_DWithin, ST_Intersects) still use
-    # the db session during validation, but these are computational operations
-    # on already-loaded geometry data, not entity lookups.
+    """all entities loaded in phase 1 - no further entity queries after this.
+    spatial predicates still use the db session during validation, but these
+    are computational operations on already-loaded geometry data."""
 
     mission: Mission
     airport: Airport

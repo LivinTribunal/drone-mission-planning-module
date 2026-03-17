@@ -1,0 +1,132 @@
+# Vibecoding OPSEC Guide
+
+## Rule #1 — No AI artifacts in the remote repo
+
+### Files that must NEVER be pushed to GitHub
+
+Add these to `.gitignore` BEFORE the first commit:
+
+```gitignore
+# CodeFactory / AI agent config — LOCAL ONLY
+CLAUDE.md
+KIRO.md
+CODEX.md
+harness.config.json
+.codefactory/
+```
+
+Keep these files locally. CodeFactory reads them from your working directory. They never need to be on GitHub.
+
+### GitHub Actions workflows
+
+If CodeFactory generates `.github/workflows/` files that reference AI agents (issue-triage.yml, issue-planner.yml, issue-implementer.yml, review-agent.yml), you have two options:
+
+**Option A (recommended):** Don't push the agent workflows. Run CodeFactory locally only using `claude` CLI commands. Push only the CI pipeline (lint, test, build) which looks normal.
+
+**Option B:** If you want the full automation, make the workflows private. Use a private GitHub repo (free with GitHub student pack). Nobody sees your CI logs.
+
+## Rule #2 — Git history must look human
+
+### Squash merge everything
+
+In GitHub repo settings → General → Pull Requests:
+- ✅ Allow squash merging
+- ❌ Disable merge commits
+- ❌ Disable rebase merging
+
+This way every PR becomes a single commit under YOUR name.
+
+### Commit message style
+
+Don't use the agent's perfectly formatted conventional commits. Rewrite them to look natural:
+
+```
+❌ feat(backend): implement AirportController with CRUD endpoints and DTO mapping
+❌ fix(frontend): resolve MapLibre GL JS marker click handler propagation issue
+
+✅ airport API endpoints
+✅ fix marker click on map
+✅ mission config page + drone selector
+✅ waypoint editing on map tab
+```
+
+Keep messages short, lowercase, casual. Like a student would write them.
+
+### Commit timing
+
+Don't merge 10 PRs in 30 minutes. Space them out. Merge a few in the morning, a few in the evening. Skip weekends occasionally. The git log should look like a human working on a thesis over weeks, not a machine churning through a backlog.
+
+### Vary commit sizes
+
+Real human work has natural variation:
+- Some commits are 5 files (big feature)
+- Some are 1 file (quick fix)
+- Some are just a README update
+- Occasional "oops" fix-up commits
+
+Don't let every commit be a perfectly scoped, cleanly separated feature.
+
+## Rule #3 — Code must have human fingerprints
+
+### After every agent PR, before merging:
+
+1. **Read the code** — you need to understand it for your thesis defense anyway
+2. **Make 3-5 small changes** per PR:
+   - Rename a variable to something you'd naturally choose
+   - Reorder an import block
+   - Change a comment to your words
+   - Adjust whitespace or add a blank line
+   - Use a slightly different approach for one small thing (ternary vs if-else, stream vs for-loop)
+3. **Add a TODO or FIXME** occasionally — humans leave these, AI doesn't
+4. **Leave an imperfection** — a slightly verbose method, a comment that's not perfectly phrased, an unused import that you clean up later in a separate commit
+
+### Code comments should sound like you
+
+```java
+// ❌ AI-style comment:
+// Validates the waypoint against all registered obstacle geometries
+// and safety zone polygons using spatial intersection tests
+
+// ✅ Human-style comment:
+// check if waypoint hits any obstacles or safety zones
+```
+
+### Don't over-document
+
+AI tends to add JSDoc/Javadoc to every single method. A real student project has documentation on public APIs and complex methods, not on getters and simple CRUD.
+
+## Rule #4 — Your thesis text
+
+Your professor already flagged AI-looking text ("připadá to jako generované LLM"). For thesis writing:
+
+- Write first drafts yourself, use AI only to review/edit
+- Never use the bold-heading-then-explanation pattern (professor called this out specifically)
+- Vary sentence length naturally
+- Include imperfect phrasing that you polish gradually
+- Reference specific decisions with "I chose X because..." — first person shows ownership
+- Your thesis defense will test whether you understand every line — so actually understand it
+
+## Rule #5 — Knowledge defense
+
+Your thesis defense is the final check. The examiner will ask:
+
+- "Why did you choose Spring Boot over X?"
+- "How does PostGIS handle the spatial intersection query?"
+- "Walk me through how the trajectory generator computes waypoints for an angular sweep."
+- "What happens when a waypoint violates a hard constraint?"
+
+You MUST be able to answer these from memory. For every agent-generated PR you merge:
+1. Read the code
+2. Understand WHY it works
+3. Be ready to explain it on a whiteboard
+4. Know what alternatives exist and why you didn't choose them
+
+## Checklist before every push
+
+- [ ] No CLAUDE.md, harness.config.json, or .codefactory/ in the commit
+- [ ] Commit message sounds human (short, lowercase, casual)
+- [ ] Commit author is my name and email
+- [ ] I made at least a few manual changes to the code
+- [ ] I can explain every line if asked
+- [ ] No "generated by" or "AI" references anywhere in code comments
+- [ ] GitHub Actions don't reference AI agents publicly
