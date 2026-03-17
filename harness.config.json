@@ -108,7 +108,23 @@
     "rejectStaleReviews": true,
     "description": "All CI gates pin to exact commit SHA from the risk policy gate"
   },
-  "architecturalBoundaries": {},
+  "architecturalBoundaries": {
+    "backend/app/api/routes": {
+      "allowedImports": ["app.schemas", "app.services", "app.core"]
+    },
+    "backend/app/schemas": {
+      "allowedImports": []
+    },
+    "backend/app/services": {
+      "allowedImports": ["app.models", "app.schemas", "app.core"]
+    },
+    "backend/app/models": {
+      "allowedImports": ["app.core"]
+    },
+    "backend/app/core": {
+      "allowedImports": []
+    }
+  },
   "docsDrift": {
     "trackedDocs": [
       "README.md",
@@ -126,7 +142,7 @@
     "screenshotDir": ".harness/evidence",
     "retentionDays": 30,
     "requiredForUI": false,
-    "browserTool": "playwright"
+    "browserTool": "puppeteer"
   },
   "monorepo": {
     "enabled": false,
@@ -136,7 +152,9 @@
   "protected_files": [
     ".github/workflows/**",
     "harness.config.json",
-    "backend/requirements.txt"
+    "CLAUDE.md",
+    "backend/requirements.txt",
+    "frontend/package-lock.json"
   ],
   "harnesses": [
     {
@@ -201,7 +219,8 @@
         "/Users/moravik/Documents/thesis/drone-mission-planning-module/.github/workflows/code-review-agent.yml",
         "/Users/moravik/Documents/thesis/drone-mission-planning-module/.github/workflows/review-agent-rerun.yml",
         "/Users/moravik/Documents/thesis/drone-mission-planning-module/.github/workflows/auto-resolve-threads.yml",
-        "/Users/moravik/Documents/thesis/drone-mission-planning-module/scripts/review-agent-utils.ts"
+        "/Users/moravik/Documents/thesis/drone-mission-planning-module/scripts/review-agent-utils.ts",
+        "/Users/moravik/Documents/thesis/drone-mission-planning-module/scripts/review-prompt.md"
       ]
     },
     {
@@ -297,7 +316,10 @@
       "name": "skills-installer",
       "enabled": true,
       "generatedAt": "2026-03-14T18:10:23.053Z",
-      "files": []
+      "files": [
+        "/Users/moravik/Documents/thesis/drone-mission-planning-module/.claude/skills/check-docs/SKILL.md",
+        "/Users/moravik/Documents/thesis/drone-mission-planning-module/.claude/skills/chrome-devtools/SKILL.md"
+      ]
     }
   ],
   "generatedAt": "2026-03-14T17:52:00.175Z",
