@@ -23,16 +23,20 @@ REVIEW CHECKLIST:
 
 CODE STYLE — BE STRICT (flag violations as REQUEST_CHANGES):
 
+Docstrings:
+- Every `def` function and every `class` MUST have a `"""..."""` docstring.
+- Missing docstrings on any function or class is a REQUEST_CHANGES violation.
+- Docstrings should be short, lowercase, one line when possible.
+- Bad: """Validates the waypoint against all registered obstacle geometries using PostGIS spatial queries and returns a list of violations.""" — too verbose
+- Good: """check if waypoint hits any obstacles or safety zones.""" — short, casual
+
 Comments:
-- No docstrings anywhere. Only # comments.
 - Never comment what the code obviously does (# enable postgis, # create engine, # revision identifiers used by Alembic). If the code is self-explanatory, don't comment it.
 - Section labels are short and lowercase: # test db config, # relationships, # runway-specific columns
 - Use dashes (-) not em-dashes (—) in comments
 - Inline comments only for genuinely non-obvious things: # discriminator, # noqa: F401
 - Always a blank line before a section comment
 - No blank line between the section comment and the code it describes
-- Bad: """Validates the waypoint against all registered obstacle geometries""" — too verbose, uses docstring
-- Good: # check if waypoint hits any obstacles or safety zones — short, casual, # only
 
 Formatting:
 - Blank line after a logical block ends (after conn.commit(), after a with block, after a loop body)
@@ -40,11 +44,6 @@ Formatting:
 - Two blank lines between top-level definitions (classes, functions)
 - One blank line between methods inside a class
 - Python line length: 100 characters max
-
-Functions:
-- No docstrings on simple CRUD, schemas, or straightforward utility functions
-- Only add a # comment if the function does something non-obvious
-- Never describe what a function does if its name already says it (no # creates an airport above def create_airport)
 
 Naming:
 - Python: snake_case files and functions, PascalCase classes
@@ -55,11 +54,9 @@ OPSEC CHECKS (flag as REQUEST_CHANGES):
 - Any commit not authored by "Štefan Moravík"
 - Any conventional commit prefix (feat:, fix:, chore:)
 - Any comment containing "generated", "auto-generated", "AI", "Claude", "agent", "Co-Authored-By", "LLM", "GPT", "copilot"
-- Excessive docstrings on simple functions
 - PR description longer than 3 sentences
 - Any "Generated with Claude Code" or similar attribution text
 - Perfectly formatted conventional commit messages (too clean = suspicious)
-- Every single function having a docstring (real students don't do this)
 - Identical comment style across every file (real code has slight variation)
 
 SEVERITY GUIDE:

@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UML Class Diagram — Drone Mission Planning</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&family=Source+Serif+4:wght@600;700&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #21262d;
+    --text: #c9d1d9;
+    --text-dim: #484f58;
+    --text-bright: #f0f6fc;
+    --pk: #f0883e;
+    --fk: #58a6ff;
+    --nn: #f85149;
+    --uq: #bc8cff;
+    --type: #39d2c0;
+    --geo: #56d364;
+    --c-orange: #f0883e;
+    --c-green: #3fb950;
+    --c-purple: #bc8cff;
+    --c-blue: #58a6ff;
+    --c-cyan: #39d2c0;
+    --c-red: #f47067;
+    --c-amber: #d97706;
+    --meth: #3fb950;
+    --ret: #f0883e;
+    --enum-bg: rgba(124,58,237,0.2);
+    --enum-text: #bc8cff;
+    --shadow: rgba(0,0,0,0.5);
+    --shadow-hover: rgba(88,166,255,0.12);
+    --note-bg: rgba(217,119,6,0.04);
+    --note-border: rgba(217,119,6,0.25);
+    --note-text: rgba(217,119,6,0.55);
+    --sec-label-color: rgba(88,166,255,0.14);
+  }
+
+  html.light {
+    --bg: #ffffff;
+    --surface: #f6f8fa;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --text-dim: #656d76;
+    --text-bright: #1f2328;
+    --pk: #bc4c00;
+    --fk: #0969da;
+    --nn: #cf222e;
+    --uq: #8250df;
+    --type: #0e7c6b;
+    --geo: #1a7f37;
+    --c-orange: #cf6518;
+    --c-green: #1a7f37;
+    --c-purple: #8250df;
+    --c-blue: #0969da;
+    --c-cyan: #1a7f72;
+    --c-red: #cf222e;
+    --c-amber: #9a6700;
+    --meth: #1a7f37;
+    --ret: #bc4c00;
+    --enum-bg: rgba(130,80,223,0.12);
+    --enum-text: #8250df;
+    --shadow: rgba(0,0,0,0.12);
+    --shadow-hover: rgba(9,105,218,0.12);
+    --note-bg: rgba(154,103,0,0.04);
+    --note-border: rgba(154,103,0,0.30);
+    --note-text: rgba(154,103,0,0.65);
+    --sec-label-color: rgba(9,105,218,0.12);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+    transition: background 0.3s, color 0.3s;
+  }
+
+  .bar {
+    position: fixed; top:0; left:0; right:0; z-index:200;
+    background: var(--bg); backdrop-filter: blur(12px);
+    padding: 14px 28px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .bar-left { display: flex; align-items: baseline; gap: 14px; }
+  .bar h1 { font-family:'Inter',sans-serif; font-size:16px; font-weight:600; color:var(--fk); letter-spacing:1.5px; text-transform:uppercase; }
+  .bar .sub { font-family:'Inter',sans-serif; font-size:11px; color:var(--text-dim); }
+  .bar-author { font-family:'Inter',sans-serif; font-size:11px; color:var(--text-dim); }
+
+  .theme-toggle {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    font-family: 'Inter', sans-serif; transition: all 0.2s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .theme-toggle:hover { border-color: var(--fk); }
+  .theme-toggle svg { width: 16px; height: 16px; fill: currentColor; }
+
+  .ctrls {
+    position: fixed; bottom:14px; right:14px; z-index:200;
+    display:flex; gap:5px;
+  }
+  .ctrls button {
+    background:var(--surface); border:1px solid var(--border); color:var(--text);
+    width:34px; height:34px; border-radius:8px; cursor:pointer; font-size:17px;
+    display:flex; align-items:center; justify-content:center;
+    transition: all 0.2s;
+  }
+  .ctrls button:hover { background:rgba(88,166,255,0.08); border-color:var(--fk); }
+
+  .wrap { width:100vw; height:100vh; overflow:hidden; cursor:grab; padding-top:54px; }
+  .wrap:active { cursor:grabbing; }
+
+  .world { transform-origin:0 0; position:relative; width:5000px; height:3500px; }
+
+  svg.rels {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    pointer-events: none;
+  }
+  svg.rels line { pointer-events: none; }
+
+  .sec-label {
+    position: absolute; pointer-events:none; z-index:1;
+    font-family: 'Source Serif 4', serif; font-weight:700; font-size:22px;
+    color: var(--sec-label-color); letter-spacing:2px; text-transform:uppercase;
+    white-space:nowrap;
+  }
+
+  .note-box {
+    position: absolute; cursor: default; z-index: 10;
+    background: rgba(240,136,62,0.06); border: 1.5px dashed rgba(240,136,62,0.4);
+    padding: 8px 14px; font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: rgba(240,136,62,0.8); max-width: 240px;
+    line-height: 1.5; pointer-events: none;
+    transition: all 0.3s;
+  }
+  html.light .note-box {
+    background: rgba(207,101,24,0.06);
+    border-color: rgba(207,101,24,0.4);
+    color: rgba(207,101,24,0.8);
+  }
+  .note-box::before {
+    content: ''; position: absolute; top: 0; right: 0;
+    width: 12px; height: 12px;
+    background: linear-gradient(225deg, var(--bg) 50%, rgba(240,136,62,0.3) 50%);
+  }
+
+  .t {
+    position:absolute; background:var(--surface); border-radius:5px;
+    min-width:235px; box-shadow:0 1px 8px var(--shadow);
+    z-index: 10;
+    transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
+  }
+  .t:hover { box-shadow:0 2px 16px var(--shadow-hover); z-index: 15; }
+
+  .th {
+    padding:7px 10px; border-bottom:1px solid var(--border);
+    border-radius:5px 5px 0 0; font-weight:600; font-size:11.5px;
+    color:var(--text-bright); display:flex; align-items:center; gap:6px;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .th .ic { font-size:9px; }
+  .th .cnt { font-size:8px; color:var(--text-dim); margin-left:auto; font-weight:400; }
+  .th .stereotype { font-size:8.5px; color:var(--text-dim); font-weight:400; font-style:italic; }
+  .th .type-badge {
+    font-size:7px; font-weight:700; padding:1px 4px; border-radius:2px;
+    letter-spacing:.5px; text-transform:uppercase; margin-left:2px;
+  }
+
+  .sec-div {
+    padding: 3px 10px 1px; font-size:7px; font-weight:600;
+    color:var(--text-dim); letter-spacing:1px; text-transform:uppercase;
+    border-top:1px solid var(--border); margin-top:1px;
+  }
+
+  .tr { padding:2px 10px; display:flex; align-items:center; gap:5px; line-height:1.35; }
+  .trs { padding:2px 0; }
+
+  .vis { color:var(--text-dim); font-size:10px; min-width:10px; text-align:center; }
+  .cn { flex:1; font-size:10px; }
+  .b { font-size:7.5px; font-weight:600; padding:1px 3.5px; border-radius:2px; letter-spacing:.4px; }
+  .b.enum-b { background:var(--enum-bg); color:var(--enum-text); }
+  .ct { text-align:right; font-size:9.5px; color:var(--type); white-space:nowrap; }
+  .mn { flex:1; font-size:10px; color:var(--meth); }
+  .rt { text-align:right; font-size:9.5px; color:var(--ret); white-space:nowrap; }
+
+  .t.dom-class .th { background:rgba(88,166,255,0.08); border-color:rgba(88,166,255,0.15); }
+  .t.dom-class { border:1px solid rgba(88,166,255,0.18); }
+  .t.dom-class .type-badge { background:rgba(88,166,255,0.15); color:var(--fk); }
+
+  .t.dom-service .th { background:rgba(5,150,105,0.10); border-color:rgba(5,150,105,0.18); }
+  .t.dom-service { border:1px solid rgba(5,150,105,0.22); }
+  .t.dom-service .type-badge { background:rgba(5,150,105,0.15); color:var(--c-green); }
+
+  .t.dom-utility .th { background:rgba(217,119,6,0.10); border-color:rgba(217,119,6,0.18); }
+  .t.dom-utility { border:1px solid rgba(217,119,6,0.22); }
+  .t.dom-utility .type-badge { background:rgba(217,119,6,0.15); color:var(--c-amber); }
+
+  .t.dom-abstract .th { background:rgba(8,145,178,0.10); border-color:rgba(8,145,178,0.18); }
+  .t.dom-abstract { border:1px solid rgba(8,145,178,0.22); }
+  .t.dom-abstract .type-badge { background:rgba(8,145,178,0.15); color:var(--c-cyan); }
+
+  html.light .t.dom-class .th { background:rgba(9,105,218,.06); border-color:rgba(9,105,218,.15); }
+  html.light .t.dom-class { border:1px solid rgba(9,105,218,.22); }
+  html.light .t.dom-class .type-badge { background:rgba(9,105,218,.12); }
+  html.light .t.dom-service .th { background:rgba(26,127,55,.06); border-color:rgba(26,127,55,.15); }
+  html.light .t.dom-service { border:1px solid rgba(26,127,55,.22); }
+  html.light .t.dom-service .type-badge { background:rgba(26,127,55,.12); }
+  html.light .t.dom-utility .th { background:rgba(154,103,0,.06); border-color:rgba(154,103,0,.15); }
+  html.light .t.dom-utility { border:1px solid rgba(154,103,0,.22); }
+  html.light .t.dom-utility .type-badge { background:rgba(154,103,0,.12); }
+  html.light .t.dom-abstract .th { background:rgba(14,124,107,.06); border-color:rgba(14,124,107,.15); }
+  html.light .t.dom-abstract { border:1px solid rgba(14,124,107,.22); }
+  html.light .t.dom-abstract .type-badge { background:rgba(14,124,107,.12); }
+
+  .rel-label {
+    position: absolute;
+    background: var(--bg);
+    border: 1px solid;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    z-index: 60;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+    pointer-events: none;
+    transition: background 0.3s;
+  }
+
+  /* Legend panel */
+  .legend-panel {
+    position: absolute;
+    z-index: 10;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 30px 40px;
+    box-shadow: 0 8px 40px var(--shadow);
+    pointer-events: none;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .legend-panel h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-bright);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .legend-section { margin-bottom: 20px; }
+  .legend-section:last-child { margin-bottom: 0; }
+  .legend-section-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 10px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    color: var(--text);
+  }
+  .legend-item:last-child { margin-bottom: 0; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .legend-line { width: 36px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+  .legend-rel-svg { width: 42px; height: 16px; flex-shrink: 0; overflow: visible; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar-left">
+    <h1>UML Class Diagram</h1>
+    <span class="sub">- Design and Implementation of a Drone Mission Planning Module for Airport Lighting Inspection</span>
+    <span class="bar-author">- Štefan Moravík</span>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">
+    <svg id="themeIcon" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zm11.394-5.834a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/></svg>
+    <span id="themeTxt">Dark</span>
+  </button>
+</div>
+
+<div class="ctrls">
+  <button onclick="sc=Math.min(1.5,sc+.1);snapBack();">+</button>
+  <button onclick="sc=Math.max(.12,sc-.1);snapBack();">&#8722;</button>
+  <button onclick="fitToScreen();up();">&#8865;</button>
+</div>
+
+<div class="wrap" id="W">
+<div class="world" id="C">
+<svg class="rels" id="S"></svg>
+<div id="labelLayer"></div>
+
+<!-- SECTION LABELS -->
+<div class="sec-label" style="left:60px;top:20px;">Airport Domain</div>
+<div class="sec-label" style="left:60px;top:390px;">AGL / PAPI</div>
+<div class="sec-label" style="left:710px;top:620px;">Inspection</div>
+<div class="sec-label" style="left:730px;top:900px;">Mission &amp; Flight Plan</div>
+<div class="sec-label" style="left:730px;top:1600px;">Constraints</div>
+<div class="sec-label" style="left:1260px;top:210px;">Services</div>
+
+<!-- NOTE BOXES -->
+<div class="note-box" id="note1" style="left:1610px;top:250px;">Depends on these classes:<br>Inspection, InspectionConfiguration,<br>InspectionTargets, Waypoint,<br>Coordinate, Obstacle, SafetyZone</div>
+<div class="note-box" id="note2" style="left:1600px;top:440px;">Depends on these classes:<br>Waypoint, DroneProfile,<br>Obstacle, SafetyZone,<br>Constraint, FlightPlan,<br>ValidationResult</div>
+<div class="note-box" id="note3" style="left:1520px;top:60px;">Used by: AGL, LHA, Waypoint,<br>Obstacle, SafetyZone, AirfieldSurface,<br>Runway, GeofenceConstraint, Airport,<br>TrajectoryGenerator, SafetyValidator</div>
+
+<!-- Legend panel -->
+<div class="legend-panel" style="left:1880px; top:60px;">
+  <h3>Legend</h3>
+  <div class="legend-section">
+    <div class="legend-section-title">Card Types</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--fk)"></div>Class</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--c-green)"></div>Service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--c-amber)"></div>Utility</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--c-cyan)"></div>Abstract</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--enum-text)"></div>Enum Badge</div>
+  </div>
+  <div class="legend-section">
+    <div class="legend-section-title">Relationships</div>
+    <div class="legend-item"><svg class="legend-rel-svg" viewBox="0 0 52 16"><line x1="16" y1="8" x2="52" y2="8" stroke="var(--fk)" stroke-width="2.5"/><polygon points="0,8 8,3 16,8 8,13" fill="var(--fk)" stroke="var(--fk)" stroke-width="0.8"/></svg>Composition</div>
+    <div class="legend-item"><svg class="legend-rel-svg" viewBox="0 0 52 16"><line x1="16" y1="8" x2="52" y2="8" stroke="var(--fk)" stroke-width="2.5" opacity="0.7"/><polygon points="0,8 8,3 16,8 8,13" fill="var(--bg)" stroke="var(--fk)" stroke-width="1.8"/></svg>Aggregation</div>
+    <div class="legend-item"><svg class="legend-rel-svg" viewBox="0 0 52 16"><line x1="0" y1="8" x2="36" y2="8" stroke="var(--c-green)" stroke-width="2.5"/><polygon points="36,2 52,8 36,14" fill="var(--bg)" stroke="var(--c-green)" stroke-width="1.8"/></svg>Inheritance</div>
+    <div class="legend-item"><svg class="legend-rel-svg" viewBox="0 0 52 16"><line x1="0" y1="8" x2="40" y2="8" stroke="var(--fk)" stroke-width="2.5" opacity="0.5"/><path d="M36,3 L48,8 L36,13" fill="none" stroke="var(--fk)" stroke-width="2" opacity="0.7"/></svg>Association</div>
+  </div>
+  <div class="legend-section">
+    <div class="legend-section-title">Other</div>
+    <div class="legend-item">
+      <svg viewBox="0 0 24 18" width="24" height="18">
+        <rect x="1" y="1" width="22" height="16" fill="rgba(240,136,62,0.06)" stroke="rgba(240,136,62,0.4)" stroke-width="1" stroke-dasharray="3,2"/>
+        <polygon points="18,1 23,1 23,6" fill="var(--bg)"/>
+        <polyline points="18,1 18,6 23,6" fill="none" stroke="rgba(240,136,62,0.4)" stroke-width="0.8"/>
+      </svg>
+      Note
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- ROW 1: Airport Domain  (y~60)                         -->
+<!-- ══════════════════════════════════════════════════════ -->
+
+<div class="t dom-class" id="t-airport" style="left:60px;top:60px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> Airport <span class="cnt">7</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">icaoCode</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">name</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">location</span><span class="ct">Coordinate</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">elevation</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">city</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">country</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">infrastructure</span><span class="ct">AirportInfrastructure</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-infra" style="left:410px;top:60px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> AirportInfrastructure <span class="cnt">3</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">surfaces</span><span class="ct">List&lt;AirfieldSurface&gt;</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">obstacles</span><span class="ct">List&lt;Obstacle&gt;</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">safetyZones</span><span class="ct">List&lt;SafetyZone&gt;</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-obstacle" style="left:870px;top:60px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> Obstacle <span class="cnt">5</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">name</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">geometry</span><span class="ct">List&lt;Coordinate&gt;</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">height</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">radius</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">type</span><span class="b enum-b">ENUM</span><span class="ct">ObstacleType</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-safety" style="left:870px;top:260px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> SafetyZone <span class="cnt">6</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">name</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">type</span><span class="b enum-b">ENUM</span><span class="ct">SafetyZoneType</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">geometry</span><span class="ct">List&lt;Coordinate&gt;</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">altitudeFloor</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">altitudeCeiling</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">isActive</span><span class="ct">Boolean</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-surface" style="left:410px;top:260px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> AirfieldSurface <span class="cnt">3</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">identifier</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">geometry</span><span class="ct">List&lt;Coordinate&gt;</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">aglSystems</span><span class="ct">List&lt;AGL&gt;</span></div>
+  </div>
+</div>
+
+<div class="t dom-utility" id="t-coord" style="left:1260px;top:60px;">
+  <div class="th"><span class="ic" style="color:var(--c-amber)">&#9679;</span><span class="type-badge">UTIL</span><span class="stereotype">&laquo;utility&raquo;</span> Coordinate <span class="cnt">3</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">latitude</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">longitude</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">altitude</span><span class="ct">Double</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-runway" style="left:360px;top:430px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> Runway <span class="cnt">5</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">heading</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">length</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">width</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">thresholdPosition</span><span class="ct">Coordinate</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">endPosition</span><span class="ct">Coordinate</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-taxiway" style="left:630px;top:470px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> Taxiway <span class="cnt">1</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">width</span><span class="ct">Double</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-agl" style="left:70px;top:260px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> AGL <span class="cnt">3</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">name</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">position</span><span class="ct">Coordinate</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">surface</span><span class="ct">AirfieldSurface</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-targets" style="left:350px;top:700px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> InspectionTargets <span class="cnt">2</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">aglSystem</span><span class="ct">AGL</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">selectedLHAs</span><span class="ct">List&lt;LHA&gt;</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-template" style="left:710px;top:660px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> InspectionTemplate <span class="cnt">8</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">name</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">description</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">targets</span><span class="ct">InspectionTargets</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">recommendedMethods</span><span class="b enum-b">ENUM</span><span class="ct">List&lt;InspectionMethod&gt;</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">defaultConfiguration</span><span class="ct">InspectionConfiguration</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">angularTolerances</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">createdBy</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">createdAt</span><span class="ct">DateTime</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-inspection" style="left:1150px;top:660px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> Inspection <span class="cnt">5</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">template</span><span class="ct">InspectionTemplate</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">method</span><span class="b enum-b">ENUM</span><span class="ct">InspectionMethod</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">configuration</span><span class="ct">InspectionConfiguration</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">sequenceOrder</span><span class="ct">Integer</span></div>
+  </div>
+  <div class="sec-div">METHODS</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">+</span><span class="mn">isSpeedCompatibleWithFrameRate()</span><span class="rt">Boolean</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-papi" style="left:70px;top:430px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> PAPISystem <span class="cnt">6</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">side</span><span class="b enum-b">ENUM</span><span class="ct">PAPISide</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">glideSlopeAngle</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">distanceFromThreshold</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">offsetFromCenterLine</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">units</span><span class="ct">List&lt;LHA&gt;</span></div>
+  </div>
+  <div class="sec-div">METHODS</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">+</span><span class="mn">calculateLHACenterPoint()</span><span class="rt">void</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-lha" style="left:80px;top:700px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> LHA <span class="cnt">5</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">unitNumber</span><span class="ct">Integer</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">settingAngle</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">transitionSectorWidth</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">lampType</span><span class="b enum-b">ENUM</span><span class="ct">LampType</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">position</span><span class="ct">Coordinate</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-inspconfig" style="left:360px;top:890px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> InspectionConfiguration <span class="cnt">6</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">altitudeOffset</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">speedOverride</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">measurementDensity</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">customTolerances</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">density</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">hoverDuration</span><span class="ct">Double</span></div>
+  </div>
+  <div class="sec-div">METHODS</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">+</span><span class="mn">resolveWithDefaults()</span><span class="rt">void</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-drone" style="left:370px;top:1330px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> DroneProfile <span class="cnt">12</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">name</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">manufacturer</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">model</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">maxSpeed</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">maxClimbRate</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">maxAltitude</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">batteryCapacity</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">enduranceMinutes</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">cameraResolution</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">cameraFrameRate</span><span class="ct">Integer</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">sensorFOV</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">weight</span><span class="ct">Double</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-mission" style="left:730px;top:950px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> Mission <span class="cnt">6</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">name</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">createdAt</span><span class="ct">DateTime</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">operatorNotes</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">configuration</span><span class="ct">MissionConfiguration</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">inspections</span><span class="ct">List&lt;Inspection&gt;</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">status</span><span class="b enum-b">ENUM</span><span class="ct">MissionStatus</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-missionconfig" style="left:370px;top:1120px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> MissionConfiguration <span class="cnt">6</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">droneProfile</span><span class="ct">DroneProfile</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">dateTime</span><span class="ct">DateTime</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">defaultSpeed</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">defaultAltitudeOffset</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">takeoffCoordinate</span><span class="ct">Coordinate</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">landingCoordinate</span><span class="ct">Coordinate</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-fplan" style="left:730px;top:1200px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> FlightPlan <span class="cnt">17</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">mission</span><span class="ct">Mission</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">infrastructure</span><span class="ct">AirportInfrastructure</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">waypoints</span><span class="ct">List&lt;Waypoint&gt;</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">totalDistance</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">estimatedDuration</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">isValidated</span><span class="ct">Boolean</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">validationResult</span><span class="ct">ValidationResult</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">generatedAt</span><span class="ct">DateTime</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">constraints</span><span class="ct">List&lt;Constraint&gt;</span></div>
+  </div>
+  <div class="sec-div">METHODS</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">+</span><span class="mn">generate(mission, infra)</span><span class="rt">void</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">appendWaypoints(wps)</span><span class="rt">void</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">addTransitWaypoints()</span><span class="rt">void</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">compile()</span><span class="rt">void</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">updateRunningTotals()</span><span class="rt">void</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">addWarning()</span><span class="rt">void</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">validate()</span><span class="rt">void</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">export(format)</span><span class="rt">ExportResult</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-waypoint" style="left:1150px;top:950px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> Waypoint <span class="cnt">9</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">sequenceOrder</span><span class="ct">Integer</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">position</span><span class="ct">Coordinate</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">heading</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">cameraTarget</span><span class="ct">Coordinate</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">speed</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">hoverDuration</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">cameraAction</span><span class="b enum-b">ENUM</span><span class="ct">CameraAction</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">waypointType</span><span class="b enum-b">ENUM</span><span class="ct">WaypointType</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">inspectionReference</span><span class="ct">Inspection</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-valres" style="left:380px;top:1630px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> ValidationResult <span class="cnt">5</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">passed</span><span class="ct">Boolean</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">violations</span><span class="ct">List&lt;Constraint&gt;</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">warnings</span><span class="ct">List&lt;Constraint&gt;</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">validatedAt</span><span class="ct">DateTime</span></div>
+  </div>
+  <div class="sec-div">METHODS</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">+</span><span class="mn">hasFailed()</span><span class="rt">Boolean</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-export" style="left:1150px;top:1430px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> ExportResult <span class="cnt">5</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">fileName</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">flightPlan</span><span class="ct">FlightPlan</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">format</span><span class="b enum-b">ENUM</span><span class="ct">ExportFormat</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">filePath</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">exportedAt</span><span class="ct">DateTime</span></div>
+  </div>
+</div>
+
+<div class="t dom-abstract" id="t-constraint" style="left:730px;top:1640px;">
+  <div class="th"><span class="ic" style="color:var(--c-cyan)">&#9679;</span><span class="type-badge">ABS</span><span class="stereotype">&laquo;abstract&raquo;</span> Constraint <span class="cnt">3</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">name</span><span class="ct">String</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">isHardConstraint</span><span class="ct">Boolean</span></div>
+  </div>
+  <div class="sec-div">METHODS</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">+</span><span class="mn">validate(waypoint)</span><span class="rt">Boolean</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-altconst" style="left:150px;top:1900px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> AltitudeConstraint <span class="cnt">2</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">minAltitude</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">maxAltitude</span><span class="ct">Double</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-spdconst" style="left:440px;top:1900px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> SpeedConstraint <span class="cnt">2</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">maxHorizontalSpeed</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">maxVerticalSpeed</span><span class="ct">Double</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-batconst" style="left:730px;top:1900px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> BatteryConstraint <span class="cnt">2</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">maxFlightTime</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">reserveMargin</span><span class="ct">Double</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-rwybuf" style="left:1020px;top:1900px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> RunwayBufferConstraint <span class="cnt">2</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">lateralBuffer</span><span class="ct">Double</span></div>
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">longitudinalBuffer</span><span class="ct">Double</span></div>
+  </div>
+</div>
+
+<div class="t dom-class" id="t-geofen" style="left:1310px;top:1900px;">
+  <div class="th"><span class="ic" style="color:var(--fk)">&#9679;</span><span class="type-badge">CLASS</span> GeofenceConstraint <span class="cnt">1</span></div>
+  <div class="sec-div">ATTRIBUTES</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">&minus;</span><span class="cn">boundaryPolygon</span><span class="ct">List&lt;Coordinate&gt;</span></div>
+  </div>
+</div>
+
+<div class="t dom-service" id="t-trajgen" style="left:1260px;top:250px;">
+  <div class="th"><span class="ic" style="color:var(--c-green)">&#9679;</span><span class="type-badge">SVC</span><span class="stereotype">&laquo;service&raquo;</span> TrajectoryGenerator <span class="cnt">6</span></div>
+  <div class="sec-div">METHODS</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">+</span><span class="mn">computeTrajectory(insp, cfg, tgt)</span><span class="rt">List&lt;Waypoint&gt;</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">determineStartPosition(cp, cfg)</span><span class="rt">Coordinate</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">determineEndPosition(cp, cfg)</span><span class="rt">Coordinate</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">calculateArcPath(s, e, c, cfg)</span><span class="rt">List&lt;Waypoint&gt;</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">calculateVerticalPath(s, c, cfg)</span><span class="rt">List&lt;Waypoint&gt;</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">reroutePath(wp, obstacle)</span><span class="rt">List&lt;Waypoint&gt;</span></div>
+  </div>
+</div>
+
+<div class="t dom-service" id="t-safetyval" style="left:1260px;top:440px;">
+  <div class="th"><span class="ic" style="color:var(--c-green)">&#9679;</span><span class="type-badge">SVC</span><span class="stereotype">&laquo;service&raquo;</span> SafetyValidator <span class="cnt">4</span></div>
+  <div class="sec-div">METHODS</div>
+  <div class="trs">
+    <div class="tr"><span class="vis">+</span><span class="mn">checkDroneConstraints(wp, dp)</span><span class="rt">Boolean</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">checkObstacles(wp, obs, sz)</span><span class="rt">Boolean</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">checkBatteryPrediction(dur, dist, dp)</span><span class="rt">Boolean</span></div>
+    <div class="tr"><span class="vis">+</span><span class="mn">validateFlightPlan(fp, constr)</span><span class="rt">ValidationResult</span></div>
+  </div>
+</div>
+
+</div><!-- /world -->
+</div><!-- /wrap -->
+
+<script>
+const W = document.getElementById('W');
+const C = document.getElementById('C');
+const S = document.getElementById('S');
+const labelLayer = document.getElementById('labelLayer');
+
+let sc, px, py;
+let isPanning = false, panSX, panSY;
+
+const up = () => C.style.transform = `translate(${px}px,${py}px) scale(${sc})`;
+
+// Theme toggle with sun/moon SVG icons
+const sunPath = 'M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zm11.394-5.834a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z';
+const moonPath = 'M21.752 15.002A9.718 9.718 0 0112.478 3.68a.75.75 0 00-.927-.905 9.75 9.75 0 109.674 12.227.75.75 0 00-.473-1z';
+
+function toggleTheme() {
+  document.documentElement.classList.toggle('light');
+  const isLight = document.documentElement.classList.contains('light');
+  document.getElementById('themeTxt').textContent = isLight ? 'Dark' : 'Light';
+  document.getElementById('themeIcon').innerHTML = '<path d="' + (isLight ? sunPath : moonPath) + '"/>';
+  render();
+}
+
+// Canvas boundary system
+const CONTENT = { left: -50, top: -50, right: 2200, bottom: 2150 };
+const EDGE_MARGIN = 150;
+
+function clampedPx() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight - 54;
+  const minPx = EDGE_MARGIN - CONTENT.right * sc;
+  const maxPx = vw - EDGE_MARGIN - CONTENT.left * sc;
+  const minPy = EDGE_MARGIN - CONTENT.bottom * sc + 54;
+  const maxPy = vh - EDGE_MARGIN - CONTENT.top * sc + 54;
+  return {
+    x: Math.max(minPx, Math.min(maxPx, px)),
+    y: Math.max(minPy, Math.min(maxPy, py))
+  };
+}
+
+function snapBack() {
+  const target = clampedPx();
+  const dx = target.x - px;
+  const dy = target.y - py;
+  if(Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) { px = target.x; py = target.y; up(); return; }
+  C.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+  px = target.x;
+  py = target.y;
+  up();
+  setTimeout(() => { C.style.transition = ''; }, 320);
+}
+
+function fitToScreen() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight - 54;
+  const cw = CONTENT.right - CONTENT.left;
+  const ch = CONTENT.bottom - CONTENT.top;
+  const pad = 40;
+  sc = Math.min((vw - pad * 2) / cw, (vh - pad * 2) / ch);
+  sc = Math.round(sc * 100) / 100;
+  px = (vw - cw * sc) / 2 - CONTENT.left * sc;
+  py = 54 + (vh - ch * sc) / 2 - CONTENT.top * sc;
+}
+fitToScreen();
+up();
+
+window.addEventListener('resize', () => { fitToScreen(); up(); render(); });
+
+// Marker colors per theme
+const markerTheme = {
+  dark: {
+    bg: '#0d1117',
+    compFill: 'rgba(88,166,255,0.7)', compStroke: 'rgba(88,166,255,0.85)',
+    aggStroke: 'rgba(88,166,255,0.7)',
+    inhStroke: 'rgba(63,185,80,0.7)',
+    arrowStroke: '#58a6ff',
+    lineComp: 'rgba(88,166,255,0.45)', lineAgg: 'rgba(88,166,255,0.35)',
+    lineInh: 'rgba(63,185,80,0.50)', lineAssoc: 'rgba(88,166,255,0.30)',
+  },
+  light: {
+    bg: '#ffffff',
+    compFill: 'rgba(9,105,218,0.7)', compStroke: 'rgba(9,105,218,0.85)',
+    aggStroke: 'rgba(9,105,218,0.7)',
+    inhStroke: 'rgba(26,127,55,0.7)',
+    arrowStroke: '#0969da',
+    lineComp: 'rgba(9,105,218,0.50)', lineAgg: 'rgba(9,105,218,0.40)',
+    lineInh: 'rgba(26,127,55,0.55)', lineAssoc: 'rgba(9,105,218,0.35)',
+  }
+};
+
+function getTheme() {
+  return document.documentElement.classList.contains('light') ? markerTheme.light : markerTheme.dark;
+}
+
+function buildMarkerDefs(t) {
+  return `<defs>
+    <marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12" markerHeight="12" orient="auto-start-reverse">
+      <path d="M1,1 L9,5 L1,9" fill="none" stroke="${t.arrowStroke}" stroke-width="1.5" opacity="0.6"/>
+    </marker>
+    <marker id="mk-diamond-filled" viewBox="-1 -1 14 10" refX="12" refY="4" markerWidth="14" markerHeight="14" orient="auto-start-reverse">
+      <path d="M0,4 L6,0 L12,4 L6,8 Z" fill="${t.bg}"/>
+      <path d="M0,4 L6,0 L12,4 L6,8 Z" fill="${t.compFill}" stroke="${t.compStroke}" stroke-width="0.8"/>
+    </marker>
+    <marker id="mk-diamond-empty" viewBox="-1 -1 14 10" refX="12" refY="4" markerWidth="14" markerHeight="14" orient="auto-start-reverse">
+      <path d="M0,4 L6,0 L12,4 L6,8 Z" fill="${t.bg}" stroke="${t.aggStroke}" stroke-width="1.4"/>
+    </marker>
+    <marker id="mk-triangle" viewBox="-1 -1 14 14" refX="12" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse">
+      <path d="M0,0 L12,6 L0,12 Z" fill="${t.bg}" stroke="${t.inhStroke}" stroke-width="1.4"/>
+    </marker>
+  </defs>`;
+}
+
+const rels = [
+  // COMPOSITION (1-9)
+  { from:'t-airport', to:'t-infra', label:'1', type:'composition',
+    fromAnchor:{side:'R',pct:0.34062065012691367}, toAnchor:{side:'L',pct:0.573208722741433}, bends:[] },
+  { from:'t-infra', to:'t-surface', label:'1..*', type:'composition',
+    fromAnchor:{side:'B',pct:0.4985709749126698}, toAnchor:{side:'T',pct:0.5}, bends:[] },
+  { from:'t-infra', to:'t-obstacle', label:'0..*', type:'composition',
+    fromAnchor:{side:'R',pct:0.37383177570093457}, toAnchor:{side:'L',pct:0.27658705858338406}, bends:[] },
+  { from:'t-infra', to:'t-safety', label:'0..*', type:'composition',
+    fromAnchor:{side:'R',pct:0.7530814032236213}, toAnchor:{side:'L',pct:0.12578616352201258}, bends:[{x:750,y:140},{x:750,y:280}] },
+  { from:'t-papi', to:'t-lha', label:'4', type:'composition',
+    fromAnchor:{side:'B',pct:0.48902397838568057}, toAnchor:{side:'T',pct:0.4498480243161096}, bends:[] },
+  { from:'t-template', to:'t-targets', label:'1..*', type:'composition',
+    fromAnchor:{side:'L',pct:0.43616177636796033}, toAnchor:{side:'R',pct:0.5}, bends:[] },
+  { from:'t-mission', to:'t-inspection', label:'1..*', type:'composition',
+    fromAnchor:{side:'R',pct:0.12478786063691533}, toAnchor:{side:'B',pct:0.2919708029197064}, bends:[{x:1070,y:970},{x:1070,y:910},{x:1230,y:910}] },
+  { from:'t-mission', to:'t-missionconfig', label:'1', type:'composition',
+    fromAnchor:{side:'L',pct:0.624373347917233}, toAnchor:{side:'R',pct:0.3144654088050286}, bends:[{x:660,y:1050},{x:660,y:1170}] },
+  { from:'t-fplan', to:'t-waypoint', label:'1..*', type:'composition',
+    fromAnchor:{side:'R',pct:0.13404825737265477}, toAnchor:{side:'B',pct:0.2161431948666003}, bends:[{x:1200,y:1250}] },
+
+  // AGGREGATION (10)
+  { from:'t-surface', to:'t-agl', label:'1..*', type:'aggregation',
+    fromAnchor:{side:'L',pct:0.4698502112405581}, toAnchor:{side:'R',pct:0.472869298367972}, bends:[] },
+
+  // INHERITANCE (11-18)
+  { from:'t-papi', to:'t-agl', label:'', type:'inheritance',
+    fromAnchor:{side:'T',pct:0.6099290780141844}, toAnchor:{side:'B',pct:0.6070921985815603}, bends:[] },
+  { from:'t-runway', to:'t-surface', label:'', type:'inheritance',
+    fromAnchor:{side:'T',pct:0.5106382978723404}, toAnchor:{side:'B',pct:0.5556583410422438}, bends:[{x:480,y:400},{x:540,y:400}] },
+  { from:'t-taxiway', to:'t-surface', label:'', type:'inheritance',
+    fromAnchor:{side:'T',pct:0.5155720012334261}, toAnchor:{side:'B',pct:0.6808510638297872}, bends:[{x:750,y:400},{x:570,y:400}] },
+  { from:'t-altconst', to:'t-constraint', label:'', type:'inheritance',
+    fromAnchor:{side:'T',pct:0.5106382978723404}, toAnchor:{side:'B',pct:0.1702127659574468}, bends:[{x:270,y:1830},{x:770,y:1830}] },
+  { from:'t-spdconst', to:'t-constraint', label:'', type:'inheritance',
+    fromAnchor:{side:'T',pct:0.5106382978723404}, toAnchor:{side:'B',pct:0.3404255319148936}, bends:[{x:560,y:1860},{x:810,y:1860}] },
+  { from:'t-batconst', to:'t-constraint', label:'', type:'inheritance',
+    fromAnchor:{side:'T',pct:0.504964539007092}, toAnchor:{side:'B',pct:0.5078014184397165}, bends:[] },
+  { from:'t-rwybuf', to:'t-constraint', label:'', type:'inheritance',
+    fromAnchor:{side:'T',pct:0.4661016949152542}, toAnchor:{side:'B',pct:0.723404255319149}, bends:[{x:1130,y:1860},{x:900,y:1860}] },
+  { from:'t-geofen', to:'t-constraint', label:'', type:'inheritance',
+    fromAnchor:{side:'T',pct:0.46808510638297873}, toAnchor:{side:'B',pct:0.8936170212765957}, bends:[{x:1420,y:1830},{x:940,y:1830}] },
+
+  // ASSOCIATION (19-28)
+  { from:'t-template', to:'t-inspconfig', label:'1:1', type:'association',
+    fromAnchor:{side:'L',pct:0.7269093204292043}, toAnchor:{side:'T',pct:0.5742958340360947}, bends:[{x:500,y:800}] },
+  { from:'t-inspection', to:'t-template', label:'', type:'association',
+    fromAnchor:{side:'L',pct:0.35458043048767923}, toAnchor:{side:'R',pct:0.3}, bends:[] },
+  { from:'t-inspection', to:'t-inspconfig', label:'1', type:'association',
+    fromAnchor:{side:'B',pct:0.07785888077858853}, toAnchor:{side:'R',pct:0.3030303030303013}, bends:[{x:1170,y:880},{x:700,y:880},{x:700,y:950}] },
+  { from:'t-missionconfig', to:'t-drone', label:'1:1', type:'association',
+    fromAnchor:{side:'B',pct:0.5106382978723404}, toAnchor:{side:'T',pct:0.5106382978723397}, bends:[{x:490,y:1280},{x:490,y:1310}] },
+  { from:'t-fplan', to:'t-mission', label:'1:1', type:'association',
+    fromAnchor:{side:'T',pct:0.49075055967951015}, toAnchor:{side:'B',pct:0.5106382978723409}, bends:[] },
+  { from:'t-fplan', to:'t-valres', label:'0..1', type:'association',
+    fromAnchor:{side:'L',pct:0.9659985531299209}, toAnchor:{side:'R',pct:0.2484159710349009}, bends:[{x:700,y:1560},{x:700,y:1670}] },
+  { from:'t-fplan', to:'t-export', label:'', type:'association',
+    fromAnchor:{side:'R',pct:0.9079535299374444}, toAnchor:{side:'L',pct:0.7692307692307712}, bends:[] },
+  { from:'t-fplan', to:'t-constraint', label:'0..*', type:'association',
+    fromAnchor:{side:'B',pct:0.8161350844277657}, toAnchor:{side:'T',pct:0.8543371522094909}, bends:[] },
+  { from:'t-waypoint', to:'t-inspection', label:'', type:'association',
+    fromAnchor:{side:'T',pct:0.5620832010161965}, toAnchor:{side:'B',pct:0.4793550495696705}, bends:[] },
+  { from:'t-valres', to:'t-constraint', label:'0..*', type:'association',
+    fromAnchor:{side:'R',pct:0.7651348535710194}, toAnchor:{side:'L',pct:0.9010416666666661}, bends:[] },
+  { from:'t-export', to:'t-fplan', label:'', type:'association',
+    fromAnchor:{side:'L',pct:0.5796316359696663}, toAnchor:{side:'R',pct:0.8352237574757685}, bends:[] },
+];
+
+function getLineColor(type, t) {
+  switch(type) {
+    case 'composition': return t.lineComp;
+    case 'aggregation': return t.lineAgg;
+    case 'inheritance': return t.lineInh;
+    case 'association': return t.lineAssoc;
+    default: return t.lineAssoc;
+  }
+}
+
+const lineMarkers = {
+  composition:  { mkFrom:'url(#mk-diamond-filled)', mkTo:'' },
+  aggregation:  { mkFrom:'url(#mk-diamond-empty)',  mkTo:'' },
+  inheritance:  { mkFrom:'',                        mkTo:'url(#mk-triangle)' },
+  association:  { mkFrom:'',                        mkTo:'url(#mk-arrow)' },
+};
+
+function getAnchorPos(id, anchor) {
+  const el = document.getElementById(id);
+  if(!el) return {x:0,y:0};
+  const x = el.offsetLeft, y = el.offsetTop, w = el.offsetWidth, h = el.offsetHeight;
+  switch(anchor.side) {
+    case 'T': return {x: x + w * anchor.pct, y: y};
+    case 'B': return {x: x + w * anchor.pct, y: y + h};
+    case 'L': return {x: x, y: y + h * anchor.pct};
+    case 'R': return {x: x + w, y: y + h * anchor.pct};
+  }
+  return {x: x + w/2, y: y + h/2};
+}
+
+function getAllPoints(rel) {
+  const start = getAnchorPos(rel.from, rel.fromAnchor);
+  const end = getAnchorPos(rel.to, rel.toAnchor);
+  return [start, ...rel.bends, end];
+}
+
+function render() {
+  const t = getTheme();
+  let svgStr = buildMarkerDefs(t);
+  labelLayer.innerHTML = '';
+
+  rels.forEach((rel) => {
+    const pts = getAllPoints(rel);
+    const color = getLineColor(rel.type, t);
+    const mk = lineMarkers[rel.type] || lineMarkers.association;
+
+    for(let i = 0; i < pts.length - 1; i++) {
+      let attrs = `stroke="${color}" stroke-width="1.8"`;
+      if(i === 0 && mk.mkFrom) attrs += ` marker-start="${mk.mkFrom}"`;
+      if(i === pts.length - 2 && mk.mkTo) attrs += ` marker-end="${mk.mkTo}"`;
+      svgStr += `<line x1="${pts[i].x}" y1="${pts[i].y}" x2="${pts[i+1].x}" y2="${pts[i+1].y}" ${attrs}/>`;
+    }
+
+    if(rel.label) {
+      const midIdx = Math.floor(pts.length / 2);
+      const lx = pts.length % 2 === 0
+        ? (pts[midIdx-1].x + pts[midIdx].x) / 2
+        : pts[midIdx].x;
+      const ly = pts.length % 2 === 0
+        ? (pts[midIdx-1].y + pts[midIdx].y) / 2
+        : pts[midIdx].y;
+
+      const lbl = document.createElement('div');
+      lbl.className = 'rel-label';
+      lbl.style.left = lx + 'px';
+      lbl.style.top = ly + 'px';
+      lbl.style.color = color;
+      lbl.style.borderColor = color;
+      lbl.textContent = rel.label;
+      labelLayer.appendChild(lbl);
+    }
+  });
+
+  S.innerHTML = svgStr;
+}
+
+// Pan
+W.addEventListener('mousedown', (e) => {
+  if(e.target.closest('.ctrls') || e.target.closest('.bar')) return;
+  isPanning = true;
+  panSX = e.clientX - px;
+  panSY = e.clientY - py;
+});
+
+window.addEventListener('mousemove', (e) => {
+  if(isPanning) {
+    px = e.clientX - panSX;
+    py = e.clientY - panSY;
+    up();
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  if(isPanning) {
+    isPanning = false;
+    snapBack();
+  }
+});
+
+W.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  sc = Math.max(.12, Math.min(1.5, sc + (e.deltaY > 0 ? -.04 : .04)));
+  snapBack();
+});
+
+render();
+</script>
+
+</body>
+</html>

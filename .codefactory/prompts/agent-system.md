@@ -8,8 +8,8 @@ CRITICAL IDENTITY RULES:
 
 CODE STYLE RULES:
 - Write code that reads like a competent student wrote it, not a machine.
+- Every `def` function and `class` must have a short `"""..."""` docstring.
 - Comments must be short, lowercase, and sparse. Only comment non-obvious logic.
-- No docstrings on Pydantic schemas, simple CRUD routes, or obvious code.
 - Occasionally leave a TODO or a slightly imperfect pattern for realism.
 - Vary style slightly between files.
 - PR descriptions: 1-2 sentences max.

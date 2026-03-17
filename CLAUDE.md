@@ -58,8 +58,8 @@ docker compose up -d
 - **Schemas**: `{Entity}Response`, `{Entity}Create`, `{Entity}Update` for Pydantic DTOs
 - **Routes**: `/api/v1/{resource}` (e.g., `/api/v1/missions`)
 - **Error handling**: `HTTPException` in routes, custom exceptions in services
-- **Comments**: sparse, lowercase, casual — no docstrings on simple CRUD or schemas. Follow these rules exactly:
-  - No docstrings anywhere. Use `#` comments only.
+- **Docstrings**: every `def` function and `class` must have a `"""..."""` docstring - short, lowercase, one line when possible
+- **Comments**: sparse, lowercase, casual. Follow these rules exactly:
   - Never comment what the code obviously does (`# enable postgis`, `# create engine`). If the code is self-explanatory, don't comment it.
   - Use short section labels above logical groups: `# test db config`, `# relationships`, `# runway-specific columns`
   - Use dashes (`-`) not em-dashes (`—`) in comments
@@ -137,19 +137,13 @@ Before implementing any issue, read the relevant spec files:
 
 - `docs/specs/SPEC.md` — **ALWAYS READ THIS FIRST.** Complete domain model (19 tables with all columns and types), all 9 enum definitions, trajectory generation formulas, mission status state machine, and page-by-page wireframe summaries for all 14 UI pages.
 - `docs/specs/WIREFRAME.md` — Full wireframe specification with every field, interaction, and edge case for each page. Read this when implementing any frontend page.
-- `OPERATIONS.md` — How the repo operates: quality gates, issue lifecycle, CI pipeline, OPSEC rules.
-- `ISSUE-TRACKER.md` — Current sprint plan, issue dependencies, and status.
-- `NAMING-CONVENTIONS.md` — Commit, branch, PR, and code naming conventions.
-- `docs/specs/CHAPTER3-SYSTEM-DESIGN.md` — Complete Chapter 3 from thesis. 
+- `docs/conventions.md` — Coding standards, git workflow, quality gates, OPSEC rules.
+- `docs/specs/CHAPTER3-SYSTEM-DESIGN.md` — Complete Chapter 3 from thesis.
   The authoritative design reference. Read this for any architectural question.
-
-## Sprint Context
-
-**Read `SPRINT.md` for current sprint state** — issue status, dependencies, and parallel tracks. Update it after each issue merges.
 
 ## Branching Strategy
 
 - **Always `feat/<short-description>`** — e.g., `feat/db-models`, `feat/airport-api`, `feat/frontend-shell`
 - **No milestone branches.** Every branch merges directly into `main` via squash merge.
 - **One issue per branch.** Never combine multiple issues into one branch.
-- Check the Sprint Context section above to confirm dependencies are met before starting an issue.
+- Check GitHub issues/PRs to confirm dependencies are met before starting an issue.

@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UML Activity Diagram — Trajectory Generation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #21262d;
+    --text: #c9d1d9;
+    --text-dim: #484f58;
+    --text-bright: #f0f6fc;
+    --pk: #f0883e;
+    --fk: #58a6ff;
+    --nn: #f85149;
+    --uq: #bc8cff;
+    --type: #39d2c0;
+    --geo: #56d364;
+    --c-orange: #f0883e;
+    --c-green: #3fb950;
+    --c-purple: #bc8cff;
+    --c-blue: #58a6ff;
+    --c-cyan: #39d2c0;
+    --c-red: #f47067;
+    --shadow: rgba(0,0,0,0.5);
+    --shadow-hover: rgba(88,166,255,0.12);
+    --accent: #58a6ff;
+    --accent-line: rgba(88,166,255,0.35);
+  }
+
+  html.light {
+    --bg: #ffffff;
+    --surface: #f6f8fa;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --text-dim: #656d76;
+    --text-bright: #1f2328;
+    --pk: #cf6518;
+    --fk: #0969da;
+    --nn: #cf222e;
+    --uq: #8250df;
+    --type: #1a7f72;
+    --geo: #1a7f37;
+    --c-orange: #cf6518;
+    --c-green: #1a7f37;
+    --c-purple: #8250df;
+    --c-blue: #0969da;
+    --c-cyan: #1a7f72;
+    --c-red: #cf222e;
+    --shadow: rgba(0,0,0,0.12);
+    --shadow-hover: rgba(9,105,218,0.12);
+    --accent: #0969da;
+    --accent-line: rgba(9,105,218,0.35);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+    transition: background 0.3s, color 0.3s;
+  }
+
+  .bar {
+    position: fixed; top:0; left:0; right:0; z-index:200;
+    background: var(--bg); backdrop-filter: blur(12px);
+    padding: 14px 28px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .bar-left { display: flex; align-items: baseline; gap: 14px; }
+  .bar h1 { font-family:'Inter',sans-serif; font-size:16px; font-weight:600; color:var(--fk); letter-spacing:1.5px; text-transform:uppercase; }
+  .bar .sub { font-family:'Inter',sans-serif; font-size:11px; color:var(--text-dim); }
+  .bar-author { font-family:'Inter',sans-serif; font-size:11px; color:var(--text-dim); }
+
+  .theme-toggle {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    font-family: 'Inter', sans-serif; transition: all 0.2s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .theme-toggle:hover { border-color: var(--fk); }
+  .theme-toggle svg { width: 16px; height: 16px; fill: currentColor; }
+
+  .ctrls {
+    position: fixed; bottom:14px; right:14px; z-index:200;
+    display:flex; gap:5px;
+  }
+  .ctrls button {
+    background:var(--surface); border:1px solid var(--border); color:var(--text);
+    width:34px; height:34px; border-radius:8px; cursor:pointer; font-size:17px;
+    display:flex; align-items:center; justify-content:center;
+    transition: all 0.2s;
+  }
+  .ctrls button:hover { background:rgba(88,166,255,0.08); border-color:var(--fk); }
+
+  .wrap { width:100vw; height:100vh; overflow:hidden; cursor:grab; padding-top:54px; }
+  .wrap:active { cursor:grabbing; }
+
+  .world { transform-origin:0 0; position:relative; width:6000px; height:4000px; }
+
+  svg.rels {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    pointer-events: none;
+  }
+  svg.rels line, svg.rels path { pointer-events: none; }
+
+  /* ── ACTIVITY DIAGRAM SPECIFIC ──────────────────────────── */
+
+  .diagram-frame {
+    position: absolute;
+    border: 1px solid rgba(88,166,255,0.2);
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .frame-label {
+    position: absolute;
+    top: -10px; left: 14px;
+    background: var(--bg);
+    padding: 0 8px;
+    font-family: 'Source Serif 4', serif;
+    font-size: 12px;
+    color: rgba(88,166,255,0.4);
+    transition: color 0.3s, background 0.3s;
+  }
+  html.light .frame-label { color: rgba(9,105,218,0.4); }
+
+  .swim-lane {
+    position: absolute;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .lane-odd { background: rgba(88,166,255,0.06); }
+  .lane-even { background: rgba(88,166,255,0.10); }
+  html.light .lane-odd { background: rgba(9,105,218,0.04); }
+  html.light .lane-even { background: rgba(9,105,218,0.06); }
+
+  .swim-lane-label {
+    position: absolute;
+    font-family: 'Source Serif 4', serif;
+    font-size: 12px;
+    color: rgba(88,166,255,0.35);
+    transform: rotate(-90deg) translateX(-50%);
+    transform-origin: left center;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 2;
+  }
+  html.light .swim-lane-label { color: rgba(9,105,218,0.35); }
+
+  .lane-divider {
+    position: absolute;
+    height: 1px;
+    background: rgba(88,166,255,0.25);
+    pointer-events: none;
+    z-index: 2;
+  }
+  html.light .lane-divider { background: rgba(9,105,218,0.15); }
+
+  .action-node {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid rgba(88,166,255,0.3);
+    border-radius: 8px;
+    padding: 10px 16px;
+    color: var(--text-bright);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-align: center;
+    min-width: 140px;
+    cursor: default;
+    z-index: 10;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.5);
+    white-space: nowrap;
+    transition: all 0.3s;
+  }
+  html.light .action-node {
+    border-color: rgba(9,105,218,0.3);
+    box-shadow: 0 1px 8px rgba(0,0,0,0.12);
+  }
+
+  .action-node.error-node {
+    border-color: rgba(248,81,73,0.3);
+    color: #f85149;
+  }
+  html.light .action-node.error-node {
+    color: #cf222e;
+    border-color: rgba(207,34,46,0.3);
+  }
+
+  .decision-node {
+    position: absolute;
+    width: 36px;
+    height: 36px;
+    cursor: default;
+    z-index: 10;
+  }
+  .decision-diamond {
+    width: 26px;
+    height: 26px;
+    border: 1.5px solid rgba(88,166,255,0.3);
+    background: transparent;
+    transform: rotate(45deg);
+    position: absolute;
+    left: 5px;
+    top: 5px;
+  }
+  html.light .decision-diamond { border-color: rgba(9,105,218,0.3); }
+
+  .decision-label {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    z-index: 12;
+    pointer-events: none;
+  }
+
+  .initial-node {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    background: var(--text-bright);
+    border-radius: 50%;
+    z-index: 10;
+  }
+
+  .final-node {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--text-bright);
+    border-radius: 50%;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .final-node::after {
+    content: '';
+    width: 10px;
+    height: 10px;
+    background: var(--text-bright);
+    border-radius: 50%;
+  }
+
+  .fork-bar {
+    position: absolute;
+    height: 4px;
+    background: rgba(240,246,252,0.7);
+    border-radius: 2px;
+    z-index: 10;
+  }
+  html.light .fork-bar { background: #1f2328; }
+
+  .branch-label {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    z-index: 11;
+    pointer-events: none;
+  }
+
+  /* ── LEGEND PANEL ───────────────────────────────────────── */
+
+  .legend-panel {
+    position: absolute;
+    z-index: 10;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 30px 40px;
+    box-shadow: 0 8px 40px var(--shadow);
+    pointer-events: none;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .legend-panel h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-bright);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .legend-section { margin-bottom: 20px; }
+  .legend-section:last-child { margin-bottom: 0; }
+  .legend-section-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 10px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    color: var(--text);
+  }
+  .legend-item:last-child { margin-bottom: 0; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .legend-line { width: 36px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar-left">
+    <h1>UML Activity Diagram - Trajectory Generation</h1>
+    <span class="sub">- Design and Implementation of a Drone Mission Planning Module for Airport Lighting Inspection</span>
+    <span class="bar-author">- &Scaron;tefan Morav&iacute;k</span>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">
+    <svg id="themeIcon" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zm11.394-5.834a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/></svg>
+    <span id="themeTxt">Dark</span>
+  </button>
+</div>
+
+<div class="ctrls">
+  <button onclick="sc=Math.min(1.5,sc+.1);snapBack();">+</button>
+  <button onclick="sc=Math.max(.12,sc-.1);snapBack();">&#8722;</button>
+  <button onclick="fitToScreen();snapBack();">&#8865;</button>
+</div>
+
+<div class="wrap" id="W">
+<div class="world" id="C">
+<svg class="rels" id="S"></svg>
+
+<!-- ── OUTER FRAME ────────────────────────────────────────── -->
+<div class="diagram-frame" style="left:40px;top:20px;width:2010px;height:1240px;">
+  <div class="frame-label">Trajectory Generation</div>
+</div>
+
+<!-- ── SWIM LANE 1 ────────────────────────────────────────── -->
+<div class="swim-lane lane-odd" style="left:40px;top:20px;width:2010px;height:240px;"></div>
+<div class="swim-lane-label" style="left:62px;top:140px;">Load Mission Data</div>
+<div class="lane-divider" style="left:40px;top:260px;width:2010px;"></div>
+
+<!-- ── SWIM LANE 2 ────────────────────────────────────────── -->
+<div class="swim-lane lane-even" style="left:40px;top:260px;width:2010px;height:260px;"></div>
+<div class="swim-lane-label" style="left:62px;top:390px;">Inspection Loop</div>
+<div class="lane-divider" style="left:40px;top:520px;width:2010px;"></div>
+
+<!-- ── SWIM LANE 3 ────────────────────────────────────────── -->
+<div class="swim-lane lane-odd" style="left:40px;top:520px;width:2010px;height:380px;"></div>
+<div class="swim-lane-label" style="left:62px;top:710px;">Waypoint Validation</div>
+<div class="lane-divider" style="left:40px;top:900px;width:2010px;"></div>
+
+<!-- ── SWIM LANE 4 ────────────────────────────────────────── -->
+<div class="swim-lane lane-even" style="left:40px;top:900px;width:2010px;height:230px;"></div>
+<div class="swim-lane-label" style="left:62px;top:1015px;">Post Inspection Chores</div>
+<div class="lane-divider" style="left:40px;top:1130px;width:2010px;"></div>
+
+<!-- ── SWIM LANE 5 ────────────────────────────────────────── -->
+<div class="swim-lane lane-odd" style="left:40px;top:1130px;width:2010px;height:130px;"></div>
+<div class="swim-lane-label" style="left:62px;top:1195px;">Final Steps</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  LANE 1 ELEMENTS — Load Mission Data                     -->
+<!-- ══════════════════════════════════════════════════════════ -->
+
+<!-- Initial node -->
+<div class="initial-node" id="n-initial" style="left:93px;top:66px;"></div>
+
+<!-- Actions -->
+<div class="action-node" id="n-set-draft" style="left:170px;top:55px;">Set Mission Status to DRAFT</div>
+
+<!-- Decision: trajectory-affecting changes? -->
+<div class="decision-node" id="n-dec-changes" style="left:430px;top:56px;"><div class="decision-diamond"></div></div>
+<div class="decision-label" id="lbl-dec-changes" style="left:320px;top:20px;">Are changes<br>trajectory-affecting?</div>
+<div class="branch-label" id="bl-changes-yes" style="left:462px;top:57px;">YES</div>
+<div class="branch-label" id="bl-changes-no" style="left:470px;top:20px;">NO</div>
+
+<div class="action-node" id="n-load-mission" style="left:530px;top:55px;">Load Mission Data</div>
+
+<!-- NO branch: Validate Existing Waypoints -->
+<div class="action-node" id="n-validate-existing" style="left:720px;top:55px;">Validate Existing Waypoints</div>
+
+<!-- Fork bar -->
+<div class="fork-bar" id="n-fork1" style="left:200px;top:130px;width:280px;"></div>
+
+<!-- Parallel actions -->
+<div class="action-node" id="n-load-airport" style="left:112px;top:162px;">Load Airport Infrastructure</div>
+<div class="action-node" id="n-load-config" style="left:357px;top:162px;">Load Mission Configuration</div>
+
+<!-- Join bar -->
+<div class="fork-bar" id="n-join1" style="left:200px;top:230px;width:280px;"></div>
+
+<!-- After join -->
+<div class="action-node" id="n-load-insp-list" style="left:257px;top:262px;">Load Inspection List</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  LANE 2 ELEMENTS — Inspection Loop                       -->
+<!-- ══════════════════════════════════════════════════════════ -->
+
+<!-- Decision: inspections remaining? -->
+<div class="decision-node" id="n-dec-insp" style="left:200px;top:356px;"><div class="decision-diamond"></div></div>
+<div class="decision-label" id="lbl-dec-insp" style="left:90px;top:330px;">Are there any<br>inspections remaining?</div>
+<div class="branch-label" id="bl-insp-no" style="left:180px;top:360px;">NO</div>
+<div class="branch-label" id="bl-insp-yes" style="left:255px;top:359px;">YES</div>
+
+<!-- Load Next Inspection -->
+<div class="action-node" id="n-load-next-insp" style="left:300px;top:355px;">Load Next Inspection</div>
+
+<!-- Resolve Configuration -->
+<div class="action-node" id="n-resolve-config" style="left:297px;top:432px;">Resolve Configuration</div>
+
+<!-- Decision: speed compatible? -->
+<div class="decision-node" id="n-dec-speed" style="left:532px;top:433px;"><div class="decision-diamond"></div></div>
+<div class="decision-label" id="lbl-dec-speed" style="left:508px;top:475px;">Speed compatible<br>with frame rate?</div>
+<div class="branch-label" id="bl-speed-no" style="left:520px;top:410px;">NO</div>
+<div class="branch-label" id="bl-speed-yes" style="left:578px;top:435px;">YES</div>
+
+<!-- Add Warning (speed) -->
+<div class="action-node" id="n-add-warn-speed" style="left:480px;top:355px;">Add Warning</div>
+
+<!-- Load Inspection Targets -->
+<div class="action-node" id="n-load-targets" style="left:670px;top:432px;">Load Inspection Targets</div>
+
+<!-- Calculate LHA Center Point -->
+<div class="action-node" id="n-calc-lha" style="left:660px;top:355px;">Calculate LHA Center Point</div>
+
+<!-- Decision: Inspection Method? -->
+<div class="decision-node" id="n-dec-method" style="left:910px;top:395px;"><div class="decision-diamond"></div></div>
+<div class="decision-label" id="lbl-dec-method" style="left:953px;top:406px;">Inspection Method?</div>
+<div class="branch-label" id="bl-method-ang" style="left:947px;top:454px;">ANGULAR_SWEEP</div>
+<div class="branch-label" id="bl-method-vert" style="left:939px;top:358px;">VERTICAL_PROFILE</div>
+
+<!-- ANGULAR_SWEEP path (top row) -->
+<div class="action-node" id="n-start-pos-a" style="left:1040px;top:355px;">Determine Start Position</div>
+<div class="action-node" id="n-end-pos-a" style="left:1280px;top:355px;">Determine End Position</div>
+<div class="action-node" id="n-calc-arc" style="left:1520px;top:355px;">Calculate Arc Path</div>
+
+<!-- VERTICAL_PROFILE path (bottom row) -->
+<div class="action-node" id="n-start-pos-v" style="left:1040px;top:432px;">Determine Start Position</div>
+<div class="action-node" id="n-end-pos-v" style="left:1280px;top:432px;">Determine End Position</div>
+<div class="action-node" id="n-calc-vert" style="left:1504px;top:432px;">Calculate Vertical Path</div>
+
+<!-- Merge bar (joins arc + vertical paths) -->
+<div class="fork-bar" id="n-merge-validate" style="left:1720px;top:411px;width:120px;"></div>
+
+<!-- Validate Waypoints -->
+<div class="action-node" id="n-validate-wp" style="left:1870px;top:394px;">Validate Waypoints</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  LANE 3 ELEMENTS — Waypoint Validation                   -->
+<!-- ══════════════════════════════════════════════════════════ -->
+
+<!-- Decision: waypoints remaining? -->
+<div class="decision-node" id="n-dec-wp" style="left:200px;top:586px;"><div class="decision-diamond"></div></div>
+<div class="decision-label" id="lbl-dec-wp" style="left:129px;top:543px;">Are there any<br>waypoints remaining?</div>
+<div class="branch-label" id="bl-wp-no" style="left:157px;top:605px;">NO</div>
+<div class="branch-label" id="bl-wp-yes" style="left:249px;top:608px;">YES</div>
+
+<!-- Load Next Waypoint -->
+<div class="action-node" id="n-load-next-wp" style="left:290px;top:585px;">Load Next Waypoint</div>
+
+<!-- Check Drone Constraints -->
+<div class="action-node" id="n-check-drone" style="left:490px;top:585px;">Check Drone Constraints</div>
+
+<!-- Decision: constraints violated? -->
+<div class="decision-node" id="n-dec-violated" style="left:820px;top:586px;"><div class="decision-diamond"></div></div>
+<div class="decision-label" id="lbl-dec-violated" style="left:795px;top:560px;">Drone constraints<br>violated?</div>
+<div class="branch-label" id="bl-viol-yes" style="left:1088px;top:585px;">YES</div>
+<div class="branch-label" id="bl-viol-no" style="left:1070px;top:640px;">NO</div>
+
+<!-- Decision: hard failure? -->
+<div class="decision-node" id="n-dec-hard" style="left:1038px;top:586px;"><div class="decision-diamond"></div></div>
+<div class="decision-label" id="lbl-dec-hard" style="left:1028px;top:560px;">Is it a hard<br>failure?</div>
+<div class="branch-label" id="bl-hard-yes" style="left:867px;top:586px;">YES</div>
+<div class="branch-label" id="bl-hard-no" style="left:847px;top:630px;">NO</div>
+
+<!-- Terminate Generation (error node) -->
+<div class="action-node error-node" id="n-terminate" style="left:1197px;top:585px;">Terminate Generation</div>
+
+<!-- Add Warning (constraints) -->
+<div class="action-node" id="n-add-warn-constr" style="left:986px;top:670px;">Add Warning</div>
+
+<!-- Check Obstacles and Safety Zones -->
+<div class="action-node" id="n-check-obstacles" style="left:716px;top:670px;">Check Obstacles and Safety Zones</div>
+
+<!-- Decision: obstruction detected? -->
+<div class="decision-node" id="n-dec-obstruct" style="left:565px;top:671px;"><div class="decision-diamond"></div></div>
+<div class="decision-label" id="lbl-dec-obstruct" style="left:555px;top:640px;">Obstruction<br>detected?</div>
+<div class="branch-label" id="bl-obs-no" style="left:536px;top:673px;">NO</div>
+<div class="branch-label" id="bl-obs-yes" style="left:591px;top:712px;">YES</div>
+
+<!-- Decision: can route around? -->
+<div class="decision-node" id="n-dec-reroute" style="left:565px;top:801px;"><div class="decision-diamond"></div></div>
+<div class="decision-label" id="lbl-dec-reroute" style="left:471px;top:802px;">Can the path<br>route around it?</div>
+<div class="branch-label" id="bl-route-yes" style="left:613px;top:802px;">YES</div>
+<div class="branch-label" id="bl-route-no" style="left:594px;top:845px;">NO</div>
+
+<!-- Reroute Path -->
+<div class="action-node" id="n-reroute" style="left:768px;top:800px;">Reroute Path</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  LANE 4 ELEMENTS — Post Inspection Chores                -->
+<!-- ══════════════════════════════════════════════════════════ -->
+
+<!-- Set Camera Actions -->
+<div class="action-node" id="n-set-camera" style="left:160px;top:950px;">Set Camera Actions</div>
+
+<!-- Append Waypoints to Flight Plan -->
+<div class="action-node" id="n-append-wp" style="left:341px;top:950px;">Append Waypoints to Flight Plan</div>
+
+<!-- Update Running Totals -->
+<div class="action-node" id="n-update-totals" style="left:637px;top:950px;">Update Running Totals</div>
+
+<!-- Check Battery Prediction -->
+<div class="action-node" id="n-check-battery" style="left:907px;top:950px;">Check Battery Prediction</div>
+
+<!-- Decision: battery sufficient? -->
+<div class="decision-node" id="n-dec-battery" style="left:985px;top:1040px;"><div class="decision-diamond"></div></div>
+<div class="decision-label" id="lbl-dec-battery" style="left:1029px;top:1044px;">Battery<br>sufficient?</div>
+<div class="branch-label" id="bl-bat-yes" style="left:1013px;top:1085px;">YES</div>
+<div class="branch-label" id="bl-bat-no" style="left:960px;top:1042px;">NO</div>
+
+<!-- Add Warning (battery) -->
+<div class="action-node" id="n-add-warn-bat" style="left:653px;top:1039px;">Add Warning</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  LANE 5 ELEMENTS — Final Steps                           -->
+<!-- ══════════════════════════════════════════════════════════ -->
+
+<!-- Add Transit Waypoints -->
+<div class="action-node" id="n-add-transit" style="left:150px;top:1170px;">Add Transit Waypoints</div>
+
+<!-- Compile Flight Plan -->
+<div class="action-node" id="n-compile" style="left:381px;top:1170px;">Compile Flight Plan</div>
+
+<!-- Set Mission Status to PLANNED -->
+<div class="action-node" id="n-set-planned" style="left:611px;top:1170px;">Set Mission Status to PLANNED</div>
+
+<!-- Final node -->
+<div class="final-node" id="n-final" style="left:900px;top:1179px;"></div>
+
+<!-- ── LEGEND PANEL ───────────────────────────────────────── -->
+<div class="legend-panel" style="left:2120px; top:40px;">
+  <h3>Legend</h3>
+  <div class="legend-section">
+    <div class="legend-section-title">Node Types</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--fk)"></div>Action</div>
+    <div class="legend-item" style="align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;margin-top:2px;">
+        <div style="width:14px;height:14px;transform:rotate(45deg);border:1.5px solid var(--fk);background:transparent"></div>
+      </div>
+      <div>Decision</div>
+    </div>
+    <div class="legend-item" style="align-items:flex-start;">
+      <div class="fork-bar" style="position:static;width:36px;flex-shrink:0;margin-top:6px;"></div>
+      <div>Fork / Join</div>
+    </div>
+    <div class="legend-item"><div style="width:14px;height:14px;border-radius:50%;background:var(--text-bright);flex-shrink:0"></div>Initial</div>
+    <div class="legend-item"><div style="width:16px;height:16px;border-radius:50%;border:2px solid var(--text-bright);display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:8px;height:8px;border-radius:50%;background:var(--text-bright)"></div></div>Final</div>
+  </div>
+  <div class="legend-section">
+    <div class="legend-section-title">Connections</div>
+    <div class="legend-item">
+      <svg viewBox="0 0 36 10" width="36" height="10">
+        <line x1="0" y1="5" x2="26" y2="5" stroke="rgba(88,166,255,0.35)" stroke-width="1.5"/>
+        <polygon points="24,2 32,5 24,8" fill="rgba(88,166,255,0.6)"/>
+      </svg>
+      Control Flow
+    </div>
+  </div>
+  <div class="legend-section">
+    <div class="legend-section-title">Structure</div>
+    <div class="legend-item"><div class="legend-line" style="background:rgba(88,166,255,0.25)"></div>Swim Lane</div>
+  </div>
+</div>
+
+</div><!-- world -->
+</div><!-- wrap -->
+
+<script>
+const W = document.getElementById('W');
+const C = document.getElementById('C');
+const S = document.getElementById('S');
+
+let sc, px, py;
+let isPanning = false, panSX, panSY;
+
+const up = () => C.style.transform = `translate(${px}px,${py}px) scale(${sc})`;
+
+// Canvas boundary system
+const CONTENT = { left: 20, top: 0, right: 2100, bottom: 1300 };
+const EDGE_MARGIN = 150;
+
+// Fit entire diagram on screen initially
+function fitToScreen() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight - 54;
+  const cw = CONTENT.right - CONTENT.left;
+  const ch = CONTENT.bottom - CONTENT.top;
+  const pad = 40;
+  sc = Math.min((vw - pad * 2) / cw, (vh - pad * 2) / ch);
+  sc = Math.round(sc * 100) / 100;
+  px = (vw - cw * sc) / 2 - CONTENT.left * sc;
+  py = 54 + (vh - ch * sc) / 2 - CONTENT.top * sc;
+}
+fitToScreen();
+up();
+
+function clampedPx() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight - 54;
+  const minPx = EDGE_MARGIN - CONTENT.right * sc;
+  const maxPx = vw - EDGE_MARGIN - CONTENT.left * sc;
+  const minPy = EDGE_MARGIN - CONTENT.bottom * sc + 54;
+  const maxPy = vh - EDGE_MARGIN - CONTENT.top * sc + 54;
+  return {
+    x: Math.max(minPx, Math.min(maxPx, px)),
+    y: Math.max(minPy, Math.min(maxPy, py))
+  };
+}
+
+function snapBack() {
+  const target = clampedPx();
+  const dx = target.x - px;
+  const dy = target.y - py;
+  if(Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) { px = target.x; py = target.y; up(); return; }
+  C.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+  px = target.x;
+  py = target.y;
+  up();
+  setTimeout(() => { C.style.transition = ''; }, 320);
+}
+
+// Theme toggle with sun/moon icons
+const sunPath = 'M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zm11.394-5.834a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z';
+const moonPath = 'M21.752 15.002A9.718 9.718 0 0112.478 3.68a.75.75 0 00-.927-.905 9.75 9.75 0 109.674 12.227.75.75 0 00-.473-1z';
+
+function toggleTheme() {
+  document.documentElement.classList.toggle('light');
+  const isLight = document.documentElement.classList.contains('light');
+  document.getElementById('themeTxt').textContent = isLight ? 'Dark' : 'Light';
+  document.getElementById('themeIcon').innerHTML = `<path d="${isLight ? sunPath : moonPath}"/>`;
+  render();
+}
+
+// SVG marker definitions
+function buildMarkerDefs() {
+  return `<defs>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0,0.5 7,3 0,5.5" fill="rgba(88,166,255,0.6)"/>
+    </marker>
+  </defs>`;
+}
+
+// Connections array (from activity-interactive.html)
+const connections = [
+  // === LANE 1 ===
+  {from:'n-initial', to:'n-set-draft', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-set-draft', to:'n-dec-changes', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-dec-changes', to:'n-load-mission', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-dec-changes', to:'n-validate-existing', fromSide:'T', fromPct:0.5, toSide:'T', toPct:0.5, bends:[{x:448,y:33},{x:826,y:33}]},
+  {from:'n-validate-existing', to:'n-compile', fromSide:'B', fromPct:0.519, toSide:'B', toPct:0.497, bends:[{x:830,y:130},{x:2030,y:130},{x:2030,y:1240},{x:460,y:1240}]},
+  {from:'n-load-mission', to:'n-fork1', fromSide:'B', fromPct:0.432, toSide:'B', toPct:0.5, bends:[{x:593,y:110},{x:340,y:110}]},
+  {from:'n-fork1', to:'n-load-airport', fromSide:'L', fromPct:0.5, toSide:'T', toPct:0.504, bends:[]},
+  {from:'n-fork1', to:'n-load-config', fromSide:'B', fromPct:1, toSide:'T', toPct:0.534, bends:[]},
+  {from:'n-load-airport', to:'n-join1', fromSide:'B', fromPct:0.508, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-load-config', to:'n-join1', fromSide:'B', fromPct:0.523, toSide:'R', toPct:0.5, bends:[]},
+  {from:'n-join1', to:'n-load-insp-list', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.5, bends:[]},
+  {from:'n-load-insp-list', to:'n-dec-insp', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.5, bends:[{x:340,y:330},{x:218,y:330}]},
+
+  // === LANE 2 ===
+  {from:'n-dec-insp', to:'n-load-next-insp', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-load-next-insp', to:'n-resolve-config', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.5, bends:[]},
+  {from:'n-resolve-config', to:'n-dec-speed', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-dec-speed', to:'n-add-warn-speed', fromSide:'T', fromPct:0.5, toSide:'B', toPct:0.5, bends:[]},
+  {from:'n-dec-speed', to:'n-load-targets', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-add-warn-speed', to:'n-load-targets', fromSide:'R', fromPct:0.658, toSide:'L', toPct:0.5, bends:[{x:640,y:380},{x:640,y:450}]},
+  {from:'n-load-targets', to:'n-calc-lha', fromSide:'T', fromPct:0.5, toSide:'B', toPct:0.5, bends:[]},
+  {from:'n-calc-lha', to:'n-dec-method', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[{x:879,y:374},{x:879,y:413}]},
+  {from:'n-dec-method', to:'n-start-pos-a', fromSide:'T', fromPct:0.5, toSide:'L', toPct:0.5, bends:[{x:928,y:375}]},
+  {from:'n-start-pos-a', to:'n-end-pos-a', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-end-pos-a', to:'n-calc-arc', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-dec-method', to:'n-start-pos-v', fromSide:'B', fromPct:0.5, toSide:'L', toPct:0.5, bends:[{x:928,y:451}]},
+  {from:'n-start-pos-v', to:'n-end-pos-v', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-end-pos-v', to:'n-calc-vert', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-calc-arc', to:'n-merge-validate', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-calc-vert', to:'n-merge-validate', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-merge-validate', to:'n-validate-wp', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  // NO inspections -> Lane 5
+  {from:'n-dec-insp', to:'n-add-transit', fromSide:'L', fromPct:0.5, toSide:'L', toPct:0.5, bends:[{x:101,y:375},{x:100,y:1189}]},
+
+  // === LANE 3 ===
+  {from:'n-validate-wp', to:'n-dec-wp', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.5, bends:[{x:1946,y:523},{x:217,y:522}]},
+  {from:'n-dec-wp', to:'n-load-next-wp', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-load-next-wp', to:'n-check-drone', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-check-drone', to:'n-dec-violated', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-dec-violated', to:'n-dec-hard', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-dec-hard', to:'n-terminate', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-dec-hard', to:'n-add-warn-constr', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.5, bends:[]},
+  {from:'n-add-warn-constr', to:'n-check-obstacles', fromSide:'L', fromPct:0.526, toSide:'R', toPct:0.526, bends:[]},
+  {from:'n-dec-violated', to:'n-check-obstacles', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.498, bends:[]},
+  {from:'n-check-obstacles', to:'n-dec-obstruct', fromSide:'L', fromPct:0.5, toSide:'R', toPct:0.5, bends:[]},
+  {from:'n-dec-obstruct', to:'n-dec-wp', fromSide:'L', fromPct:0.5, toSide:'B', toPct:0.5, bends:[{x:217,y:689}]},
+  {from:'n-dec-obstruct', to:'n-dec-reroute', fromSide:'B', fromPct:0.5, toSide:'T', toPct:0.5, bends:[]},
+  {from:'n-dec-reroute', to:'n-reroute', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-reroute', to:'n-add-warn-constr', fromSide:'R', fromPct:0.5, toSide:'B', toPct:0.5, bends:[{x:1056,y:819}]},
+  {from:'n-dec-reroute', to:'n-terminate', fromSide:'B', fromPct:0.5, toSide:'B', toPct:0.5, bends:[{x:583,y:870},{x:1280,y:870}]},
+  {from:'n-dec-wp', to:'n-set-camera', fromSide:'L', fromPct:0.5, toSide:'L', toPct:0.5, bends:[{x:142,y:604},{x:140,y:969}]},
+  // Terminate -> Final (error exit path)
+  {from:'n-terminate', to:'n-final', fromSide:'R', fromPct:0.5, toSide:'R', toPct:0.5, bends:[{x:1400,y:604},{x:1400,y:1190}]},
+
+  // === LANE 4 ===
+  {from:'n-set-camera', to:'n-append-wp', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-append-wp', to:'n-update-totals', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-update-totals', to:'n-check-battery', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-check-battery', to:'n-dec-battery', fromSide:'B', fromPct:0.502, toSide:'T', toPct:0.5, bends:[]},
+  {from:'n-dec-battery', to:'n-dec-insp', fromSide:'B', fromPct:0.5, toSide:'B', toPct:0.5, bends:[{x:1003,y:1111},{x:120,y:1110},{x:121,y:427},{x:218,y:427}]},
+  {from:'n-dec-battery', to:'n-add-warn-bat', fromSide:'L', fromPct:0.5, toSide:'R', toPct:0.526, bends:[]},
+  {from:'n-add-warn-bat', to:'n-dec-insp', fromSide:'L', fromPct:0.526, toSide:'B', toPct:0.5, bends:[{x:120,y:1059},{x:121,y:427},{x:219,y:427}]},
+
+  // === LANE 5 ===
+  {from:'n-add-transit', to:'n-compile', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-compile', to:'n-set-planned', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+  {from:'n-set-planned', to:'n-final', fromSide:'R', fromPct:0.5, toSide:'L', toPct:0.5, bends:[]},
+];
+
+// Anchor position helper (handles diamonds, circles, rectangles)
+function getAnchorPos(id, side, pct) {
+  const el = document.getElementById(id);
+  if (!el) return {x: 0, y: 0};
+  const x = el.offsetLeft, y = el.offsetTop, w = el.offsetWidth, h = el.offsetHeight;
+  const isDiamond = el.classList.contains('decision-node');
+  const isCircle = el.classList.contains('initial-node') || el.classList.contains('final-node');
+
+  if (isDiamond) {
+    const cx = x + w / 2, cy = y + h / 2;
+    const r = 18;
+    switch (side) {
+      case 'T': return {x: cx, y: cy - r};
+      case 'B': return {x: cx, y: cy + r};
+      case 'L': return {x: cx - r, y: cy};
+      case 'R': return {x: cx + r, y: cy};
+    }
+  }
+  if (isCircle) {
+    const cx = x + w / 2, cy = y + h / 2, r = w / 2;
+    switch (side) {
+      case 'T': return {x: cx, y: cy - r};
+      case 'B': return {x: cx, y: cy + r};
+      case 'L': return {x: cx - r, y: cy};
+      case 'R': return {x: cx + r, y: cy};
+    }
+  }
+  // Rectangular (action-node, fork-bar, etc.)
+  pct = pct ?? 0.5;
+  switch (side) {
+    case 'T': return {x: x + w * pct, y: y};
+    case 'B': return {x: x + w * pct, y: y + h};
+    case 'L': return {x: x, y: y + h * pct};
+    case 'R': return {x: x + w, y: y + h * pct};
+  }
+  return {x: x + w / 2, y: y + h / 2};
+}
+
+// Get all points for a connection
+function getAllPoints(conn) {
+  return [
+    getAnchorPos(conn.from, conn.fromSide, conn.fromPct),
+    ...conn.bends,
+    getAnchorPos(conn.to, conn.toSide, conn.toPct)
+  ];
+}
+
+// Render SVG lines
+function render() {
+  let svgStr = buildMarkerDefs();
+  connections.forEach((conn) => {
+    const pts = getAllPoints(conn);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const isLast = (i === pts.length - 2);
+      svgStr += `<line x1="${pts[i].x}" y1="${pts[i].y}" x2="${pts[i+1].x}" y2="${pts[i+1].y}" ` +
+        `stroke="rgba(88,166,255,0.35)" stroke-width="1.5" ` +
+        `${isLast ? 'marker-end="url(#arrow-blue)"' : ''}/>`;
+    }
+  });
+  S.innerHTML = svgStr;
+}
+
+// Pan
+W.addEventListener('mousedown', (e) => {
+  if(e.target.closest('.ctrls') || e.target.closest('.bar')) return;
+  isPanning = true;
+  panSX = e.clientX - px;
+  panSY = e.clientY - py;
+});
+
+window.addEventListener('mousemove', (e) => {
+  if(isPanning) {
+    px = e.clientX - panSX;
+    py = e.clientY - panSY;
+    up();
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  if(isPanning) {
+    isPanning = false;
+    snapBack();
+  }
+});
+
+W.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  sc = Math.max(.12, Math.min(1.5, sc + (e.deltaY > 0 ? -.04 : .04)));
+  snapBack();
+});
+
+fitToScreen();
+up();
+setTimeout(render, 100);
+</script>
+
+</body>
+</html>

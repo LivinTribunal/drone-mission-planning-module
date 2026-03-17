@@ -22,7 +22,7 @@ IMPLEMENTATION RULES:
 10. Error handling: HTTPException in routes, custom exceptions in services.
 11. Write pytest tests for services and routes. Use async tests with asyncio_mode = "auto".
 12. Frontend tests: vitest with @testing-library/react.
-13. Comments: sparse, lowercase, casual — no docstrings on simple CRUD or schemas.
+13. Every `def` function and `class` must have a short `"""..."""` docstring. Comments: sparse, lowercase, casual.
 
 QUALITY:
 - Run `cd backend && ruff check .` after making Python changes to verify lint passes.
