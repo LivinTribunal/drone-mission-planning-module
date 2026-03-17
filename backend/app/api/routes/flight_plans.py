@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_db
 from app.schemas.flight_plan import FlightPlanResponse, GenerateTrajectoryResponse
 from app.services import flight_plan_service
-from app.services.trajectory_generator import generate_trajectory
+from app.services.trajectory_orchestrator import generate_trajectory
 
 router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
 

@@ -15,6 +15,7 @@ from app.services.geometry_converter import geojson_to_ewkt
 
 
 def _to_point_ewkt(lon: float, lat: float, alt: float) -> str:
+    """convert lon/lat/alt to EWKT point string"""
     return geojson_to_ewkt({"type": "Point", "coordinates": [lon, lat, alt]})
 
 
