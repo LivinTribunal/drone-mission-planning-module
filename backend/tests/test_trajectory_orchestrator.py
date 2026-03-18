@@ -187,6 +187,7 @@ def test_validation_result_always_created(client):
     fp = response.json()["flight_plan"]
     assert fp["validation_result"] is not None
     assert fp["validation_result"]["passed"] is True
+    assert fp["is_validated"] is True
 
 
 def test_regeneration_replaces_flight_plan(client):

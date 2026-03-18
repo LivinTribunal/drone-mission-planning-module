@@ -34,7 +34,7 @@ class FlightPlan(Base):
     airport_id = Column(UUID, ForeignKey("airport.id"), nullable=False)
     total_distance = Column(Float)
     estimated_duration = Column(Float)
-    # TODO: set when validation endpoint is implemented
+    # set to True by orchestrator after passing final validation
     is_validated = Column(Boolean, nullable=False, default=False)
     generated_at = Column(DateTime(timezone=True), server_default=func.now())
 

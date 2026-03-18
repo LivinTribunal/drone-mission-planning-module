@@ -518,6 +518,10 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     flight_plan = persist_flight_plan(db, mission, all_waypoints, warnings, total_dist, total_dur)
 
+    # no hard violations at this point - mark flight plan as validated
+    flight_plan.is_validated = True
+    db.flush()
+
     # transition to PLANNED only if still in DRAFT (skip if already PLANNED from regression)
     if mission.status == MissionStatus.DRAFT:
         mission.transition_to(MissionStatus.PLANNED)
