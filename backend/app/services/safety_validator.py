@@ -63,19 +63,6 @@ def validate_inspection_pass(
     return violations
 
 
-def validate_flight_plan(
-    db: Session,
-    waypoints: list[WaypointData],
-    drone: DroneProfile | None,
-    constraints: list[ConstraintRule],
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
-    surfaces: list[AirfieldSurface],
-) -> list[Violation]:
-    """validate entire flight plan against all constraints and obstacles"""
-    return validate_inspection_pass(db, waypoints, drone, constraints, obstacles, zones, surfaces)
-
-
 def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation | None:
     """check if waypoint exceeds drone altitude or speed limits."""
     if drone.max_altitude is not None and wp.alt > drone.max_altitude:

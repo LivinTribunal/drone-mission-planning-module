@@ -189,7 +189,8 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 warnings.append(warning)
 
         if drone:
-            warning = check_sensor_fov(drone, lha_positions, MIN_ARC_RADIUS)
+            fov_distance = config.horizontal_distance or MIN_ARC_RADIUS
+            warning = check_sensor_fov(drone, lha_positions, fov_distance)
             if warning:
                 warnings.append(warning)
 
@@ -268,7 +269,6 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 obstructed_wps.append(wp_idx + 1)
 
         if obstructed_wps:
-            label = f"{template.name} #{inspection.sequence_order}"
             if len(obstructed_wps) <= 3:
                 wp_str = ", ".join(str(i) for i in obstructed_wps)
             else:
