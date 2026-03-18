@@ -49,6 +49,12 @@ def persist_flight_plan(
     estimated_duration: float,
 ) -> FlightPlan:
     """persist flight plan with waypoints and validation result"""
+    # delete existing flight plan if regenerating
+    existing = db.query(FlightPlan).filter(FlightPlan.mission_id == mission.id).first()
+    if existing:
+        db.delete(existing)
+        db.flush()
+
     flight_plan = FlightPlan(
         mission_id=mission.id,
         airport_id=mission.airport_id,
@@ -78,8 +84,9 @@ def persist_flight_plan(
                 )
             )
 
-    # transition mission via aggregate root
-    mission.transition_to("PLANNED")
+    # transition to PLANNED only if still in DRAFT (skip if already PLANNED from regression)
+    if mission.status == "DRAFT":
+        mission.transition_to("PLANNED")
     db.commit()
     db.refresh(flight_plan)
 
