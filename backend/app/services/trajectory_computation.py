@@ -427,4 +427,4 @@ def compute_measurement_trajectory(
             center, runway_heading, config, inspection.id, speed, setting_angles
         )
 
-    return []
+    raise ValueError(f"unsupported inspection method: {inspection.method}")

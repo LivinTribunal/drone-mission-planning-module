@@ -353,7 +353,7 @@ def _check_runway_buffer(
             text(
                 "SELECT ST_DWithin("
                 "ST_Force2D(ST_GeomFromEWKT(:rwy_geom))::geography, "
-                "ST_Force2D(ST_Force2D(ST_GeomFromEWKT(:point))::geography, "
+                "ST_Force2D(ST_GeomFromEWKT(:point))::geography, "
                 ":buffer)"
             ),
             {

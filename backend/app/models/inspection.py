@@ -110,8 +110,14 @@ class Inspection(Base):
     template = relationship("InspectionTemplate")
     config = relationship("InspectionConfiguration")
 
-    def is_speed_compatible_with_frame_rate(self, drone_profile, speed: float) -> bool:
-        """check if speed is compatible with camera frame rate at measurement density."""
+    def is_speed_compatible_with_frame_rate(
+        self, drone_profile, speed: float, path_distance: float = 0.0
+    ) -> bool:
+        """check if speed is compatible with camera frame rate at measurement density.
+
+        at speed v and frame_rate f, capture spacing is v/f meters.
+        speed is compatible when v/f <= waypoint_spacing (= path_distance / (density - 1)).
+        """
         if not drone_profile or not drone_profile.camera_frame_rate:
             return True
         if not self.config or not self.config.measurement_density:
@@ -120,8 +126,13 @@ class Inspection(Base):
         if density < 2:
             return True
 
-        # max speed check against drone limit
         if drone_profile.max_speed and speed > drone_profile.max_speed:
             return False
+
+        if path_distance > 0:
+            waypoint_spacing = path_distance / (density - 1)
+            max_compatible_speed = waypoint_spacing * drone_profile.camera_frame_rate
+            if speed > max_compatible_speed:
+                return False
 
         return True

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
@@ -61,7 +62,7 @@ class FlightPlan(Base):
         """set computed flight plan metrics and timestamp."""
         self.total_distance = total_distance
         self.estimated_duration = estimated_duration
-        self.generated_at = func.now()
+        self.generated_at = datetime.now(timezone.utc)
 
 
 class Waypoint(Base):

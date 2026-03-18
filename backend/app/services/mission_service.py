@@ -155,6 +155,9 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
                 measurement_density=insp.config.measurement_density,
                 custom_tolerances=insp.config.custom_tolerances,
                 density=insp.config.density,
+                hover_duration=insp.config.hover_duration,
+                horizontal_distance=insp.config.horizontal_distance,
+                sweep_angle=insp.config.sweep_angle,
             )
             db.add(new_config)
             db.flush()

@@ -24,11 +24,14 @@ IMPLEMENTATION RULES:
 12. Frontend tests: vitest with @testing-library/react.
 13. Every `def` function and `class` must have a short `"""..."""` docstring. Comments: sparse, lowercase, casual.
 
-QUALITY:
-- Run `cd backend && ruff check .` after making Python changes to verify lint passes.
-- Run `cd backend && pytest` after writing tests to verify they pass.
-- Run `cd frontend && npm run build` after frontend changes to verify build passes.
-- If a quality check fails, fix the issue before finishing.
+QUALITY — MANDATORY BEFORE FINISHING:
+You MUST run ALL applicable quality checks before you finish. Do not skip any.
+- `cd backend && ruff check .` — must pass with zero errors.
+- `cd backend && ruff format --check .` — must pass with zero reformatting needed.
+- `cd backend && pytest -v` — all tests must pass. If any test fails, fix it before finishing.
+- `cd frontend && npm run build` — must succeed if you touched any frontend code.
+- If ANY quality check fails, diagnose the issue, fix it, and re-run the check until it passes.
+- Do NOT finish your work with failing checks. The CI will reject your changes.
 
 CRITICAL PATHS — extra care required:
 - **/trajectory* — core thesis algorithm
