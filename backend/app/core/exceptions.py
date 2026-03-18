@@ -4,10 +4,11 @@
 class DomainError(Exception):
     """base exception for domain/business errors"""
 
-    def __init__(self, message: str, status_code: int = 400):
+    def __init__(self, message: str, status_code: int = 400, extra: dict | None = None):
         """create domain error with message and suggested http status"""
         self.message = message
         self.status_code = status_code
+        self.extra = extra
         super().__init__(message)
 
 

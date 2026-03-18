@@ -66,6 +66,7 @@ def persist_flight_plan(
         db.add(_waypoint_to_model(wp, flight_plan.id, i))
 
     # validation result - always created so serialization never gets None
+    # passed=True means no hard violations - soft warnings may still exist
     val_result = ValidationResult(
         flight_plan_id=flight_plan.id,
         passed=True,

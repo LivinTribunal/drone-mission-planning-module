@@ -1,6 +1,6 @@
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import TrajectoryGenerationError
 from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
 from app.models.enums import CameraAction, SafetyZoneType, WaypointType
 from app.schemas.geometry import parse_ewkb
@@ -343,9 +343,8 @@ def resolve_inspection_collisions(
 
     for seg_start, seg_end in segments:
         if seg_start == 0 or seg_end == len(waypoints) - 1:
-            raise HTTPException(
-                status_code=400,
-                detail="obstacle at measurement pass boundary - cannot reroute",
+            raise TrajectoryGenerationError(
+                "obstacle at measurement pass boundary - cannot reroute"
             )
 
         anchor_before = result[seg_start - 1]
@@ -365,10 +364,7 @@ def resolve_inspection_collisions(
         # A* through local visibility graph
         path = _run_astar(db, from_pt, to_pt, nearby_obs, nearby_zones)
         if path is None:
-            raise HTTPException(
-                status_code=400,
-                detail="no obstacle-free reroute path found",
-            )
+            raise TrajectoryGenerationError("no obstacle-free reroute path found")
 
         # build rerouted waypoints (skip anchors at index 0 and -1)
         rerouted_wps = []
@@ -407,28 +403,20 @@ def resolve_inspection_collisions(
         rerouted_dist = total_path_distance(rerouted_pts) if rerouted_pts else 0.0
 
         if original_dist > 0 and rerouted_dist > original_dist * (1 + MAX_REROUTE_DEVIATION):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"rerouted path {rerouted_dist:.0f}m exceeds "
-                    f"{MAX_REROUTE_DEVIATION:.0%} deviation"
-                ),
+            raise TrajectoryGenerationError(
+                f"rerouted path {rerouted_dist:.0f}m exceeds {MAX_REROUTE_DEVIATION:.0%} deviation"
             )
 
         # validate: line-of-sight to PAPI center
         for wp in rerouted_wps:
             wp_pt = Point3D(lon=wp.lon, lat=wp.lat, alt=wp.alt)
             if not has_line_of_sight(db, wp_pt, center, nearby_obs, nearby_zones):
-                raise HTTPException(
-                    status_code=400,
-                    detail="rerouted path blocks camera line-of-sight to PAPI",
-                )
+                raise TrajectoryGenerationError("rerouted path blocks camera line-of-sight to PAPI")
 
         # validate: turn angle
         if rerouted_wps and _max_turn_angle(rerouted_wps) > MAX_TURN_ANGLE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"rerouted path exceeds max turn angle {MAX_TURN_ANGLE}",
+            raise TrajectoryGenerationError(
+                f"rerouted path exceeds max turn angle {MAX_TURN_ANGLE}"
             )
 
         result[seg_start : seg_end + 1] = rerouted_wps
@@ -482,10 +470,7 @@ def compute_transit_path(
     # A* through visibility graph with runway penalties
     path = _run_astar(db, from_point, to_point, obstacles, zones, surfaces)
     if path is None:
-        raise HTTPException(
-            status_code=400,
-            detail="no obstacle-free transit path found",
-        )
+        raise TrajectoryGenerationError("no obstacle-free transit path found")
 
     # transit altitude = max of endpoints so drone never goes underground
     transit_alt = max(from_point.alt, to_point.alt)

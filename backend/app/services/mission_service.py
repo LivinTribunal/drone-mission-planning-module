@@ -1,8 +1,8 @@
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.exceptions import DomainError, NotFoundError
 from app.models.airport import Airport
 from app.models.enums import MissionStatus
 from app.models.inspection import Inspection, InspectionConfiguration
@@ -15,19 +15,19 @@ def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mis
     """validate and execute status transition via aggregate root."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
-        raise HTTPException(status_code=404, detail="mission not found")
+        raise NotFoundError("mission not found")
 
     try:
         mission.transition_to(target_status)
-    except ValueError as e:
-        raise HTTPException(
+    except ValueError:
+        raise DomainError(
+            "invalid status transition",
             status_code=409,
-            detail={
+            extra={
                 "error": "invalid status transition",
                 "current_status": mission.status,
                 "target_status": target_status,
                 "allowed_transitions": TRANSITIONS.get(mission.status, []),
-                "message": str(e),
             },
         )
 
@@ -67,7 +67,7 @@ def get_mission(db: Session, mission_id: UUID) -> Mission:
         .first()
     )
     if not mission:
-        raise HTTPException(status_code=404, detail="mission not found")
+        raise NotFoundError("mission not found")
 
     return mission
 
@@ -76,12 +76,12 @@ def create_mission(db: Session, schema: MissionCreate) -> Mission:
     """create mission in DRAFT status."""
     airport = db.query(Airport).filter(Airport.id == schema.airport_id).first()
     if not airport:
-        raise HTTPException(status_code=400, detail="airport not found")
+        raise DomainError("airport not found")
 
     if schema.drone_profile_id:
         drone = db.query(DroneProfile).filter(DroneProfile.id == schema.drone_profile_id).first()
         if not drone:
-            raise HTTPException(status_code=400, detail="drone profile not found")
+            raise DomainError("drone profile not found")
 
     mission = Mission(**schema_to_model_data(schema))
     db.add(mission)
@@ -95,7 +95,7 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
     """update mission - regresses VALIDATED -> PLANNED on trajectory changes."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
-        raise HTTPException(status_code=404, detail="mission not found")
+        raise NotFoundError("mission not found")
 
     data = schema.model_dump(exclude_unset=True)
 
@@ -115,7 +115,7 @@ def delete_mission(db: Session, mission_id: UUID):
     """delete mission."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
-        raise HTTPException(status_code=404, detail="mission not found")
+        raise NotFoundError("mission not found")
 
     db.delete(mission)
     db.commit()
@@ -130,7 +130,7 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
         .first()
     )
     if not original:
-        raise HTTPException(status_code=404, detail="mission not found")
+        raise NotFoundError("mission not found")
 
     copy = Mission(
         name=f"{original.name} (copy)",

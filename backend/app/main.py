@@ -28,7 +28,12 @@ app.add_middleware(
 @app.exception_handler(DomainError)
 async def domain_error_handler(request, exc: DomainError):
     """translate domain exceptions to http responses."""
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+    if exc.extra:
+        detail = {"message": exc.message, **exc.extra}
+    else:
+        detail = exc.message
+
+    return JSONResponse(status_code=exc.status_code, content={"detail": detail})
 
 
 app.include_router(airports_router)
