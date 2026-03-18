@@ -108,7 +108,7 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
 
 
 def _apply_camera_actions(waypoints: list[WaypointData]):
-    """Set lead-in/lead-out waypoints to NONE camera action, inner to PHOTO_CAPTURE."""
+    """set lead-in and lead-out waypoints to NONE camera action."""
     if len(waypoints) >= 2:
         waypoints[0].camera_action = CameraAction.NONE
         waypoints[-1].camera_action = CameraAction.NONE

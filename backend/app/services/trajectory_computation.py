@@ -3,6 +3,7 @@ from uuid import UUID
 
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
 from app.models.mission import DroneProfile
+from app.schemas.geometry import parse_ewkb
 from app.services.trajectory_types import (
     DEFAULT_GLIDE_SLOPE,
     DEFAULT_HEADING,
@@ -68,11 +69,11 @@ def resolve_with_defaults(inspection, template) -> ResolvedConfig:
 
 def get_lha_positions(template) -> list[Point3D]:
     """Extract 3D positions from all LHA units across template targets."""
-    from app.schemas.geometry import parse_ewkb
-
     positions = []
     for agl in template.targets:
         for lha in agl.lhas:
+            if not lha.position:
+                continue
             c = parse_ewkb(lha.position.data)["coordinates"]
             positions.append(Point3D(lon=c[0], lat=c[1], alt=c[2]))
 
