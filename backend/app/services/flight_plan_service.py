@@ -66,23 +66,22 @@ def persist_flight_plan(
     for i, wp in enumerate(all_waypoints, start=1):
         db.add(_waypoint_to_model(wp, flight_plan.id, i))
 
-    # validation result with soft warnings
-    if warnings:
-        val_result = ValidationResult(
-            flight_plan_id=flight_plan.id,
-            passed=True,
-        )
-        db.add(val_result)
-        db.flush()
+    # validation result - always created so serialization never gets None
+    val_result = ValidationResult(
+        flight_plan_id=flight_plan.id,
+        passed=True,
+    )
+    db.add(val_result)
+    db.flush()
 
-        for w in dict.fromkeys(warnings):  # deduplicate preserving order
-            db.add(
-                ValidationViolation(
-                    validation_result_id=val_result.id,
-                    is_warning=True,
-                    message=w,
-                )
+    for w in dict.fromkeys(warnings):  # deduplicate preserving order
+        db.add(
+            ValidationViolation(
+                validation_result_id=val_result.id,
+                is_warning=True,
+                message=w,
             )
+        )
 
     # transition to PLANNED only if still in DRAFT (skip if already PLANNED from regression)
     if mission.status == MissionStatus.DRAFT:

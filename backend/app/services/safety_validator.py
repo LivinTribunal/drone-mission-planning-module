@@ -73,7 +73,7 @@ def validate_flight_plan(
 
 def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation | None:
     """check if waypoint exceeds drone altitude or speed limits."""
-    if drone.max_altitude and wp.alt > drone.max_altitude:
+    if drone.max_altitude is not None and wp.alt > drone.max_altitude:
         return Violation(
             is_warning=False,
             message=(
@@ -87,7 +87,7 @@ def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation 
     except ValueError:
         return Violation(is_warning=False, message=f"invalid speed value: {wp.speed}")
 
-    if drone.max_speed and wp.speed > drone.max_speed:
+    if drone.max_speed is not None and wp.speed > drone.max_speed:
         return Violation(
             is_warning=False,
             message=(
@@ -293,19 +293,20 @@ def _check_constraint(
     ctype = constraint.constraint_type
 
     if ctype == ConstraintType.ALTITUDE:
-        if constraint.min_altitude and wp.alt < constraint.min_altitude:
+        if constraint.min_altitude is not None and wp.alt < constraint.min_altitude:
             return _violation(
                 constraint,
                 f"alt {wp.alt:.0f}m below min {constraint.min_altitude:.0f}m",
             )
-        if constraint.max_altitude and wp.alt > constraint.max_altitude:
+        if constraint.max_altitude is not None and wp.alt > constraint.max_altitude:
             return _violation(
                 constraint,
                 f"alt {wp.alt:.0f}m above max {constraint.max_altitude:.0f}m",
             )
 
     elif ctype == ConstraintType.SPEED:
-        if constraint.max_horizontal_speed and wp.speed > constraint.max_horizontal_speed:
+        max_speed = constraint.max_horizontal_speed
+        if max_speed is not None and wp.speed > max_speed:
             return _violation(
                 constraint,
                 f"speed {wp.speed:.1f} exceeds max {constraint.max_horizontal_speed:.1f} m/s",

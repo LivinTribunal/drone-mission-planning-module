@@ -150,3 +150,93 @@ def test_obstacle_no_geometry():
     )()
 
     assert check_obstacle(None, wp, obs) is None
+
+
+# zero-value constraint checks - regression tests for truthiness bug
+
+
+def test_altitude_constraint_zero_min():
+    """constraint with min_altitude=0 must still fire when waypoint is below 0"""
+    from app.services.safety_validator import _check_constraint
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=-5.0)
+    constraint = type(
+        "C",
+        (),
+        {
+            "constraint_type": "ALTITUDE",
+            "min_altitude": 0.0,
+            "max_altitude": 500.0,
+            "is_hard_constraint": True,
+            "id": "test-id",
+        },
+    )()
+
+    result = _check_constraint(None, wp, constraint, [])
+
+    assert result is not None
+    assert "below min" in result.message
+
+
+def test_altitude_constraint_zero_max():
+    """constraint with max_altitude=0 must still fire when waypoint is above 0"""
+    from app.services.safety_validator import _check_constraint
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
+    constraint = type(
+        "C",
+        (),
+        {
+            "constraint_type": "ALTITUDE",
+            "min_altitude": None,
+            "max_altitude": 0.0,
+            "is_hard_constraint": True,
+            "id": "test-id",
+        },
+    )()
+
+    result = _check_constraint(None, wp, constraint, [])
+
+    assert result is not None
+    assert "above max" in result.message
+
+
+def test_speed_constraint_zero_max():
+    """constraint with max_horizontal_speed=0 must fire when waypoint has any speed"""
+    from app.services.safety_validator import _check_constraint
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=300.0, speed=1.0)
+    constraint = type(
+        "C",
+        (),
+        {
+            "constraint_type": "SPEED",
+            "max_horizontal_speed": 0.0,
+            "is_hard_constraint": True,
+            "id": "test-id",
+        },
+    )()
+
+    result = _check_constraint(None, wp, constraint, [])
+
+    assert result is not None
+
+
+def test_drone_zero_max_altitude():
+    """drone with max_altitude=0 must trigger violation"""
+    from app.services.safety_validator import check_drone_constraints
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
+    drone = type("D", (), {"max_altitude": 0.0, "max_speed": 23.0})()
+
+    assert check_drone_constraints(wp, drone) is not None
+
+
+def test_drone_zero_max_speed():
+    """drone with max_speed=0 must trigger violation"""
+    from app.services.safety_validator import check_drone_constraints
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=100.0, speed=1.0)
+    drone = type("D", (), {"max_altitude": 500.0, "max_speed": 0.0})()
+
+    assert check_drone_constraints(wp, drone) is not None

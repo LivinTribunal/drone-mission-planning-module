@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
+from app.core.exceptions import DomainError, TrajectoryGenerationError
 from app.schemas.flight_plan import FlightPlanResponse, GenerateTrajectoryResponse
 from app.services import flight_plan_service
 from app.services.trajectory_orchestrator import generate_trajectory
@@ -17,7 +18,13 @@ router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
 )
 def generate(mission_id: UUID, db: Session = Depends(get_db)):
     """run 5-phase trajectory generation pipeline"""
-    flight_plan, warnings = generate_trajectory(db, mission_id)
+    try:
+        flight_plan, warnings = generate_trajectory(db, mission_id)
+    except TrajectoryGenerationError as e:
+        detail = {"error": e.message, "violations": e.violations} if e.violations else e.message
+        raise HTTPException(status_code=e.status_code, detail=detail)
+    except DomainError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
 
     # reload with eager-loaded waypoints
     try:

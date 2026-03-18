@@ -1,9 +1,9 @@
 import math
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.exceptions import NotFoundError, TrajectoryGenerationError
 from app.models.agl import AGL
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
@@ -72,13 +72,13 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
         .first()
     )
     if not mission:
-        raise HTTPException(status_code=404, detail="mission not found")
+        raise NotFoundError("mission not found")
     if not mission.inspections:
-        raise HTTPException(status_code=400, detail="mission has no inspections")
+        raise TrajectoryGenerationError("mission has no inspections")
 
     airport = db.query(Airport).filter(Airport.id == mission.airport_id).first()
     if not airport:
-        raise HTTPException(status_code=400, detail="airport not found")
+        raise NotFoundError("airport not found")
 
     obstacles = db.query(Obstacle).filter(Obstacle.airport_id == airport.id).all()
     safety_zones = (
@@ -232,12 +232,9 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         hard = [v for v in violations if not v.is_warning]
         if hard:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "hard constraint violation",
-                    "violations": [{"message": v.message} for v in hard],
-                },
+            raise TrajectoryGenerationError(
+                "hard constraint violation",
+                violations=[{"message": v.message} for v in hard],
             )
 
         # group soft warnings by message, show affected waypoint range
@@ -321,7 +318,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         inspection_passes.append(InspectionPass(waypoints=pass_wps, inspection_id=inspection.id))
 
     if not inspection_passes:
-        raise HTTPException(status_code=400, detail="no waypoints generated")
+        raise TrajectoryGenerationError("no waypoints generated")
 
     # phase 5 - final assembly with A* transit
     all_waypoints: list[WaypointData] = []
@@ -446,12 +443,9 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     )
     final_hard = [v for v in final_violations if not v.is_warning]
     if final_hard:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "final validation failed",
-                "violations": [{"message": v.message} for v in final_hard],
-            },
+        raise TrajectoryGenerationError(
+            "final validation failed",
+            violations=[{"message": v.message} for v in final_hard],
         )
 
     final_groups: dict[str, list[int]] = {}
