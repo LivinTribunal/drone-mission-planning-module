@@ -123,11 +123,26 @@ class TestMissionInspections:
         assert len(m.inspections) == 1
         assert insp.mission_id == m.id
 
-    def test_add_inspection_not_draft(self):
-        """cannot add inspection in non-DRAFT status."""
+    def test_add_inspection_planned_regresses_to_draft(self):
+        """adding inspection in PLANNED status auto-regresses to DRAFT."""
         m = self._make_mission("PLANNED")
         insp = self._make_inspection()
-        with pytest.raises(ValueError, match="DRAFT"):
+        m.add_inspection(insp)
+        assert len(m.inspections) == 1
+        assert m.status == "DRAFT"
+
+    def test_add_inspection_validated_regresses_to_draft(self):
+        """adding inspection in VALIDATED status auto-regresses to DRAFT."""
+        m = self._make_mission("VALIDATED")
+        insp = self._make_inspection()
+        m.add_inspection(insp)
+        assert m.status == "DRAFT"
+
+    def test_add_inspection_blocked_after_exported(self):
+        """cannot add inspection after mission is exported."""
+        m = self._make_mission("EXPORTED")
+        insp = self._make_inspection()
+        with pytest.raises(ValueError, match="exported"):
             m.add_inspection(insp)
 
     def test_add_inspection_max_limit(self):
@@ -146,11 +161,19 @@ class TestMissionInspections:
         assert removed is insp
         assert len(m.inspections) == 0
 
-    def test_remove_inspection_not_draft(self):
-        """cannot remove inspection in non-DRAFT status."""
+    def test_remove_inspection_planned_regresses_to_draft(self):
+        """removing inspection in PLANNED status auto-regresses to DRAFT."""
         insp = self._make_inspection()
         m = self._make_mission("PLANNED", inspections=[insp])
-        with pytest.raises(ValueError, match="DRAFT"):
+        m.remove_inspection(insp.id)
+        assert len(m.inspections) == 0
+        assert m.status == "DRAFT"
+
+    def test_remove_inspection_blocked_after_exported(self):
+        """cannot remove inspection after mission is exported."""
+        insp = self._make_inspection()
+        m = self._make_mission("EXPORTED", inspections=[insp])
+        with pytest.raises(ValueError, match="exported"):
             m.remove_inspection(insp.id)
 
     def test_remove_inspection_not_found(self):
@@ -178,6 +201,20 @@ class TestMissionChangeDroneProfile:
         m.change_drone_profile(new_id)
         assert m.drone_profile_id == new_id
         assert m.status == "DRAFT"
+
+    def test_change_drone_profile_planned_stays_planned(self):
+        """changing drone profile in PLANNED stays PLANNED (no regression needed)."""
+        m = Mission(id=uuid4(), name="test", status="PLANNED", airport_id=uuid4())
+        new_id = uuid4()
+        m.change_drone_profile(new_id)
+        assert m.drone_profile_id == new_id
+        assert m.status == "PLANNED"
+
+    def test_change_drone_profile_blocked_after_exported(self):
+        """cannot change drone profile after mission is exported."""
+        m = Mission(id=uuid4(), name="test", status="EXPORTED", airport_id=uuid4())
+        with pytest.raises(ValueError, match="exported"):
+            m.change_drone_profile(uuid4())
 
 
 # airport aggregate root tests
