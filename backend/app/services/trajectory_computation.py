@@ -173,7 +173,7 @@ def check_speed_framerate(
     if not drone.camera_frame_rate:
         return None
 
-    if optimal_speed and speed > optimal_speed:
+    if optimal_speed is not None and speed > optimal_speed:
         return (
             f"speed {speed:.1f} m/s exceeds optimal {optimal_speed:.1f} m/s "
             f"for frame rate {drone.camera_frame_rate} fps"
@@ -233,11 +233,11 @@ def resolve_speed(
 
     Returns the final speed and an optional warning string if auto-computed.
     """
-    if config.speed_override:
+    if config.speed_override is not None:
         return config.speed_override, None
 
     optimal = compute_optimal_speed(path_distance, density, drone)
-    if optimal:
+    if optimal is not None:
         warning = f"speed auto-set to {optimal:.1f} m/s based on path geometry and frame rate"
         return optimal, warning
 

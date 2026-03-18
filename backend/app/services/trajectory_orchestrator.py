@@ -116,11 +116,6 @@ def _apply_camera_actions(waypoints: list[WaypointData]):
         waypoints[-1].camera_action = CameraAction.NONE
 
 
-def apply_constraints(db, waypoints, drone, constraints, obstacles, zones, surfaces) -> list:
-    """Run safety validation against all constraints and return violations."""
-    return validate_inspection_pass(db, waypoints, drone, constraints, obstacles, zones, surfaces)
-
-
 def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list[str]]:
     """Five-phase trajectory generation pipeline.
 
@@ -201,9 +196,12 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 warnings.append(warning)
 
         # phase 3 - compute waypoints
-        pass_wps = compute_measurement_trajectory(
-            inspection, config, center, rwy_heading, glide_slope, speed, setting_angles
-        )
+        try:
+            pass_wps = compute_measurement_trajectory(
+                inspection, config, center, rwy_heading, glide_slope, speed, setting_angles
+            )
+        except ValueError as e:
+            raise TrajectoryGenerationError(str(e))
 
         # phase 3 - validate and reroute
         violations = validate_inspection_pass(

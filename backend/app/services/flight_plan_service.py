@@ -49,12 +49,6 @@ def persist_flight_plan(
     estimated_duration: float,
 ) -> FlightPlan:
     """persist flight plan with waypoints and validation result"""
-    # delete existing flight plan if regenerating
-    existing = db.query(FlightPlan).filter(FlightPlan.mission_id == mission.id).first()
-    if existing:
-        db.delete(existing)
-        db.flush()
-
     flight_plan = FlightPlan(
         mission_id=mission.id,
         airport_id=mission.airport_id,
