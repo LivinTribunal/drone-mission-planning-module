@@ -1,3 +1,4 @@
+from uuid import UUID as PyUUID
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
@@ -112,8 +113,9 @@ class Mission(Base):
         """remove inspection by id - enforces DRAFT-only."""
         if self.status != "DRAFT":
             raise ValueError("can only remove inspections in DRAFT status")
+        target = PyUUID(str(inspection_id))
         for insp in self.inspections:
-            if str(insp.id) == str(inspection_id):
+            if insp.id == target:
                 self.inspections.remove(insp)
                 return insp
         raise ValueError(f"inspection {inspection_id} not found")
