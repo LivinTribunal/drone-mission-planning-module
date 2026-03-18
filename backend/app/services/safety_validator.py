@@ -143,7 +143,7 @@ def check_battery(
     reserve_margin: float = 0.15,
 ) -> Violation | None:
     """soft warning if cumulative flight time exceeds battery capacity"""
-    if not drone or not drone.endurance_minutes:
+    if not drone or drone.endurance_minutes is None:
         return None
 
     available_s = drone.endurance_minutes * 60 * (1 - reserve_margin)

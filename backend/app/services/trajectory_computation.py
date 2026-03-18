@@ -93,7 +93,7 @@ def get_lha_setting_angles(template) -> list[Degrees]:
 def get_glide_slope_angle(template) -> Degrees:
     """Return the first non-null glide slope angle from template targets, or default."""
     for agl in template.targets:
-        if agl.glide_slope_angle:
+        if agl.glide_slope_angle is not None:
             return agl.glide_slope_angle
 
     return DEFAULT_GLIDE_SLOPE

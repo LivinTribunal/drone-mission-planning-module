@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.exceptions import NotFoundError
 from app.models.enums import MissionStatus
 from app.models.flight_plan import (
     FlightPlan,
@@ -98,6 +99,6 @@ def get_flight_plan(db: Session, mission_id: UUID) -> FlightPlan:
         .first()
     )
     if not fp:
-        raise ValueError("flight plan not found")
+        raise NotFoundError("flight plan not found")
 
     return fp

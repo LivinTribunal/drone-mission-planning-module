@@ -88,14 +88,9 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     )
     surfaces = db.query(AirfieldSurface).filter(AirfieldSurface.airport_id == airport.id).all()
 
-    # constraint rules are created per-flight-plan after generation;
-    # during generation, drone limits are checked directly in validate_inspection_pass
-    existing_fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission.id).first()
-    constraints = (
-        db.query(ConstraintRule).filter(ConstraintRule.flight_plan_id == existing_fp.id).all()
-        if existing_fp
-        else []
-    )
+    # constraint rules live on the flight plan which gets deleted before regeneration;
+    # drone limits are checked directly in validate_inspection_pass
+    constraints: list[ConstraintRule] = []
 
     return MissionData(
         mission=mission,
@@ -279,6 +274,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
+        # note: uses per-pass speed for battery estimate; final duration uses per-waypoint speed
         seg_dur = seg_dist / max(speed, MIN_SPEED_FLOOR)
 
         for wp in pass_wps:
