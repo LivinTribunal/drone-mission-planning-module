@@ -34,7 +34,7 @@ class FlightPlan(Base):
     airport_id = Column(UUID, ForeignKey("airport.id"), nullable=False)
     total_distance = Column(Float)
     estimated_duration = Column(Float)
-    is_validated = Column(Boolean, nullable=False, default=False)
+    is_validated = Column(Boolean, nullable=False, default=False)  # set by validation endpoint
     generated_at = Column(DateTime(timezone=True), server_default=func.now())
 
     mission = relationship("Mission", back_populates="flight_plan")

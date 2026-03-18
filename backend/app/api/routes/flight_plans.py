@@ -20,7 +20,10 @@ def generate(mission_id: UUID, db: Session = Depends(get_db)):
     flight_plan, warnings = generate_trajectory(db, mission_id)
 
     # reload with eager-loaded waypoints
-    fp = flight_plan_service.get_flight_plan(db, flight_plan.mission_id)
+    try:
+        fp = flight_plan_service.get_flight_plan(db, flight_plan.mission_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="flight plan not found")
 
     return GenerateTrajectoryResponse(flight_plan=fp, warnings=warnings)
 

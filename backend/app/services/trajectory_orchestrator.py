@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.agl import AGL
-from app.models.airport import Airport, Obstacle, SafetyZone
+from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
 from app.models.flight_plan import ConstraintRule, FlightPlan
 from app.models.inspection import Inspection, InspectionTemplate
@@ -21,6 +21,7 @@ from app.services.trajectory_computation import (
     check_sensor_fov,
     check_speed_framerate,
     compute_measurement_trajectory,
+    compute_optimal_speed,
     determine_end_position,
     determine_start_position,
     get_glide_slope_angle,
@@ -85,13 +86,15 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
         .filter(SafetyZone.airport_id == airport.id, SafetyZone.is_active == True)  # noqa: E712
         .all()
     )
-    from app.models.airport import AirfieldSurface
-
     surfaces = db.query(AirfieldSurface).filter(AirfieldSurface.airport_id == airport.id).all()
+
+    # constraint rules are created per-flight-plan after generation;
+    # during generation, drone limits are checked directly in validate_inspection_pass
+    existing_fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission.id).first()
     constraints = (
-        db.query(ConstraintRule)
-        .filter(ConstraintRule.flight_plan_id == None)  # noqa: E711
-        .all()
+        db.query(ConstraintRule).filter(ConstraintRule.flight_plan_id == existing_fp.id).all()
+        if existing_fp
+        else []
     )
 
     return MissionData(
@@ -187,8 +190,6 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             warnings.append(f"{template.name} #{inspection.sequence_order}: {speed_warning}")
 
         if drone:
-            from app.services.trajectory_computation import compute_optimal_speed
-
             optimal_speed = compute_optimal_speed(path_dist, config.measurement_density, drone)
             warning = check_speed_framerate(speed, drone, optimal_speed)
             if warning:
