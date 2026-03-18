@@ -18,6 +18,13 @@ from app.services.trajectory_types import DEFAULT_RUNWAY_BUFFER, Violation, Wayp
 HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
 
+def _line_ewkt(from_lon: float, from_lat: float, to_lon: float, to_lat: float) -> str:
+    """build EWKT linestring from two 2D points."""
+    return geojson_to_ewkt(
+        {"type": "LineString", "coordinates": [[from_lon, from_lat], [to_lon, to_lat]]}
+    )
+
+
 def validate_inspection_pass(
     db: Session,
     waypoints: list[WaypointData],
@@ -121,7 +128,8 @@ def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violati
     obs_base_alt = 0.0
     if obstacle.position:
         obs_pos = parse_ewkb(obstacle.position.data)
-        obs_base_alt = obs_pos["coordinates"][2]
+        coords = obs_pos["coordinates"]
+        obs_base_alt = coords[2] if len(coords) > 2 else 0.0
 
     obs_top = obs_base_alt + (obstacle.height or 0)
 
@@ -205,7 +213,7 @@ def segments_intersect_obstacle(
     if not obstacle.geometry:
         return False
 
-    line_ewkt = f"SRID=4326;LINESTRING({from_lon} {from_lat}, {to_lon} {to_lat})"
+    line_ewkt = _line_ewkt(from_lon, from_lat, to_lon, to_lat)
 
     result = db.execute(
         text(
@@ -234,7 +242,7 @@ def segments_intersect_zone(
     if zone.type not in HARD_ZONE_TYPES:
         return False
 
-    line_ewkt = f"SRID=4326;LINESTRING({from_lon} {from_lat}, {to_lon} {to_lat})"
+    line_ewkt = _line_ewkt(from_lon, from_lat, to_lon, to_lat)
 
     result = db.execute(
         text(
@@ -263,7 +271,7 @@ def segment_runway_crossing_length(
         return 0.0
 
     half_width = (surface.width or 45.0) / 2.0
-    line_ewkt = f"SRID=4326;LINESTRING({from_lon} {from_lat}, {to_lon} {to_lat})"
+    line_ewkt = _line_ewkt(from_lon, from_lat, to_lon, to_lat)
 
     # buffer the centerline by half width to get runway polygon, then intersect
     result = db.execute(

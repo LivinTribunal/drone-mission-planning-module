@@ -160,8 +160,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         # compute optimal density if not overridden
         density, density_warning = resolve_density(inspection.method, setting_angles, config)
         if density_warning:
-            if inspection.config:
-                inspection.config.measurement_density = density
+            config.measurement_density = density
             warnings.append(f"{template.name} #{inspection.sequence_order}: {density_warning}")
 
         # compute optimal speed from path geometry and camera frame rate
@@ -177,9 +176,6 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             config, path_dist, config.measurement_density, drone, default_speed
         )
         if speed_warning:
-            # save computed speed back to config so the operator can see it
-            if inspection.config:
-                inspection.config.speed_override = speed
             warnings.append(f"{template.name} #{inspection.sequence_order}: {speed_warning}")
 
         if drone:
@@ -281,7 +277,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         seg_dur = seg_dist / max(speed, MIN_SPEED_FLOOR)
 
         for wp in pass_wps:
-            if wp.hover_duration:
+            if wp.hover_duration is not None:
                 seg_dur += wp.hover_duration
 
         cumulative_distance += seg_dist
@@ -478,7 +474,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             total_dist += d
             total_dur += d / max(cur.speed, MIN_SPEED_FLOOR)
 
-        if all_waypoints[j].hover_duration:
+        if all_waypoints[j].hover_duration is not None:
             total_dur += all_waypoints[j].hover_duration
 
     flight_plan = persist_flight_plan(db, mission, all_waypoints, warnings, total_dist, total_dur)
