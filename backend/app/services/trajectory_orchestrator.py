@@ -54,7 +54,10 @@ from app.utils.geo import bearing_between, distance_between, total_path_distance
 
 
 def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
-    """Load all entities needed for trajectory generation in a single query phase."""
+    """load all entities needed for trajectory generation in a single query phase.
+
+    constraints are intentionally empty - see comment in function body.
+    """
     mission = (
         db.query(Mission)
         .options(

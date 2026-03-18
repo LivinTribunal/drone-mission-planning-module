@@ -489,3 +489,53 @@ def test_vertical_profile_generates_hover_waypoints(client):
     if len(measurement_wps) >= 2:
         alts = [w["position"]["coordinates"][2] for w in measurement_wps]
         assert max(alts) > min(alts), "vertical profile should have varying altitudes"
+
+
+# flight plan service tests (via route layer)
+
+
+def test_get_flight_plan_not_found(client):
+    """get flight plan for mission with no plan returns 404"""
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "FPNF"},
+    ).json()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={"name": "No Plan Test", "airport_id": airport["id"], "default_speed": 5.0},
+    ).json()
+
+    response = client.get(f"/api/v1/missions/{mission['id']}/flight-plan")
+    assert response.status_code == 404
+
+
+def test_persist_transitions_draft_to_planned(client):
+    """generating trajectory transitions mission from DRAFT to PLANNED"""
+    mission_id, _ = _create_mission_with_inspection(client, "DRPL")
+
+    # verify starts as DRAFT
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["status"] == "DRAFT"
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    # verify transitioned to PLANNED
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["status"] == "PLANNED"
+
+
+def test_persist_keeps_planned_on_regeneration(client):
+    """regenerating trajectory on PLANNED mission stays PLANNED"""
+    mission_id, _ = _create_mission_with_inspection(client, "RGPL")
+
+    # first generation -> PLANNED
+    client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["status"] == "PLANNED"
+
+    # second generation -> still PLANNED
+    client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["status"] == "PLANNED"
