@@ -1,9 +1,9 @@
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.exceptions import DomainError, NotFoundError
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.mission import InspectionCreate, InspectionUpdate
@@ -11,7 +11,7 @@ from app.services.geometry_converter import apply_dict_update, schema_to_model_d
 
 
 def _get_mission(db: Session, mission_id: UUID) -> Mission:
-    """get mission or 404."""
+    """get mission or raise NotFoundError."""
     mission = (
         db.query(Mission)
         .options(joinedload(Mission.inspections))
@@ -19,7 +19,7 @@ def _get_mission(db: Session, mission_id: UUID) -> Mission:
         .first()
     )
     if not mission:
-        raise HTTPException(status_code=404, detail="mission not found")
+        raise NotFoundError("mission not found")
 
     return mission
 
@@ -33,7 +33,7 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
         db.query(InspectionTemplate).filter(InspectionTemplate.id == schema.template_id).first()
     )
     if not template:
-        raise HTTPException(status_code=400, detail="template not found")
+        raise NotFoundError("template not found")
 
     config_data = schema.config.model_dump() if schema.config else None
     config_id = None
@@ -60,7 +60,7 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
     try:
         mission.add_inspection(inspection)
     except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise DomainError(str(e), status_code=409)
 
     mission.regress_if_validated()
     db.commit()
@@ -81,7 +81,7 @@ def update_inspection(
         .first()
     )
     if not inspection:
-        raise HTTPException(status_code=404, detail="inspection not found")
+        raise NotFoundError("inspection not found")
 
     data = schema.model_dump(exclude_unset=True)
     config_data = data.pop("config", None)
@@ -108,14 +108,13 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     """delete inspection and reorder remaining."""
     mission = _get_mission(db, mission_id)
 
-    # check status before calling aggregate - avoids fragile string matching on ValueError
     if mission.status != "DRAFT":
-        raise HTTPException(status_code=409, detail="can only remove inspections in DRAFT status")
+        raise DomainError("can only remove inspections in DRAFT status", status_code=409)
 
     try:
         mission.remove_inspection(inspection_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="inspection not found")
+        raise NotFoundError("inspection not found")
 
     db.flush()
 
@@ -138,7 +137,7 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
     mission = _get_mission(db, mission_id)
 
     if mission.status != "DRAFT":
-        raise HTTPException(status_code=409, detail="can only reorder inspections in DRAFT status")
+        raise DomainError("can only reorder inspections in DRAFT status", status_code=409)
 
     for i, insp_id in enumerate(inspection_ids, start=1):
         inspection = (
@@ -147,7 +146,7 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
             .first()
         )
         if not inspection:
-            raise HTTPException(status_code=404, detail=f"inspection {insp_id} not found")
+            raise NotFoundError(f"inspection {insp_id} not found")
 
         inspection.sequence_order = i
 
