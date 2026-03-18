@@ -50,6 +50,56 @@ def test_generate_trajectory_no_inspections(client, db_engine):
             generate_trajectory(db, mission["id"])
 
 
+def test_generate_trajectory_no_waypoints_generated(client):
+    """mission with inspection but no LHAs produces 400"""
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "NOLH"},
+    ).json()
+    airport_id = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces", json=TRAJECTORY_SURFACE_PAYLOAD
+    ).json()
+    surface_id = surface["id"]
+
+    # create AGL with no LHAs
+    agl = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls",
+        json=TRAJECTORY_AGL_PAYLOAD,
+    ).json()
+
+    template = client.post(
+        "/api/v1/inspection-templates",
+        json={
+            "name": "No LHA Template",
+            "methods": ["ANGULAR_SWEEP"],
+            "target_agl_ids": [agl["id"]],
+            "default_config": {"measurement_density": 6, "speed_override": 5.0},
+        },
+    ).json()
+
+    drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "No LHA Test",
+            "airport_id": airport_id,
+            "drone_profile_id": drone["id"],
+            "default_speed": 5.0,
+        },
+    ).json()
+
+    client.post(
+        f"/api/v1/missions/{mission['id']}/inspections",
+        json={"template_id": template["id"], "method": "ANGULAR_SWEEP"},
+    )
+
+    response = client.post(f"/api/v1/missions/{mission['id']}/generate-trajectory")
+    assert response.status_code == 400
+
+
 def test_generate_trajectory_route_translates_not_found(client):
     """route returns 404 for missing mission"""
     response = client.post(f"/api/v1/missions/{uuid4()}/generate-trajectory")

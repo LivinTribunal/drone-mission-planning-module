@@ -91,8 +91,8 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
 
     # constraints intentionally empty during generation - constraint rules are
     # per-flight-plan children that get cascade-deleted with the old plan.
-    # drone limits and spatial checks run directly in validate_inspection_pass;
-    # operator-configured constraints are re-created and validated post-generation
+    # drone limits and spatial checks run directly in validate_inspection_pass.
+    # operator must re-attach constraints after regeneration if needed
     constraints: list[ConstraintRule] = []
 
     return MissionData(
@@ -130,7 +130,10 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
-    # only DRAFT or PLANNED missions can generate trajectories
+    # auto-regress VALIDATED to PLANNED so regeneration works without manual step
+    if mission.status == MissionStatus.VALIDATED:
+        mission.regress_if_validated()
+
     if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
         raise TrajectoryGenerationError(
             f"cannot generate trajectory for mission in {mission.status} status"
@@ -144,6 +147,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     inspection_passes: list[InspectionPass] = []
     cumulative_distance = 0.0
     cumulative_duration = 0.0
+    battery_warned = False
 
     sorted_inspections = sorted(mission.inspections, key=lambda i: i.sequence_order)
 
@@ -191,7 +195,8 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         if drone:
             fov_distance = config.horizontal_distance or MIN_ARC_RADIUS
-            warning = check_sensor_fov(drone, lha_positions, fov_distance)
+            approach = (rwy_heading + 180) % 360
+            warning = check_sensor_fov(drone, lha_positions, fov_distance, approach)
             if warning:
                 warnings.append(warning)
 
@@ -288,10 +293,11 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         cumulative_distance += seg_dist
         cumulative_duration += seg_dur
 
-        if drone:
+        if drone and not battery_warned:
             bw = check_battery(cumulative_duration, drone, DEFAULT_RESERVE_MARGIN)
             if bw:
                 warnings.append(bw.message)
+                battery_warned = True
 
         # for vertical profiles, add descent waypoint back to start altitude
         # so transit doesn't start from the top of the vertical sweep

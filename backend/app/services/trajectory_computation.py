@@ -14,7 +14,6 @@ from app.services.trajectory_types import (
     MIN_ARC_RADIUS,
     MIN_ELEVATION_ANGLE,
     MIN_LHA_FOR_FOV_CHECK,
-    NORTH_BEARING,
     SPEED_FRAMERATE_MARGIN,
     Degrees,
     Meters,
@@ -188,14 +187,16 @@ def check_speed_framerate(
     return None
 
 
-def check_sensor_fov(drone, lha_positions: list[Point3D], distance: Meters) -> str | None:
+def check_sensor_fov(
+    drone, lha_positions: list[Point3D], distance: Meters, approach_heading: Degrees = 0.0
+) -> str | None:
     """Verify camera field of view covers all LHA units at the given distance."""
     if not drone.sensor_fov or len(lha_positions) < MIN_LHA_FOR_FOV_CHECK:
         return None
 
     tuples = [p.to_tuple() for p in lha_positions]
     center = center_of_points(tuples)
-    obs_lon, obs_lat = point_at_distance(center[0], center[1], NORTH_BEARING, distance)
+    obs_lon, obs_lat = point_at_distance(center[0], center[1], approach_heading, distance)
     span = angular_span_at_distance(tuples, obs_lon, obs_lat)
 
     if span > drone.sensor_fov:
