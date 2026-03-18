@@ -75,6 +75,11 @@ jobs:
             exit 1
           fi
 
+      - name: Setup Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.12'
+
       - name: Setup Node.js
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
@@ -272,20 +277,21 @@ jobs:
         if: steps.changes.outputs.has-changes == 'true' && steps.protected.outputs.has-remaining == 'true'
         id: lint
         run: |
-          # Try eslint auto-fix first for minor formatting issues
-          npx eslint src/ --fix 2>/dev/null || true
+          PASSED="true"
 
-          if npm run lint; then
-            echo "passed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "passed=false" >> "$GITHUB_OUTPUT"
-          fi
+          # backend lint
+          (cd backend && ruff check . && ruff format --check .) || PASSED="false"
+
+          # frontend lint
+          (cd frontend && npm run lint) || PASSED="false"
+
+          echo "passed=${PASSED}" >> "$GITHUB_OUTPUT"
 
       - name: Run validation — Type Check
         if: steps.changes.outputs.has-changes == 'true' && steps.protected.outputs.has-remaining == 'true'
         id: typecheck
         run: |
-          if npm run typecheck; then
+          if (cd frontend && npx tsc --noEmit); then
             echo "passed=true" >> "$GITHUB_OUTPUT"
           else
             echo "passed=false" >> "$GITHUB_OUTPUT"
@@ -295,11 +301,15 @@ jobs:
         if: steps.changes.outputs.has-changes == 'true' && steps.protected.outputs.has-remaining == 'true'
         id: test
         run: |
-          if npm test; then
-            echo "passed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "passed=false" >> "$GITHUB_OUTPUT"
-          fi
+          PASSED="true"
+
+          # backend tests
+          (cd backend && pytest -v) || PASSED="false"
+
+          # frontend tests
+          (cd frontend && npx vitest run) || PASSED="false"
+
+          echo "passed=${PASSED}" >> "$GITHUB_OUTPUT"
 
       - name: Evaluate validation results
         if: steps.changes.outputs.has-changes == 'true' && steps.protected.outputs.has-remaining == 'true'

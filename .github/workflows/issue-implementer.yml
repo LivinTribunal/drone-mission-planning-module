@@ -42,6 +42,11 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.12'
+
       - name: Setup Node.js
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
@@ -328,10 +333,15 @@ jobs:
           TEST_OK="true"
           BUILD_OK="true"
 
-          npm run lint || LINT_OK="false"
-          npm run typecheck || TYPECHECK_OK="false"
-          npm test || TEST_OK="false"
-          npm run build || BUILD_OK="false"
+          # backend quality gates
+          pip install ruff 2>/dev/null || true
+          (cd backend && ruff check . && ruff format --check .) || LINT_OK="false"
+          (cd backend && pip install -r requirements.txt -q && pytest -v) || TEST_OK="false"
+
+          # frontend quality gates
+          (cd frontend && npm ci -q && npm run lint) || LINT_OK="false"
+          (cd frontend && npx tsc --noEmit) || TYPECHECK_OK="false"
+          (cd frontend && npm run build) || BUILD_OK="false"
 
           PASSED="true"
           if [[ "$LINT_OK" == "false" || "$TYPECHECK_OK" == "false" || "$TEST_OK" == "false" || "$BUILD_OK" == "false" ]]; then
@@ -608,10 +618,15 @@ jobs:
           TEST_OK="true"
           BUILD_OK="true"
 
-          npm run lint 2>/dev/null || LINT_OK="false"
-          npm run typecheck 2>/dev/null || TYPECHECK_OK="false"
-          npm test 2>/dev/null || TEST_OK="false"
-          npm run build 2>/dev/null || BUILD_OK="false"
+          # backend baseline
+          pip install ruff 2>/dev/null || true
+          (cd backend && ruff check . && ruff format --check .) 2>/dev/null || LINT_OK="false"
+          (cd backend && pip install -r requirements.txt -q && pytest -v) 2>/dev/null || TEST_OK="false"
+
+          # frontend baseline
+          (cd frontend && npm ci -q && npm run lint) 2>/dev/null || LINT_OK="false"
+          (cd frontend && npx tsc --noEmit) 2>/dev/null || TYPECHECK_OK="false"
+          (cd frontend && npm run build) 2>/dev/null || BUILD_OK="false"
 
           echo "lint=${LINT_OK}" >> "$GITHUB_OUTPUT"
           echo "typecheck=${TYPECHECK_OK}" >> "$GITHUB_OUTPUT"
@@ -815,10 +830,14 @@ jobs:
           TEST_OK="true"
           BUILD_OK="true"
 
-          npm run lint || LINT_OK="false"
-          npm run typecheck || TYPECHECK_OK="false"
-          npm test || TEST_OK="false"
-          npm run build || BUILD_OK="false"
+          # backend quality gates
+          (cd backend && ruff check . && ruff format --check .) || LINT_OK="false"
+          (cd backend && pytest -v) || TEST_OK="false"
+
+          # frontend quality gates
+          (cd frontend && npm run lint) || LINT_OK="false"
+          (cd frontend && npx tsc --noEmit) || TYPECHECK_OK="false"
+          (cd frontend && npm run build) || BUILD_OK="false"
 
           echo "lint=${LINT_OK}" >> "$GITHUB_OUTPUT"
           echo "typecheck=${TYPECHECK_OK}" >> "$GITHUB_OUTPUT"
