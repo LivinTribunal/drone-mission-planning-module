@@ -67,6 +67,7 @@ def update_airport(db: Session, airport_id: UUID, schema: AirportUpdate) -> Airp
     if not airport:
         raise NotFoundError("airport not found")
 
+    # value objects are immutable, ORM models are mutable - updates apply to ORM instances
     apply_schema_update(airport, schema)
     db.commit()
     db.refresh(airport)

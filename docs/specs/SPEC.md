@@ -90,6 +90,15 @@ DRAFT → PLANNED → VALIDATED → EXPORTED → COMPLETED
 - Any waypoint edit (move, add, delete) → status regresses to PLANNED
 - Config change affecting trajectory (drone, framerate-related) → regresses to PLANNED
 - Config change NOT affecting geometry → validate only, no regression
+- Adding/removing inspections → regresses to DRAFT (trajectory is invalid)
+- Changing drone profile → regresses to PLANNED (inspections still valid, trajectory needs regeneration)
+
+**Modification rules:**
+- DRAFT, PLANNED, VALIDATED: inspections can be added/removed/reordered, drone profile can be changed (auto-regresses as above)
+- EXPORTED, COMPLETED, CANCELLED: terminal states — no modifications allowed, user must duplicate the mission
+
+**Duplication:**
+- Duplicated missions always start in DRAFT status regardless of the original's status
 
 **Status gating:**
 - Export button: disabled until VALIDATED
@@ -199,7 +208,7 @@ Airport list, inspection template editor (AGL selector, LHA checkboxes, default 
 
 ### Aggregate Roots
 
-- **Mission** — owns inspections, controls status transitions via `transition_to()`. Enforces DRAFT-only for inspection add/remove, max 10 inspections, auto-regresses VALIDATED->PLANNED on trajectory-affecting changes.
+- **Mission** — owns inspections, controls status transitions via `transition_to()`. Allows inspection add/remove in DRAFT/PLANNED/VALIDATED (auto-regresses to DRAFT), blocks after EXPORTED. Max 10 inspections. Auto-regresses VALIDATED->PLANNED on trajectory-affecting changes (drone, speed, coordinates).
 - **Airport** — owns surfaces, obstacles, safety zones via `add_surface()`, `add_obstacle()`, `add_safety_zone()`. Sets `airport_id` on child entities.
 
 ### Value Objects (`backend/app/models/value_objects.py`)

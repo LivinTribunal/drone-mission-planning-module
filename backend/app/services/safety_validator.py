@@ -41,28 +41,28 @@ def validate_inspection_pass(
 
     for i, wp in enumerate(waypoints):
         if drone:
-            v = check_drone_constraints(wp, drone)
-            if v:
-                v.waypoint_index = i
-                violations.append(v)
+            violation = check_drone_constraints(wp, drone)
+            if violation:
+                violation.waypoint_index = i
+                violations.append(violation)
 
         for constraint in constraints:
-            v = _check_constraint(db, wp, constraint, surfaces)
-            if v:
-                v.waypoint_index = i
-                violations.append(v)
+            violation = _check_constraint(db, wp, constraint, surfaces)
+            if violation:
+                violation.waypoint_index = i
+                violations.append(violation)
 
         for obstacle in obstacles:
-            v = check_obstacle(db, wp, obstacle)
-            if v:
-                v.waypoint_index = i
-                violations.append(v)
+            violation = check_obstacle(db, wp, obstacle)
+            if violation:
+                violation.waypoint_index = i
+                violations.append(violation)
 
         for zone in zones:
-            v = check_safety_zone(db, wp, zone)
-            if v:
-                v.waypoint_index = i
-                violations.append(v)
+            violation = check_safety_zone(db, wp, zone)
+            if violation:
+                violation.waypoint_index = i
+                violations.append(violation)
 
     return violations
 

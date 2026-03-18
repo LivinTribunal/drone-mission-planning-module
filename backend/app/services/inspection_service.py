@@ -4,7 +4,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
-from app.models.enums import MissionStatus
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.mission import InspectionCreate, InspectionUpdate
@@ -109,9 +108,6 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     """delete inspection and reorder remaining."""
     mission = _get_mission(db, mission_id)
 
-    if mission.status != MissionStatus.DRAFT:
-        raise DomainError("can only remove inspections in DRAFT status", status_code=409)
-
     try:
         mission.remove_inspection(inspection_id)
     except ValueError:
@@ -137,8 +133,9 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
     """reorder inspections by provided id list."""
     mission = _get_mission(db, mission_id)
 
-    if mission.status != MissionStatus.DRAFT:
-        raise DomainError("can only reorder inspections in DRAFT status", status_code=409)
+    terminal = {"EXPORTED", "COMPLETED", "CANCELLED"}
+    if mission.status in terminal:
+        raise DomainError("cannot reorder inspections after mission is exported", status_code=409)
 
     # validate inspection_ids matches mission inspections exactly
     existing_ids = {insp.id for insp in mission.inspections}

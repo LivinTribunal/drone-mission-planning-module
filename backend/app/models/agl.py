@@ -39,15 +39,15 @@ class AGL(Base):
         lons, lats, alts = [], [], []
         for lha in self.lhas:
             try:
-                c = parse_ewkb(lha.position.data).get("coordinates")
-                if not c or len(c) < 3:
+                coords = parse_ewkb(lha.position.data).get("coordinates")
+                if not coords or len(coords) < 3:
                     continue
             except Exception:
                 logger.warning("failed to parse LHA position for lha %s", lha.id)
                 continue
-            lons.append(c[0])
-            lats.append(c[1])
-            alts.append(c[2])
+            lons.append(coords[0])
+            lats.append(coords[1])
+            alts.append(coords[2])
 
         if not lons:
             raise ValueError("no valid LHA positions to compute center from")

@@ -116,6 +116,7 @@ def _format_soft_warnings(violations: list, label: str, warnings: list[str]) -> 
     for v in violations:
         if not v.is_warning:
             continue
+
         indices = groups.setdefault(v.message, [])
         if v.waypoint_index is not None:
             indices.append(v.waypoint_index + 1)
@@ -129,6 +130,7 @@ def _format_soft_warnings(violations: list, label: str, warnings: list[str]) -> 
             full = f"{label} (wp {wp_str}): {msg}"
         else:
             full = f"{label}: {msg}"
+
         if full not in warnings:
             warnings.append(full)
 
@@ -156,10 +158,11 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
-    # auto-regress VALIDATED to PLANNED so regeneration works without manual step
+    # auto-regress VALIDATED so regeneration works without manual step
     if mission.status == MissionStatus.VALIDATED:
         mission.regress_if_validated()
 
+    # only DRAFT or PLANNED can generate - terminal states are blocked
     if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
         raise TrajectoryGenerationError(
             f"cannot generate trajectory for mission in {mission.status} status"
@@ -174,6 +177,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     warnings: list[str] = []
     if had_constraints:
         warnings.append("constraints were reset - re-attach after generation")
+
     inspection_passes: list[InspectionPass] = []
     cumulative_distance = 0.0
     cumulative_duration = 0.0
@@ -372,7 +376,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             )
         )
 
-        # TODO: this should be configurable in mission config
+        # TODO: TAKEOFF_SAFE_ALTITUDE should be configurable
         # vertical climb to safe altitude before starting transit
         safe_alt = tc[2] + TAKEOFF_SAFE_ALTITUDE
         all_waypoints.append(
@@ -420,6 +424,8 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             Coordinate(lat=lc[1], lon=lc[0], alt=lc[2])
         except ValueError as e:
             raise TrajectoryGenerationError(f"invalid landing coordinate: {e}")
+
+        # TODO: LANDING_SAFE_ALTITUDE should be configurable
         safe_alt = lc[2] + LANDING_SAFE_ALTITUDE
         last = all_waypoints[-1]
         from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)
@@ -520,11 +526,11 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # no hard violations at this point - mark flight plan as validated
     flight_plan.is_validated = True
-    db.flush()
 
     # transition to PLANNED only if still in DRAFT (skip if already PLANNED from regression)
     if mission.status == MissionStatus.DRAFT:
         mission.transition_to(MissionStatus.PLANNED)
-        db.commit()
+
+    db.commit()
 
     return flight_plan, warnings

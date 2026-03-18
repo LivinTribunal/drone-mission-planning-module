@@ -26,7 +26,6 @@ from app.services.trajectory_types import (
 from app.utils.geo import (
     angular_span_at_distance,
     bearing_between,
-    center_of_points,
     elevation_angle,
     point_at_distance,
 )
@@ -165,6 +164,8 @@ def compute_optimal_speed(
     """
     if not drone or not drone.camera_frame_rate or density < 2:
         return None
+    if path_distance <= 0:
+        return None
 
     waypoint_spacing = path_distance / (density - 1)
     optimal = waypoint_spacing * drone.camera_frame_rate
@@ -207,8 +208,8 @@ def check_sensor_fov(
         return None
 
     tuples = [p.to_tuple() for p in lha_positions]
-    center = center_of_points(tuples)
-    obs_lon, obs_lat = point_at_distance(center[0], center[1], approach_heading, distance)
+    center = Point3D.center(lha_positions)
+    obs_lon, obs_lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
     span = angular_span_at_distance(tuples, obs_lon, obs_lat)
 
     if span > drone.sensor_fov:
@@ -281,7 +282,7 @@ def determine_start_position(
 
             return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
-        case _:
+        case InspectionMethod.VERTICAL_PROFILE:
             distance = (
                 config.horizontal_distance
                 if config.horizontal_distance is not None
@@ -291,6 +292,8 @@ def determine_start_position(
             alt = center.alt + distance * math.tan(math.radians(MIN_ELEVATION_ANGLE))
 
             return Point3D(lon=lon, lat=lat, alt=alt)
+
+    raise ValueError(f"unsupported inspection method: {method}")
 
 
 def determine_end_position(
@@ -313,7 +316,7 @@ def determine_end_position(
 
             return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
-        case _:
+        case InspectionMethod.VERTICAL_PROFILE:
             distance = (
                 config.horizontal_distance
                 if config.horizontal_distance is not None
@@ -323,6 +326,8 @@ def determine_end_position(
             alt = center.alt + distance * math.tan(math.radians(MAX_ELEVATION_ANGLE))
 
             return Point3D(lon=lon, lat=lat, alt=alt)
+
+    raise ValueError(f"unsupported inspection method: {method}")
 
 
 def calculate_arc_path(

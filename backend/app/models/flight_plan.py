@@ -34,7 +34,6 @@ class FlightPlan(Base):
     airport_id = Column(UUID, ForeignKey("airport.id"), nullable=False)
     total_distance = Column(Float)
     estimated_duration = Column(Float)
-    # set to True by orchestrator after passing final validation
     is_validated = Column(Boolean, nullable=False, default=False)
     generated_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -65,6 +64,7 @@ class FlightPlan(Base):
             raise ValueError(f"total_distance must be non-negative, got {total_distance}")
         if estimated_duration < 0:
             raise ValueError(f"estimated_duration must be non-negative, got {estimated_duration}")
+
         self.total_distance = total_distance
         self.estimated_duration = estimated_duration
         self.generated_at = datetime.now(timezone.utc)

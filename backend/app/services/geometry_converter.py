@@ -1,4 +1,9 @@
+from typing import Any
+
 from pydantic import BaseModel
+
+GeoJSON = dict[str, Any]
+EWKT = str
 
 # all geometry column names across the project
 GEOM_FIELDS = {
@@ -14,7 +19,7 @@ GEOM_FIELDS = {
 }
 
 
-def geojson_to_ewkt(geojson: dict) -> str:
+def geojson_to_ewkt(geojson: GeoJSON) -> EWKT:
     """convert GeoJSON dict to EWKT string"""
     coords = geojson["coordinates"]
     geom_type = geojson["type"]

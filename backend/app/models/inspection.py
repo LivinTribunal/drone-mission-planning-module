@@ -7,6 +7,7 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 
+# junction tables - no ORM class needed, just a Table for many-to-many with no extra columns
 insp_template_targets = Table(
     "insp_template_targets",
     Base.metadata,
@@ -70,7 +71,9 @@ class InspectionConfiguration(Base):
         for key in self._MERGE_FIELDS:
             template_val = getattr(template_config, key, None) if template_config else None
             override_val = getattr(self, key, None)
+
             merged[key] = override_val if override_val is not None else template_val
+
         return merged
 
 
@@ -103,7 +106,7 @@ class Inspection(Base):
     mission_id = Column(UUID, ForeignKey("mission.id", ondelete="CASCADE"), nullable=False)
     template_id = Column(UUID, ForeignKey("inspection_template.id"), nullable=False)
     config_id = Column(UUID, ForeignKey("inspection_configuration.id"))
-    method = Column(String(30), nullable=False)
+    method = Column(String(30), nullable=False)  # validated at schema level
     sequence_order = Column(Integer, nullable=False)
 
     mission = relationship("Mission", back_populates="inspections")
@@ -122,6 +125,7 @@ class Inspection(Base):
             return True
         if not self.config or not self.config.measurement_density:
             return True
+
         density = self.config.measurement_density
         if density < 2:
             return True
