@@ -129,6 +129,12 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
+    # only DRAFT or PLANNED missions can generate trajectories
+    if mission.status not in ("DRAFT", "PLANNED"):
+        raise TrajectoryGenerationError(
+            f"cannot generate trajectory for mission in {mission.status} status"
+        )
+
     if mission.flight_plan:
         db.delete(mission.flight_plan)
         db.flush()
@@ -316,9 +322,9 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # takeoff + climb to safe altitude before transit
     if mission.takeoff_coordinate:
-        tc = parse_ewkb(mission.takeoff_coordinate.data)["coordinates"]
-        if len(tc) < 3:
-            raise TrajectoryGenerationError("takeoff coordinate must be 3D")
+        tc = parse_ewkb(mission.takeoff_coordinate.data).get("coordinates")
+        if not tc or len(tc) < 3:
+            raise TrajectoryGenerationError("takeoff coordinate must be a valid 3D point")
         first_wp = inspection_passes[0].waypoints[0]
         all_waypoints.append(
             WaypointData(
@@ -370,9 +376,9 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # landing: transit to safe altitude above landing spot, then descend
     if mission.landing_coordinate:
-        lc = parse_ewkb(mission.landing_coordinate.data)["coordinates"]
-        if len(lc) < 3:
-            raise TrajectoryGenerationError("landing coordinate must be 3D")
+        lc = parse_ewkb(mission.landing_coordinate.data).get("coordinates")
+        if not lc or len(lc) < 3:
+            raise TrajectoryGenerationError("landing coordinate must be a valid 3D point")
         safe_alt = lc[2] + LANDING_SAFE_ALTITUDE
         last = all_waypoints[-1]
         from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)

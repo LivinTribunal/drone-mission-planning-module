@@ -180,7 +180,9 @@ def check_speed_framerate(
             f"for frame rate {drone.camera_frame_rate} fps"
         )
 
-    if drone.max_speed and speed > drone.max_speed * SPEED_FRAMERATE_MARGIN:
+    # fallback check only when optimal_speed could not be computed
+    max_framerate_speed = (drone.max_speed or 0) * SPEED_FRAMERATE_MARGIN
+    if optimal_speed is None and drone.max_speed and speed > max_framerate_speed:
         return f"speed {speed:.1f} m/s may be too high for frame rate {drone.camera_frame_rate} fps"
 
     return None
