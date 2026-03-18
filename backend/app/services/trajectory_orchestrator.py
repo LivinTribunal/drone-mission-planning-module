@@ -142,11 +142,15 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             f"cannot generate trajectory for mission in {mission.status} status"
         )
 
+    had_constraints = False
     if mission.flight_plan:
+        had_constraints = bool(mission.flight_plan.constraints)
         db.delete(mission.flight_plan)
         db.flush()
 
     warnings: list[str] = []
+    if had_constraints:
+        warnings.append("constraints were reset - re-attach after generation")
     inspection_passes: list[InspectionPass] = []
     cumulative_distance = 0.0
     cumulative_duration = 0.0

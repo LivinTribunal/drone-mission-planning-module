@@ -7,6 +7,7 @@ from app.api.routes.drone_profiles import router as drone_profiles_router
 from app.api.routes.flight_plans import router as flight_plans_router
 from app.api.routes.inspection_templates import router as templates_router
 from app.api.routes.missions import router as missions_router
+from app.core.config import settings
 from app.core.exceptions import DomainError
 
 app = FastAPI(
@@ -18,7 +19,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

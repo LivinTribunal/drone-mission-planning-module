@@ -94,7 +94,10 @@ def get_glide_slope_angle(template) -> Degrees:
     """Return the first non-null glide slope angle from template targets, or default."""
     for agl in template.targets:
         if agl.glide_slope_angle is not None:
-            return agl.glide_slope_angle
+            angle = agl.glide_slope_angle
+            if not (0 < angle < 90):
+                raise ValueError(f"glide slope angle {angle} out of valid range (0-90)")
+            return angle
 
     return DEFAULT_GLIDE_SLOPE
 

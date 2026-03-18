@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import TrajectoryGenerationError
@@ -32,6 +34,8 @@ from app.utils.geo import (
     point_at_distance,
     total_path_distance,
 )
+
+logger = logging.getLogger(__name__)
 
 HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
@@ -71,8 +75,8 @@ def _extract_polygon_vertices(geom_data: bytes) -> list[Point3D]:
 
         return vertices
 
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("failed to extract vertices from obstacle geometry: %s", e)
 
     return []
 
