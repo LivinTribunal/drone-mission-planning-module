@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import TrajectoryGenerationError
 from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
 from app.models.enums import ConstraintType, SurfaceType
 from app.models.flight_plan import ConstraintRule
@@ -386,8 +387,11 @@ def _wp_to_ewkt(wp) -> str:
 
 def _geom_to_ewkt(geom) -> str:
     """convert WKBElement to EWKT string for use in text() queries"""
-    geojson = parse_ewkb(geom.data)
-    return geojson_to_ewkt(geojson)
+    try:
+        geojson = parse_ewkb(geom.data)
+        return geojson_to_ewkt(geojson)
+    except Exception as e:
+        raise TrajectoryGenerationError(f"failed to parse geometry: {e}") from e
 
 
 def _violation(constraint: ConstraintRule, message: str) -> Violation:

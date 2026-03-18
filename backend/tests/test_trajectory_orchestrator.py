@@ -539,3 +539,23 @@ def test_persist_keeps_planned_on_regeneration(client):
     client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     mission = client.get(f"/api/v1/missions/{mission_id}").json()
     assert mission["status"] == "PLANNED"
+
+
+def test_validated_mission_auto_regresses_on_regeneration(client):
+    """generating trajectory on VALIDATED mission auto-regresses to PLANNED"""
+    mission_id, _ = _create_mission_with_inspection(client, "VREG")
+
+    # generate -> PLANNED
+    client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+
+    # validate -> VALIDATED
+    client.post(f"/api/v1/missions/{mission_id}/validate")
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["status"] == "VALIDATED"
+
+    # regenerate -> auto-regresses to PLANNED
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["status"] == "PLANNED"

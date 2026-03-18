@@ -110,6 +110,29 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     )
 
 
+def _format_soft_warnings(violations: list, label: str, warnings: list[str]) -> None:
+    """group soft violations by message and append formatted warnings."""
+    groups: dict[str, list[int]] = {}
+    for v in violations:
+        if not v.is_warning:
+            continue
+        indices = groups.setdefault(v.message, [])
+        if v.waypoint_index is not None:
+            indices.append(v.waypoint_index + 1)
+
+    for msg, indices in groups.items():
+        if indices:
+            if len(indices) <= 3:
+                wp_str = ", ".join(str(i) for i in sorted(indices))
+            else:
+                wp_str = f"{min(indices)}-{max(indices)}"
+            full = f"{label} (wp {wp_str}): {msg}"
+        else:
+            full = f"{label}: {msg}"
+        if full not in warnings:
+            warnings.append(full)
+
+
 def _apply_camera_actions(waypoints: list[WaypointData]):
     """set lead-in and lead-out waypoints to NONE camera action."""
     if len(waypoints) >= 2:
@@ -226,7 +249,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         if obstacle_violations:
             pass_wps = resolve_inspection_collisions(
-                db, pass_wps, data.obstacles, data.safety_zones, center
+                db, pass_wps, data.obstacles, data.safety_zones, center, data.surfaces
             )
 
             # re-validate after rerouting
@@ -257,25 +280,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         # group soft warnings by message, show affected waypoint range
         label = f"{template.name} #{inspection.sequence_order}"
-        soft_groups: dict[str, list[int]] = {}
-        for v in violations:
-            if not v.is_warning:
-                continue
-            indices = soft_groups.setdefault(v.message, [])
-            if v.waypoint_index is not None:
-                indices.append(v.waypoint_index + 1)
-
-        for msg, indices in soft_groups.items():
-            if indices:
-                if len(indices) <= 3:
-                    wp_str = ", ".join(str(i) for i in sorted(indices))
-                else:
-                    wp_str = f"{min(indices)}-{max(indices)}"
-                full = f"{label} (wp {wp_str}): {msg}"
-            else:
-                full = f"{label}: {msg}"
-            if full not in warnings:
-                warnings.append(full)
+        _format_soft_warnings(violations, label, warnings)
 
         # phase 4 - post-inspection processing
         _apply_camera_actions(pass_wps)
@@ -493,25 +498,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             ],
         )
 
-    final_groups: dict[str, list[int]] = {}
-    for v in final_violations:
-        if not v.is_warning:
-            continue
-        indices = final_groups.setdefault(v.message, [])
-        if v.waypoint_index is not None:
-            indices.append(v.waypoint_index + 1)
-
-    for msg, indices in final_groups.items():
-        if indices:
-            if len(indices) <= 3:
-                wp_str = ", ".join(str(i) for i in sorted(indices))
-            else:
-                wp_str = f"{min(indices)}-{max(indices)}"
-            full = f"final validation (wp {wp_str}): {msg}"
-        else:
-            full = f"final validation: {msg}"
-        if full not in warnings:
-            warnings.append(full)
+    _format_soft_warnings(final_violations, "final validation", warnings)
 
     # compute final totals per-segment
     total_dist = 0.0

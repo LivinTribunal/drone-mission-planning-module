@@ -77,8 +77,9 @@ def _extract_polygon_vertices(geom_data: bytes) -> list[Point3D]:
         return vertices
 
     except Exception as e:
-        logger.warning("failed to extract vertices from obstacle geometry: %s", e)
-        raise TrajectoryGenerationError(f"failed to extract vertices from obstacle geometry: {e}")
+        raise TrajectoryGenerationError(
+            f"failed to extract vertices from obstacle geometry: {e}"
+        ) from e
 
 
 def _collect_nearby_objects(
@@ -326,6 +327,7 @@ def resolve_inspection_collisions(
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
     center: Point3D,
+    surfaces: list[AirfieldSurface] | None = None,
 ) -> list[WaypointData]:
     """A*-based rerouting of measurement waypoints around obstacles and safety zones.
 
@@ -380,8 +382,8 @@ def resolve_inspection_collisions(
             obstacles, zones, mid_lon, mid_lat, search_radius
         )
 
-        # A* through local visibility graph
-        path = _run_astar(db, from_pt, to_pt, nearby_obs, nearby_zones)
+        # A* through local visibility graph (includes runway crossing penalties)
+        path = _run_astar(db, from_pt, to_pt, nearby_obs, nearby_zones, surfaces)
         if path is None:
             raise TrajectoryGenerationError("no obstacle-free reroute path found")
 
