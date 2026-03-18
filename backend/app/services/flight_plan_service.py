@@ -69,7 +69,8 @@ def persist_flight_plan(
     db.add(val_result)
     db.flush()
 
-    for w in dict.fromkeys(warnings):  # deduplicate preserving order
+    # defensive dedup - orchestrator already deduplicates but this protects against direct callers
+    for w in dict.fromkeys(warnings):
         db.add(
             ValidationViolation(
                 validation_result_id=val_result.id,
