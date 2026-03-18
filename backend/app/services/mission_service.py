@@ -76,12 +76,12 @@ def create_mission(db: Session, schema: MissionCreate) -> Mission:
     """create mission in DRAFT status."""
     airport = db.query(Airport).filter(Airport.id == schema.airport_id).first()
     if not airport:
-        raise DomainError("airport not found")
+        raise NotFoundError("airport not found")
 
     if schema.drone_profile_id:
         drone = db.query(DroneProfile).filter(DroneProfile.id == schema.drone_profile_id).first()
         if not drone:
-            raise DomainError("drone profile not found")
+            raise NotFoundError("drone profile not found")
 
     mission = Mission(**schema_to_model_data(schema))
     db.add(mission)
@@ -122,7 +122,11 @@ def delete_mission(db: Session, mission_id: UUID):
 
 
 def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
-    """duplicate mission as new DRAFT."""
+    """duplicate mission as new DRAFT.
+
+    runs in a single db session that auto-rolls back on exception via the
+    get_db dependency, so no explicit try/except is needed here.
+    """
     original = (
         db.query(Mission)
         .options(joinedload(Mission.inspections).joinedload(Inspection.config))

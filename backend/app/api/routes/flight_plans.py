@@ -21,7 +21,11 @@ def generate(mission_id: UUID, db: Session = Depends(get_db)):
     try:
         flight_plan, warnings = generate_trajectory(db, mission_id)
     except TrajectoryGenerationError as e:
-        detail = {"error": e.message, "violations": e.violations} if e.violations else e.message
+        detail = (
+            {"error": e.message, "violations": e.violations}
+            if e.violations is not None
+            else e.message
+        )
         raise HTTPException(status_code=e.status_code, detail=detail)
     except DomainError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)

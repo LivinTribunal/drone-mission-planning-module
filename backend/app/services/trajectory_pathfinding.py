@@ -56,6 +56,8 @@ def _extract_polygon_vertices(geom_data: bytes) -> list[Point3D]:
         if geojson["type"] != "Polygon":
             return []
 
+        if not geojson.get("coordinates"):
+            return []
         coords = geojson["coordinates"][0]
         if len(coords) < 3:
             return []
@@ -91,7 +93,13 @@ def _collect_nearby_objects(
     for obs in obstacles:
         if not obs.position:
             continue
-        obs_pos = parse_ewkb(obs.position.data)["coordinates"]
+        try:
+            obs_pos = parse_ewkb(obs.position.data).get("coordinates")
+            if not obs_pos or len(obs_pos) < 2:
+                continue
+        except Exception:
+            logger.warning("failed to parse obstacle position for obstacle %s", obs.id)
+            continue
         if distance_between(center_lon, center_lat, obs_pos[0], obs_pos[1]) <= search_radius:
             nearby_obs.append(obs)
 
@@ -207,11 +215,17 @@ def _collect_graph_nodes_in_circle(
         for surface in surfaces:
             if not surface.geometry:
                 continue
-            geojson = parse_ewkb(surface.geometry.data)
-            if geojson["type"] != "LineString":
+            try:
+                geojson = parse_ewkb(surface.geometry.data)
+            except Exception:
+                logger.warning("failed to parse surface geometry for surface %s", surface.id)
+                continue
+            if geojson.get("type") != "LineString":
                 continue
 
-            coords = geojson["coordinates"]
+            coords = geojson.get("coordinates")
+            if not coords:
+                continue
             start = coords[0]
             end = coords[-1]
             length = surface.length or distance_between(start[0], start[1], end[0], end[1])

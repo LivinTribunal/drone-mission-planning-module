@@ -71,6 +71,7 @@ def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation 
     if drone.max_altitude is not None and wp.alt > drone.max_altitude:
         return Violation(
             is_warning=False,
+            violation_kind="drone",
             message=(
                 f"waypoint alt {wp.alt:.0f}m exceeds drone max altitude {drone.max_altitude:.0f}m"
             ),
@@ -80,11 +81,14 @@ def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation 
     try:
         Speed(wp.speed)
     except ValueError:
-        return Violation(is_warning=False, message=f"invalid speed value: {wp.speed}")
+        return Violation(
+            is_warning=False, violation_kind="drone", message=f"invalid speed value: {wp.speed}"
+        )
 
     if drone.max_speed is not None and wp.speed > drone.max_speed:
         return Violation(
             is_warning=False,
+            violation_kind="drone",
             message=(
                 f"waypoint speed {wp.speed:.1f} m/s exceeds "
                 f"drone max speed {drone.max_speed:.1f} m/s"
@@ -115,9 +119,12 @@ def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violati
 
     obs_base_alt = 0.0
     if obstacle.position:
-        obs_pos = parse_ewkb(obstacle.position.data)
-        coords = obs_pos["coordinates"]
-        obs_base_alt = coords[2] if len(coords) > 2 else 0.0
+        try:
+            obs_pos = parse_ewkb(obstacle.position.data)
+            coords = obs_pos.get("coordinates", [])
+            obs_base_alt = coords[2] if len(coords) > 2 else 0.0
+        except Exception:
+            pass
 
     obs_top = obs_base_alt + (obstacle.height or 0)
 
@@ -147,6 +154,7 @@ def check_battery(
     if cumulative_duration_s > available_s:
         return Violation(
             is_warning=True,
+            violation_kind="battery",
             message=(
                 f"estimated flight time {cumulative_duration_s:.0f}s exceeds "
                 f"battery capacity {available_s:.0f}s "
@@ -185,6 +193,7 @@ def check_safety_zone(db: Session, wp: WaypointData, zone: SafetyZone) -> Violat
 
     return Violation(
         is_warning=not is_hard,
+        violation_kind="safety_zone",
         message=f"waypoint inside {zone.type} zone: {zone.name}",
     )
 
@@ -385,6 +394,7 @@ def _violation(constraint: ConstraintRule, message: str) -> Violation:
     """create a violation from a constraint, inheriting its hard/soft flag"""
     return Violation(
         is_warning=not constraint.is_hard_constraint,
+        violation_kind="constraint",
         message=message,
         constraint_id=str(constraint.id),
     )

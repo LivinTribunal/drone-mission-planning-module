@@ -52,7 +52,8 @@ def delete_drone(db: Session, drone_id: UUID) -> list[str]:
     if not drone:
         raise NotFoundError("drone profile not found")
 
-    # check missions using this drone
+    # check missions using this drone - FK is ON DELETE SET NULL so missions
+    # keep existing but lose their drone reference after deletion
     missions = db.query(Mission).filter(Mission.drone_profile_id == drone_id).all()
     warnings = [f"mission '{mission.name}' uses this drone" for mission in missions]
 

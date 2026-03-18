@@ -1,3 +1,4 @@
+import logging
 import math
 from uuid import UUID
 
@@ -29,6 +30,8 @@ from app.utils.geo import (
     elevation_angle,
     point_at_distance,
 )
+
+logger = logging.getLogger(__name__)
 
 # config fields that can be overridden per-inspection
 CONFIG_FIELDS = (
@@ -73,7 +76,13 @@ def get_lha_positions(template) -> list[Point3D]:
         for lha in agl.lhas:
             if not lha.position:
                 continue
-            c = parse_ewkb(lha.position.data)["coordinates"]
+            try:
+                c = parse_ewkb(lha.position.data).get("coordinates")
+                if not c or len(c) < 3:
+                    continue
+            except Exception:
+                logger.warning("failed to parse LHA position for lha %s", lha.id)
+                continue
             positions.append(Point3D(lon=c[0], lat=c[1], alt=c[2]))
 
     return positions

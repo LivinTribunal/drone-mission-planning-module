@@ -1,3 +1,4 @@
+import logging
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
@@ -6,6 +7,8 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+
+logger = logging.getLogger(__name__)
 
 
 class AGL(Base):
@@ -35,10 +38,19 @@ class AGL(Base):
 
         lons, lats, alts = [], [], []
         for lha in self.lhas:
-            c = parse_ewkb(lha.position.data)["coordinates"]
+            try:
+                c = parse_ewkb(lha.position.data).get("coordinates")
+                if not c or len(c) < 3:
+                    continue
+            except Exception:
+                logger.warning("failed to parse LHA position for lha %s", lha.id)
+                continue
             lons.append(c[0])
             lats.append(c[1])
             alts.append(c[2])
+
+        if not lons:
+            raise ValueError("no valid LHA positions to compute center from")
 
         n = len(lons)
         return (sum(lons) / n, sum(lats) / n, sum(alts) / n)

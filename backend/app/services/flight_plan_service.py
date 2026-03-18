@@ -3,7 +3,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import NotFoundError
-from app.models.enums import MissionStatus
 from app.models.flight_plan import (
     FlightPlan,
     ValidationResult,
@@ -12,6 +11,7 @@ from app.models.flight_plan import (
 )
 from app.models.mission import Mission
 from app.services.geometry_converter import geojson_to_ewkt
+from app.services.trajectory_types import WaypointData
 
 
 def _to_point_ewkt(lon: float, lat: float, alt: float) -> str:
@@ -44,7 +44,7 @@ def _waypoint_to_model(wp, flight_plan_id, sequence_order: int) -> Waypoint:
 def persist_flight_plan(
     db: Session,
     mission: Mission,
-    all_waypoints: list,
+    all_waypoints: list[WaypointData],
     warnings: list[str],
     total_distance: float,
     estimated_duration: float,
@@ -84,9 +84,6 @@ def persist_flight_plan(
             )
         )
 
-    # transition to PLANNED only if still in DRAFT (skip if already PLANNED from regression)
-    if mission.status == MissionStatus.DRAFT:
-        mission.transition_to(MissionStatus.PLANNED)
     db.commit()
     db.refresh(flight_plan)
 

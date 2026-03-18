@@ -60,6 +60,10 @@ class FlightPlan(Base):
 
     def compile(self, total_distance: float, estimated_duration: float):
         """set computed flight plan metrics and timestamp."""
+        if total_distance < 0:
+            raise ValueError(f"total_distance must be non-negative, got {total_distance}")
+        if estimated_duration < 0:
+            raise ValueError(f"estimated_duration must be non-negative, got {estimated_duration}")
         self.total_distance = total_distance
         self.estimated_duration = estimated_duration
         self.generated_at = datetime.now(timezone.utc)

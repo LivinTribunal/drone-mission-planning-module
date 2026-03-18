@@ -140,6 +140,19 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
     if mission.status != MissionStatus.DRAFT:
         raise DomainError("can only reorder inspections in DRAFT status", status_code=409)
 
+    # validate inspection_ids matches mission inspections exactly
+    existing_ids = {insp.id for insp in mission.inspections}
+    provided_ids = set(inspection_ids)
+    if existing_ids != provided_ids:
+        missing = existing_ids - provided_ids
+        extra = provided_ids - existing_ids
+        parts = []
+        if missing:
+            parts.append(f"missing: {sorted(str(i) for i in missing)}")
+        if extra:
+            parts.append(f"unknown: {sorted(str(i) for i in extra)}")
+        raise DomainError(f"inspection_ids mismatch - {', '.join(parts)}", status_code=400)
+
     for i, insp_id in enumerate(inspection_ids, start=1):
         inspection = (
             db.query(Inspection)

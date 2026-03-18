@@ -244,7 +244,15 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         if hard:
             raise TrajectoryGenerationError(
                 "hard constraint violation",
-                violations=[{"message": v.message} for v in hard],
+                violations=[
+                    {
+                        "message": v.message,
+                        "violation_kind": v.violation_kind,
+                        "constraint_id": v.constraint_id,
+                        "waypoint_index": v.waypoint_index,
+                    }
+                    for v in hard
+                ],
             )
 
         # group soft warnings by message, show affected waypoint range
@@ -336,7 +344,10 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # takeoff + climb to safe altitude before transit
     if mission.takeoff_coordinate:
-        tc = parse_ewkb(mission.takeoff_coordinate.data).get("coordinates")
+        try:
+            tc = parse_ewkb(mission.takeoff_coordinate.data).get("coordinates")
+        except Exception:
+            raise TrajectoryGenerationError("failed to parse takeoff coordinate geometry")
         if not tc or len(tc) < 3:
             raise TrajectoryGenerationError("takeoff coordinate must be a valid 3D point")
         try:
@@ -394,7 +405,10 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # landing: transit to safe altitude above landing spot, then descend
     if mission.landing_coordinate:
-        lc = parse_ewkb(mission.landing_coordinate.data).get("coordinates")
+        try:
+            lc = parse_ewkb(mission.landing_coordinate.data).get("coordinates")
+        except Exception:
+            raise TrajectoryGenerationError("failed to parse landing coordinate geometry")
         if not lc or len(lc) < 3:
             raise TrajectoryGenerationError("landing coordinate must be a valid 3D point")
         try:
@@ -468,7 +482,15 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     if final_hard:
         raise TrajectoryGenerationError(
             "final validation failed",
-            violations=[{"message": v.message} for v in final_hard],
+            violations=[
+                {
+                    "message": v.message,
+                    "violation_kind": v.violation_kind,
+                    "constraint_id": v.constraint_id,
+                    "waypoint_index": v.waypoint_index,
+                }
+                for v in final_hard
+            ],
         )
 
     final_groups: dict[str, list[int]] = {}
@@ -508,5 +530,10 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             total_dur += all_waypoints[j].hover_duration
 
     flight_plan = persist_flight_plan(db, mission, all_waypoints, warnings, total_dist, total_dur)
+
+    # transition to PLANNED only if still in DRAFT (skip if already PLANNED from regression)
+    if mission.status == MissionStatus.DRAFT:
+        mission.transition_to(MissionStatus.PLANNED)
+        db.commit()
 
     return flight_plan, warnings
