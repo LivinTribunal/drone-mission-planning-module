@@ -199,7 +199,7 @@ def segments_intersect_obstacle(
     from_lat: float,
     to_lon: float,
     to_lat: float,
-    obstacle,
+    obstacle: Obstacle,
 ) -> bool:
     """check if a line segment intersects an obstacle's 2D footprint"""
     if not obstacle.geometry:
@@ -225,7 +225,7 @@ def segments_intersect_zone(
     from_lat: float,
     to_lon: float,
     to_lat: float,
-    zone,
+    zone: SafetyZone,
 ) -> bool:
     """check if a line segment intersects a hard safety zone's 2D footprint"""
     if not zone.geometry:

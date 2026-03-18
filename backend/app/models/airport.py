@@ -81,10 +81,14 @@ class AirfieldSurface(Base):
 
 
 class Runway(AirfieldSurface):
+    """runway surface subtype."""
+
     __mapper_args__ = {"polymorphic_identity": "RUNWAY"}
 
 
 class Taxiway(AirfieldSurface):
+    """taxiway surface subtype."""
+
     __mapper_args__ = {"polymorphic_identity": "TAXIWAY"}
 
 

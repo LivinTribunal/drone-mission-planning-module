@@ -108,12 +108,13 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     """delete inspection and reorder remaining."""
     mission = _get_mission(db, mission_id)
 
+    # check status before calling aggregate - avoids fragile string matching on ValueError
+    if mission.status != "DRAFT":
+        raise HTTPException(status_code=409, detail="can only remove inspections in DRAFT status")
+
     try:
         mission.remove_inspection(inspection_id)
-    except ValueError as e:
-        detail = str(e)
-        if "DRAFT" in detail:
-            raise HTTPException(status_code=409, detail=detail)
+    except ValueError:
         raise HTTPException(status_code=404, detail="inspection not found")
 
     db.flush()

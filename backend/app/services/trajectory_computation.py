@@ -2,6 +2,7 @@ import math
 from uuid import UUID
 
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
+from app.models.mission import DroneProfile
 from app.services.trajectory_types import (
     DEFAULT_GLIDE_SLOPE,
     DEFAULT_HEADING,
@@ -165,7 +166,7 @@ def compute_optimal_speed(
 
 def check_speed_framerate(
     speed: MetersPerSecond,
-    drone,
+    drone: DroneProfile,
     optimal_speed: MetersPerSecond | None = None,
 ) -> str | None:
     """Check if speed is compatible with camera frame rate."""
