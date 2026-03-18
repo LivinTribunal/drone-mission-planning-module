@@ -95,11 +95,11 @@ jobs:
           while IFS= read -r file; do
             [[ -z "$file" ]] && continue
             case "$file" in
-              src/index.ts|src/cli.ts|package.json|tsconfig.json|tsup.config.ts|vitest.config.ts|eslint.config.js)
+              *trajectory*|*safety_validator*|*flight_plan*|*/migrations/versions/*)
                 TIER=3 ;;
-              src/commands/*.ts|src/core/*.ts|src/harnesses/index.ts|src/harnesses/types.ts)
-                [[ $TIER -lt 3 ]] && TIER=3 ;;
-              src/*.ts|tests/*.ts|scripts/*.ts|*.ts|*.js|*.mjs)
+              backend/app/*|frontend/src/*|backend/tests/*|docker-compose.yml|backend/pyproject.toml)
+                [[ $TIER -lt 2 ]] && TIER=2 ;;
+              scripts/*|.codefactory/*)
                 [[ $TIER -lt 2 ]] && TIER=2 ;;
             esac
           done <<< "$CHANGED"
