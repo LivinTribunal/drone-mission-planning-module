@@ -131,7 +131,7 @@ class SafetyZoneResponse(BaseModel):
 
 # AGLs for airport surfaces
 class LHACreate(BaseModel):
-    """LHA create schema"""
+    """lha create schema"""
 
     unit_number: int
     setting_angle: float
@@ -141,7 +141,7 @@ class LHACreate(BaseModel):
 
 
 class LHAUpdate(BaseModel):
-    """LHA update schema"""
+    """lha update schema"""
 
     unit_number: int | None = None
     setting_angle: float | None = None
@@ -151,7 +151,7 @@ class LHAUpdate(BaseModel):
 
 
 class LHAResponse(BaseModel):
-    """LHA response schema"""
+    """lha response schema"""
 
     id: UUID
     agl_id: UUID
@@ -165,7 +165,7 @@ class LHAResponse(BaseModel):
 
 
 class AGLCreate(BaseModel):
-    """AGL create schema"""
+    """agl create schema"""
 
     agl_type: str
     name: str
@@ -177,7 +177,7 @@ class AGLCreate(BaseModel):
 
 
 class AGLUpdate(BaseModel):
-    """AGL update schema"""
+    """agl update schema"""
 
     agl_type: str | None = None
     name: str | None = None
@@ -189,7 +189,7 @@ class AGLUpdate(BaseModel):
 
 
 class AGLResponse(BaseModel):
-    """AGL response schema"""
+    """agl response schema"""
 
     id: UUID
     surface_id: UUID
@@ -228,14 +228,14 @@ class SafetyZoneListResponse(BaseModel):
 
 
 class AGLListResponse(BaseModel):
-    """AGL list response"""
+    """agl list response"""
 
     data: list[AGLResponse]
     meta: ListMeta
 
 
 class LHAListResponse(BaseModel):
-    """LHA list response"""
+    """lha list response"""
 
     data: list[LHAResponse]
     meta: ListMeta

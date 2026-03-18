@@ -4,18 +4,21 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
-from app.models.enums import ConstraintType, SafetyZoneType, SurfaceType
+from app.models.enums import ConstraintType, SurfaceType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
 from app.models.value_objects import Speed
 from app.schemas.geometry import parse_ewkb
 from app.services.geometry_converter import geojson_to_ewkt
-from app.services.trajectory_types import DEFAULT_RUNWAY_BUFFER, Violation, WaypointData
+from app.services.trajectory_types import (
+    DEFAULT_RUNWAY_BUFFER,
+    HARD_ZONE_TYPES,
+    Violation,
+    WaypointData,
+)
 
 # spatial queries use parameterized text() with PostGIS functions
 # all inputs are bound parameters - no sql injection risk
-
-HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
 
 def _line_ewkt(from_lon: float, from_lat: float, to_lon: float, to_lat: float) -> str:
@@ -121,6 +124,7 @@ def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violati
     if wp.alt <= obs_top:
         return Violation(
             is_warning=False,
+            violation_kind="obstacle",
             message=(
                 f"waypoint at {wp.alt:.0f}m intersects obstacle "
                 f"'{obstacle.name}' (top: {obs_top:.0f}m)"

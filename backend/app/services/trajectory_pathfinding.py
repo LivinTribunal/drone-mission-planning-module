@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
-from app.models.enums import CameraAction, SafetyZoneType, WaypointType
+from app.models.enums import CameraAction, WaypointType
 from app.schemas.geometry import parse_ewkb
 from app.services.safety_validator import (
     check_obstacle,
@@ -14,6 +14,7 @@ from app.services.safety_validator import (
 )
 from app.services.trajectory_types import (
     DEFAULT_OBSTACLE_RADIUS,
+    HARD_ZONE_TYPES,
     MAX_REROUTE_DEVIATION,
     MAX_TURN_ANGLE,
     REROUTE_SEARCH_RADIUS_MULTIPLIER,
@@ -37,8 +38,6 @@ from app.utils.geo import (
 
 logger = logging.getLogger(__name__)
 
-HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
-
 # buffer to push obstacle vertices outward so A* nodes are outside the polygon
 # vertices ON the boundary are detected as intersecting by ST_Intersects
 VERTEX_BUFFER_M: Meters = 5.0
@@ -51,7 +50,7 @@ MAX_ASTAR_RETRIES = 3
 
 
 def _extract_polygon_vertices(geom_data: bytes) -> list[Point3D]:
-    """Extract vertices from polygon geometry, offset outward from centroid by VERTEX_BUFFER_M."""
+    """extract vertices from polygon geometry, offset outward from centroid by VERTEX_BUFFER_M."""
     try:
         geojson = parse_ewkb(geom_data)
         if geojson["type"] != "Polygon":
@@ -77,8 +76,7 @@ def _extract_polygon_vertices(geom_data: bytes) -> list[Point3D]:
 
     except Exception as e:
         logger.warning("failed to extract vertices from obstacle geometry: %s", e)
-
-    return []
+        raise TrajectoryGenerationError(f"failed to extract vertices from obstacle geometry: {e}")
 
 
 def _collect_nearby_objects(
@@ -88,7 +86,7 @@ def _collect_nearby_objects(
     center_lat: float,
     search_radius: Meters,
 ) -> tuple[list[Obstacle], list[SafetyZone]]:
-    """Collect obstacles and hard safety zones within search_radius of center."""
+    """collect obstacles and hard safety zones within search_radius of center."""
     nearby_obs = []
     for obs in obstacles:
         if not obs.position:
@@ -120,7 +118,7 @@ def _is_segment_blocked(
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
 ) -> bool:
-    """Check if a straight-line segment is blocked by obstacles or hard zones."""
+    """check if a straight-line segment is blocked by obstacles or hard zones."""
     for obs in obstacles:
         if segments_intersect_obstacle(db, from_pt.lon, from_pt.lat, to_pt.lon, to_pt.lat, obs):
             return True
@@ -139,9 +137,9 @@ def _build_visibility_graph(
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface] | None = None,
 ) -> dict[int, list[tuple[int, float]]]:
-    """Build adjacency list where edges connect unobstructed node pairs.
+    """build adjacency list where edges connect unobstructed node pairs.
 
-    Edges crossing runways get a distance penalty proportional to crossing
+    edges crossing runways get a distance penalty proportional to crossing
     length, making A* prefer routes that go around runways or cross
     perpendicularly.
     """
@@ -182,9 +180,9 @@ def _collect_graph_nodes_in_circle(
     center: Point3D,
     radius: Meters,
 ) -> list[Point3D]:
-    """Collect nodes within search circle for visibility graph construction.
+    """collect nodes within search circle for visibility graph construction.
 
-    Includes endpoints plus nearby vertices from obstacles, hard zones,
+    includes endpoints plus nearby vertices from obstacles, hard zones,
     and runway/taxiway surfaces.
     """
     nodes = list(endpoints)
@@ -254,10 +252,10 @@ def _run_astar(
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface] | None = None,
 ) -> list[Point3D] | None:
-    """Circle-based A* pathfinding with expanding search radius on failure.
+    """circle-based A* pathfinding with expanding search radius on failure.
 
-    Builds a visibility graph within a circle centered on the midpoint
-    of from_point to to_point. Expands the radius and retries if no
+    builds a visibility graph within a circle centered on the midpoint
+    of from_point to to_point. expands the radius and retries if no
     path is found.
     """
     mid = Point3D(
@@ -292,12 +290,12 @@ def has_line_of_sight(
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
 ) -> bool:
-    """Check if the line from point to target is clear of obstacles and hard zones."""
+    """check if the line from point to target is clear of obstacles and hard zones."""
     return not _is_segment_blocked(db, point, target, obstacles, zones)
 
 
 def _max_turn_angle(waypoints: list[WaypointData]) -> Degrees:
-    """Compute the maximum turn angle between consecutive waypoint headings."""
+    """compute the maximum turn angle between consecutive waypoint headings."""
     max_angle = 0.0
     for i in range(1, len(waypoints)):
         diff = abs(waypoints[i].heading - waypoints[i - 1].heading)
@@ -317,7 +315,7 @@ def resolve_inspection_collisions(
 ) -> list[WaypointData]:
     """A*-based rerouting of measurement waypoints around obstacles and safety zones.
 
-    Finds alternative positions that preserve measurement geometry (distance
+    finds alternative positions that preserve measurement geometry (distance
     to center, line-of-sight to PAPI, max turn angle).
     """
     # find colliding waypoints
@@ -359,7 +357,10 @@ def resolve_inspection_collisions(
         # collect nearby obstacles AND safety zones
         mid_lon = (from_pt.lon + to_pt.lon) / 2
         mid_lat = (from_pt.lat + to_pt.lat) / 2
-        max_radius = max((obs.radius or DEFAULT_OBSTACLE_RADIUS) for obs in obstacles)
+        max_radius = max(
+            ((obs.radius or DEFAULT_OBSTACLE_RADIUS) for obs in obstacles),
+            default=DEFAULT_OBSTACLE_RADIUS,
+        )
         search_radius = max_radius * REROUTE_SEARCH_RADIUS_MULTIPLIER
         nearby_obs, nearby_zones = _collect_nearby_objects(
             obstacles, zones, mid_lon, mid_lat, search_radius
@@ -437,7 +438,7 @@ def compute_transit_path(
     speed: MetersPerSecond,
     surfaces: list[AirfieldSurface] | None = None,
 ) -> list[WaypointData]:
-    """Compute A* transit path - shortest obstacle-free route with runway crossing penalties."""
+    """compute A* transit path - shortest obstacle-free route with runway crossing penalties."""
     # straight-line if path is clear and doesn't cross runway
     if not _is_segment_blocked(db, from_point, to_point, obstacles, zones):
         crosses_runway = False

@@ -118,13 +118,13 @@ def _apply_camera_actions(waypoints: list[WaypointData]):
 
 
 def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list[str]]:
-    """Five-phase trajectory generation pipeline.
+    """five-phase trajectory generation pipeline.
 
-    Phase 1: load all data
-    Phase 2: config resolution and pre-checks per inspection
-    Phase 3: compute waypoints, validate, and reroute
-    Phase 4: post-inspection processing
-    Phase 5: final assembly with A* transit
+    phase 1: load all data
+    phase 2: config resolution and pre-checks per inspection
+    phase 3: compute waypoints, validate, and reroute
+    phase 4: post-inspection processing
+    phase 5: final assembly with A* transit
     """
 
     # phase 1 - load all data
@@ -221,7 +221,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         )
 
         obstacle_violations = [
-            v for v in violations if not v.is_warning and "obstacle" in (v.message or "").lower()
+            v for v in violations if not v.is_warning and v.violation_kind == "obstacle"
         ]
 
         if obstacle_violations:
