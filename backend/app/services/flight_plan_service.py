@@ -49,7 +49,11 @@ def persist_flight_plan(
     total_distance: float,
     estimated_duration: float,
 ) -> FlightPlan:
-    """persist flight plan with waypoints and validation result"""
+    """persist flight plan with waypoints and validation result.
+
+    caller must filter out hard violations before calling - all warnings
+    are stored as soft violations (is_warning=True).
+    """
     flight_plan = FlightPlan(
         mission_id=mission.id,
         airport_id=mission.airport_id,

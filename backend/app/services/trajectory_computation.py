@@ -228,20 +228,21 @@ def resolve_speed(
     density: int,
     drone,
     default_speed: MetersPerSecond,
-) -> tuple[MetersPerSecond, str | None]:
+) -> tuple[MetersPerSecond, str | None, MetersPerSecond | None]:
     """Resolve measurement speed from override, optimal calculation, or default.
 
-    Returns the final speed and an optional warning string if auto-computed.
+    Returns (final_speed, optional_warning, optimal_speed).
     """
-    if config.speed_override is not None:
-        return config.speed_override, None
-
     optimal = compute_optimal_speed(path_distance, density, drone)
+
+    if config.speed_override is not None:
+        return config.speed_override, None, optimal
+
     if optimal is not None:
         warning = f"speed auto-set to {optimal:.1f} m/s based on path geometry and frame rate"
-        return optimal, warning
+        return optimal, warning, optimal
 
-    return default_speed, None
+    return default_speed, None, optimal
 
 
 def determine_start_position(

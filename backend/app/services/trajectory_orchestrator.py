@@ -21,7 +21,6 @@ from app.services.trajectory_computation import (
     check_sensor_fov,
     check_speed_framerate,
     compute_measurement_trajectory,
-    compute_optimal_speed,
     determine_end_position,
     determine_start_position,
     get_glide_slope_angle,
@@ -172,14 +171,13 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         )
         path_dist = distance_between(start_pos.lon, start_pos.lat, end_pos.lon, end_pos.lat)
 
-        speed, speed_warning = resolve_speed(
+        speed, speed_warning, optimal_speed = resolve_speed(
             config, path_dist, config.measurement_density, drone, default_speed
         )
         if speed_warning:
             warnings.append(f"{template.name} #{inspection.sequence_order}: {speed_warning}")
 
         if drone:
-            optimal_speed = compute_optimal_speed(path_dist, config.measurement_density, drone)
             warning = check_speed_framerate(speed, drone, optimal_speed)
             if warning:
                 warnings.append(warning)
