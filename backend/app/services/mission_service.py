@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.airport import Airport
 from app.models.enums import MissionStatus
 from app.models.inspection import Inspection, InspectionConfiguration
-from app.models.mission import TRAJECTORY_FIELDS, DroneProfile, Mission
+from app.models.mission import TRAJECTORY_FIELDS, TRANSITIONS, DroneProfile, Mission
 from app.schemas.mission import MissionCreate, MissionUpdate
 from app.services.geometry_converter import apply_schema_update, schema_to_model_data
 
@@ -26,6 +26,7 @@ def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mis
                 "error": "invalid status transition",
                 "current_status": mission.status,
                 "target_status": target_status,
+                "allowed_transitions": TRANSITIONS.get(mission.status, []),
                 "message": str(e),
             },
         )
