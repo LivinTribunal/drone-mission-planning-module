@@ -214,7 +214,7 @@ def resolve_density(
     Returns the final density and an optional warning string if auto-increased.
     """
     optimal = compute_optimal_density(method, setting_angles, config)
-    if optimal and config.measurement_density < optimal:
+    if optimal is not None and config.measurement_density < optimal:
         config.measurement_density = optimal
         warning = f"density auto-set to {optimal} to capture all transition angles"
         return optimal, warning

@@ -53,6 +53,9 @@ SURFACE_NODE_SPACING: Meters = 200.0
 # parallel crossing (~3700m for LKPR) costs 3700*10=37000m - strongly avoided
 RUNWAY_CROSSING_PENALTY_PER_METER = 10.0
 
+# vertical profile descent detection - ~11m at equator
+VERTICAL_POSITION_TOLERANCE_DEG: Degrees = 0.0001
+
 # safety validation
 DEFAULT_RUNWAY_BUFFER: Meters = 100.0
 

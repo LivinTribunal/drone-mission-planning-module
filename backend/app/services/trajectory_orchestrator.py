@@ -44,6 +44,7 @@ from app.services.trajectory_types import (
     MIN_ARC_RADIUS,
     MIN_SPEED_FLOOR,
     TAKEOFF_SAFE_ALTITUDE,
+    VERTICAL_POSITION_TOLERANCE_DEG,
     InspectionPass,
     MissionData,
     Point3D,
@@ -88,8 +89,10 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     )
     surfaces = db.query(AirfieldSurface).filter(AirfieldSurface.airport_id == airport.id).all()
 
-    # constraint rules live on the flight plan which gets deleted before regeneration;
-    # drone limits are checked directly in validate_inspection_pass
+    # constraints intentionally empty during generation - constraint rules are
+    # per-flight-plan children that get cascade-deleted with the old plan.
+    # drone limits and spatial checks run directly in validate_inspection_pass;
+    # operator-configured constraints are re-created and validated post-generation
     constraints: list[ConstraintRule] = []
 
     return MissionData(
@@ -294,8 +297,8 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         if (
             inspection.method == InspectionMethod.VERTICAL_PROFILE
             and len(pass_wps) >= 2
-            and abs(pass_wps[0].lon - pass_wps[-1].lon) < 0.0001
-            and abs(pass_wps[0].lat - pass_wps[-1].lat) < 0.0001
+            and abs(pass_wps[0].lon - pass_wps[-1].lon) < VERTICAL_POSITION_TOLERANCE_DEG
+            and abs(pass_wps[0].lat - pass_wps[-1].lat) < VERTICAL_POSITION_TOLERANCE_DEG
         ):
             pass_wps.append(
                 WaypointData(
