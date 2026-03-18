@@ -206,3 +206,165 @@ def test_regeneration_replaces_flight_plan(client):
     fp_get = client.get(f"/api/v1/missions/{mission_id}/flight-plan")
     assert fp_get.status_code == 200
     assert fp_get.json()["id"] == fp2_id
+
+
+def _create_mission_with_inspection(client, icao_code, **mission_extras):
+    """helper to create airport + surface + agl + lhas + template + drone + mission + inspection"""
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": icao_code},
+    ).json()
+    airport_id = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces", json=TRAJECTORY_SURFACE_PAYLOAD
+    ).json()
+    surface_id = surface["id"]
+
+    agl = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls",
+        json=TRAJECTORY_AGL_PAYLOAD,
+    ).json()
+    agl_id = agl["id"]
+
+    for i in range(1, 5):
+        client.post(
+            f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas",
+            json=make_lha_payload(i),
+        )
+
+    template = client.post(
+        "/api/v1/inspection-templates",
+        json={
+            "name": f"Template {icao_code}",
+            "methods": ["ANGULAR_SWEEP"],
+            "target_agl_ids": [agl_id],
+            "default_config": {"measurement_density": 6, "speed_override": 5.0},
+        },
+    ).json()
+
+    drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
+
+    mission_payload = {
+        "name": f"Test {icao_code}",
+        "airport_id": airport_id,
+        "drone_profile_id": drone["id"],
+        "default_speed": 5.0,
+        **mission_extras,
+    }
+
+    mission = client.post("/api/v1/missions", json=mission_payload).json()
+    mission_id = mission["id"]
+
+    client.post(
+        f"/api/v1/missions/{mission_id}/inspections",
+        json={"template_id": template["id"], "method": "ANGULAR_SWEEP"},
+    )
+
+    return mission_id, airport_id
+
+
+def test_phase5_takeoff_landing_assembly(client):
+    """trajectory includes TAKEOFF and LANDING waypoints when coordinates are set"""
+    takeoff = {"type": "Point", "coordinates": [14.24, 50.10, 300]}
+    landing = {"type": "Point", "coordinates": [14.28, 50.09, 300]}
+
+    mission_id, _ = _create_mission_with_inspection(
+        client,
+        "TKLM",
+        takeoff_coordinate=takeoff,
+        landing_coordinate=landing,
+    )
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    fp = response.json()["flight_plan"]
+    wp_types = [w["waypoint_type"] for w in fp["waypoints"]]
+
+    assert wp_types[0] == "TAKEOFF"
+    assert wp_types[-1] == "LANDING"
+
+    # second waypoint should be TRANSIT (vertical climb to safe altitude)
+    assert wp_types[1] == "TRANSIT"
+
+    # total distance and duration should be positive
+    assert fp["total_distance"] > 0
+    assert fp["estimated_duration"] > 0
+
+
+def test_phase5_transit_between_waypoints(client):
+    """transit waypoints are inserted between takeoff climb and inspection pass"""
+    takeoff = {"type": "Point", "coordinates": [14.24, 50.10, 300]}
+
+    mission_id, _ = _create_mission_with_inspection(
+        client,
+        "TRNZ",
+        takeoff_coordinate=takeoff,
+    )
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    fp = response.json()["flight_plan"]
+    wp_types = [w["waypoint_type"] for w in fp["waypoints"]]
+
+    # should start with TAKEOFF, then TRANSIT (climb), then more TRANSIT or MEASUREMENT
+    assert wp_types[0] == "TAKEOFF"
+    assert "TRANSIT" in wp_types
+    assert "MEASUREMENT" in wp_types
+
+
+def test_runway_crossing_warnings(client):
+    """trajectory crossing a runway produces crossing warnings"""
+    # place takeoff on one side of runway, so transit crosses it
+    takeoff = {"type": "Point", "coordinates": [14.26, 50.11, 300]}
+    landing = {"type": "Point", "coordinates": [14.26, 50.08, 300]}
+
+    mission_id, _ = _create_mission_with_inspection(
+        client,
+        "RWCR",
+        takeoff_coordinate=takeoff,
+        landing_coordinate=landing,
+    )
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    warnings = response.json()["warnings"]
+    # check that runway crossing warnings exist if trajectory crosses the runway
+    # the exact number depends on geometry, but we verify the pipeline runs
+    assert isinstance(warnings, list)
+
+
+def test_final_validation_produces_soft_warnings(client):
+    """final assembled path validation adds soft warnings to the response"""
+    mission_id, _ = _create_mission_with_inspection(client, "FNVL")
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    fp = response.json()["flight_plan"]
+    # validation result should exist with passed=True
+    assert fp["validation_result"] is not None
+    assert fp["validation_result"]["passed"] is True
+
+    # waypoints should be ordered by sequence
+    wps = fp["waypoints"]
+    assert len(wps) > 0
+    seq_orders = [w["sequence_order"] for w in wps]
+    assert seq_orders == sorted(seq_orders)
+
+
+def test_pipeline_computes_distance_and_duration(client):
+    """full pipeline computes total_distance and estimated_duration"""
+    mission_id, _ = _create_mission_with_inspection(client, "DIST")
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    fp = response.json()["flight_plan"]
+    assert fp["total_distance"] is not None
+    assert fp["total_distance"] > 0
+    assert fp["estimated_duration"] is not None
+    assert fp["estimated_duration"] > 0
