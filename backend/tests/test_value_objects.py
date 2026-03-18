@@ -113,6 +113,12 @@ class TestAltitudeRange:
         assert r.contains(50) is False
         assert r.contains(600) is False
 
+    def test_immutable(self):
+        """frozen dataclass prevents attribute assignment."""
+        r = AltitudeRange(min_alt=100, max_alt=500)
+        with pytest.raises(AttributeError):
+            r.min_alt = 200
+
 
 class TestIcaoCode:
     """tests for IcaoCode value object."""

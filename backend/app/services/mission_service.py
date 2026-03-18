@@ -163,15 +163,13 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
             db.flush()
             new_config_id = new_config.id
 
-        db.add(
-            Inspection(
-                mission_id=copy.id,
-                template_id=insp.template_id,
-                config_id=new_config_id,
-                method=insp.method,
-                sequence_order=insp.sequence_order,
-            )
+        new_insp = Inspection(
+            template_id=insp.template_id,
+            config_id=new_config_id,
+            method=insp.method,
+            sequence_order=insp.sequence_order,
         )
+        copy.add_inspection(new_insp)
 
     db.commit()
     db.refresh(copy)

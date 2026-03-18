@@ -1,8 +1,8 @@
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.enums import MissionStatus
 from app.models.flight_plan import (
     FlightPlan,
     ValidationResult,
@@ -85,8 +85,8 @@ def persist_flight_plan(
             )
 
     # transition to PLANNED only if still in DRAFT (skip if already PLANNED from regression)
-    if mission.status == "DRAFT":
-        mission.transition_to("PLANNED")
+    if mission.status == MissionStatus.DRAFT:
+        mission.transition_to(MissionStatus.PLANNED)
     db.commit()
     db.refresh(flight_plan)
 
@@ -105,6 +105,6 @@ def get_flight_plan(db: Session, mission_id: UUID) -> FlightPlan:
         .first()
     )
     if not fp:
-        raise HTTPException(status_code=404, detail="flight plan not found")
+        raise ValueError("flight plan not found")
 
     return fp

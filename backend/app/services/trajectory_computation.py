@@ -131,7 +131,7 @@ def compute_optimal_density(
             return optimal
 
         case InspectionMethod.ANGULAR_SWEEP:
-            half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+            half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             # at least one point per degree of sweep
             optimal = math.ceil(2 * half_sweep) + 1
 
@@ -258,7 +258,7 @@ def determine_start_position(
     match method:
         case InspectionMethod.ANGULAR_SWEEP:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
-            half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+            half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             angle = approach - half_sweep
             lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
             alt = center.alt + radius * math.tan(math.radians(glide_slope))
@@ -266,7 +266,11 @@ def determine_start_position(
             return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
         case _:
-            distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
+            distance = (
+                config.horizontal_distance
+                if config.horizontal_distance is not None
+                else DEFAULT_HORIZONTAL_DISTANCE
+            )
             lon, lat = point_at_distance(center.lon, center.lat, approach, distance)
             alt = center.alt + distance * math.tan(math.radians(MIN_ELEVATION_ANGLE))
 
@@ -286,7 +290,7 @@ def determine_end_position(
     match method:
         case InspectionMethod.ANGULAR_SWEEP:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
-            half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+            half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             angle = approach + half_sweep
             lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
             alt = center.alt + radius * math.tan(math.radians(glide_slope))
@@ -294,7 +298,11 @@ def determine_end_position(
             return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
         case _:
-            distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
+            distance = (
+                config.horizontal_distance
+                if config.horizontal_distance is not None
+                else DEFAULT_HORIZONTAL_DISTANCE
+            )
             lon, lat = point_at_distance(center.lon, center.lat, approach, distance)
             alt = center.alt + distance * math.tan(math.radians(MAX_ELEVATION_ANGLE))
 
@@ -312,7 +320,7 @@ def calculate_arc_path(
     """Generate angular sweep arc path on the approach side of the PAPI."""
     density = config.measurement_density
     radius = config.horizontal_distance or MIN_ARC_RADIUS
-    half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+    half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
     glide_height = radius * math.tan(math.radians(glide_slope_angle))
     arc_alt = center.alt + glide_height + config.altitude_offset
 
@@ -364,7 +372,11 @@ def calculate_vertical_path(
     """Generate vertical profile path with HOVER at transition angles."""
     density = config.measurement_density
     hover_duration = config.hover_duration
-    distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
+    distance = (
+        config.horizontal_distance
+        if config.horizontal_distance is not None
+        else DEFAULT_HORIZONTAL_DISTANCE
+    )
 
     approach_heading = (runway_heading + 180) % 360
     lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)

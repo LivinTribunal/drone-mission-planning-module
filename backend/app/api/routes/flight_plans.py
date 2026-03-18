@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
@@ -28,4 +28,7 @@ def generate(mission_id: UUID, db: Session = Depends(get_db)):
 @router.get("/{mission_id}/flight-plan", response_model=FlightPlanResponse)
 def get_plan(mission_id: UUID, db: Session = Depends(get_db)):
     """get flight plan for mission"""
-    return flight_plan_service.get_flight_plan(db, mission_id)
+    try:
+        return flight_plan_service.get_flight_plan(db, mission_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="flight plan not found")
