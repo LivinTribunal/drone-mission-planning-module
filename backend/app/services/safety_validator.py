@@ -19,10 +19,8 @@ HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
 
 def _line_ewkt(from_lon: float, from_lat: float, to_lon: float, to_lat: float) -> str:
-    """build EWKT linestring from two 2D points."""
-    return geojson_to_ewkt(
-        {"type": "LineString", "coordinates": [[from_lon, from_lat], [to_lon, to_lat]]}
-    )
+    """build 2D EWKT linestring for spatial intersection checks."""
+    return f"SRID=4326;LINESTRING({from_lon} {from_lat}, {to_lon} {to_lat})"
 
 
 def validate_inspection_pass(
