@@ -532,7 +532,7 @@ jobs:
             }
             const nextCycle = maxCycle + 1;
 
-            if (nextCycle > 3) {
+            if (nextCycle > 15) {
               core.info(`Max review-fix cycles reached (${maxCycle} cycles). Escalating.`);
               core.setOutput('eligible', 'false');
               core.setOutput('escalate', 'true');
