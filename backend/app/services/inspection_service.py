@@ -137,6 +137,9 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
     """reorder inspections by provided id list."""
     mission = _get_mission(db, mission_id)
 
+    if mission.status != "DRAFT":
+        raise HTTPException(status_code=409, detail="can only reorder inspections in DRAFT status")
+
     for i, insp_id in enumerate(inspection_ids, start=1):
         inspection = (
             db.query(Inspection)

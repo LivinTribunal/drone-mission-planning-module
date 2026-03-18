@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import NotFoundError, TrajectoryGenerationError
 from app.models.agl import AGL
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
-from app.models.enums import CameraAction, InspectionMethod, WaypointType
+from app.models.enums import CameraAction, InspectionMethod, MissionStatus, WaypointType
 from app.models.flight_plan import ConstraintRule, FlightPlan
 from app.models.inspection import Inspection, InspectionTemplate
 from app.models.mission import Mission
+from app.models.value_objects import Coordinate
 from app.schemas.geometry import parse_ewkb
 from app.services.flight_plan_service import persist_flight_plan
 from app.services.safety_validator import (
@@ -130,7 +131,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     default_speed = data.default_speed
 
     # only DRAFT or PLANNED missions can generate trajectories
-    if mission.status not in ("DRAFT", "PLANNED"):
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
         raise TrajectoryGenerationError(
             f"cannot generate trajectory for mission in {mission.status} status"
         )
@@ -325,6 +326,10 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         tc = parse_ewkb(mission.takeoff_coordinate.data).get("coordinates")
         if not tc or len(tc) < 3:
             raise TrajectoryGenerationError("takeoff coordinate must be a valid 3D point")
+        try:
+            Coordinate(lat=tc[1], lon=tc[0], alt=tc[2])
+        except ValueError as e:
+            raise TrajectoryGenerationError(f"invalid takeoff coordinate: {e}")
         first_wp = inspection_passes[0].waypoints[0]
         all_waypoints.append(
             WaypointData(
@@ -379,6 +384,10 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         lc = parse_ewkb(mission.landing_coordinate.data).get("coordinates")
         if not lc or len(lc) < 3:
             raise TrajectoryGenerationError("landing coordinate must be a valid 3D point")
+        try:
+            Coordinate(lat=lc[1], lon=lc[0], alt=lc[2])
+        except ValueError as e:
+            raise TrajectoryGenerationError(f"invalid landing coordinate: {e}")
         safe_alt = lc[2] + LANDING_SAFE_ALTITUDE
         last = all_waypoints[-1]
         from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)
