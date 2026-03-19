@@ -37,10 +37,6 @@ REROUTE_SEARCH_RADIUS_MULTIPLIER = 3.0
 MAX_REROUTE_DEVIATION = 0.15
 MAX_TURN_ANGLE: Degrees = 60.0
 
-# takeoff/landing safety
-TAKEOFF_SAFE_ALTITUDE: Meters = 10.0
-LANDING_SAFE_ALTITUDE: Meters = 10.0
-
 # minimum speed floor for duration calculation - prevents division by zero
 MIN_SPEED_FLOOR: MetersPerSecond = 0.1
 
