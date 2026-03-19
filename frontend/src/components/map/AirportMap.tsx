@@ -277,26 +277,30 @@ export default function AirportMap({
 
       map.setStyle(mode === "satellite" ? makeSatelliteStyle() : makeMapStyle());
 
-      // restore position and re-add layers in a single callback
-      map.once("style.load", () => {
-        map.setCenter(center);
-        map.setZoom(zoom);
-        map.setBearing(bearing);
-        map.setPitch(pitch);
+      // wait for new style to be ready before re-adding layers
+      const mapInstance = map;
+      function onData() {
+        if (!mapInstance.isStyleLoaded()) return;
+        mapInstance.off("data", onData);
+
+        mapInstance.setCenter(center);
+        mapInstance.setZoom(zoom);
+        mapInstance.setBearing(bearing);
+        mapInstance.setPitch(pitch);
 
         if (layersAddedRef.current) return;
         layersAddedRef.current = true;
-        addSafetyZoneLayers(map, airport.safety_zones);
-        addSurfaceLayers(map, airport.surfaces);
-        addObstacleLayers(map, airport.obstacles);
-        addAglLayers(map, airport.surfaces);
+        addSafetyZoneLayers(mapInstance, airport.safety_zones);
+        addSurfaceLayers(mapInstance, airport.surfaces);
+        addObstacleLayers(mapInstance, airport.obstacles);
+        addAglLayers(mapInstance, airport.surfaces);
 
         for (const [key, layerIds] of Object.entries(layerGroupMap)) {
           const visible = layerConfig[key as keyof MapLayerConfig];
           for (const layerId of layerIds) {
             try {
-              if (map.getLayer(layerId)) {
-                map.setLayoutProperty(
+              if (mapInstance.getLayer(layerId)) {
+                mapInstance.setLayoutProperty(
                   layerId,
                   "visibility",
                   visible ? "visible" : "none",
@@ -307,7 +311,8 @@ export default function AirportMap({
             }
           }
         }
-      });
+      }
+      mapInstance.on("data", onData);
     },
     [airport, layerConfig],
   );
@@ -355,24 +360,24 @@ export default function AirportMap({
     >
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* top-left: layers panel */}
-      {showLayerPanel && (
-        <div className="absolute top-3 left-3 z-10 w-52">
+      {/* top-left: layers panel + poi info */}
+      <div className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-52">
+        {showLayerPanel && (
           <LayerPanel layers={layerConfig} onToggle={handleLayerToggle} />
-        </div>
-      )}
-
-      {/* top-right: legend */}
-      {showLegend && <LegendPanel />}
-
-      {/* bottom-left: poi info + map help */}
-      <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-2 w-52">
+        )}
         {showPoiInfo && (
           <PoiInfoPanel
             feature={selectedFeature}
             onClose={() => setSelectedFeature(null)}
           />
         )}
+      </div>
+
+      {/* top-right: legend */}
+      {showLegend && <LegendPanel />}
+
+      {/* bottom-left: map help */}
+      <div className="absolute bottom-3 left-3 z-10">
         <MapHelpPanel />
       </div>
 

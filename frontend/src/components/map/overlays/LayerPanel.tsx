@@ -21,14 +21,14 @@ export default function LayerPanel({ layers, onToggle }: LayerPanelProps) {
 
   return (
     <div
-      className="z-10 w-52 rounded-2xl border border-tv-border bg-tv-surface"
+      className="z-10 rounded-2xl border border-tv-border bg-tv-bg"
       data-testid="layer-panel"
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-tv-text-primary"
       >
-        <span>{t("dashboard.layers")}</span>
+        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border">{t("dashboard.layers")}</span>
         <svg
           className={`ml-2 h-4 w-4 text-tv-text-secondary transition-transform ${collapsed ? "" : "rotate-180"}`}
           viewBox="0 0 20 20"
@@ -52,10 +52,23 @@ export default function LayerPanel({ layers, onToggle }: LayerPanelProps) {
                 type="checkbox"
                 checked={layers[key]}
                 onChange={() => onToggle(key)}
-                className="h-3.5 w-3.5 rounded accent-tv-accent"
+                className="sr-only"
                 data-testid={`layer-toggle-${key}`}
               />
               {t(i18nKey)}
+              <span
+                className="ml-auto flex-shrink-0 relative inline-block w-10 h-[16px] rounded-full transition-colors duration-200"
+                style={{
+                  backgroundColor: layers[key] ? "var(--tv-accent)" : "var(--tv-border)",
+                }}
+              >
+                <span
+                  className="absolute top-[2px] h-[12px] w-[20px] rounded-full bg-white shadow-sm transition-transform duration-200"
+                  style={{
+                    transform: layers[key] ? "translateX(20px)" : "translateX(2px)",
+                  }}
+                />
+              </span>
             </label>
           ))}
         </div>

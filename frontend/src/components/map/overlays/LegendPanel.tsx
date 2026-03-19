@@ -30,14 +30,14 @@ export default function LegendPanel() {
 
   return (
     <div
-      className="absolute top-3 right-14 z-10 rounded-2xl border border-tv-border bg-tv-surface"
+      className="absolute top-3 right-3 z-10 w-44 rounded-2xl border border-tv-border bg-tv-bg"
       data-testid="legend-panel"
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-tv-text-primary"
       >
-        <span>{t("dashboard.legend")}</span>
+        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border">{t("dashboard.legend")}</span>
         <svg
           className={`ml-2 h-4 w-4 text-tv-text-secondary transition-transform ${collapsed ? "" : "rotate-180"}`}
           viewBox="0 0 20 20"

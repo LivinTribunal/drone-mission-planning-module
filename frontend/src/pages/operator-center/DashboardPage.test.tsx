@@ -211,8 +211,8 @@ describe("DashboardPage", () => {
     await waitFor(() => {
       expect(screen.getByText("dashboard.statistics")).toBeInTheDocument();
     });
-    // total missions shows the count
-    expect(screen.getByText("2")).toBeInTheDocument();
+    // total missions shows the count (may appear in both stat card and mission count bubble)
+    expect(screen.getAllByText("2").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("dashboard.totalMissions")).toBeInTheDocument();
     // uncomputable stats show dash
     const dashes = screen.getAllByText("\u2014");

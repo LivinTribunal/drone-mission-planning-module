@@ -581,13 +581,13 @@ function DroneProfileRow({ dp, missionCount }: { dp: DroneProfileResponse; missi
           {[dp.manufacturer, dp.model].filter(Boolean).join(" \u00B7 ") || "\u2014"}
         </p>
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <span className="flex items-center gap-1 text-xs text-tv-text-primary">
-          <Battery className="w-3.5 h-3.5" style={{ color: "var(--tv-accent)" }} />
+      <div className="flex items-center gap-4 flex-shrink-0">
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-tv-text-primary">
+          <Battery className="w-4 h-4" style={{ color: "var(--tv-accent)" }} />
           {dp.endurance_minutes != null ? `${dp.endurance_minutes} ${t("dashboard.minutes")}` : "\u2014"}
         </span>
-        <span className="flex items-center gap-1 text-xs text-tv-text-primary">
-          <Layers className="w-3.5 h-3.5" style={{ color: "var(--tv-info)" }} />
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-tv-text-primary">
+          <Layers className="w-4 h-4" style={{ color: "var(--tv-info)" }} />
           {missionCount}
         </span>
       </div>
@@ -641,7 +641,7 @@ function DroneProfilesSection({
         data-testid="section-dashboard.droneprofiles"
       >
         <div className="flex-1 flex items-center gap-2">
-          <span className="text-base font-semibold text-tv-text-primary rounded-full px-3 py-1 bg-tv-surface-hover">
+          <span className="text-base font-semibold text-tv-text-primary rounded-full px-3 py-1 bg-tv-bg border border-tv-border">
             {t("dashboard.droneProfiles")}
           </span>
         </div>
@@ -675,6 +675,9 @@ function DroneProfilesSection({
           {/* always-visible: most used drone preview */}
           {mostUsed && (
             <div className="border-t border-tv-border">
+              <p className="px-3 pt-2 text-[10px] font-medium uppercase text-tv-text-muted">
+                {t("dashboard.mostUsedDrone")}
+              </p>
               <DroneProfileRow dp={mostUsed} missionCount={missionCounts[mostUsed.id] || 0} />
             </div>
           )}
@@ -733,27 +736,30 @@ function DashboardView() {
   if (!selectedAirport) return null;
 
   return (
-    <div className="flex gap-4 p-4 h-full">
+    <div className="flex p-4 h-full">
       {/* left panel - 30% */}
-      <div className="w-[30%] flex-shrink-0 overflow-y-auto flex flex-col gap-4 mr-2">
-        <MissionListSection
-          missions={missions}
-          loading={missionsLoading}
-          error={missionsError}
-          onRetry={fetchMissions}
-          droneProfiles={droneProfiles}
-        />
+      <div className="w-[30%] flex-shrink-0 flex">
+        <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-4">
+          <MissionListSection
+            missions={missions}
+            loading={missionsLoading}
+            error={missionsError}
+            onRetry={fetchMissions}
+            droneProfiles={droneProfiles}
+          />
 
-        <Button
-          className="w-full"
-          onClick={() => setShowCreateDialog(true)}
-          data-testid="new-mission-btn"
-        >
-          {t("dashboard.newMission")}
-        </Button>
+          <Button
+            className="w-full"
+            onClick={() => setShowCreateDialog(true)}
+            data-testid="new-mission-btn"
+          >
+            {t("dashboard.newMission")}
+          </Button>
 
-        <StatisticsSection missions={missions} />
-        <DroneProfilesSection profiles={droneProfiles} loading={droneProfilesLoading} missions={missions} />
+          <StatisticsSection missions={missions} />
+          <DroneProfilesSection profiles={droneProfiles} loading={droneProfilesLoading} missions={missions} />
+        </div>
+        <div className="w-2.5 flex-shrink-0" />
       </div>
 
       {/* right panel - 70% */}

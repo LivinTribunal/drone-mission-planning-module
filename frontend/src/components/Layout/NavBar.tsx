@@ -47,30 +47,33 @@ export default function NavBar({ items, role }: NavBarProps) {
 
   return (
     <nav
-      className="flex items-center gap-6 px-4 py-5 bg-tv-bg"
+      className="flex items-center px-4 py-5 bg-tv-bg"
       data-testid="navbar"
     >
       {/* left section - 30% */}
-      <div className="w-[30%] flex-shrink-0">
-        <NavLink
-          to={
-            role === "operator"
-              ? "/operator-center/dashboard"
-              : "/coordinator-center/airports"
-          }
-          className="flex w-full items-center justify-center gap-2 rounded-full bg-tv-surface px-4 h-11"
-        >
-          <svg
-            className="h-6 w-6 text-tv-accent"
-            viewBox="0 0 24 24"
-            fill="currentColor"
+      <div className="w-[30%] flex-shrink-0 flex">
+        <div className="flex-1 overflow-hidden pr-4" style={{ scrollbarGutter: "stable" }}>
+          <NavLink
+            to={
+              role === "operator"
+                ? "/operator-center/dashboard"
+                : "/coordinator-center/airports"
+            }
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-tv-surface px-4 h-11"
           >
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-          </svg>
-          <span className="text-sm font-semibold text-tv-text-primary">
-            {t("common.appTitle")}
-          </span>
-        </NavLink>
+            <svg
+              className="h-6 w-6 text-tv-accent"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
+            <span className="text-sm font-semibold text-tv-text-primary">
+              {t("common.appTitle")}
+            </span>
+          </NavLink>
+        </div>
+        <div className="w-2.5 flex-shrink-0" />
       </div>
 
       {/* right section - 70% */}

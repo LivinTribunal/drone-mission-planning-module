@@ -10,7 +10,7 @@ export default function TerrainToggle({ mode, onToggle }: TerrainToggleProps) {
 
   return (
     <div
-      className="absolute bottom-3 right-3 z-10 flex rounded-full border border-tv-border bg-tv-surface p-0.5"
+      className="absolute bottom-2 right-2 z-10 flex rounded-full border border-tv-border bg-tv-surface p-0.5"
       data-testid="terrain-toggle"
     >
       <button

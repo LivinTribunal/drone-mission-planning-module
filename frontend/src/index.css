@@ -102,3 +102,23 @@ body {
   background-color: var(--tv-bg);
   color: var(--tv-text-primary);
 }
+
+/* global scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tv-border) transparent;
+}
+
+/* maplibre navigation control - rounded to match design system */
+.maplibregl-ctrl-group {
+  border-radius: 16px !important;
+  overflow: hidden;
+  border: 1px solid var(--tv-border) !important;
+  box-shadow: none !important;
+}
+.maplibregl-ctrl-group button {
+  border-radius: 0 !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--tv-border) !important;
+}

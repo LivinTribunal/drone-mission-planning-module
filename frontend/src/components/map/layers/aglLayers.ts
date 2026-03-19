@@ -41,8 +41,8 @@ export function addAglLayers(
       "circle-color": "#4595e5",
       "circle-stroke-color": "#ffffff",
       "circle-stroke-width": 2,
-      "circle-opacity": ["interpolate", ["linear"], ["zoom"], 14, 1, 15, 0.3],
-      "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 14, 1, 15, 0.3],
+      "circle-opacity": ["interpolate", ["linear"], ["zoom"], 16, 1, 17, 0.3],
+      "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 16, 1, 17, 0.3],
     },
   });
 
@@ -91,8 +91,8 @@ export function addAglLayers(
         "circle-color": "#60a5fa",
         "circle-stroke-color": "#ffffff",
         "circle-stroke-width": 1,
-        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
-        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
+        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 16, 0, 17, 1],
+        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 16, 0, 17, 1],
       },
     });
   }

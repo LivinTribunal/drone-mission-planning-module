@@ -1,42 +1,26 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 export default function MapHelpPanel() {
   const { t } = useTranslation();
-  const [showHelp, setShowHelp] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-  return (
-    <div>
-      {showHelp && (
-        <div className="mb-2 w-56 rounded-2xl border border-tv-border bg-tv-surface p-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-tv-text-primary">
-              {t("dashboard.mapHelpTitle")}
-            </span>
-            <button
-              onClick={() => setShowHelp(false)}
-              className="rounded-full p-0.5 text-tv-text-secondary hover:bg-tv-surface-hover"
-              aria-label={t("common.close")}
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-          </div>
-          <ul className="space-y-1.5 text-xs text-tv-text-secondary">
-            <li>{t("dashboard.mapHelpDrag")}</li>
-            <li>{t("dashboard.mapHelpRotate")}</li>
-            <li>{t("dashboard.mapHelpClick")}</li>
-            <li>{t("dashboard.mapHelpWasd")}</li>
-          </ul>
-        </div>
-      )}
+  useEffect(() => {
+    if (!expanded) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setExpanded(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [expanded]);
+
+  if (!expanded) {
+    return (
       <button
-        onClick={() => setShowHelp(!showHelp)}
+        onClick={() => setExpanded(true)}
         className="flex h-8 w-8 items-center justify-center rounded-full border border-tv-border bg-tv-surface text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
         aria-label={t("dashboard.mapHelpTitle")}
         data-testid="map-help-btn"
@@ -49,6 +33,35 @@ export default function MapHelpPanel() {
           />
         </svg>
       </button>
+    );
+  }
+
+  return (
+    <div ref={ref} className="w-56 rounded-2xl border border-tv-border bg-tv-surface p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-tv-text-primary">
+          {t("dashboard.mapHelpTitle")}
+        </span>
+        <button
+          onClick={() => setExpanded(false)}
+          className="rounded-full p-0.5 text-tv-text-secondary hover:bg-tv-surface-hover"
+          aria-label={t("common.close")}
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
+      </div>
+      <ul className="space-y-1.5 text-xs text-tv-text-secondary">
+        <li>{t("dashboard.mapHelpDrag")}</li>
+        <li>{t("dashboard.mapHelpRotate")}</li>
+        <li>{t("dashboard.mapHelpClick")}</li>
+        <li>{t("dashboard.mapHelpWasd")}</li>
+      </ul>
     </div>
   );
 }
