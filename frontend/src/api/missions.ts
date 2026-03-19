@@ -9,7 +9,10 @@ import type {
   InspectionUpdate,
   ReorderRequest,
 } from "@/types/mission";
-import type { FlightPlanResponse } from "@/types/flightPlan";
+import type {
+  FlightPlanResponse,
+  GenerateTrajectoryResponse,
+} from "@/types/flightPlan";
 import client from "./client";
 
 export async function listMissions(params?: {
@@ -126,7 +129,7 @@ export async function reorderInspections(
 
 export async function generateTrajectory(
   missionId: string,
-): Promise<FlightPlanResponse> {
+): Promise<GenerateTrajectoryResponse> {
   const res = await client.post(`/missions/${missionId}/generate-trajectory`);
   return res.data;
 }
