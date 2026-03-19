@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -206,19 +206,31 @@ describe("DashboardPage", () => {
     });
   });
 
-  it("shows statistics section", async () => {
+  it("shows statistics section with computed values", async () => {
     renderDashboard(mockAirport);
     await waitFor(() => {
       expect(screen.getByText("dashboard.statistics")).toBeInTheDocument();
     });
-    expect(screen.getByText("94%")).toBeInTheDocument();
+    // both mock missions are from march 2026 (current month in tests)
+    expect(screen.getByText("2")).toBeInTheDocument();
+    // uncomputable stats show dash
+    const dashes = screen.getAllByText("\u2014");
+    expect(dashes.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("shows drone profiles section", async () => {
+  it("shows drone profiles section and resolves drone names in mission rows", async () => {
     renderDashboard(mockAirport);
     await waitFor(() => {
-      expect(screen.getByText("DJI Matrice 300")).toBeInTheDocument();
+      expect(screen.getByTestId("drone-profile-dp-1")).toBeInTheDocument();
     });
+    // drone profile card shows name
+    expect(within(screen.getByTestId("drone-profile-dp-1")).getByText("DJI Matrice 300")).toBeInTheDocument();
+    // mission m-1 has drone_profile_id dp-1 which maps to "DJI Matrice 300"
+    const row1 = screen.getByTestId("mission-row-m-1");
+    expect(row1).toHaveTextContent("DJI Matrice 300");
+    // mission m-2 has no drone
+    const row2 = screen.getByTestId("mission-row-m-2");
+    expect(row2).toHaveTextContent("dashboard.noDrone");
   });
 
   it("renders map component when airport detail is loaded", async () => {
@@ -238,7 +250,20 @@ describe("DashboardPage", () => {
     const sectionBtn = screen.getByTestId("section-dashboard.statistics");
     fireEvent.click(sectionBtn);
 
-    // after collapse, the stat values should not be visible
-    expect(screen.queryByText("94%")).not.toBeInTheDocument();
+    // after collapse, the stat labels should not be visible
+    expect(screen.queryByText("dashboard.avgInspectionTime")).not.toBeInTheDocument();
+  });
+
+  it("shows error state when airport detail fetch fails", async () => {
+    const { getAirport } = await import("@/api/airports");
+    (getAirport as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("fail"));
+
+    renderDashboard(mockAirport);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("map-error")).toBeInTheDocument();
+    });
+    expect(screen.getByText("common.error")).toBeInTheDocument();
+    expect(screen.getByText("common.retry")).toBeInTheDocument();
   });
 });

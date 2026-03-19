@@ -54,7 +54,7 @@ export default function PoiInfoPanel({ feature, onClose }: PoiInfoPanelProps) {
           <>
             <InfoRow label={t("dashboard.poiName")} value={z.name} />
             <InfoRow label={t("dashboard.poiType")} value={z.type} />
-            <InfoRow label={t("dashboard.poiActive")} value={z.is_active ? "Yes" : "No"} />
+            <InfoRow label={t("dashboard.poiActive")} value={z.is_active ? t("common.yes") : t("common.no")} />
             {z.altitude_floor != null && (
               <InfoRow label={t("dashboard.poiFloor")} value={`${z.altitude_floor}m`} />
             )}

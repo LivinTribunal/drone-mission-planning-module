@@ -292,26 +292,22 @@ function Spinner() {
   );
 }
 
-function MissionListSection({ airportId }: { airportId: string }) {
+function MissionListSection({
+  missions,
+  loading,
+  error,
+  onRetry,
+  droneProfiles,
+}: {
+  missions: MissionResponse[];
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
+  droneProfiles: DroneProfileResponse[];
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [missions, setMissions] = useState<MissionResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const [search, setSearch] = useState("");
-
-  const fetchMissions = useCallback(() => {
-    setLoading(true);
-    setError(false);
-    listMissions({ airport_id: airportId })
-      .then((res) => setMissions(res.data))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }, [airportId]);
-
-  useEffect(() => {
-    fetchMissions();
-  }, [fetchMissions]);
 
   const filtered = useMemo(() => {
     if (!search) return missions;
@@ -343,7 +339,7 @@ function MissionListSection({ airportId }: { airportId: string }) {
       ) : error ? (
         <div className="text-center text-xs text-tv-error py-4">
           {t("dashboard.loadError")}
-          <button onClick={fetchMissions} className="ml-2 underline hover:no-underline">
+          <button onClick={onRetry} className="ml-2 underline hover:no-underline">
             {t("common.retry")}
           </button>
         </div>
@@ -353,26 +349,31 @@ function MissionListSection({ airportId }: { airportId: string }) {
         </p>
       ) : (
         <div className="space-y-2 max-h-[360px] overflow-y-auto">
-          {filtered.map((mission) => (
-            <button
-              key={mission.id}
-              onClick={() => navigate(`/operator-center/missions/${mission.id}/overview`)}
-              className="w-full text-left rounded-xl border border-tv-border bg-tv-bg p-3
-                hover:bg-tv-surface-hover transition-colors"
-              data-testid={`mission-row-${mission.id}`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-tv-text-primary truncate mr-2">
-                  {mission.name}
-                </span>
-                <Badge status={mission.status} />
-              </div>
-              <div className="flex items-center gap-3 text-xs text-tv-text-secondary">
-                <span>{mission.drone_profile_id ? mission.drone_profile_id.slice(0, 8) : t("dashboard.noDrone")}</span>
-                <span>{new Date(mission.created_at).toLocaleDateString()}</span>
-              </div>
-            </button>
-          ))}
+          {filtered.map((mission) => {
+            const drone = droneProfiles.find(
+              (dp) => dp.id === mission.drone_profile_id,
+            );
+            return (
+              <button
+                key={mission.id}
+                onClick={() => navigate(`/operator-center/missions/${mission.id}/overview`)}
+                className="w-full text-left rounded-xl border border-tv-border bg-tv-bg p-3
+                  hover:bg-tv-surface-hover transition-colors"
+                data-testid={`mission-row-${mission.id}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-tv-text-primary truncate mr-2">
+                    {mission.name}
+                  </span>
+                  <Badge status={mission.status} />
+                </div>
+                <div className="flex items-center gap-3 text-xs text-tv-text-secondary">
+                  <span>{drone ? drone.name : t("dashboard.noDrone")}</span>
+                  <span>{new Date(mission.created_at).toLocaleDateString()}</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </CollapsibleSection>
@@ -499,14 +500,20 @@ function CreateMissionDialog({
   );
 }
 
-function StatisticsSection() {
+function StatisticsSection({ missions }: { missions: MissionResponse[] }) {
   const { t } = useTranslation();
 
+  const now = new Date();
+  const thisMonth = missions.filter((m) => {
+    const d = new Date(m.created_at);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+
   const stats = [
-    { label: t("dashboard.avgInspectionTime"), value: "12 min" },
-    { label: t("dashboard.totalInspections"), value: "48" },
-    { label: t("dashboard.missionsThisMonth"), value: "7" },
-    { label: t("dashboard.successRate"), value: "94%" },
+    { label: t("dashboard.avgInspectionTime"), value: "\u2014" },
+    { label: t("dashboard.totalInspections"), value: "\u2014" },
+    { label: t("dashboard.missionsThisMonth"), value: String(thisMonth) },
+    { label: t("dashboard.successRate"), value: "\u2014" },
   ];
 
   return (
@@ -526,17 +533,14 @@ function StatisticsSection() {
   );
 }
 
-function DroneProfilesSection() {
+function DroneProfilesSection({
+  profiles,
+  loading,
+}: {
+  profiles: DroneProfileResponse[];
+  loading: boolean;
+}) {
   const { t } = useTranslation();
-  const [profiles, setProfiles] = useState<DroneProfileResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    listDroneProfiles()
-      .then((res) => setProfiles(res.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
 
   return (
     <CollapsibleSection title={t("dashboard.droneProfiles")}>
@@ -576,8 +580,42 @@ function DroneProfilesSection() {
 
 function DashboardView() {
   const { t } = useTranslation();
-  const { selectedAirport, airportDetail, airportDetailLoading } = useAirport();
+  const {
+    selectedAirport,
+    airportDetail,
+    airportDetailLoading,
+    airportDetailError,
+    refreshAirportDetail,
+  } = useAirport();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+  const [missions, setMissions] = useState<MissionResponse[]>([]);
+  const [missionsLoading, setMissionsLoading] = useState(true);
+  const [missionsError, setMissionsError] = useState(false);
+  const [droneProfiles, setDroneProfiles] = useState<DroneProfileResponse[]>([]);
+  const [droneProfilesLoading, setDroneProfilesLoading] = useState(true);
+
+  const fetchMissions = useCallback(() => {
+    if (!selectedAirport) return;
+    setMissionsLoading(true);
+    setMissionsError(false);
+    listMissions({ airport_id: selectedAirport.id })
+      .then((res) => setMissions(res.data))
+      .catch(() => setMissionsError(true))
+      .finally(() => setMissionsLoading(false));
+  }, [selectedAirport]);
+
+  useEffect(() => {
+    fetchMissions();
+  }, [fetchMissions]);
+
+  useEffect(() => {
+    setDroneProfilesLoading(true);
+    listDroneProfiles()
+      .then((res) => setDroneProfiles(res.data))
+      .catch(() => {})
+      .finally(() => setDroneProfilesLoading(false));
+  }, []);
 
   if (!selectedAirport) return null;
 
@@ -585,7 +623,13 @@ function DashboardView() {
     <div className="flex gap-4 p-4 h-full">
       {/* left panel - 30% */}
       <div className="w-[30%] flex-shrink-0 overflow-y-auto flex flex-col gap-4">
-        <MissionListSection airportId={selectedAirport.id} />
+        <MissionListSection
+          missions={missions}
+          loading={missionsLoading}
+          error={missionsError}
+          onRetry={fetchMissions}
+          droneProfiles={droneProfiles}
+        />
 
         <Button
           className="w-full"
@@ -595,21 +639,39 @@ function DashboardView() {
           {t("dashboard.newMission")}
         </Button>
 
-        <StatisticsSection />
-        <DroneProfilesSection />
+        <StatisticsSection missions={missions} />
+        <DroneProfilesSection profiles={droneProfiles} loading={droneProfilesLoading} />
       </div>
 
       {/* right panel - 70% */}
       <div className="flex-1">
-        {airportDetailLoading || !airportDetail ? (
+        {airportDetailLoading ? (
           <div
             className="h-full rounded-2xl flex items-center justify-center"
             style={{ backgroundColor: "var(--tv-map-bg)" }}
           >
             <Spinner />
           </div>
-        ) : (
+        ) : airportDetailError ? (
+          <div
+            className="h-full rounded-2xl flex flex-col items-center justify-center gap-3"
+            style={{ backgroundColor: "var(--tv-map-bg)" }}
+            data-testid="map-error"
+          >
+            <p className="text-sm text-tv-error">{t("common.error")}</p>
+            <Button variant="secondary" onClick={refreshAirportDetail}>
+              {t("common.retry")}
+            </Button>
+          </div>
+        ) : airportDetail ? (
           <AirportMap airport={airportDetail} />
+        ) : (
+          <div
+            className="h-full rounded-2xl flex items-center justify-center"
+            style={{ backgroundColor: "var(--tv-map-bg)" }}
+          >
+            <Spinner />
+          </div>
         )}
       </div>
 

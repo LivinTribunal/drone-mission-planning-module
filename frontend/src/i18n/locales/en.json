@@ -12,7 +12,9 @@
     "search": "Search",
     "comingSoon": "Coming soon",
     "close": "Close",
-    "error": "Something went wrong"
+    "error": "Something went wrong",
+    "yes": "Yes",
+    "no": "No"
   },
   "nav": {
     "dashboard": "Dashboard",

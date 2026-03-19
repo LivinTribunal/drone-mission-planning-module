@@ -254,6 +254,10 @@ export default function AirportMap({
     } else {
       map.on("load", syncVisibility);
     }
+
+    return () => {
+      map.off("load", syncVisibility);
+    };
   }, [layerConfig]);
 
   // terrain mode switch

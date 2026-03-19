@@ -6,13 +6,6 @@ export const SAFETY_ZONE_SOURCE = "safety-zones";
 export const SAFETY_ZONE_FILL_LAYER = "safety-zones-fill";
 export const SAFETY_ZONE_BORDER_LAYER = "safety-zones-border";
 
-const zoneFillColors: Record<SafetyZoneType, string> = {
-  CTR: "rgba(69, 149, 229, 0.2)",
-  RESTRICTED: "rgba(229, 165, 69, 0.2)",
-  PROHIBITED: "rgba(229, 69, 69, 0.2)",
-  TEMPORARY_NO_FLY: "rgba(229, 229, 69, 0.2)",
-};
-
 const zoneBorderColors: Record<SafetyZoneType, string> = {
   CTR: "#4595e5",
   RESTRICTED: "#e5a545",
@@ -36,7 +29,6 @@ export function addSafetyZoneLayers(
           id: z.id,
           name: z.name,
           zoneType: z.type,
-          fillColor: zoneFillColors[z.type],
           borderColor: zoneBorderColors[z.type],
           entityType: "safety_zone",
         },

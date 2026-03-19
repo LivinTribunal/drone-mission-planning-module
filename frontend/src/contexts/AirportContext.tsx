@@ -15,6 +15,7 @@ interface AirportContextValue {
   selectedAirport: AirportResponse | null;
   airportDetail: AirportDetailResponse | null;
   airportDetailLoading: boolean;
+  airportDetailError: boolean;
   selectAirport: (airport: AirportResponse) => void;
   clearAirport: () => void;
   refreshAirportDetail: () => void;
@@ -28,12 +29,20 @@ export function AirportProvider({ children }: { children: ReactNode }) {
   const [airportDetail, setAirportDetail] =
     useState<AirportDetailResponse | null>(null);
   const [airportDetailLoading, setAirportDetailLoading] = useState(false);
+  const [airportDetailError, setAirportDetailError] = useState(false);
 
   const fetchDetail = useCallback((airportId: string) => {
     setAirportDetailLoading(true);
+    setAirportDetailError(false);
     getAirport(airportId)
-      .then((detail) => setAirportDetail(detail))
-      .catch(() => setAirportDetail(null))
+      .then((detail) => {
+        setAirportDetail(detail);
+        setAirportDetailError(false);
+      })
+      .catch(() => {
+        setAirportDetail(null);
+        setAirportDetailError(true);
+      })
       .finally(() => setAirportDetailLoading(false));
   }, []);
 
@@ -65,6 +74,7 @@ export function AirportProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(AIRPORT_KEY, JSON.stringify(airport));
       setSelectedAirport(airport);
       setAirportDetail(null);
+      setAirportDetailError(false);
       fetchDetail(airport.id);
     },
     [fetchDetail],
@@ -74,6 +84,7 @@ export function AirportProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(AIRPORT_KEY);
     setSelectedAirport(null);
     setAirportDetail(null);
+    setAirportDetailError(false);
   }, []);
 
   const refreshAirportDetail = useCallback(() => {
@@ -88,6 +99,7 @@ export function AirportProvider({ children }: { children: ReactNode }) {
         selectedAirport,
         airportDetail,
         airportDetailLoading,
+        airportDetailError,
         selectAirport,
         clearAirport,
         refreshAirportDetail,
