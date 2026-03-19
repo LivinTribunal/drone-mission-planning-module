@@ -53,10 +53,12 @@ export function AirportProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = JSON.parse(saved);
         if (
-          parsed?.id &&
-          parsed?.icao_code &&
-          parsed?.name &&
-          parsed?.elevation != null
+          typeof parsed?.id === "string" &&
+          typeof parsed?.icao_code === "string" &&
+          typeof parsed?.name === "string" &&
+          typeof parsed?.elevation === "number" &&
+          parsed.location &&
+          typeof parsed.location === "object"
         ) {
           setSelectedAirport(parsed as AirportResponse);
           fetchDetail(parsed.id);

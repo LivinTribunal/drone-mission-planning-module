@@ -623,10 +623,12 @@ function DroneProfileRow({ dp, missionCount }: { dp: DroneProfileResponse; missi
 function DroneProfilesSection({
   profiles,
   loading,
+  error,
   missions,
 }: {
   profiles: DroneProfileResponse[];
   loading: boolean;
+  error: boolean;
   missions: MissionResponse[];
 }) {
   const { t } = useTranslation();
@@ -689,6 +691,12 @@ function DroneProfilesSection({
         <div className="px-4 pb-4">
           <Spinner />
         </div>
+      ) : error ? (
+        <div className="px-4 pb-4">
+          <p className="text-center text-xs text-tv-error py-4" data-testid="drone-profiles-error">
+            {t("dashboard.droneLoadError")}
+          </p>
+        </div>
       ) : profiles.length === 0 ? (
         <div className="px-4 pb-4">
           <p className="text-center text-xs text-tv-text-muted py-4">
@@ -735,6 +743,7 @@ function DashboardView() {
   const [missionsError, setMissionsError] = useState(false);
   const [droneProfiles, setDroneProfiles] = useState<DroneProfileResponse[]>([]);
   const [droneProfilesLoading, setDroneProfilesLoading] = useState(true);
+  const [droneProfilesError, setDroneProfilesError] = useState(false);
 
   const fetchMissions = useCallback(() => {
     if (!selectedAirport) return;
@@ -752,9 +761,10 @@ function DashboardView() {
 
   useEffect(() => {
     setDroneProfilesLoading(true);
+    setDroneProfilesError(false);
     listDroneProfiles()
       .then((res) => setDroneProfiles(res.data))
-      .catch(() => {})
+      .catch(() => setDroneProfilesError(true))
       .finally(() => setDroneProfilesLoading(false));
   }, []);
 
@@ -782,7 +792,7 @@ function DashboardView() {
           </Button>
 
           <StatisticsSection missions={missions} />
-          <DroneProfilesSection profiles={droneProfiles} loading={droneProfilesLoading} missions={missions} />
+          <DroneProfilesSection profiles={droneProfiles} loading={droneProfilesLoading} error={droneProfilesError} missions={missions} />
         </div>
         <div className="w-2.5 flex-shrink-0" />
       </div>

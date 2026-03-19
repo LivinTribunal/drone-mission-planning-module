@@ -142,12 +142,13 @@ export default function AirportMap({
 
     function addLayers() {
       if (!map || layersAddedRef.current) return;
-      layersAddedRef.current = true;
 
       addSafetyZoneLayers(map, airport.safety_zones);
       addSurfaceLayers(map, airport.surfaces);
       addObstacleLayers(map, airport.obstacles);
       addAglLayers(map, airport.surfaces);
+
+      layersAddedRef.current = true;
     }
 
     if (map.isStyleLoaded()) {
@@ -293,11 +294,11 @@ export default function AirportMap({
         mapInstance.setPitch(pitch);
 
         if (layersAddedRef.current) return;
-        layersAddedRef.current = true;
         addSafetyZoneLayers(mapInstance, airport.safety_zones);
         addSurfaceLayers(mapInstance, airport.surfaces);
         addObstacleLayers(mapInstance, airport.obstacles);
         addAglLayers(mapInstance, airport.surfaces);
+        layersAddedRef.current = true;
 
         for (const [key, layerIds] of Object.entries(layerGroupMap)) {
           const visible = layerConfig[key as keyof MapLayerConfig];
