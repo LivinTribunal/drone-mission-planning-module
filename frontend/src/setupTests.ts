@@ -53,6 +53,7 @@ vi.mock("maplibre-gl", () => {
     setPitch: vi.fn(),
     isStyleLoaded: vi.fn().mockReturnValue(false),
     queryRenderedFeatures: vi.fn().mockReturnValue([]),
+    panBy: vi.fn(),
   }));
   const MockNavigationControl = vi.fn();
   return {

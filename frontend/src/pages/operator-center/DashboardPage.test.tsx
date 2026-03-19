@@ -206,33 +206,27 @@ describe("DashboardPage", () => {
     });
   });
 
-  it("shows statistics section with computed values", async () => {
+  it("shows statistics section with stat cards", async () => {
     renderDashboard(mockAirport);
     await waitFor(() => {
       expect(screen.getByText("dashboard.statistics")).toBeInTheDocument();
     });
-    // both mock missions are from march 2026 (current month in tests)
-    // "2" appears in both mission count badge and stats - use getAllByText
-    const twos = screen.getAllByText("2");
-    expect(twos.length).toBeGreaterThanOrEqual(1);
+    // total missions shows the count
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("dashboard.totalMissions")).toBeInTheDocument();
     // uncomputable stats show dash
     const dashes = screen.getAllByText("\u2014");
     expect(dashes.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("shows drone profiles section and resolves drone names in mission rows", async () => {
+  it("shows drone profiles section with most used drone visible", async () => {
     renderDashboard(mockAirport);
 
-    // drone profiles section is collapsed by default - expand it
-    await waitFor(() => {
-      expect(screen.getByTestId("section-dashboard.droneprofiles")).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId("section-dashboard.droneprofiles"));
-
+    // drone profiles section - most used drone is always visible
     await waitFor(() => {
       expect(screen.getByTestId("drone-profile-dp-1")).toBeInTheDocument();
     });
-    // drone profile card shows name
+    // drone profile row shows name
     expect(within(screen.getByTestId("drone-profile-dp-1")).getByText("DJI Matrice 300")).toBeInTheDocument();
     // mission m-1 has drone_profile_id dp-1 which maps to "DJI Matrice 300"
     const row1 = screen.getByTestId("mission-row-m-1");
@@ -260,7 +254,7 @@ describe("DashboardPage", () => {
     fireEvent.click(sectionBtn);
 
     // after collapse, the stat labels should not be visible
-    expect(screen.queryByText("dashboard.avgInspectionTime")).not.toBeInTheDocument();
+    expect(screen.queryByText("dashboard.totalMissions")).not.toBeInTheDocument();
   });
 
   it("shows error state when airport detail fetch fails", async () => {

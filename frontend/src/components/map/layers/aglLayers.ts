@@ -31,6 +31,7 @@ export function addAglLayers(
     },
   });
 
+  // zoom-dependent opacity: opaque when zoomed out, semi-transparent when zoomed in
   map.addLayer({
     id: AGL_POINT_LAYER,
     type: "circle",
@@ -40,6 +41,8 @@ export function addAglLayers(
       "circle-color": "#4595e5",
       "circle-stroke-color": "#ffffff",
       "circle-stroke-width": 2,
+      "circle-opacity": ["interpolate", ["linear"], ["zoom"], 14, 1, 15, 0.3],
+      "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 14, 1, 15, 0.3],
     },
   });
 
@@ -60,7 +63,7 @@ export function addAglLayers(
     },
   });
 
-  // lha markers
+  // lha markers - visible only when zoomed in
   if (lhas.length > 0) {
     map.addSource(LHA_SOURCE, {
       type: "geojson",
@@ -88,6 +91,8 @@ export function addAglLayers(
         "circle-color": "#60a5fa",
         "circle-stroke-color": "#ffffff",
         "circle-stroke-width": 1,
+        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
+        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
       },
     });
   }

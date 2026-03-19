@@ -22,14 +22,11 @@ export default function CollapsibleSection({
         className="flex w-full items-center gap-2 p-4 text-left"
         data-testid={`section-${title.toLowerCase().replace(/\s+/g, "-")}`}
       >
-        <span className="flex-1 text-base font-semibold text-tv-text-primary rounded-full px-3 py-1 bg-tv-section-label-bg">
-          {title}
-        </span>
-        {count != null && (
-          <span className="inline-flex items-center justify-center min-w-[24px] h-6 rounded-full px-2 text-xs font-semibold bg-tv-accent/20 text-tv-accent">
-            {count}
+        <div className="flex-1 flex items-center gap-2">
+          <span className="text-base font-semibold text-tv-text-primary rounded-full px-3 py-1 bg-tv-surface-hover">
+            {title}{count != null ? ` (${count})` : ""}
           </span>
-        )}
+        </div>
         <svg
           className={`h-5 w-5 flex-shrink-0 text-tv-text-secondary transition-transform duration-200 ${
             expanded ? "rotate-180" : ""

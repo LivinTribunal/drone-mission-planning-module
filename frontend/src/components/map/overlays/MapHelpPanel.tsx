@@ -6,7 +6,7 @@ export default function MapHelpPanel() {
   const [showHelp, setShowHelp] = useState(false);
 
   return (
-    <div className="absolute bottom-3 left-3 z-10">
+    <div>
       {showHelp && (
         <div className="mb-2 w-56 rounded-2xl border border-tv-border bg-tv-surface p-3">
           <div className="flex items-center justify-between mb-2">

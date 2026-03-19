@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import {
+  Layers,
+  Clock,
+  FileText,
+  CheckCircle,
+  TrendingUp,
+  Battery,
+} from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { listAirportSummaries } from "@/api/airports";
 import { listMissions, createMission } from "@/api/missions";
@@ -280,7 +288,6 @@ function AirportSelectionView() {
   );
 }
 
-// spinner shared across sections
 function Spinner() {
   return (
     <div className="flex justify-center py-6">
@@ -367,14 +374,24 @@ function MissionListSection({
                 data-testid={`mission-row-${mission.id}`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-tv-text-primary truncate mr-2">
+                  <span className="text-sm font-semibold text-tv-text-primary truncate mr-2">
                     {mission.name}
                   </span>
                   <Badge status={mission.status} />
                 </div>
                 <div className="flex items-center gap-3 text-xs text-tv-text-secondary">
                   <span>{drone ? drone.name : t("dashboard.noDrone")}</span>
-                  <span>{new Date(mission.created_at).toLocaleDateString()}</span>
+                  <span className="flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
+                    {"\u2014"}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
+                    {"\u2014"}
+                  </span>
+                  <span className="ml-auto">
+                    {new Date(mission.created_at).toLocaleDateString()}
+                  </span>
                 </div>
               </button>
             );
@@ -505,20 +522,22 @@ function CreateMissionDialog({
   );
 }
 
+// stat card definitions
+const STAT_CARDS = [
+  { key: "totalMissions", icon: FileText, color: "var(--tv-accent)" },
+  { key: "avgDuration", icon: Clock, color: "var(--tv-info)" },
+  { key: "inspectionsDone", icon: CheckCircle, color: "#9b59b6" },
+  { key: "successRate", icon: TrendingUp, color: "var(--tv-accent)" },
+] as const;
+
 function StatisticsSection({ missions }: { missions: MissionResponse[] }) {
   const { t } = useTranslation();
 
-  const now = new Date();
-  const thisMonth = missions.filter((m) => {
-    const d = new Date(m.created_at);
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  }).length;
-
   const stats = [
-    { label: t("dashboard.avgInspectionTime"), value: "\u2014" },
-    { label: t("dashboard.totalInspections"), value: "\u2014" },
-    { label: t("dashboard.missionsThisMonth"), value: String(thisMonth) },
-    { label: t("dashboard.successRate"), value: "\u2014" },
+    { ...STAT_CARDS[0], value: String(missions.length), label: t("dashboard.totalMissions") },
+    { ...STAT_CARDS[1], value: "\u2014", label: t("dashboard.avgDuration") },
+    { ...STAT_CARDS[2], value: "\u2014", label: t("dashboard.inspectionsDone") },
+    { ...STAT_CARDS[3], value: "\u2014", label: t("dashboard.successRate") },
   ];
 
   return (
@@ -526,10 +545,20 @@ function StatisticsSection({ missions }: { missions: MissionResponse[] }) {
       <div className="grid grid-cols-2 gap-2">
         {stats.map((stat) => (
           <div
-            key={stat.label}
-            className="rounded-xl bg-tv-bg border border-tv-border p-3"
+            key={stat.key}
+            className="rounded-xl border p-3"
+            style={{
+              backgroundColor: "var(--tv-surface)",
+              borderColor: "var(--tv-border)",
+            }}
           >
-            <p className="text-lg font-semibold text-tv-text-primary">{stat.value}</p>
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center mb-2"
+              style={{ backgroundColor: stat.color + "1a" }}
+            >
+              <stat.icon className="w-4 h-4" style={{ color: stat.color }} />
+            </div>
+            <p className="text-2xl font-bold text-tv-text-primary">{stat.value}</p>
             <p className="text-xs text-tv-text-secondary">{stat.label}</p>
           </div>
         ))}
@@ -538,23 +567,29 @@ function StatisticsSection({ missions }: { missions: MissionResponse[] }) {
   );
 }
 
-function DroneProfileCard({ dp }: { dp: DroneProfileResponse }) {
+function DroneProfileRow({ dp, missionCount }: { dp: DroneProfileResponse; missionCount: number }) {
   const { t } = useTranslation();
 
   return (
     <div
-      className="rounded-xl border border-tv-border bg-tv-bg p-3"
+      className="flex items-center p-3"
       data-testid={`drone-profile-${dp.id}`}
     >
-      <p className="text-sm font-medium text-tv-text-primary">{dp.name}</p>
-      <div className="flex items-center gap-3 text-xs text-tv-text-secondary mt-1">
-        {dp.manufacturer && <span>{dp.manufacturer}</span>}
-        {dp.model && <span>{dp.model}</span>}
-        {dp.endurance_minutes != null && (
-          <span>
-            {dp.endurance_minutes} {t("dashboard.minutes")}
-          </span>
-        )}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-tv-text-primary">{dp.name}</p>
+        <p className="text-xs text-tv-text-secondary">
+          {[dp.manufacturer, dp.model].filter(Boolean).join(" \u00B7 ") || "\u2014"}
+        </p>
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <span className="flex items-center gap-1 text-xs text-tv-text-primary">
+          <Battery className="w-3.5 h-3.5" style={{ color: "var(--tv-accent)" }} />
+          {dp.endurance_minutes != null ? `${dp.endurance_minutes} ${t("dashboard.minutes")}` : "\u2014"}
+        </span>
+        <span className="flex items-center gap-1 text-xs text-tv-text-primary">
+          <Layers className="w-3.5 h-3.5" style={{ color: "var(--tv-info)" }} />
+          {missionCount}
+        </span>
       </div>
     </div>
   );
@@ -570,64 +605,89 @@ function DroneProfilesSection({
   missions: MissionResponse[];
 }) {
   const { t } = useTranslation();
-  const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  const mostUsedId = useMemo(() => {
+  // count missions per drone profile
+  const missionCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const m of missions) {
       if (m.drone_profile_id) {
         counts[m.drone_profile_id] = (counts[m.drone_profile_id] || 0) + 1;
       }
     }
+    return counts;
+  }, [missions]);
+
+  const mostUsedId = useMemo(() => {
     let topId: string | null = null;
     let topCount = 0;
-    for (const [id, count] of Object.entries(counts)) {
+    for (const [id, count] of Object.entries(missionCounts)) {
       if (count > topCount) {
         topId = id;
         topCount = count;
       }
     }
     return topId;
-  }, [missions]);
+  }, [missionCounts]);
 
   const mostUsed = profiles.find((dp) => dp.id === mostUsedId) ?? profiles[0] ?? null;
   const rest = profiles.filter((dp) => dp.id !== mostUsed?.id);
 
   return (
-    <CollapsibleSection title={t("dashboard.droneProfiles")} defaultExpanded={false}>
+    <div className="bg-tv-surface border border-tv-border rounded-3xl">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center gap-2 p-4 text-left"
+        data-testid="section-dashboard.droneprofiles"
+      >
+        <div className="flex-1 flex items-center gap-2">
+          <span className="text-base font-semibold text-tv-text-primary rounded-full px-3 py-1 bg-tv-surface-hover">
+            {t("dashboard.droneProfiles")}
+          </span>
+        </div>
+        <svg
+          className={`h-5 w-5 flex-shrink-0 text-tv-text-secondary transition-transform duration-200 ${
+            expanded ? "rotate-180" : ""
+          }`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+
       {loading ? (
-        <Spinner />
+        <div className="px-4 pb-4">
+          <Spinner />
+        </div>
       ) : profiles.length === 0 ? (
-        <p className="text-center text-xs text-tv-text-muted py-4">
-          {t("dashboard.noDroneProfiles")}
-        </p>
+        <div className="px-4 pb-4">
+          <p className="text-center text-xs text-tv-text-muted py-4">
+            {t("dashboard.noDroneProfiles")}
+          </p>
+        </div>
       ) : (
-        <div className="space-y-2">
+        <>
+          {/* always-visible: most used drone preview */}
           {mostUsed && (
-            <div>
-              <p className="text-[10px] font-medium uppercase text-tv-text-muted mb-1">
-                {t("dashboard.mostUsedDrone")}
-              </p>
-              <DroneProfileCard dp={mostUsed} />
+            <div className="border-t border-tv-border">
+              <DroneProfileRow dp={mostUsed} missionCount={missionCounts[mostUsed.id] || 0} />
             </div>
           )}
-          {rest.length > 0 && (
-            <>
-              <button
-                onClick={() => setShowAll(!showAll)}
-                className="text-xs text-tv-accent hover:underline"
-                data-testid="toggle-all-drones"
-              >
-                {showAll ? t("dashboard.showLess") : t("dashboard.showAll")} ({rest.length})
-              </button>
-              {showAll && rest.map((dp) => (
-                <DroneProfileCard key={dp.id} dp={dp} />
-              ))}
-            </>
-          )}
-        </div>
+
+          {/* expanded: all other drone profiles */}
+          {expanded && rest.map((dp) => (
+            <div key={dp.id} className="border-t border-tv-border">
+              <DroneProfileRow dp={dp} missionCount={missionCounts[dp.id] || 0} />
+            </div>
+          ))}
+        </>
       )}
-    </CollapsibleSection>
+    </div>
   );
 }
 

@@ -124,7 +124,7 @@ export default function AirportMap({
       interactive,
     });
 
-    map.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.addControl(new maplibregl.NavigationControl(), "bottom-right");
 
     mapRef.current = map;
 
@@ -355,24 +355,31 @@ export default function AirportMap({
     >
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* left column - layers + feature info stacked */}
-      <div className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-52">
-        {showLayerPanel && (
+      {/* top-left: layers panel */}
+      {showLayerPanel && (
+        <div className="absolute top-3 left-3 z-10 w-52">
           <LayerPanel layers={layerConfig} onToggle={handleLayerToggle} />
-        )}
+        </div>
+      )}
+
+      {/* top-right: legend */}
+      {showLegend && <LegendPanel />}
+
+      {/* bottom-left: poi info + map help */}
+      <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-2 w-52">
         {showPoiInfo && (
           <PoiInfoPanel
             feature={selectedFeature}
             onClose={() => setSelectedFeature(null)}
           />
         )}
+        <MapHelpPanel />
       </div>
 
-      {showLegend && <LegendPanel />}
+      {/* bottom-right: terrain toggle sits at the very bottom */}
       {showTerrainToggle && (
         <TerrainToggle mode={terrainMode} onToggle={handleTerrainChange} />
       )}
-      <MapHelpPanel />
 
       {children}
     </div>
