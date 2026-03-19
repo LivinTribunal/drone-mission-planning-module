@@ -14,13 +14,13 @@ export default function CoordinatorLayout() {
   const { selectedAirport } = useAirport();
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
+    <div className="flex flex-col h-screen bg-tv-bg text-tv-text-primary">
       <NavBar items={coordinatorItems} role="coordinator" />
       <main className="flex-1 overflow-auto">
         {selectedAirport ? (
           <Outlet />
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-[var(--color-text-muted)]">
+          <div className="flex flex-col items-center justify-center h-full text-tv-text-muted">
             <p className="text-lg mb-2">Select an airport to get started</p>
             <svg
               className="h-8 w-8 animate-bounce"

@@ -24,7 +24,6 @@ export default function AirportSelector() {
     fetchAirports();
   }, [fetchAirports]);
 
-  // close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -39,14 +38,17 @@ export default function AirportSelector() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 rounded px-3 py-1.5 text-sm
-          bg-[var(--color-surface)] text-[var(--color-text)]
-          border border-[var(--color-border)] hover:bg-[var(--color-hover)]"
+        className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium
+          bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
         data-testid="airport-selector"
       >
-        <span className="opacity-60">Airport:</span>
+        <span className="text-tv-text-secondary">Airport:</span>
         <span>{selectedAirport?.icao_code ?? "None"}</span>
-        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+        <svg
+          className={`h-4 w-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
           <path
             fillRule="evenodd"
             d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
@@ -57,15 +59,15 @@ export default function AirportSelector() {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 min-w-[200px] rounded border
-            border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg z-50"
+          className="absolute right-0 top-full mt-1 min-w-[220px] rounded-2xl border
+            border-tv-border bg-tv-surface p-2 z-50"
         >
           {loading ? (
-            <div className="px-3 py-2 text-sm text-[var(--color-text-muted)]">
+            <div className="px-4 py-2.5 text-sm text-tv-text-muted">
               Loading...
             </div>
           ) : error ? (
-            <div className="px-3 py-2 text-sm text-red-500">
+            <div className="px-4 py-2.5 text-sm text-tv-error">
               {error}
               <button
                 onClick={fetchAirports}
@@ -75,7 +77,7 @@ export default function AirportSelector() {
               </button>
             </div>
           ) : airports.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-[var(--color-text-muted)]">
+            <div className="px-4 py-2.5 text-sm text-tv-text-muted">
               No airports available
             </div>
           ) : (
@@ -86,11 +88,15 @@ export default function AirportSelector() {
                   selectAirport(airport);
                   setOpen(false);
                 }}
-                className={`block w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-hover)]
-                  ${selectedAirport?.id === airport.id ? "bg-[var(--color-hover)]" : ""}`}
+                className={`block w-full text-left rounded-xl px-4 py-2.5 text-sm transition-colors
+                  ${selectedAirport?.id === airport.id ? "bg-tv-surface-hover" : "hover:bg-tv-surface-hover"}`}
               >
-                <span className="font-medium">{airport.icao_code}</span>
-                <span className="ml-2 opacity-60">{airport.name}</span>
+                <span className="font-medium text-tv-text-primary">
+                  {airport.icao_code}
+                </span>
+                <span className="ml-2 text-tv-text-secondary">
+                  {airport.name}
+                </span>
               </button>
             ))
           )}
