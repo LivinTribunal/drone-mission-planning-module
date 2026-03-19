@@ -1,0 +1,65 @@
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { MapLayerConfig } from "@/types/map";
+
+interface LayerPanelProps {
+  layers: MapLayerConfig;
+  onToggle: (key: keyof MapLayerConfig) => void;
+}
+
+const layerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
+  { key: "runways", i18nKey: "dashboard.runways" },
+  { key: "taxiways", i18nKey: "dashboard.taxiways" },
+  { key: "safetyZones", i18nKey: "dashboard.safetyZones" },
+  { key: "obstacles", i18nKey: "dashboard.obstacles" },
+  { key: "aglSystems", i18nKey: "dashboard.aglSystems" },
+];
+
+export default function LayerPanel({ layers, onToggle }: LayerPanelProps) {
+  const { t } = useTranslation();
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div
+      className="absolute top-3 left-3 z-10 rounded-2xl border border-tv-border bg-tv-surface/95 backdrop-blur-sm"
+      data-testid="layer-panel"
+    >
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-tv-text-primary"
+      >
+        <span>{t("dashboard.layers")}</span>
+        <svg
+          className={`ml-2 h-4 w-4 text-tv-text-secondary transition-transform ${collapsed ? "" : "rotate-180"}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+      {!collapsed && (
+        <div className="border-t border-tv-border px-3 pb-2 pt-1">
+          {layerKeys.map(({ key, i18nKey }) => (
+            <label
+              key={key}
+              className="flex cursor-pointer items-center gap-2 py-1 text-xs text-tv-text-secondary hover:text-tv-text-primary"
+            >
+              <input
+                type="checkbox"
+                checked={layers[key]}
+                onChange={() => onToggle(key)}
+                className="h-3.5 w-3.5 rounded accent-tv-accent"
+                data-testid={`layer-toggle-${key}`}
+              />
+              {t(i18nKey)}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

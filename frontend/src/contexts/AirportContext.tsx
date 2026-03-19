@@ -6,14 +6,18 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import type { AirportResponse } from "@/types/airport";
+import type { AirportResponse, AirportDetailResponse } from "@/types/airport";
+import { getAirport } from "@/api/airports";
 
 const AIRPORT_KEY = "tarmacview_airport";
 
 interface AirportContextValue {
   selectedAirport: AirportResponse | null;
+  airportDetail: AirportDetailResponse | null;
+  airportDetailLoading: boolean;
   selectAirport: (airport: AirportResponse) => void;
   clearAirport: () => void;
+  refreshAirportDetail: () => void;
 }
 
 const AirportContext = createContext<AirportContextValue | null>(null);
@@ -21,6 +25,17 @@ const AirportContext = createContext<AirportContextValue | null>(null);
 export function AirportProvider({ children }: { children: ReactNode }) {
   const [selectedAirport, setSelectedAirport] =
     useState<AirportResponse | null>(null);
+  const [airportDetail, setAirportDetail] =
+    useState<AirportDetailResponse | null>(null);
+  const [airportDetailLoading, setAirportDetailLoading] = useState(false);
+
+  const fetchDetail = useCallback((airportId: string) => {
+    setAirportDetailLoading(true);
+    getAirport(airportId)
+      .then((detail) => setAirportDetail(detail))
+      .catch(() => setAirportDetail(null))
+      .finally(() => setAirportDetailLoading(false));
+  }, []);
 
   // rehydrate from localStorage
   useEffect(() => {
@@ -28,7 +43,6 @@ export function AirportProvider({ children }: { children: ReactNode }) {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // validate shape - reset if stale schema
         if (
           parsed?.id &&
           parsed?.icao_code &&
@@ -36,6 +50,7 @@ export function AirportProvider({ children }: { children: ReactNode }) {
           parsed?.elevation != null
         ) {
           setSelectedAirport(parsed as AirportResponse);
+          fetchDetail(parsed.id);
         } else {
           localStorage.removeItem(AIRPORT_KEY);
         }
@@ -43,21 +58,40 @@ export function AirportProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(AIRPORT_KEY);
       }
     }
-  }, []);
+  }, [fetchDetail]);
 
-  const selectAirport = useCallback((airport: AirportResponse) => {
-    localStorage.setItem(AIRPORT_KEY, JSON.stringify(airport));
-    setSelectedAirport(airport);
-  }, []);
+  const selectAirport = useCallback(
+    (airport: AirportResponse) => {
+      localStorage.setItem(AIRPORT_KEY, JSON.stringify(airport));
+      setSelectedAirport(airport);
+      setAirportDetail(null);
+      fetchDetail(airport.id);
+    },
+    [fetchDetail],
+  );
 
   const clearAirport = useCallback(() => {
     localStorage.removeItem(AIRPORT_KEY);
     setSelectedAirport(null);
+    setAirportDetail(null);
   }, []);
+
+  const refreshAirportDetail = useCallback(() => {
+    if (selectedAirport) {
+      fetchDetail(selectedAirport.id);
+    }
+  }, [selectedAirport, fetchDetail]);
 
   return (
     <AirportContext.Provider
-      value={{ selectedAirport, selectAirport, clearAirport }}
+      value={{
+        selectedAirport,
+        airportDetail,
+        airportDetailLoading,
+        selectAirport,
+        clearAirport,
+        refreshAirportDetail,
+      }}
     >
       {children}
     </AirportContext.Provider>
