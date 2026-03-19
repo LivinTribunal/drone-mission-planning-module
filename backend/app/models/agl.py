@@ -1,3 +1,4 @@
+import logging
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
@@ -7,8 +8,12 @@ from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
+logger = logging.getLogger(__name__)
+
 
 class AGL(Base):
+    """approach guidance light group with child LHA units."""
+
     __tablename__ = "agl"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -24,8 +29,36 @@ class AGL(Base):
     surface = relationship("AirfieldSurface", back_populates="agls")
     lhas = relationship("LHA", back_populates="agl", cascade="all, delete-orphan")
 
+    def calculate_lha_center_point(self) -> tuple[float, float, float]:
+        """compute centroid (lon, lat, alt) of all LHA positions."""
+        from app.schemas.geometry import parse_ewkb
+
+        if not self.lhas:
+            raise ValueError("no LHA units to compute center from")
+
+        lons, lats, alts = [], [], []
+        for lha in self.lhas:
+            try:
+                coords = parse_ewkb(lha.position.data).get("coordinates")
+                if not coords or len(coords) < 3:
+                    continue
+            except Exception:
+                logger.warning("failed to parse LHA position for lha %s", lha.id)
+                continue
+            lons.append(coords[0])
+            lats.append(coords[1])
+            alts.append(coords[2])
+
+        if not lons:
+            raise ValueError("no valid LHA positions to compute center from")
+
+        n = len(lons)
+        return (sum(lons) / n, sum(lats) / n, sum(alts) / n)
+
 
 class LHA(Base):
+    """light housing assembly - individual light unit within an AGL."""
+
     __tablename__ = "lha"
 
     id = Column(UUID, primary_key=True, default=uuid4)

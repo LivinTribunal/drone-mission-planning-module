@@ -1,9 +1,9 @@
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.exceptions import NotFoundError
 from app.models.agl import AGL
 from app.models.inspection import (
     InspectionConfiguration,
@@ -40,7 +40,7 @@ def _load_template(db: Session, template_id: UUID) -> InspectionTemplate:
         .first()
     )
     if not template:
-        raise HTTPException(status_code=404, detail="template not found")
+        raise NotFoundError("template not found")
 
     return _enrich(template, db)
 
@@ -108,7 +108,7 @@ def update_template(
         .first()
     )
     if not template:
-        raise HTTPException(status_code=404, detail="template not found")
+        raise NotFoundError("template not found")
 
     data = schema.model_dump(exclude_unset=True)
     target_ids = data.pop("target_agl_ids", None)
@@ -143,7 +143,7 @@ def delete_template(db: Session, template_id: UUID):
         .first()
     )
     if not template:
-        raise HTTPException(status_code=404, detail="template not found")
+        raise NotFoundError("template not found")
 
     config = template.default_config
     db.delete(template)

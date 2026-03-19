@@ -1,3 +1,4 @@
+from uuid import UUID as PyUUID
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
@@ -8,8 +9,32 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 
+# max inspections per mission
+MAX_INSPECTIONS = 10
+
+# status state machine - valid transitions
+TRANSITIONS = {
+    "DRAFT": ["PLANNED"],
+    "PLANNED": ["VALIDATED"],
+    "VALIDATED": ["EXPORTED"],
+    "EXPORTED": ["COMPLETED", "CANCELLED"],
+    "COMPLETED": [],
+    "CANCELLED": [],
+}
+
+# fields that affect trajectory - changing these regresses VALIDATED -> PLANNED
+TRAJECTORY_FIELDS = {
+    "drone_profile_id",
+    "default_speed",
+    "default_altitude_offset",
+    "takeoff_coordinate",
+    "landing_coordinate",
+}
+
 
 class DroneProfile(Base):
+    """drone hardware profile with performance limits."""
+
     __tablename__ = "drone_profile"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -28,6 +53,8 @@ class DroneProfile(Base):
 
 
 class Mission(Base):
+    """aggregate root - owns inspections and controls status transitions."""
+
     __tablename__ = "mission"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -58,3 +85,63 @@ class Mission(Base):
             name="ck_mission_status",
         ),
     )
+
+    def transition_to(self, target_status: str):
+        """enforce status state machine transitions."""
+        allowed = TRANSITIONS.get(self.status, [])
+        if target_status not in allowed:
+            raise ValueError(
+                f"cannot transition from {self.status} to {target_status}, allowed: {allowed}"
+            )
+        self.status = target_status
+
+    def regress_if_validated(self):
+        """regress VALIDATED -> PLANNED when trajectory-affecting data changes.
+
+        bypasses transition_to() because the state machine has no backward
+        transitions by design - this is the one intentional exception.
+        """
+        if self.status == "VALIDATED":
+            self.status = "PLANNED"
+
+    # terminal states - no modifications allowed, user must duplicate
+    _TERMINAL = {"EXPORTED", "COMPLETED", "CANCELLED"}
+
+    def add_inspection(self, inspection):
+        """add inspection - allowed in DRAFT/PLANNED/VALIDATED, blocked after EXPORTED."""
+        if self.status in self._TERMINAL:
+            raise ValueError("cannot modify inspections after mission is exported")
+        if len(self.inspections) >= MAX_INSPECTIONS:
+            raise ValueError(f"mission already has {MAX_INSPECTIONS} inspections (max limit)")
+
+        inspection.mission_id = self.id
+        self.inspections.append(inspection)
+
+        # adding inspection invalidates trajectory - regress to DRAFT
+        if self.status in ("PLANNED", "VALIDATED"):
+            self.status = "DRAFT"
+
+    def remove_inspection(self, inspection_id):
+        """remove inspection by id - allowed in DRAFT/PLANNED/VALIDATED, blocked after EXPORTED."""
+        if self.status in self._TERMINAL:
+            raise ValueError("cannot modify inspections after mission is exported")
+
+        target = PyUUID(str(inspection_id))
+        for insp in self.inspections:
+            if insp.id == target:
+                self.inspections.remove(insp)
+                # removing inspection invalidates trajectory - regress to DRAFT
+                if self.status in ("PLANNED", "VALIDATED"):
+                    self.status = "DRAFT"
+                return insp
+
+        raise ValueError(f"inspection {inspection_id} not found")
+
+    def change_drone_profile(self, drone_profile_id):
+        """change drone profile - allowed in DRAFT/PLANNED/VALIDATED, blocked after EXPORTED."""
+        if self.status in self._TERMINAL:
+            raise ValueError("cannot change drone profile after mission is exported")
+
+        self.drone_profile_id = drone_profile_id
+        # drone change invalidates trajectory but not inspections - regress to PLANNED
+        self.regress_if_validated()

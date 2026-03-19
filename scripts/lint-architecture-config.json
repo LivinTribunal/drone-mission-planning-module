@@ -32,6 +32,11 @@
       "modulePrefix": "app.core"
     }
   ],
+  "valueObjectRules": {
+    "file": "backend/app/models/value_objects.py",
+    "forbiddenImports": ["sqlalchemy", "fastapi"],
+    "note": "value objects must be pure Python - no framework dependencies"
+  },
   "ignorePatterns": [
     "**/*.pyc",
     "**/__pycache__/**",

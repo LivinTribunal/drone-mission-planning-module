@@ -1,8 +1,8 @@
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import NotFoundError
 from app.models.mission import DroneProfile, Mission
 from app.schemas.drone_profile import DroneProfileCreate, DroneProfileUpdate
 from app.services.geometry_converter import apply_schema_update, schema_to_model_data
@@ -17,7 +17,7 @@ def get_drone(db: Session, drone_id: UUID) -> DroneProfile:
     """get drone profile by id"""
     drone = db.query(DroneProfile).filter(DroneProfile.id == drone_id).first()
     if not drone:
-        raise HTTPException(status_code=404, detail="drone profile not found")
+        raise NotFoundError("drone profile not found")
 
     return drone
 
@@ -36,7 +36,7 @@ def update_drone(db: Session, drone_id: UUID, schema: DroneProfileUpdate) -> Dro
     """update drone profile"""
     drone = db.query(DroneProfile).filter(DroneProfile.id == drone_id).first()
     if not drone:
-        raise HTTPException(status_code=404, detail="drone profile not found")
+        raise NotFoundError("drone profile not found")
 
     apply_schema_update(drone, schema)
 
@@ -50,9 +50,10 @@ def delete_drone(db: Session, drone_id: UUID) -> list[str]:
     """delete drone profile, returns warnings for missions using it"""
     drone = db.query(DroneProfile).filter(DroneProfile.id == drone_id).first()
     if not drone:
-        raise HTTPException(status_code=404, detail="drone profile not found")
+        raise NotFoundError("drone profile not found")
 
-    # check missions using this drone
+    # check missions using this drone - FK is ON DELETE SET NULL so missions
+    # keep existing but lose their drone reference after deletion
     missions = db.query(Mission).filter(Mission.drone_profile_id == drone_id).all()
     warnings = [f"mission '{mission.name}' uses this drone" for mission in missions]
 

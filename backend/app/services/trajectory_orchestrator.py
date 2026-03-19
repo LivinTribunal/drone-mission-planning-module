@@ -1,15 +1,16 @@
 import math
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.exceptions import NotFoundError, TrajectoryGenerationError
 from app.models.agl import AGL
-from app.models.airport import Airport, Obstacle, SafetyZone
-from app.models.enums import CameraAction, InspectionMethod, WaypointType
+from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
+from app.models.enums import CameraAction, InspectionMethod, MissionStatus, WaypointType
 from app.models.flight_plan import ConstraintRule, FlightPlan
 from app.models.inspection import Inspection, InspectionTemplate
 from app.models.mission import Mission
+from app.models.value_objects import Coordinate
 from app.schemas.geometry import parse_ewkb
 from app.services.flight_plan_service import persist_flight_plan
 from app.services.safety_validator import (
@@ -43,6 +44,7 @@ from app.services.trajectory_types import (
     MIN_ARC_RADIUS,
     MIN_SPEED_FLOOR,
     TAKEOFF_SAFE_ALTITUDE,
+    VERTICAL_POSITION_TOLERANCE_DEG,
     InspectionPass,
     MissionData,
     Point3D,
@@ -52,7 +54,10 @@ from app.utils.geo import bearing_between, distance_between, total_path_distance
 
 
 def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
-    """Load all entities needed for trajectory generation in a single query phase."""
+    """load all entities needed for trajectory generation in a single query phase.
+
+    constraints are intentionally empty - see comment in function body.
+    """
     mission = (
         db.query(Mission)
         .options(
@@ -71,13 +76,13 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
         .first()
     )
     if not mission:
-        raise HTTPException(status_code=404, detail="mission not found")
+        raise NotFoundError("mission not found")
     if not mission.inspections:
-        raise HTTPException(status_code=400, detail="mission has no inspections")
+        raise TrajectoryGenerationError("mission has no inspections")
 
     airport = db.query(Airport).filter(Airport.id == mission.airport_id).first()
     if not airport:
-        raise HTTPException(status_code=400, detail="airport not found")
+        raise NotFoundError("airport not found")
 
     obstacles = db.query(Obstacle).filter(Obstacle.airport_id == airport.id).all()
     safety_zones = (
@@ -85,14 +90,13 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
         .filter(SafetyZone.airport_id == airport.id, SafetyZone.is_active == True)  # noqa: E712
         .all()
     )
-    from app.models.airport import AirfieldSurface
-
     surfaces = db.query(AirfieldSurface).filter(AirfieldSurface.airport_id == airport.id).all()
-    constraints = (
-        db.query(ConstraintRule)
-        .filter(ConstraintRule.flight_plan_id == None)  # noqa: E711
-        .all()
-    )
+
+    # constraints intentionally empty during generation - constraint rules are
+    # per-flight-plan children that get cascade-deleted with the old plan.
+    # drone limits and spatial checks run directly in validate_inspection_pass.
+    # operator must re-attach constraints after regeneration if needed
+    constraints: list[ConstraintRule] = []
 
     return MissionData(
         mission=mission,
@@ -106,26 +110,46 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     )
 
 
+def _format_soft_warnings(violations: list, label: str, warnings: list[str]) -> None:
+    """group soft violations by message and append formatted warnings."""
+    groups: dict[str, list[int]] = {}
+    for v in violations:
+        if not v.is_warning:
+            continue
+
+        indices = groups.setdefault(v.message, [])
+        if v.waypoint_index is not None:
+            indices.append(v.waypoint_index + 1)
+
+    for msg, indices in groups.items():
+        if indices:
+            if len(indices) <= 3:
+                wp_str = ", ".join(str(i) for i in sorted(indices))
+            else:
+                wp_str = f"{min(indices)}-{max(indices)}"
+            full = f"{label} (wp {wp_str}): {msg}"
+        else:
+            full = f"{label}: {msg}"
+
+        if full not in warnings:
+            warnings.append(full)
+
+
 def _apply_camera_actions(waypoints: list[WaypointData]):
-    """Set lead-in/lead-out waypoints to NONE camera action, inner to PHOTO_CAPTURE."""
+    """set lead-in and lead-out waypoints to NONE camera action."""
     if len(waypoints) >= 2:
         waypoints[0].camera_action = CameraAction.NONE
         waypoints[-1].camera_action = CameraAction.NONE
 
 
-def apply_constraints(db, waypoints, drone, constraints, obstacles, zones, surfaces) -> list:
-    """Run safety validation against all constraints and return violations."""
-    return validate_inspection_pass(db, waypoints, drone, constraints, obstacles, zones, surfaces)
-
-
 def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list[str]]:
-    """Five-phase trajectory generation pipeline.
+    """five-phase trajectory generation pipeline.
 
-    Phase 1: load all data
-    Phase 2: config resolution and pre-checks per inspection
-    Phase 3: compute waypoints, validate, and reroute
-    Phase 4: post-inspection processing
-    Phase 5: final assembly with A* transit
+    phase 1: load all data
+    phase 2: config resolution and pre-checks per inspection
+    phase 3: compute waypoints, validate, and reroute
+    phase 4: post-inspection processing
+    phase 5: final assembly with A* transit
     """
 
     # phase 1 - load all data
@@ -134,11 +158,26 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
+    # auto-regress VALIDATED so regeneration works without manual step
+    if mission.status == MissionStatus.VALIDATED:
+        mission.regress_if_validated()
+
+    # only DRAFT or PLANNED can generate - terminal states are blocked
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
+        raise TrajectoryGenerationError(
+            f"cannot generate trajectory for mission in {mission.status} status"
+        )
+
+    had_constraints = False
     if mission.flight_plan:
+        had_constraints = bool(mission.flight_plan.constraints)
         db.delete(mission.flight_plan)
         db.flush()
 
     warnings: list[str] = []
+    if had_constraints:
+        warnings.append("constraints were reset - re-attach after generation")
+
     inspection_passes: list[InspectionPass] = []
     cumulative_distance = 0.0
     cumulative_duration = 0.0
@@ -164,8 +203,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         # compute optimal density if not overridden
         density, density_warning = resolve_density(inspection.method, setting_angles, config)
         if density_warning:
-            if inspection.config:
-                inspection.config.measurement_density = density
+            config.measurement_density = density
             warnings.append(f"{template.name} #{inspection.sequence_order}: {density_warning}")
 
         # compute optimal speed from path geometry and camera frame rate
@@ -177,32 +215,31 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         )
         path_dist = distance_between(start_pos.lon, start_pos.lat, end_pos.lon, end_pos.lat)
 
-        speed, speed_warning = resolve_speed(
+        speed, speed_warning, optimal_speed = resolve_speed(
             config, path_dist, config.measurement_density, drone, default_speed
         )
         if speed_warning:
-            # save computed speed back to config so the operator can see it
-            if inspection.config:
-                inspection.config.speed_override = speed
             warnings.append(f"{template.name} #{inspection.sequence_order}: {speed_warning}")
 
         if drone:
-            from app.services.trajectory_computation import compute_optimal_speed
-
-            optimal_speed = compute_optimal_speed(path_dist, config.measurement_density, drone)
             warning = check_speed_framerate(speed, drone, optimal_speed)
             if warning:
                 warnings.append(warning)
 
         if drone:
-            warning = check_sensor_fov(drone, lha_positions, MIN_ARC_RADIUS)
+            fov_distance = config.horizontal_distance or MIN_ARC_RADIUS
+            approach = (rwy_heading + 180) % 360
+            warning = check_sensor_fov(drone, lha_positions, fov_distance, approach)
             if warning:
                 warnings.append(warning)
 
         # phase 3 - compute waypoints
-        pass_wps = compute_measurement_trajectory(
-            inspection, config, center, rwy_heading, glide_slope, speed, setting_angles
-        )
+        try:
+            pass_wps = compute_measurement_trajectory(
+                inspection, config, center, rwy_heading, glide_slope, speed, setting_angles
+            )
+        except ValueError as e:
+            raise TrajectoryGenerationError(str(e))
 
         # phase 3 - validate and reroute
         violations = validate_inspection_pass(
@@ -210,12 +247,12 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         )
 
         obstacle_violations = [
-            v for v in violations if not v.is_warning and "obstacle" in (v.message or "").lower()
+            v for v in violations if not v.is_warning and v.violation_kind == "obstacle"
         ]
 
         if obstacle_violations:
             pass_wps = resolve_inspection_collisions(
-                db, pass_wps, data.obstacles, data.safety_zones, center
+                db, pass_wps, data.obstacles, data.safety_zones, center, data.surfaces
             )
 
             # re-validate after rerouting
@@ -231,35 +268,22 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         hard = [v for v in violations if not v.is_warning]
         if hard:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "hard constraint violation",
-                    "violations": [{"message": v.message} for v in hard],
-                },
+            raise TrajectoryGenerationError(
+                "hard constraint violation",
+                violations=[
+                    {
+                        "message": v.message,
+                        "violation_kind": v.violation_kind,
+                        "constraint_id": v.constraint_id,
+                        "waypoint_index": v.waypoint_index,
+                    }
+                    for v in hard
+                ],
             )
 
         # group soft warnings by message, show affected waypoint range
         label = f"{template.name} #{inspection.sequence_order}"
-        soft_groups: dict[str, list[int]] = {}
-        for v in violations:
-            if not v.is_warning:
-                continue
-            indices = soft_groups.setdefault(v.message, [])
-            if v.waypoint_index is not None:
-                indices.append(v.waypoint_index + 1)
-
-        for msg, indices in soft_groups.items():
-            if indices:
-                if len(indices) <= 3:
-                    wp_str = ", ".join(str(i) for i in sorted(indices))
-                else:
-                    wp_str = f"{min(indices)}-{max(indices)}"
-                full = f"{label} (wp {wp_str}): {msg}"
-            else:
-                full = f"{label}: {msg}"
-            if full not in warnings:
-                warnings.append(full)
+        _format_soft_warnings(violations, label, warnings)
 
         # phase 4 - post-inspection processing
         _apply_camera_actions(pass_wps)
@@ -274,7 +298,6 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 obstructed_wps.append(wp_idx + 1)
 
         if obstructed_wps:
-            label = f"{template.name} #{inspection.sequence_order}"
             if len(obstructed_wps) <= 3:
                 wp_str = ", ".join(str(i) for i in obstructed_wps)
             else:
@@ -283,27 +306,23 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
+        # note: uses per-pass speed for battery estimate; final duration uses per-waypoint speed
         seg_dur = seg_dist / max(speed, MIN_SPEED_FLOOR)
 
         for wp in pass_wps:
-            if wp.hover_duration:
+            if wp.hover_duration is not None:
                 seg_dur += wp.hover_duration
 
         cumulative_distance += seg_dist
         cumulative_duration += seg_dur
-
-        if drone:
-            bw = check_battery(cumulative_duration, drone, DEFAULT_RESERVE_MARGIN)
-            if bw:
-                warnings.append(bw.message)
 
         # for vertical profiles, add descent waypoint back to start altitude
         # so transit doesn't start from the top of the vertical sweep
         if (
             inspection.method == InspectionMethod.VERTICAL_PROFILE
             and len(pass_wps) >= 2
-            and abs(pass_wps[0].lon - pass_wps[-1].lon) < 0.0001
-            and abs(pass_wps[0].lat - pass_wps[-1].lat) < 0.0001
+            and abs(pass_wps[0].lon - pass_wps[-1].lon) < VERTICAL_POSITION_TOLERANCE_DEG
+            and abs(pass_wps[0].lat - pass_wps[-1].lat) < VERTICAL_POSITION_TOLERANCE_DEG
         ):
             pass_wps.append(
                 WaypointData(
@@ -320,14 +339,34 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         inspection_passes.append(InspectionPass(waypoints=pass_wps, inspection_id=inspection.id))
 
     if not inspection_passes:
-        raise HTTPException(status_code=400, detail="no waypoints generated")
+        raise TrajectoryGenerationError("no waypoints generated")
+
+    # battery check after all inspections are computed
+    if drone:
+        bw = check_battery(cumulative_duration, drone, DEFAULT_RESERVE_MARGIN)
+        if bw:
+            warnings.append(bw.message)
 
     # phase 5 - final assembly with A* transit
     all_waypoints: list[WaypointData] = []
 
     # takeoff + climb to safe altitude before transit
     if mission.takeoff_coordinate:
-        tc = parse_ewkb(mission.takeoff_coordinate.data)["coordinates"]
+        try:
+            parsed = parse_ewkb(mission.takeoff_coordinate.data)
+            if parsed is None:
+                raise TrajectoryGenerationError("takeoff coordinate geometry is empty")
+            tc = parsed.get("coordinates")
+        except TrajectoryGenerationError:
+            raise
+        except Exception:
+            raise TrajectoryGenerationError("failed to parse takeoff coordinate geometry")
+        if not tc or len(tc) < 3:
+            raise TrajectoryGenerationError("takeoff coordinate must be a valid 3D point")
+        try:
+            Coordinate(lat=tc[1], lon=tc[0], alt=tc[2])
+        except ValueError as e:
+            raise TrajectoryGenerationError(f"invalid takeoff coordinate: {e}")
         first_wp = inspection_passes[0].waypoints[0]
         all_waypoints.append(
             WaypointData(
@@ -341,7 +380,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             )
         )
 
-        # TODO: this should be configurable in mission config
+        # TODO: TAKEOFF_SAFE_ALTITUDE should be configurable
         # vertical climb to safe altitude before starting transit
         safe_alt = tc[2] + TAKEOFF_SAFE_ALTITUDE
         all_waypoints.append(
@@ -379,7 +418,23 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # landing: transit to safe altitude above landing spot, then descend
     if mission.landing_coordinate:
-        lc = parse_ewkb(mission.landing_coordinate.data)["coordinates"]
+        try:
+            parsed = parse_ewkb(mission.landing_coordinate.data)
+            if parsed is None:
+                raise TrajectoryGenerationError("landing coordinate geometry is empty")
+            lc = parsed.get("coordinates")
+        except TrajectoryGenerationError:
+            raise
+        except Exception:
+            raise TrajectoryGenerationError("failed to parse landing coordinate geometry")
+        if not lc or len(lc) < 3:
+            raise TrajectoryGenerationError("landing coordinate must be a valid 3D point")
+        try:
+            Coordinate(lat=lc[1], lon=lc[0], alt=lc[2])
+        except ValueError as e:
+            raise TrajectoryGenerationError(f"invalid landing coordinate: {e}")
+
+        # TODO: LANDING_SAFE_ALTITUDE should be configurable
         safe_alt = lc[2] + LANDING_SAFE_ALTITUDE
         last = all_waypoints[-1]
         from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)
@@ -445,33 +500,20 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     )
     final_hard = [v for v in final_violations if not v.is_warning]
     if final_hard:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "final validation failed",
-                "violations": [{"message": v.message} for v in final_hard],
-            },
+        raise TrajectoryGenerationError(
+            "final validation failed",
+            violations=[
+                {
+                    "message": v.message,
+                    "violation_kind": v.violation_kind,
+                    "constraint_id": v.constraint_id,
+                    "waypoint_index": v.waypoint_index,
+                }
+                for v in final_hard
+            ],
         )
 
-    final_groups: dict[str, list[int]] = {}
-    for v in final_violations:
-        if not v.is_warning:
-            continue
-        indices = final_groups.setdefault(v.message, [])
-        if v.waypoint_index is not None:
-            indices.append(v.waypoint_index + 1)
-
-    for msg, indices in final_groups.items():
-        if indices:
-            if len(indices) <= 3:
-                wp_str = ", ".join(str(i) for i in sorted(indices))
-            else:
-                wp_str = f"{min(indices)}-{max(indices)}"
-            full = f"final validation (wp {wp_str}): {msg}"
-        else:
-            full = f"final validation: {msg}"
-        if full not in warnings:
-            warnings.append(full)
+    _format_soft_warnings(final_violations, "final validation", warnings)
 
     # compute final totals per-segment
     total_dist = 0.0
@@ -486,9 +528,18 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             total_dist += d
             total_dur += d / max(cur.speed, MIN_SPEED_FLOOR)
 
-        if all_waypoints[j].hover_duration:
+        if all_waypoints[j].hover_duration is not None:
             total_dur += all_waypoints[j].hover_duration
 
     flight_plan = persist_flight_plan(db, mission, all_waypoints, warnings, total_dist, total_dur)
+
+    # no hard violations at this point - mark flight plan as validated
+    flight_plan.is_validated = True
+
+    # transition to PLANNED only if still in DRAFT (skip if already PLANNED from regression)
+    if mission.status == MissionStatus.DRAFT:
+        mission.transition_to(MissionStatus.PLANNED)
+
+    db.commit()
 
     return flight_plan, warnings

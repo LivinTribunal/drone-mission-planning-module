@@ -233,6 +233,34 @@ Before implementing any issue, read the relevant spec files:
 - `docs/specs/CHAPTER3-SYSTEM-DESIGN.md` — Complete Chapter 3 from thesis.
   The authoritative design reference. Read this for any architectural question.
 
+## DDD-Lite Patterns
+
+Business logic belongs on model methods, not in services. Services handle DB access and HTTP concerns only.
+
+### Aggregate Roots
+- **Mission** — owns inspections, controls status transitions via `transition_to()`. Enforces DRAFT-only for inspection add/remove, max 10 inspections, auto-regresses VALIDATED→PLANNED on trajectory-affecting changes.
+- **Airport** — owns surfaces, obstacles, safety zones via `add_surface()`, `add_obstacle()`, `add_safety_zone()`.
+
+### Value Objects (`backend/app/models/value_objects.py`)
+- **Coordinate** — immutable (lat, lon, alt) with range validation, `to_wkt()`
+- **Speed** — non-negative float
+- **AltitudeRange** — min ≤ max, `contains()` method
+- **IcaoCode** — exactly 4 uppercase alpha chars
+
+### Key Entity Methods
+- `Mission.transition_to(status)` — enforces state machine
+- `Mission.add_inspection()` / `remove_inspection()` — DRAFT-only, max 10
+- `InspectionConfiguration.resolve_with_defaults(template_config)`
+- `AGL.calculate_lha_center_point()` — centroid of LHA positions
+- `Inspection.is_speed_compatible_with_frame_rate(drone, speed)`
+- `FlightPlan.compile(total_distance, estimated_duration)`
+
+### Rules for New Code
+- New business logic → method on the relevant model
+- New primitive (speed, altitude, angle) → value object
+- New child entity → create through aggregate root method
+- Status change → `mission.transition_to()`, never assign directly
+
 ## Branching Strategy
 
 - **Always `feat/<short-description>`** — e.g., `feat/db-models`, `feat/airport-api`, `feat/frontend-shell`
