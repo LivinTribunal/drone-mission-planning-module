@@ -309,8 +309,16 @@ def delete_safety_zone(db: Session, airport_id: UUID, zone_id: UUID):
 
 
 # AGLs
-def list_agls(db: Session, surface_id: UUID) -> list[AGL]:
-    """list AGLs for surface"""
+def list_agls(db: Session, airport_id: UUID, surface_id: UUID) -> list[AGL]:
+    """list AGLs for surface, validates surface belongs to airport."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     return db.query(AGL).options(joinedload(AGL.lhas)).filter(AGL.surface_id == surface_id).all()
 
 
@@ -357,8 +365,12 @@ def delete_agl(db: Session, surface_id: UUID, agl_id: UUID):
 
 
 # LHAs
-def list_lhas(db: Session, agl_id: UUID) -> list[LHA]:
-    """list LHAs for AGL"""
+def list_lhas(db: Session, surface_id: UUID, agl_id: UUID) -> list[LHA]:
+    """list LHAs for AGL, validates AGL belongs to surface."""
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
+    if not agl:
+        raise NotFoundError("agl not found")
+
     return db.query(LHA).filter(LHA.agl_id == agl_id).all()
 
 

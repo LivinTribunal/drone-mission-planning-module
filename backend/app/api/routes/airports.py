@@ -180,7 +180,7 @@ def delete_safety_zone(airport_id: UUID, zone_id: UUID, db: Session = Depends(ge
 @router.get("/{airport_id}/surfaces/{surface_id}/agls", response_model=AGLListResponse)
 def list_agls(airport_id: UUID, surface_id: UUID, db: Session = Depends(get_db)):
     """list all AGLs for surface"""
-    agls = airport_service.list_agls(db, surface_id)
+    agls = airport_service.list_agls(db, airport_id, surface_id)
 
     return AGLListResponse(data=agls, meta=ListMeta(total=len(agls)))
 
@@ -219,7 +219,7 @@ def delete_agl(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = D
 )
 def list_lhas(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = Depends(get_db)):
     """list all LHAs for AGL"""
-    lhas = airport_service.list_lhas(db, agl_id)
+    lhas = airport_service.list_lhas(db, surface_id, agl_id)
 
     return LHAListResponse(data=lhas, meta=ListMeta(total=len(lhas)))
 
