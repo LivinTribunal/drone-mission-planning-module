@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import settings
 from app.core.exceptions import NotFoundError, TrajectoryGenerationError
 from app.models.agl import AGL
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
@@ -40,10 +41,8 @@ from app.services.trajectory_pathfinding import (
 from app.services.trajectory_types import (
     DEFAULT_RESERVE_MARGIN,
     DEFAULT_SPEED,
-    LANDING_SAFE_ALTITUDE,
     MIN_ARC_RADIUS,
     MIN_SPEED_FLOOR,
-    TAKEOFF_SAFE_ALTITUDE,
     VERTICAL_POSITION_TOLERANCE_DEG,
     InspectionPass,
     MissionData,
@@ -380,9 +379,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             )
         )
 
-        # TODO: TAKEOFF_SAFE_ALTITUDE should be configurable
-        # vertical climb to safe altitude before starting transit
-        safe_alt = tc[2] + TAKEOFF_SAFE_ALTITUDE
+        safe_alt = tc[2] + settings.takeoff_safe_altitude
         all_waypoints.append(
             WaypointData(
                 lon=tc[0],
@@ -434,8 +431,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         except ValueError as e:
             raise TrajectoryGenerationError(f"invalid landing coordinate: {e}")
 
-        # TODO: LANDING_SAFE_ALTITUDE should be configurable
-        safe_alt = lc[2] + LANDING_SAFE_ALTITUDE
+        safe_alt = lc[2] + settings.landing_safe_altitude
         last = all_waypoints[-1]
         from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)
         above_landing = Point3D(lon=lc[0], lat=lc[1], alt=safe_alt)

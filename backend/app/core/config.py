@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     jwt_refresh_expiration_days: int = 7
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # safety constants - overridable via .env
+    takeoff_safe_altitude: float = 10.0
+    landing_safe_altitude: float = 10.0
+    vertex_buffer_m: float = 5.0
+
     class Config:
         env_file = ".env"
 

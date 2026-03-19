@@ -8,6 +8,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.models.enums import MissionStatus
 
 # max inspections per mission
 MAX_INSPECTIONS = 10
@@ -101,8 +102,8 @@ class Mission(Base):
         bypasses transition_to() because the state machine has no backward
         transitions by design - this is the one intentional exception.
         """
-        if self.status == "VALIDATED":
-            self.status = "PLANNED"
+        if self.status == MissionStatus.VALIDATED:
+            self.status = MissionStatus.PLANNED
 
     # terminal states - no modifications allowed, user must duplicate
     _TERMINAL = {"EXPORTED", "COMPLETED", "CANCELLED"}
@@ -118,8 +119,8 @@ class Mission(Base):
         self.inspections.append(inspection)
 
         # adding inspection invalidates trajectory - regress to DRAFT
-        if self.status in ("PLANNED", "VALIDATED"):
-            self.status = "DRAFT"
+        if self.status in (MissionStatus.PLANNED, MissionStatus.VALIDATED):
+            self.status = MissionStatus.DRAFT
 
     def remove_inspection(self, inspection_id):
         """remove inspection by id - allowed in DRAFT/PLANNED/VALIDATED, blocked after EXPORTED."""
@@ -131,8 +132,8 @@ class Mission(Base):
             if insp.id == target:
                 self.inspections.remove(insp)
                 # removing inspection invalidates trajectory - regress to DRAFT
-                if self.status in ("PLANNED", "VALIDATED"):
-                    self.status = "DRAFT"
+                if self.status in (MissionStatus.PLANNED, MissionStatus.VALIDATED):
+                    self.status = MissionStatus.DRAFT
                 return insp
 
         raise ValueError(f"inspection {inspection_id} not found")
