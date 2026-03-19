@@ -37,8 +37,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const savedUser = localStorage.getItem(USER_KEY);
     if (savedToken && savedUser) {
       try {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        // validate shape - reset if stale schema
+        if (parsed?.id && parsed?.email && Array.isArray(parsed?.roles)) {
+          setToken(savedToken);
+          setUser(parsed as AuthUser);
+        } else {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(USER_KEY);
+        }
       } catch {
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
@@ -46,8 +53,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // TODO: replace with real JWT auth when backend auth endpoints are implemented
   const login = useCallback(async (email: string, password: string) => {
-    // mock auth - any credentials succeed
+    // mock auth - any credentials succeed, token is not a real JWT
     void password;
     const mockUser: AuthUser = {
       id: "00000000-0000-0000-0000-000000000001",

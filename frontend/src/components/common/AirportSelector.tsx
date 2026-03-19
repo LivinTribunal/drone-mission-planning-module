@@ -6,15 +6,14 @@ import { listAirports } from "@/api/airports";
 export default function AirportSelector() {
   const { selectedAirport, selectAirport } = useAirport();
   const [airports, setAirports] = useState<AirportResponse[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     listAirports()
       .then((res) => setAirports(res.data))
-      .catch(() => {
-        // backend may not be running yet
-      });
+      .catch(() => setError("Failed to load airports"));
   }, []);
 
   // close dropdown on outside click
@@ -53,7 +52,9 @@ export default function AirportSelector() {
           className="absolute right-0 top-full mt-1 min-w-[200px] rounded border
             border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg z-50"
         >
-          {airports.length === 0 ? (
+          {error ? (
+            <div className="px-3 py-2 text-sm text-red-500">{error}</div>
+          ) : airports.length === 0 ? (
             <div className="px-3 py-2 text-sm text-[var(--color-text-muted)]">
               No airports available
             </div>

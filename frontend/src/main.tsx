@@ -6,7 +6,10 @@ import { AirportProvider } from "./contexts/AirportContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import "./index.css";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("root element not found - check index.html");
+
+ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <ThemeProvider>
       <AuthProvider>
