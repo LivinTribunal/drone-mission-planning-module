@@ -36,7 +36,11 @@ def validate_inspection_pass(
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface],
 ) -> list[Violation]:
-    """validate all waypoints in an inspection pass"""
+    """validate all waypoints in an inspection pass.
+
+    drone and constraint checks run per-waypoint (no spatial queries).
+    obstacle and zone checks use batched spatial queries - one query each.
+    """
     violations = []
 
     for i, wp in enumerate(waypoints):
@@ -52,17 +56,146 @@ def validate_inspection_pass(
                 violation.waypoint_index = i
                 violations.append(violation)
 
-        for obstacle in obstacles:
-            violation = check_obstacle(db, wp, obstacle)
-            if violation:
-                violation.waypoint_index = i
-                violations.append(violation)
+    violations.extend(_batch_check_obstacles(db, waypoints, obstacles))
+    violations.extend(_batch_check_zones(db, waypoints, zones))
 
-        for zone in zones:
-            violation = check_safety_zone(db, wp, zone)
-            if violation:
-                violation.waypoint_index = i
-                violations.append(violation)
+    return violations
+
+
+def _batch_check_obstacles(
+    db: Session,
+    waypoints: list[WaypointData],
+    obstacles: list[Obstacle],
+) -> list[Violation]:
+    """batch obstacle containment - one query for all waypoints against all obstacles."""
+    # filter obstacles with geometry
+    valid_obs = [(i, obs) for i, obs in enumerate(obstacles) if obs.geometry]
+    if not valid_obs or not waypoints:
+        return []
+
+    wp_ewkts = [_wp_to_ewkt(wp) for wp in waypoints]
+    obs_ewkts = [(i, _geom_to_ewkt(obs.geometry)) for i, obs in valid_obs]
+
+    # build VALUES clauses with bind parameters
+    wp_values = ", ".join(f"(:wp_idx_{i}, :wp_geom_{i})" for i in range(len(waypoints)))
+    obs_values = ", ".join(f"(:obs_idx_{i}, :obs_geom_{i})" for i, _ in enumerate(obs_ewkts))
+
+    params: dict[str, object] = {}
+    for i, ewkt in enumerate(wp_ewkts):
+        params[f"wp_idx_{i}"] = i
+        params[f"wp_geom_{i}"] = ewkt
+    for i, (orig_idx, ewkt) in enumerate(obs_ewkts):
+        params[f"obs_idx_{i}"] = orig_idx
+        params[f"obs_geom_{i}"] = ewkt
+
+    sql = (
+        f"SELECT wp.idx, obs.idx, "  # noqa: S608
+        f"ST_Contains("
+        f"ST_Force2D(ST_GeomFromEWKT(obs.geom)), "
+        f"ST_Force2D(ST_GeomFromEWKT(wp.geom))) AS contained "
+        f"FROM (VALUES {wp_values}) AS wp(idx, geom), "
+        f"(VALUES {obs_values}) AS obs(idx, geom)"
+    )
+
+    rows = db.execute(text(sql), params).fetchall()
+
+    # pre-compute obstacle top altitudes
+    obs_tops: dict[int, float] = {}
+    for orig_idx, obs in valid_obs:
+        obs_base_alt = 0.0
+        if obs.position:
+            try:
+                obs_pos = parse_ewkb(obs.position.data)
+                if obs_pos is not None:
+                    coords = obs_pos.get("coordinates", [])
+                    obs_base_alt = coords[2] if len(coords) > 2 else 0.0
+            except (IndexError, KeyError, ValueError):
+                pass
+        obs_tops[orig_idx] = obs_base_alt + (obs.height or 0)
+
+    violations = []
+    for wp_idx, obs_idx, contained in rows:
+        if contained is not True:
+            continue
+
+        obs = obstacles[obs_idx]
+        obs_top = obs_tops[obs_idx]
+        wp = waypoints[wp_idx]
+
+        if wp.alt <= obs_top:
+            violations.append(
+                Violation(
+                    is_warning=False,
+                    violation_kind="obstacle",
+                    message=(
+                        f"waypoint at {wp.alt:.0f}m intersects obstacle "
+                        f"'{obs.name}' (top: {obs_top:.0f}m)"
+                    ),
+                    waypoint_index=wp_idx,
+                )
+            )
+
+    return violations
+
+
+def _batch_check_zones(
+    db: Session,
+    waypoints: list[WaypointData],
+    zones: list[SafetyZone],
+) -> list[Violation]:
+    """batch safety zone containment - one query for all waypoints against all zones."""
+    valid_zones = [(i, zone) for i, zone in enumerate(zones) if zone.geometry]
+    if not valid_zones or not waypoints:
+        return []
+
+    wp_ewkts = [_wp_to_ewkt(wp) for wp in waypoints]
+    zone_ewkts = [(i, _geom_to_ewkt(zone.geometry)) for i, zone in valid_zones]
+
+    wp_values = ", ".join(f"(:wp_idx_{i}, :wp_geom_{i})" for i in range(len(waypoints)))
+    zone_values = ", ".join(f"(:z_idx_{i}, :z_geom_{i})" for i, _ in enumerate(zone_ewkts))
+
+    params: dict[str, object] = {}
+    for i, ewkt in enumerate(wp_ewkts):
+        params[f"wp_idx_{i}"] = i
+        params[f"wp_geom_{i}"] = ewkt
+    for i, (orig_idx, ewkt) in enumerate(zone_ewkts):
+        params[f"z_idx_{i}"] = orig_idx
+        params[f"z_geom_{i}"] = ewkt
+
+    sql = (
+        f"SELECT wp.idx, z.idx, "  # noqa: S608
+        f"ST_Contains("
+        f"ST_Force2D(ST_GeomFromEWKT(z.geom)), "
+        f"ST_Force2D(ST_GeomFromEWKT(wp.geom))) AS contained "
+        f"FROM (VALUES {wp_values}) AS wp(idx, geom), "
+        f"(VALUES {zone_values}) AS z(idx, geom)"
+    )
+
+    rows = db.execute(text(sql), params).fetchall()
+
+    violations = []
+    for wp_idx, zone_idx, contained in rows:
+        if contained is not True:
+            continue
+
+        zone = zones[zone_idx]
+        wp = waypoints[wp_idx]
+
+        # altitude band check
+        if zone.altitude_floor is not None and wp.alt < zone.altitude_floor:
+            continue
+        if zone.altitude_ceiling is not None and wp.alt > zone.altitude_ceiling:
+            continue
+
+        is_hard = zone.type in HARD_ZONE_TYPES
+        violations.append(
+            Violation(
+                is_warning=not is_hard,
+                violation_kind="safety_zone",
+                message=f"waypoint inside {zone.type} zone: {zone.name}",
+                waypoint_index=wp_idx,
+            )
+        )
 
     return violations
 
@@ -115,7 +248,7 @@ def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violati
         {"obs_geom": _geom_to_ewkt(obstacle.geometry), "point": wp_ewkt},
     ).scalar()
 
-    if not contained:
+    if contained is not True:
         return None
 
     obs_base_alt = 0.0
@@ -183,7 +316,7 @@ def check_safety_zone(db: Session, wp: WaypointData, zone: SafetyZone) -> Violat
         {"zone_geom": _geom_to_ewkt(zone.geometry), "point": wp_ewkt},
     ).scalar()
 
-    if not contained:
+    if contained is not True:
         return None
 
     if zone.altitude_floor is not None and wp.alt < zone.altitude_floor:
@@ -331,7 +464,7 @@ def _check_constraint(
             {"boundary": _geom_to_ewkt(constraint.boundary), "point": wp_ewkt},
         ).scalar()
 
-        if not contained:
+        if contained is not True:
             return _violation(constraint, "waypoint outside geofence boundary")
 
     elif ctype == ConstraintType.RUNWAY_BUFFER:
