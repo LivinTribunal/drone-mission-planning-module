@@ -314,8 +314,16 @@ def list_agls(db: Session, surface_id: UUID) -> list[AGL]:
     return db.query(AGL).options(joinedload(AGL.lhas)).filter(AGL.surface_id == surface_id).all()
 
 
-def create_agl(db: Session, surface_id: UUID, schema: AGLCreate) -> AGL:
-    """create AGL for surface"""
+def create_agl(db: Session, airport_id: UUID, surface_id: UUID, schema: AGLCreate) -> AGL:
+    """create AGL for surface, validates surface belongs to airport."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     data = schema_to_model_data(schema)
     agl = AGL(surface_id=surface_id, **data)
     db.add(agl)
@@ -354,8 +362,12 @@ def list_lhas(db: Session, agl_id: UUID) -> list[LHA]:
     return db.query(LHA).filter(LHA.agl_id == agl_id).all()
 
 
-def create_lha(db: Session, agl_id: UUID, schema: LHACreate) -> LHA:
-    """create LHA for AGL"""
+def create_lha(db: Session, surface_id: UUID, agl_id: UUID, schema: LHACreate) -> LHA:
+    """create LHA for AGL, validates AGL belongs to surface."""
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
+    if not agl:
+        raise NotFoundError("agl not found")
+
     data = schema_to_model_data(schema)
     lha = LHA(agl_id=agl_id, **data)
     db.add(lha)

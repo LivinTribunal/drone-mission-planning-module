@@ -1,4 +1,4 @@
-import type { PointZ, PolygonZ } from "./common";
+import type { LineStringZ, PointZ, PolygonZ } from "./common";
 import type {
   LampType,
   ObstacleType,
@@ -34,7 +34,7 @@ export interface SurfaceResponse {
   airport_id: string;
   identifier: string;
   surface_type: SurfaceType;
-  geometry: PolygonZ;
+  geometry: LineStringZ;
   heading: number | null;
   length: number | null;
   width: number | null;
@@ -99,7 +99,6 @@ export interface AirportCreate {
 }
 
 export interface AirportUpdate {
-  icao_code?: string;
   name?: string;
   city?: string | null;
   country?: string | null;
@@ -110,7 +109,7 @@ export interface AirportUpdate {
 export interface SurfaceCreate {
   identifier: string;
   surface_type: SurfaceType;
-  geometry: PolygonZ;
+  geometry: LineStringZ;
   heading?: number | null;
   length?: number | null;
   width?: number | null;
@@ -122,7 +121,7 @@ export interface SurfaceCreate {
 export interface SurfaceUpdate {
   identifier?: string;
   surface_type?: SurfaceType;
-  geometry?: PolygonZ;
+  geometry?: LineStringZ;
   heading?: number | null;
   length?: number | null;
   width?: number | null;

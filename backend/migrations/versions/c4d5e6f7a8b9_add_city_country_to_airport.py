@@ -1,7 +1,7 @@
 """add city and country to airport
 
 Revision ID: c4d5e6f7a8b9
-Revises: f341383d7ac2
+Revises: b2c3d4e5f6a7
 Create Date: 2026-03-19 16:00:00.000000
 
 """

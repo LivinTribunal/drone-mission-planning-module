@@ -68,7 +68,7 @@ export async function deleteAirport(id: string): Promise<DeleteResponse> {
 
 export async function listSurfaces(
   airportId: string,
-): Promise<SurfaceResponse[]> {
+): Promise<{ data: SurfaceResponse[]; meta: ListMeta }> {
   const res = await client.get(`/airports/${airportId}/surfaces`);
   return res.data;
 }
@@ -110,7 +110,7 @@ export async function deleteSurface(
 
 export async function listObstacles(
   airportId: string,
-): Promise<ObstacleResponse[]> {
+): Promise<{ data: ObstacleResponse[]; meta: ListMeta }> {
   const res = await client.get(`/airports/${airportId}/obstacles`);
   return res.data;
 }
@@ -152,7 +152,7 @@ export async function deleteObstacle(
 
 export async function listSafetyZones(
   airportId: string,
-): Promise<SafetyZoneResponse[]> {
+): Promise<{ data: SafetyZoneResponse[]; meta: ListMeta }> {
   const res = await client.get(`/airports/${airportId}/safety-zones`);
   return res.data;
 }
@@ -198,7 +198,7 @@ export async function deleteSafetyZone(
 export async function listAGLs(
   airportId: string,
   surfaceId: string,
-): Promise<AGLResponse[]> {
+): Promise<{ data: AGLResponse[]; meta: ListMeta }> {
   const res = await client.get(
     `/airports/${airportId}/surfaces/${surfaceId}/agls`,
   );
@@ -258,7 +258,7 @@ export async function listLHAs(
   airportId: string,
   surfaceId: string,
   aglId: string,
-): Promise<LHAResponse[]> {
+): Promise<{ data: LHAResponse[]; meta: ListMeta }> {
   const res = await client.get(
     `/airports/${airportId}/surfaces/${surfaceId}/agls/${aglId}/lhas`,
   );

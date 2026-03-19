@@ -190,7 +190,7 @@ def list_agls(airport_id: UUID, surface_id: UUID, db: Session = Depends(get_db))
 )
 def create_agl(airport_id: UUID, surface_id: UUID, body: AGLCreate, db: Session = Depends(get_db)):
     """create AGL for surface"""
-    return airport_service.create_agl(db, surface_id, body)
+    return airport_service.create_agl(db, airport_id, surface_id, body)
 
 
 @router.put("/{airport_id}/surfaces/{surface_id}/agls/{agl_id}", response_model=AGLResponse)
@@ -237,7 +237,7 @@ def create_lha(
     db: Session = Depends(get_db),
 ):
     """create LHA for AGL"""
-    return airport_service.create_lha(db, agl_id, body)
+    return airport_service.create_lha(db, surface_id, agl_id, body)
 
 
 @router.put(
