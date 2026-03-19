@@ -1,19 +1,21 @@
 import { NavLink, Outlet, useParams } from "react-router-dom";
-
-const tabs = [
-  { label: "Overview", path: "overview" },
-  { label: "Configuration", path: "configuration" },
-  { label: "Map", path: "map" },
-  { label: "Validation & Export", path: "validation-export" },
-];
+import { useTranslation } from "react-i18next";
 
 export default function MissionTabNav() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useTranslation();
+
+  const tabs = [
+    { label: t("mission.overview"), path: "overview" },
+    { label: t("mission.configuration"), path: "configuration" },
+    { label: t("mission.map"), path: "map" },
+    { label: t("mission.validationExport"), path: "validation-export" },
+  ];
 
   return (
     <div>
       <div
-        className="flex gap-1 px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-surface)]"
+        className="flex gap-1 px-4 py-2 bg-tv-surface rounded-full mx-4 mt-4 p-1"
         data-testid="mission-tabs"
       >
         {tabs.map((tab) => (
@@ -21,10 +23,10 @@ export default function MissionTabNav() {
             key={tab.path}
             to={`/operator-center/missions/${id}/${tab.path}`}
             className={({ isActive }) =>
-              `px-3 py-1.5 rounded text-sm transition-colors ${
+              `px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 isActive
-                  ? "bg-[var(--color-active)] text-[var(--color-text)] font-medium"
-                  : "text-[var(--color-text-muted)] hover:bg-[var(--color-hover)]"
+                  ? "bg-tv-nav-active-bg text-tv-nav-active-text"
+                  : "text-tv-text-secondary hover:bg-tv-surface-hover"
               }`
             }
           >

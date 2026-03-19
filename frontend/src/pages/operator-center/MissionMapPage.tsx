@@ -1,8 +1,11 @@
+import { useTranslation } from "react-i18next";
+
 export default function MissionMapPage() {
+  const { t } = useTranslation();
+
   return (
-    <div>
-      <h1 className="text-xl font-bold mb-2">Mission Map</h1>
-      <p className="text-[var(--color-text-muted)]">Coming soon</p>
+    <div className="flex items-center justify-center py-12">
+      <p className="text-sm text-tv-text-muted">{t("mission.map")}</p>
     </div>
   );
 }

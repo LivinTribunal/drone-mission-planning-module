@@ -69,6 +69,7 @@ docker compose up -d
   - Add a blank line after a logical block ends (e.g. after `conn.commit()` before the next statement)
 - **UUIDs**: `Column(UUID, primary_key=True, default=uuid4)` for all primary keys
 - **Geometry**: GeoAlchemy2 `Geometry("POINTZ", srid=4326)` for all coordinates
+- **Frontend i18n**: All user-facing strings use `react-i18next`. Translation files in `frontend/src/i18n/locales/{lang}.json`. Use `useTranslation()` hook + `t()` calls. Nest keys by page/component. Never hardcode user-visible text in JSX. Adding a new language requires only a new JSON file + registering it in `src/i18n/index.ts`.
 
 ## Project Structure
 
@@ -90,6 +91,7 @@ drone-mission-planning-module/
 │   │   ├── pages/          # operator-center/ and coordinator-center/ routes
 │   │   ├── components/     # Reusable React components
 │   │   ├── api/            # Axios client + API functions
+│   │   ├── i18n/           # i18next config + locale JSON files
 │   │   └── types/          # TypeScript interfaces matching Pydantic schemas
 │   └── package.json
 ├── .codefactory/prompts/   # Agent prompt files

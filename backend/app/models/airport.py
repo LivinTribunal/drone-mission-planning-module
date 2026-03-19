@@ -16,6 +16,8 @@ class Airport(Base):
     id = Column(UUID, primary_key=True, default=uuid4)
     icao_code = Column(String(4), unique=True, nullable=False)
     name = Column(String, nullable=False)
+    city = Column(String(100))
+    country = Column(String(100))
     elevation = Column(Float, nullable=False)
     location = Column(Geometry("POINTZ", srid=4326), nullable=False)
 

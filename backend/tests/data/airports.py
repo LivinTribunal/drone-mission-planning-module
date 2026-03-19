@@ -1,6 +1,8 @@
 AIRPORT_PAYLOAD = {
     "icao_code": "LKPR",
     "name": "Prague Airport",
+    "city": "Prague",
+    "country": "Czech Republic",
     "elevation": 380.0,
     "location": {"type": "Point", "coordinates": [14.26, 50.10, 380.0]},
 }
@@ -76,6 +78,8 @@ AIRPORT_UPDATE_PAYLOAD = {"name": "Vaclav Havel"}
 THROWAWAY_AIRPORT_PAYLOAD = {
     "icao_code": "LKTB",
     "name": "Brno Airport",
+    "city": "Brno",
+    "country": "Czech Republic",
     "elevation": 241.0,
     "location": {"type": "Point", "coordinates": [16.69, 49.15, 241.0]},
 }
