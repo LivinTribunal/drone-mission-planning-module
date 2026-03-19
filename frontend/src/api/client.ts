@@ -2,6 +2,13 @@ import axios from "axios";
 
 const TOKEN_KEY = "tarmacview_token";
 
+// callback set by AuthContext to clear react auth state on 401
+export let onUnauthorized: (() => void) | null = null;
+
+export function setOnUnauthorized(callback: (() => void) | null) {
+  onUnauthorized = callback;
+}
+
 const client = axios.create({
   baseURL: "/api/v1",
   headers: { "Content-Type": "application/json" },
@@ -29,6 +36,7 @@ client.interceptors.response.use(
 
       if (status === 401) {
         localStorage.removeItem(TOKEN_KEY);
+        onUnauthorized?.();
       }
 
       console.error(`API error ${status}: ${message}`);

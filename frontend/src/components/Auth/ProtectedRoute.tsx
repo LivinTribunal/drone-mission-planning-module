@@ -14,7 +14,11 @@ export default function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
   }
 
   if (requiredRole && !user?.roles.includes(requiredRole)) {
-    return <Navigate to="/login" replace />;
+    // redirect to user's default route instead of login (they're already authenticated)
+    const defaultRoute = user?.roles.includes("COORDINATOR")
+      ? "/coordinator-center/dashboard"
+      : "/operator-center/dashboard";
+    return <Navigate to={defaultRoute} replace />;
   }
 
   return <Outlet />;

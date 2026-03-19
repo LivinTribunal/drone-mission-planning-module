@@ -6,6 +6,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import { setOnUnauthorized } from "@/api/client";
 
 const TOKEN_KEY = "tarmacview_token";
 const USER_KEY = "tarmacview_user";
@@ -51,6 +52,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(USER_KEY);
       }
     }
+  }, []);
+
+  // register 401 handler so axios interceptor can clear react state
+  useEffect(() => {
+    setOnUnauthorized(() => {
+      setToken(null);
+      setUser(null);
+      localStorage.removeItem(USER_KEY);
+    });
+    return () => setOnUnauthorized(null);
   }, []);
 
   // TODO: replace with real JWT auth when backend auth endpoints are implemented
