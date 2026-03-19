@@ -100,7 +100,7 @@ export default function PoiInfoPanel({ feature, onClose }: PoiInfoPanelProps) {
 
   return (
     <div
-      className="absolute bottom-3 left-3 z-10 min-w-[200px] max-w-[280px] rounded-2xl border border-tv-border bg-tv-surface/95 backdrop-blur-sm"
+      className="z-10 w-52 rounded-2xl border border-tv-border bg-tv-surface"
       data-testid="poi-info-panel"
     >
       <div className="flex items-center justify-between px-3 py-2">

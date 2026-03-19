@@ -29,6 +29,7 @@ import LayerPanel from "./overlays/LayerPanel";
 import LegendPanel from "./overlays/LegendPanel";
 import PoiInfoPanel from "./overlays/PoiInfoPanel";
 import TerrainToggle from "./overlays/TerrainToggle";
+import MapHelpPanel from "./overlays/MapHelpPanel";
 
 const ESRI_TILES =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -276,15 +277,13 @@ export default function AirportMap({
 
       map.setStyle(mode === "satellite" ? makeSatelliteStyle() : makeMapStyle());
 
-      map.once("styledata", () => {
+      // restore position and re-add layers in a single callback
+      map.once("style.load", () => {
         map.setCenter(center);
         map.setZoom(zoom);
         map.setBearing(bearing);
         map.setPitch(pitch);
-      });
 
-      // re-add infrastructure layers after style change
-      map.once("style.load", () => {
         if (layersAddedRef.current) return;
         layersAddedRef.current = true;
         addSafetyZoneLayers(map, airport.safety_zones);
@@ -292,7 +291,6 @@ export default function AirportMap({
         addObstacleLayers(map, airport.obstacles);
         addAglLayers(map, airport.surfaces);
 
-        // re-apply visibility
         for (const [key, layerIds] of Object.entries(layerGroupMap)) {
           const visible = layerConfig[key as keyof MapLayerConfig];
           for (const layerId of layerIds) {
@@ -318,6 +316,37 @@ export default function AirportMap({
     setLayerConfig((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  // wasd / arrow key navigation
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !interactive) return;
+
+    const PAN_STEP = 80;
+    const keyMap: Record<string, [number, number]> = {
+      w: [0, -PAN_STEP],
+      a: [-PAN_STEP, 0],
+      s: [0, PAN_STEP],
+      d: [PAN_STEP, 0],
+      ArrowUp: [0, -PAN_STEP],
+      ArrowLeft: [-PAN_STEP, 0],
+      ArrowDown: [0, PAN_STEP],
+      ArrowRight: [PAN_STEP, 0],
+    };
+
+    function handleKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const delta = keyMap[e.key];
+      if (delta && map) {
+        e.preventDefault();
+        map.panBy(delta, { duration: 200 });
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [interactive]);
+
   return (
     <div
       className="relative h-full w-full rounded-2xl overflow-hidden"
@@ -326,19 +355,24 @@ export default function AirportMap({
     >
       <div ref={containerRef} className="h-full w-full" />
 
-      {showLayerPanel && (
-        <LayerPanel layers={layerConfig} onToggle={handleLayerToggle} />
-      )}
+      {/* left column - layers + feature info stacked */}
+      <div className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-52">
+        {showLayerPanel && (
+          <LayerPanel layers={layerConfig} onToggle={handleLayerToggle} />
+        )}
+        {showPoiInfo && (
+          <PoiInfoPanel
+            feature={selectedFeature}
+            onClose={() => setSelectedFeature(null)}
+          />
+        )}
+      </div>
+
       {showLegend && <LegendPanel />}
-      {showPoiInfo && (
-        <PoiInfoPanel
-          feature={selectedFeature}
-          onClose={() => setSelectedFeature(null)}
-        />
-      )}
       {showTerrainToggle && (
         <TerrainToggle mode={terrainMode} onToggle={handleTerrainChange} />
       )}
+      <MapHelpPanel />
 
       {children}
     </div>

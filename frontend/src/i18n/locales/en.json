@@ -128,7 +128,16 @@
     "vegetation": "Vegetation",
     "other": "Other",
     "aglMarker": "AGL System",
-    "lhaMarker": "LHA Unit"
+    "lhaMarker": "LHA Unit",
+    "mapHelpTitle": "Map Controls",
+    "mapHelpDrag": "Left-click drag - move around",
+    "mapHelpRotate": "Right-click drag - rotate / tilt",
+    "mapHelpClick": "Click an object - view feature info",
+    "mapHelpWasd": "WASD or arrow keys - pan the map",
+    "mostUsedDrone": "Most Used",
+    "allDrones": "All Drone Profiles",
+    "showAll": "Show all",
+    "showLess": "Show less"
   },
   "mission": {
     "overview": "Overview",

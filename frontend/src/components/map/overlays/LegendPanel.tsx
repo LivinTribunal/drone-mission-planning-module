@@ -30,7 +30,7 @@ export default function LegendPanel() {
 
   return (
     <div
-      className="absolute top-3 right-3 z-10 rounded-2xl border border-tv-border bg-tv-surface/95 backdrop-blur-sm"
+      className="absolute top-3 right-14 z-10 rounded-2xl border border-tv-border bg-tv-surface"
       data-testid="legend-panel"
     >
       <button

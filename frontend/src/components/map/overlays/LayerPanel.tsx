@@ -21,7 +21,7 @@ export default function LayerPanel({ layers, onToggle }: LayerPanelProps) {
 
   return (
     <div
-      className="absolute top-3 left-3 z-10 rounded-2xl border border-tv-border bg-tv-surface/95 backdrop-blur-sm"
+      className="z-10 w-52 rounded-2xl border border-tv-border bg-tv-surface"
       data-testid="layer-panel"
     >
       <button

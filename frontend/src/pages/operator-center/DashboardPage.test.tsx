@@ -212,7 +212,9 @@ describe("DashboardPage", () => {
       expect(screen.getByText("dashboard.statistics")).toBeInTheDocument();
     });
     // both mock missions are from march 2026 (current month in tests)
-    expect(screen.getByText("2")).toBeInTheDocument();
+    // "2" appears in both mission count badge and stats - use getAllByText
+    const twos = screen.getAllByText("2");
+    expect(twos.length).toBeGreaterThanOrEqual(1);
     // uncomputable stats show dash
     const dashes = screen.getAllByText("\u2014");
     expect(dashes.length).toBeGreaterThanOrEqual(3);
@@ -220,6 +222,13 @@ describe("DashboardPage", () => {
 
   it("shows drone profiles section and resolves drone names in mission rows", async () => {
     renderDashboard(mockAirport);
+
+    // drone profiles section is collapsed by default - expand it
+    await waitFor(() => {
+      expect(screen.getByTestId("section-dashboard.droneprofiles")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("section-dashboard.droneprofiles"));
+
     await waitFor(() => {
       expect(screen.getByTestId("drone-profile-dp-1")).toBeInTheDocument();
     });

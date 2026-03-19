@@ -315,20 +315,25 @@ function MissionListSection({
     return missions.filter((m) => m.name.toLowerCase().includes(q));
   }, [missions, search]);
 
-  const title = loading
-    ? t("dashboard.missions")
-    : t("dashboard.missionCount", { count: missions.length });
-
   return (
-    <CollapsibleSection title={title}>
+    <CollapsibleSection title={t("dashboard.missions")} count={missions.length}>
       {/* search */}
-      <div className="mb-3">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex items-center justify-center h-8 w-8 rounded-full bg-tv-accent flex-shrink-0">
+          <svg className="h-4 w-4 text-tv-accent-text" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </div>
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t("dashboard.searchMissions")}
-          className="w-full rounded-full border border-tv-border bg-tv-bg px-4 py-2 text-xs
+          className="flex-1 rounded-full border border-tv-border bg-tv-bg px-4 py-2 text-xs
             text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent"
           data-testid="mission-search"
         />
@@ -533,17 +538,63 @@ function StatisticsSection({ missions }: { missions: MissionResponse[] }) {
   );
 }
 
-function DroneProfilesSection({
-  profiles,
-  loading,
-}: {
-  profiles: DroneProfileResponse[];
-  loading: boolean;
-}) {
+function DroneProfileCard({ dp }: { dp: DroneProfileResponse }) {
   const { t } = useTranslation();
 
   return (
-    <CollapsibleSection title={t("dashboard.droneProfiles")}>
+    <div
+      className="rounded-xl border border-tv-border bg-tv-bg p-3"
+      data-testid={`drone-profile-${dp.id}`}
+    >
+      <p className="text-sm font-medium text-tv-text-primary">{dp.name}</p>
+      <div className="flex items-center gap-3 text-xs text-tv-text-secondary mt-1">
+        {dp.manufacturer && <span>{dp.manufacturer}</span>}
+        {dp.model && <span>{dp.model}</span>}
+        {dp.endurance_minutes != null && (
+          <span>
+            {dp.endurance_minutes} {t("dashboard.minutes")}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DroneProfilesSection({
+  profiles,
+  loading,
+  missions,
+}: {
+  profiles: DroneProfileResponse[];
+  loading: boolean;
+  missions: MissionResponse[];
+}) {
+  const { t } = useTranslation();
+  const [showAll, setShowAll] = useState(false);
+
+  const mostUsedId = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const m of missions) {
+      if (m.drone_profile_id) {
+        counts[m.drone_profile_id] = (counts[m.drone_profile_id] || 0) + 1;
+      }
+    }
+    let topId: string | null = null;
+    let topCount = 0;
+    for (const [id, count] of Object.entries(counts)) {
+      if (count > topCount) {
+        topId = id;
+        topCount = count;
+      }
+    }
+    return topId;
+  }, [missions]);
+
+  const mostUsed = profiles.find((dp) => dp.id === mostUsedId) ?? profiles[0] ?? null;
+  const rest = profiles.filter((dp) => dp.id !== mostUsed?.id);
+
+  return (
+    <CollapsibleSection title={t("dashboard.droneProfiles")} defaultExpanded={false}>
       {loading ? (
         <Spinner />
       ) : profiles.length === 0 ? (
@@ -552,26 +603,28 @@ function DroneProfilesSection({
         </p>
       ) : (
         <div className="space-y-2">
-          {profiles.map((dp) => (
-            <div
-              key={dp.id}
-              className="rounded-xl border border-tv-border bg-tv-bg p-3"
-              data-testid={`drone-profile-${dp.id}`}
-            >
-              <p className="text-sm font-medium text-tv-text-primary">{dp.name}</p>
-              <div className="flex items-center gap-3 text-xs text-tv-text-secondary mt-1">
-                {dp.manufacturer && (
-                  <span>{dp.manufacturer}</span>
-                )}
-                {dp.model && <span>{dp.model}</span>}
-                {dp.endurance_minutes != null && (
-                  <span>
-                    {dp.endurance_minutes} {t("dashboard.minutes")}
-                  </span>
-                )}
-              </div>
+          {mostUsed && (
+            <div>
+              <p className="text-[10px] font-medium uppercase text-tv-text-muted mb-1">
+                {t("dashboard.mostUsedDrone")}
+              </p>
+              <DroneProfileCard dp={mostUsed} />
             </div>
-          ))}
+          )}
+          {rest.length > 0 && (
+            <>
+              <button
+                onClick={() => setShowAll(!showAll)}
+                className="text-xs text-tv-accent hover:underline"
+                data-testid="toggle-all-drones"
+              >
+                {showAll ? t("dashboard.showLess") : t("dashboard.showAll")} ({rest.length})
+              </button>
+              {showAll && rest.map((dp) => (
+                <DroneProfileCard key={dp.id} dp={dp} />
+              ))}
+            </>
+          )}
         </div>
       )}
     </CollapsibleSection>
@@ -622,7 +675,7 @@ function DashboardView() {
   return (
     <div className="flex gap-4 p-4 h-full">
       {/* left panel - 30% */}
-      <div className="w-[30%] flex-shrink-0 overflow-y-auto flex flex-col gap-4">
+      <div className="w-[30%] flex-shrink-0 overflow-y-auto flex flex-col gap-4 mr-2">
         <MissionListSection
           missions={missions}
           loading={missionsLoading}
@@ -640,7 +693,7 @@ function DashboardView() {
         </Button>
 
         <StatisticsSection missions={missions} />
-        <DroneProfilesSection profiles={droneProfiles} loading={droneProfilesLoading} />
+        <DroneProfilesSection profiles={droneProfiles} loading={droneProfilesLoading} missions={missions} />
       </div>
 
       {/* right panel - 70% */}
