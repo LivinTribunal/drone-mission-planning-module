@@ -14,8 +14,9 @@ export default function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
   }
 
   if (requiredRole && !user?.roles.includes(requiredRole)) {
-    // redirect to user's default route instead of login (they're already authenticated)
-    const defaultRoute = user?.roles.includes("COORDINATOR")
+    // redirect to default route - they're already authenticated
+    const coordinator: UserRole = "COORDINATOR";
+    const defaultRoute = user?.roles.includes(coordinator)
       ? "/coordinator-center/dashboard"
       : "/operator-center/dashboard";
     return <Navigate to={defaultRoute} replace />;

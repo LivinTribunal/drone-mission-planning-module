@@ -29,7 +29,12 @@ export function AirportProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = JSON.parse(saved);
         // validate shape - reset if stale schema
-        if (parsed?.id && parsed?.icao_code) {
+        if (
+          parsed?.id &&
+          parsed?.icao_code &&
+          parsed?.name &&
+          parsed?.elevation != null
+        ) {
           setSelectedAirport(parsed as AirportResponse);
         } else {
           localStorage.removeItem(AIRPORT_KEY);

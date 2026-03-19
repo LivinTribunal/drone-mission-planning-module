@@ -40,7 +40,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = JSON.parse(savedUser);
         // validate shape - reset if stale schema
-        if (parsed?.id && parsed?.email && Array.isArray(parsed?.roles)) {
+        if (
+          parsed?.id &&
+          parsed?.email &&
+          typeof parsed?.name === "string" &&
+          Array.isArray(parsed?.roles)
+        ) {
           setToken(savedToken);
           setUser(parsed as AuthUser);
         } else {
