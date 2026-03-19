@@ -36,7 +36,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
       onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-labelledby="modal-title"
       data-testid="modal-overlay"
     >
       <div
@@ -44,7 +44,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
         className="w-full max-w-md rounded-2xl border border-tv-border bg-tv-surface p-6"
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-tv-text-primary">{title}</h2>
+          <h2 id="modal-title" className="text-base font-semibold text-tv-text-primary">{title}</h2>
           <button
             onClick={onClose}
             className="rounded-full p-1 text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"

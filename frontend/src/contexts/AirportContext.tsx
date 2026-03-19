@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import type { AirportResponse, AirportDetailResponse } from "@/types/airport";
@@ -30,20 +31,27 @@ export function AirportProvider({ children }: { children: ReactNode }) {
     useState<AirportDetailResponse | null>(null);
   const [airportDetailLoading, setAirportDetailLoading] = useState(false);
   const [airportDetailError, setAirportDetailError] = useState(false);
+  const fetchCounterRef = useRef(0);
 
   const fetchDetail = useCallback((airportId: string) => {
+    const requestId = ++fetchCounterRef.current;
     setAirportDetailLoading(true);
     setAirportDetailError(false);
     getAirport(airportId)
       .then((detail) => {
+        if (fetchCounterRef.current !== requestId) return;
         setAirportDetail(detail);
         setAirportDetailError(false);
       })
       .catch(() => {
+        if (fetchCounterRef.current !== requestId) return;
         setAirportDetail(null);
         setAirportDetailError(true);
       })
-      .finally(() => setAirportDetailLoading(false));
+      .finally(() => {
+        if (fetchCounterRef.current !== requestId) return;
+        setAirportDetailLoading(false);
+      });
   }, []);
 
   // rehydrate from localStorage
@@ -58,7 +66,9 @@ export function AirportProvider({ children }: { children: ReactNode }) {
           typeof parsed?.name === "string" &&
           typeof parsed?.elevation === "number" &&
           parsed.location &&
-          typeof parsed.location === "object"
+          typeof parsed.location === "object" &&
+          Array.isArray(parsed.location.coordinates) &&
+          parsed.location.coordinates.length >= 2
         ) {
           setSelectedAirport(parsed as AirportResponse);
           fetchDetail(parsed.id);

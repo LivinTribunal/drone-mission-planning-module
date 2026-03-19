@@ -135,20 +135,27 @@ export default function AirportMap({
     };
   }, [airport.id, interactive]); // only re-init on airport id change
 
+  // shared helper to add all infrastructure layers
+  const addAllLayers = useCallback(
+    (map: maplibregl.Map) => {
+      if (layersAddedRef.current) return;
+      addSafetyZoneLayers(map, airport.safety_zones);
+      addSurfaceLayers(map, airport.surfaces);
+      addObstacleLayers(map, airport.obstacles);
+      addAglLayers(map, airport.surfaces);
+      layersAddedRef.current = true;
+    },
+    [airport],
+  );
+
   // add infrastructure layers once map + airport data are ready
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     function addLayers() {
-      if (!map || layersAddedRef.current) return;
-
-      addSafetyZoneLayers(map, airport.safety_zones);
-      addSurfaceLayers(map, airport.surfaces);
-      addObstacleLayers(map, airport.obstacles);
-      addAglLayers(map, airport.surfaces);
-
-      layersAddedRef.current = true;
+      if (!map) return;
+      addAllLayers(map);
     }
 
     if (map.isStyleLoaded()) {
@@ -160,7 +167,7 @@ export default function AirportMap({
     return () => {
       map.off("load", addLayers);
     };
-  }, [airport]);
+  }, [airport, addAllLayers]);
 
   // click handler
   useEffect(() => {
@@ -293,12 +300,7 @@ export default function AirportMap({
         mapInstance.setBearing(bearing);
         mapInstance.setPitch(pitch);
 
-        if (layersAddedRef.current) return;
-        addSafetyZoneLayers(mapInstance, airport.safety_zones);
-        addSurfaceLayers(mapInstance, airport.surfaces);
-        addObstacleLayers(mapInstance, airport.obstacles);
-        addAglLayers(mapInstance, airport.surfaces);
-        layersAddedRef.current = true;
+        addAllLayers(mapInstance);
 
         for (const [key, layerIds] of Object.entries(layerGroupMap)) {
           const visible = layerConfig[key as keyof MapLayerConfig];
@@ -319,7 +321,7 @@ export default function AirportMap({
       }
       mapInstance.on("data", onData);
     },
-    [airport, layerConfig],
+    [airport, layerConfig, addAllLayers],
   );
 
   const handleLayerToggle = useCallback((key: keyof MapLayerConfig) => {
