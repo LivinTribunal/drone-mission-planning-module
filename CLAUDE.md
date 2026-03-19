@@ -55,6 +55,7 @@ docker compose up -d
 - **Python line length**: 100 characters max (Ruff config in `pyproject.toml`)
 - **Frontend naming**: `PascalCase.tsx` for components, `camelCase.ts` for utilities
 - **Frontend types**: `frontend/src/types/{domain}.ts`, use `interface` matching Pydantic schemas
+- **Frontend design system**: Read `docs/specs/DESIGN-SYSTEM.md` before writing any components. Implement the CSS variables exactly as specified (`--tv-*`). Reference `docs/design-reference/` for visual patterns but do NOT copy Next.js patterns - use React 18 + Vite + react-router-dom. Every component must use `--tv-*` CSS variables, not placeholder/default Tailwind colors.
 - **Schemas**: `{Entity}Response`, `{Entity}Create`, `{Entity}Update` for Pydantic DTOs
 - **Routes**: `/api/v1/{resource}` (e.g., `/api/v1/missions`)
 - **Error handling**: `HTTPException` in routes, custom exceptions in services
