@@ -280,6 +280,10 @@ export default function AirportMap({
       // wait for new style to be ready before re-adding layers
       const mapInstance = map;
       function onData() {
+        if (!mapRef.current) {
+          mapInstance.off("data", onData);
+          return;
+        }
         if (!mapInstance.isStyleLoaded()) return;
         mapInstance.off("data", onData);
 

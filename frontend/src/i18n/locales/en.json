@@ -82,6 +82,7 @@
     "nameRequired": "Mission name is required",
     "droneRequired": "Drone profile is required",
     "createError": "Failed to create mission",
+    "droneLoadError": "Failed to load drone profiles",
     "loadError": "Failed to load missions",
     "totalMissions": "Total Missions",
     "avgDuration": "Avg Duration",

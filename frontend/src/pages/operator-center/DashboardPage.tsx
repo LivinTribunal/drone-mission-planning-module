@@ -36,6 +36,19 @@ type SortDir = "asc" | "desc";
 
 const PAGE_SIZES = [10, 20, 50, 200] as const;
 
+/** build page indices with ellipsis when there are many pages. */
+function paginationRange(total: number, current: number): (number | "...")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  const pages: (number | "...")[] = [0];
+  const start = Math.max(1, current - 1);
+  const end = Math.min(total - 2, current + 1);
+  if (start > 1) pages.push("...");
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (end < total - 2) pages.push("...");
+  pages.push(total - 1);
+  return pages;
+}
+
 function SortIndicator({
   active,
   dir,
@@ -244,43 +257,46 @@ function AirportSelectionView() {
 
       {/* pagination bar */}
       {!loading && !error && sorted.length > 0 && (
-        <div className="flex flex-col items-center w-full max-w-5xl pt-3 gap-2">
-          <span className="text-xs text-tv-text-secondary">
+        <div className="relative flex items-center justify-between w-full max-w-5xl pt-3">
+          <span className="absolute left-1/2 -translate-x-1/2 text-xs text-tv-text-secondary">
             {t("airportSelection.showing", { from: showFrom, to: showTo, total: sorted.length })}
           </span>
-
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-1">
-              {PAGE_SIZES.map((size) => (
-                <button
-                  key={size}
-                  onClick={() => handlePageSizeChange(size)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    pageSize === size
-                      ? "bg-tv-accent text-tv-accent-text"
-                      : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-1">
-            {Array.from({ length: totalPages }, (_, i) => (
+          <div className="flex items-center gap-1">
+            {PAGE_SIZES.map((size) => (
               <button
-                key={i}
-                onClick={() => setPage(i)}
+                key={size}
+                onClick={() => handlePageSizeChange(size)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  page === i
+                  pageSize === size
                     ? "bg-tv-accent text-tv-accent-text"
                     : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
                 }`}
               >
-                {i + 1}
+                {size}
               </button>
             ))}
-            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {paginationRange(totalPages, page).map((item, idx) =>
+              item === "..." ? (
+                <span key={`ellipsis-${idx}`} className="px-1 text-xs text-tv-text-muted">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  onClick={() => setPage(item as number)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    page === item
+                      ? "bg-tv-accent text-tv-accent-text"
+                      : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
+                  }`}
+                >
+                  {(item as number) + 1}
+                </button>
+              ),
+            )}
           </div>
         </div>
       )}
@@ -419,10 +435,14 @@ function CreateMissionDialog({
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [droneLoadError, setDroneLoadError] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      listDroneProfiles().then((res) => setDroneProfiles(res.data)).catch(() => {});
+      setDroneLoadError(false);
+      listDroneProfiles()
+        .then((res) => setDroneProfiles(res.data))
+        .catch(() => setDroneLoadError(true));
       setName("");
       setDroneProfileId("");
       setFormError(null);
@@ -495,6 +515,11 @@ function CreateMissionDialog({
                 </option>
               ))}
             </select>
+            {droneLoadError && (
+              <p className="text-xs text-tv-error mt-1" data-testid="drone-load-error">
+                {t("dashboard.droneLoadError")}
+              </p>
+            )}
           </div>
 
           {formError && (
@@ -526,7 +551,7 @@ function CreateMissionDialog({
 const STAT_CARDS = [
   { key: "totalMissions", icon: FileText, color: "var(--tv-accent)" },
   { key: "avgDuration", icon: Clock, color: "var(--tv-info)" },
-  { key: "inspectionsDone", icon: CheckCircle, color: "#9b59b6" },
+  { key: "inspectionsDone", icon: CheckCircle, color: "var(--tv-inspection-4)" },
   { key: "successRate", icon: TrendingUp, color: "var(--tv-accent)" },
 ] as const;
 
