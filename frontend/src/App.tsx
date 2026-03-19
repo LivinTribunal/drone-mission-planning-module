@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/Auth/ProtectedRoute";
 import OperatorLayout from "@/components/Layout/OperatorLayout";
 import CoordinatorLayout from "@/components/Layout/CoordinatorLayout";
@@ -18,15 +19,22 @@ import InspectionEditPage from "@/pages/coordinator-center/InspectionEditPage";
 import DroneListPage from "@/pages/coordinator-center/DroneListPage";
 import DroneEditPage from "@/pages/coordinator-center/DroneEditPage";
 
+function CatchAllRedirect() {
+  const { isAuthenticated } = useAuth();
+  if (isAuthenticated) {
+    return <Navigate to="/operator-center/dashboard" replace />;
+  }
+  return <Navigate to="/login" replace />;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
 
-        {/* protected routes */}
-        <Route element={<ProtectedRoute />}>
-          {/* operator center */}
+        {/* operator center */}
+        <Route element={<ProtectedRoute requiredRole="OPERATOR" />}>
           <Route path="/operator-center" element={<OperatorLayout />}>
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="missions" element={<MissionListPage />} />
@@ -44,8 +52,10 @@ function App() {
             </Route>
             <Route path="airport" element={<AirportPage />} />
           </Route>
+        </Route>
 
-          {/* coordinator center */}
+        {/* coordinator center */}
+        <Route element={<ProtectedRoute requiredRole="COORDINATOR" />}>
           <Route path="/coordinator-center" element={<CoordinatorLayout />}>
             <Route path="airports" element={<AirportListPage />} />
             <Route path="airports/:id" element={<AirportEditPage />} />
@@ -57,7 +67,7 @@ function App() {
         </Route>
 
         {/* default redirect */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<CatchAllRedirect />} />
       </Routes>
     </BrowserRouter>
   );

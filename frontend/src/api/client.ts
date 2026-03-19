@@ -16,15 +16,9 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// unwrap envelope for list responses, handle errors
+// handle errors - let callers deal with response data
 client.interceptors.response.use(
-  (response) => {
-    // list endpoints return { data, meta } envelope
-    if (response.data && "meta" in response.data && "data" in response.data) {
-      return response;
-    }
-    return response;
-  },
+  (response) => response,
   (error) => {
     if (error.response) {
       const status = error.response.status;
@@ -35,13 +29,6 @@ client.interceptors.response.use(
 
       if (status === 401) {
         localStorage.removeItem(TOKEN_KEY);
-        window.location.href = "/login";
-        return Promise.reject(error);
-      }
-
-      if (status === 409) {
-        alert(message);
-        return Promise.reject(error);
       }
 
       console.error(`API error ${status}: ${message}`);
