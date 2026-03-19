@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
-from app.models.enums import CameraAction, WaypointType
+from app.models.enums import CameraAction, SafetyZoneType, WaypointType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile, Mission
 
@@ -53,8 +53,12 @@ SURFACE_NODE_SPACING: Meters = 200.0
 # parallel crossing (~3700m for LKPR) costs 3700*10=37000m - strongly avoided
 RUNWAY_CROSSING_PENALTY_PER_METER = 10.0
 
+# vertical profile descent detection - ~11m at equator
+VERTICAL_POSITION_TOLERANCE_DEG: Degrees = 0.0001
+
 # safety validation
 DEFAULT_RUNWAY_BUFFER: Meters = 100.0
+HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
 
 @dataclass
@@ -93,6 +97,7 @@ class Violation:
 
     is_warning: bool
     message: str
+    violation_kind: str | None = None
     constraint_id: str | None = None
     waypoint_index: int | None = None
 

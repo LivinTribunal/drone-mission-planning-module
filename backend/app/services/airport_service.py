@@ -1,10 +1,11 @@
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.exceptions import DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
+from app.models.value_objects import IcaoCode
 from app.schemas.airport import AirportCreate, AirportUpdate
 from app.schemas.infrastructure import (
     AGLCreate,
@@ -40,13 +41,18 @@ def get_airport(db: Session, airport_id: UUID) -> Airport:
         .first()
     )
     if not airport:
-        raise HTTPException(status_code=404, detail="airport not found")
+        raise NotFoundError("airport not found")
 
     return airport
 
 
 def create_airport(db: Session, schema: AirportCreate) -> Airport:
-    """create airport"""
+    """create airport with ICAO code validation."""
+    try:
+        IcaoCode(schema.icao_code)
+    except ValueError as e:
+        raise DomainError(str(e))
+
     airport = Airport(**schema_to_model_data(schema))
     db.add(airport)
     db.commit()
@@ -59,8 +65,9 @@ def update_airport(db: Session, airport_id: UUID, schema: AirportUpdate) -> Airp
     """update airport"""
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
-        raise HTTPException(status_code=404, detail="airport not found")
+        raise NotFoundError("airport not found")
 
+    # value objects are immutable, ORM models are mutable - updates apply to ORM instances
     apply_schema_update(airport, schema)
     db.commit()
     db.refresh(airport)
@@ -72,7 +79,7 @@ def delete_airport(db: Session, airport_id: UUID):
     """delete airport"""
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
-        raise HTTPException(status_code=404, detail="airport not found")
+        raise NotFoundError("airport not found")
 
     db.delete(airport)
     db.commit()
@@ -90,10 +97,14 @@ def list_surfaces(db: Session, airport_id: UUID) -> list[AirfieldSurface]:
 
 
 def create_surface(db: Session, airport_id: UUID, schema: SurfaceCreate) -> AirfieldSurface:
-    """create surface for airport"""
+    """create surface via airport aggregate root."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
     data = schema_to_model_data(schema)
-    surface = AirfieldSurface(airport_id=airport_id, **data)
-    db.add(surface)
+    surface = AirfieldSurface(**data)
+    airport.add_surface(surface)
     db.commit()
     db.refresh(surface)
 
@@ -110,7 +121,7 @@ def update_surface(
         .first()
     )
     if not surface:
-        raise HTTPException(status_code=404, detail="surface not found")
+        raise NotFoundError("surface not found")
 
     apply_schema_update(surface, schema)
     db.commit()
@@ -127,7 +138,7 @@ def delete_surface(db: Session, airport_id: UUID, surface_id: UUID):
         .first()
     )
     if not surface:
-        raise HTTPException(status_code=404, detail="surface not found")
+        raise NotFoundError("surface not found")
 
     db.delete(surface)
     db.commit()
@@ -140,10 +151,14 @@ def list_obstacles(db: Session, airport_id: UUID) -> list[Obstacle]:
 
 
 def create_obstacle(db: Session, airport_id: UUID, schema: ObstacleCreate) -> Obstacle:
-    """create obstacle for airport"""
+    """create obstacle via airport aggregate root."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
     data = schema_to_model_data(schema)
-    obstacle = Obstacle(airport_id=airport_id, **data)
-    db.add(obstacle)
+    obstacle = Obstacle(**data)
+    airport.add_obstacle(obstacle)
     db.commit()
     db.refresh(obstacle)
 
@@ -160,7 +175,7 @@ def update_obstacle(
         .first()
     )
     if not obstacle:
-        raise HTTPException(status_code=404, detail="obstacle not found")
+        raise NotFoundError("obstacle not found")
 
     apply_schema_update(obstacle, schema)
     db.commit()
@@ -177,7 +192,7 @@ def delete_obstacle(db: Session, airport_id: UUID, obstacle_id: UUID):
         .first()
     )
     if not obstacle:
-        raise HTTPException(status_code=404, detail="obstacle not found")
+        raise NotFoundError("obstacle not found")
 
     db.delete(obstacle)
     db.commit()
@@ -190,10 +205,14 @@ def list_safety_zones(db: Session, airport_id: UUID) -> list[SafetyZone]:
 
 
 def create_safety_zone(db: Session, airport_id: UUID, schema: SafetyZoneCreate) -> SafetyZone:
-    """create safety zone for airport"""
+    """create safety zone via airport aggregate root."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
     data = schema_to_model_data(schema)
-    zone = SafetyZone(airport_id=airport_id, **data)
-    db.add(zone)
+    zone = SafetyZone(**data)
+    airport.add_safety_zone(zone)
     db.commit()
     db.refresh(zone)
 
@@ -210,7 +229,7 @@ def update_safety_zone(
         .first()
     )
     if not zone:
-        raise HTTPException(status_code=404, detail="safety zone not found")
+        raise NotFoundError("safety zone not found")
 
     apply_schema_update(zone, schema)
     db.commit()
@@ -227,7 +246,7 @@ def delete_safety_zone(db: Session, airport_id: UUID, zone_id: UUID):
         .first()
     )
     if not zone:
-        raise HTTPException(status_code=404, detail="safety zone not found")
+        raise NotFoundError("safety zone not found")
 
     db.delete(zone)
     db.commit()
@@ -254,7 +273,7 @@ def update_agl(db: Session, surface_id: UUID, agl_id: UUID, schema: AGLUpdate) -
     """update AGL, validates it belongs to surface"""
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
-        raise HTTPException(status_code=404, detail="agl not found")
+        raise NotFoundError("agl not found")
 
     apply_schema_update(agl, schema)
     db.commit()
@@ -267,7 +286,7 @@ def delete_agl(db: Session, surface_id: UUID, agl_id: UUID):
     """delete AGL, validates it belongs to surface"""
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
-        raise HTTPException(status_code=404, detail="agl not found")
+        raise NotFoundError("agl not found")
 
     db.delete(agl)
     db.commit()
@@ -294,7 +313,7 @@ def update_lha(db: Session, agl_id: UUID, lha_id: UUID, schema: LHAUpdate) -> LH
     """update LHA, validates it belongs to AGL"""
     lha = db.query(LHA).filter(LHA.id == lha_id, LHA.agl_id == agl_id).first()
     if not lha:
-        raise HTTPException(status_code=404, detail="lha not found")
+        raise NotFoundError("lha not found")
 
     apply_schema_update(lha, schema)
     db.commit()
@@ -307,7 +326,7 @@ def delete_lha(db: Session, agl_id: UUID, lha_id: UUID):
     """delete LHA, validates it belongs to AGL"""
     lha = db.query(LHA).filter(LHA.id == lha_id, LHA.agl_id == agl_id).first()
     if not lha:
-        raise HTTPException(status_code=404, detail="lha not found")
+        raise NotFoundError("lha not found")
 
     db.delete(lha)
     db.commit()

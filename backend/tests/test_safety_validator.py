@@ -150,3 +150,174 @@ def test_obstacle_no_geometry():
     )()
 
     assert check_obstacle(None, wp, obs) is None
+
+
+# zero-value constraint checks - regression tests for truthiness bug
+
+
+def test_altitude_constraint_zero_min():
+    """constraint with min_altitude=0 must still fire when waypoint is below 0"""
+    from app.services.safety_validator import _check_constraint
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=-5.0)
+    constraint = type(
+        "C",
+        (),
+        {
+            "constraint_type": "ALTITUDE",
+            "min_altitude": 0.0,
+            "max_altitude": 500.0,
+            "is_hard_constraint": True,
+            "id": "test-id",
+        },
+    )()
+
+    result = _check_constraint(None, wp, constraint, [])
+
+    assert result is not None
+    assert "below min" in result.message
+
+
+def test_altitude_constraint_zero_max():
+    """constraint with max_altitude=0 must still fire when waypoint is above 0"""
+    from app.services.safety_validator import _check_constraint
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
+    constraint = type(
+        "C",
+        (),
+        {
+            "constraint_type": "ALTITUDE",
+            "min_altitude": None,
+            "max_altitude": 0.0,
+            "is_hard_constraint": True,
+            "id": "test-id",
+        },
+    )()
+
+    result = _check_constraint(None, wp, constraint, [])
+
+    assert result is not None
+    assert "above max" in result.message
+
+
+def test_speed_constraint_zero_max():
+    """constraint with max_horizontal_speed=0 must fire when waypoint has any speed"""
+    from app.services.safety_validator import _check_constraint
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=300.0, speed=1.0)
+    constraint = type(
+        "C",
+        (),
+        {
+            "constraint_type": "SPEED",
+            "max_horizontal_speed": 0.0,
+            "is_hard_constraint": True,
+            "id": "test-id",
+        },
+    )()
+
+    result = _check_constraint(None, wp, constraint, [])
+
+    assert result is not None
+
+
+def test_drone_zero_max_altitude():
+    """drone with max_altitude=0 must trigger violation"""
+    from app.services.safety_validator import check_drone_constraints
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
+    drone = type("D", (), {"max_altitude": 0.0, "max_speed": 23.0})()
+
+    assert check_drone_constraints(wp, drone) is not None
+
+
+def test_drone_zero_max_speed():
+    """drone with max_speed=0 must trigger violation"""
+    from app.services.safety_validator import check_drone_constraints
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=100.0, speed=1.0)
+    drone = type("D", (), {"max_altitude": 500.0, "max_speed": 0.0})()
+
+    assert check_drone_constraints(wp, drone) is not None
+
+
+# segment intersection null-geometry early exits
+
+
+def test_segments_intersect_obstacle_null_geometry():
+    """obstacle with no geometry returns False"""
+    from app.services.safety_validator import segments_intersect_obstacle
+
+    obstacle = type("O", (), {"geometry": None})()
+    result = segments_intersect_obstacle(None, 14.0, 50.0, 14.1, 50.1, obstacle)
+
+    assert result is False
+
+
+def test_segments_intersect_zone_null_geometry():
+    """safety zone with no geometry returns False"""
+    from app.services.safety_validator import segments_intersect_zone
+
+    zone = type("Z", (), {"geometry": None, "type": "PROHIBITED"})()
+    result = segments_intersect_zone(None, 14.0, 50.0, 14.1, 50.1, zone)
+
+    assert result is False
+
+
+# check_speed_framerate fallback branch
+
+
+def test_speed_framerate_fallback_no_optimal():
+    """fallback fires when optimal_speed is None and speed exceeds max_speed margin"""
+    from app.services.trajectory_computation import check_speed_framerate
+
+    drone = type("D", (), {"camera_frame_rate": 30, "max_speed": 10.0})()
+    warning = check_speed_framerate(speed=9.5, drone=drone, optimal_speed=None)
+
+    assert warning is not None
+    assert "too high" in warning
+
+
+def test_speed_framerate_fallback_skipped_with_optimal():
+    """fallback does not fire when optimal_speed is computed"""
+    from app.services.trajectory_computation import check_speed_framerate
+
+    drone = type("D", (), {"camera_frame_rate": 30, "max_speed": 10.0})()
+    warning = check_speed_framerate(speed=4.0, drone=drone, optimal_speed=5.0)
+
+    assert warning is None
+
+
+# geometry parse failure paths
+
+
+def test_check_obstacle_null_position_altitude():
+    """obstacle with no position defaults altitude to 0"""
+    from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import WaypointData
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
+    obstacle = type("O", (), {"geometry": None, "position": None, "height": 10.0, "id": "o1"})()
+
+    # no geometry means no containment check - returns None
+    result = check_obstacle(None, wp, obstacle)
+    assert result is None
+
+
+def test_check_obstacle_corrupt_position():
+    """obstacle with corrupt position data falls back to 0 altitude"""
+    from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import WaypointData
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
+
+    # position with corrupt data that will fail parse_ewkb
+    corrupt_pos = type("P", (), {"data": b"\x00\x00\x00"})()
+    obstacle = type(
+        "O", (), {"geometry": None, "position": corrupt_pos, "height": 10.0, "id": "o1"}
+    )()
+
+    # no geometry means no containment check - returns None regardless of position
+    result = check_obstacle(None, wp, obstacle)
+    assert result is None

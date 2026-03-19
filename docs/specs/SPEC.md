@@ -90,6 +90,15 @@ DRAFT → PLANNED → VALIDATED → EXPORTED → COMPLETED
 - Any waypoint edit (move, add, delete) → status regresses to PLANNED
 - Config change affecting trajectory (drone, framerate-related) → regresses to PLANNED
 - Config change NOT affecting geometry → validate only, no regression
+- Adding/removing inspections → regresses to DRAFT (trajectory is invalid)
+- Changing drone profile → regresses to PLANNED (inspections still valid, trajectory needs regeneration)
+
+**Modification rules:**
+- DRAFT, PLANNED, VALIDATED: inspections can be added/removed/reordered, drone profile can be changed (auto-regresses as above)
+- EXPORTED, COMPLETED, CANCELLED: terminal states — no modifications allowed, user must duplicate the mission
+
+**Duplication:**
+- Duplicated missions always start in DRAFT status regardless of the original's status
 
 **Status gating:**
 - Export button: disabled until VALIDATED
@@ -192,3 +201,31 @@ Airport list, inspection template editor (AGL selector, LHA checkboxes, default 
 - **Delete:** always confirmation dialog with impact description
 - **Max 5 inspections per mission.** Fixed color per inspection order.
 - **Desktop only** — no mobile optimization
+
+---
+
+## DDD-Lite Patterns
+
+### Aggregate Roots
+
+- **Mission** — owns inspections, controls status transitions via `transition_to()`. Allows inspection add/remove in DRAFT/PLANNED/VALIDATED (auto-regresses to DRAFT), blocks after EXPORTED. Max 10 inspections. Auto-regresses VALIDATED->PLANNED on trajectory-affecting changes (drone, speed, coordinates).
+- **Airport** — owns surfaces, obstacles, safety zones via `add_surface()`, `add_obstacle()`, `add_safety_zone()`. Sets `airport_id` on child entities.
+
+### Value Objects (`backend/app/models/value_objects.py`)
+
+- **Coordinate** — immutable (lat, lon, alt) with range validation, `to_wkt()` method
+- **Speed** — non-negative float value
+- **AltitudeRange** — min <= max invariant, `contains()` method
+- **IcaoCode** — exactly 4 uppercase alpha characters
+
+### Business Methods on Entities
+
+- `Mission.transition_to(target_status)` — enforces state machine
+- `Mission.regress_if_validated()` — VALIDATED -> PLANNED on trajectory changes
+- `Mission.add_inspection(inspection)` / `remove_inspection(id)` — DRAFT-only with max 10
+- `Mission.change_drone_profile(id)` — auto-regresses
+- `Airport.add_surface/obstacle/safety_zone()` — sets airport_id on child
+- `InspectionConfiguration.resolve_with_defaults(template_config)` — merges overrides
+- `AGL.calculate_lha_center_point()` — centroid of LHA positions
+- `Inspection.is_speed_compatible_with_frame_rate(drone, speed)` — speed/framerate check
+- `FlightPlan.compile(total_distance, estimated_duration)` — sets metrics and timestamp

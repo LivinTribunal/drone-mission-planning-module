@@ -72,6 +72,14 @@ if [[ -d "$BACKEND_APP" ]]; then
   else
     echo "  services/ does not import routes/"
   fi
+
+  # no direct mission.status assignment outside models/ (exclude == comparisons)
+  if grep -rn "mission\.status\s*=" "${BACKEND_APP}/services/" "${BACKEND_APP}/api/routes/" 2>/dev/null | grep -v "==" | grep -v "# arch-exempt" | grep -v "__pycache__"; then
+    echo "::error::direct mission.status assignment found outside models/ - use Mission.transition_to() or Mission.regress_if_validated()"
+    ((VIOLATIONS++))
+  else
+    echo "  no direct mission.status assignment outside models/"
+  fi
 else
   echo "  (backend/app/ not found, skipping backend checks)"
 fi

@@ -1,9 +1,8 @@
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.enums import MissionStatus
+from app.core.exceptions import NotFoundError
 from app.models.flight_plan import (
     FlightPlan,
     ValidationResult,
@@ -12,6 +11,7 @@ from app.models.flight_plan import (
 )
 from app.models.mission import Mission
 from app.services.geometry_converter import geojson_to_ewkt
+from app.services.trajectory_types import WaypointData
 
 
 def _to_point_ewkt(lon: float, lat: float, alt: float) -> str:
@@ -44,46 +44,48 @@ def _waypoint_to_model(wp, flight_plan_id, sequence_order: int) -> Waypoint:
 def persist_flight_plan(
     db: Session,
     mission: Mission,
-    all_waypoints: list,
+    all_waypoints: list[WaypointData],
     warnings: list[str],
     total_distance: float,
     estimated_duration: float,
 ) -> FlightPlan:
-    """persist flight plan with waypoints and validation result"""
+    """persist flight plan with waypoints and validation result.
+
+    caller must filter out hard violations before calling - all warnings
+    are stored as soft violations (is_warning=True).
+    """
     flight_plan = FlightPlan(
         mission_id=mission.id,
         airport_id=mission.airport_id,
-        total_distance=total_distance,
-        estimated_duration=estimated_duration,
     )
+    flight_plan.compile(total_distance, estimated_duration)
     db.add(flight_plan)
     db.flush()
 
     for i, wp in enumerate(all_waypoints, start=1):
         db.add(_waypoint_to_model(wp, flight_plan.id, i))
 
-    # validation result with soft warnings
-    if warnings:
-        val_result = ValidationResult(
-            flight_plan_id=flight_plan.id,
-            passed=True,
-        )
-        db.add(val_result)
-        db.flush()
+    # validation result - always created so serialization never gets None
+    # passed=True means no hard violations - soft warnings may still exist
+    val_result = ValidationResult(
+        flight_plan_id=flight_plan.id,
+        passed=True,
+    )
+    db.add(val_result)
+    db.flush()
 
-        for w in dict.fromkeys(warnings):  # deduplicate preserving order
-            db.add(
-                ValidationViolation(
-                    validation_result_id=val_result.id,
-                    is_warning=True,
-                    message=w,
-                )
+    # defensive dedup - orchestrator already deduplicates but this protects against direct callers
+    for w in dict.fromkeys(warnings):
+        db.add(
+            ValidationViolation(
+                validation_result_id=val_result.id,
+                is_warning=True,
+                message=w,
             )
+        )
 
-    # set mission status to PLANNED
-    mission.status = MissionStatus.PLANNED
-    db.commit()
-    db.refresh(flight_plan)
+    # caller (orchestrator) handles commit after setting is_validated and status
+    db.flush()
 
     return flight_plan
 
@@ -100,6 +102,6 @@ def get_flight_plan(db: Session, mission_id: UUID) -> FlightPlan:
         .first()
     )
     if not fp:
-        raise HTTPException(status_code=404, detail="flight plan not found")
+        raise NotFoundError("flight plan not found")
 
     return fp

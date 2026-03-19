@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
@@ -19,6 +20,8 @@ from app.core.database import Base
 
 
 class FlightPlan(Base):
+    """generated flight plan with waypoints and validation."""
+
     __tablename__ = "flight_plan"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -55,8 +58,21 @@ class FlightPlan(Base):
         "ConstraintRule", back_populates="flight_plan", cascade="all, delete-orphan"
     )
 
+    def compile(self, total_distance: float, estimated_duration: float):
+        """set computed flight plan metrics and timestamp."""
+        if total_distance < 0:
+            raise ValueError(f"total_distance must be non-negative, got {total_distance}")
+        if estimated_duration < 0:
+            raise ValueError(f"estimated_duration must be non-negative, got {estimated_duration}")
+
+        self.total_distance = total_distance
+        self.estimated_duration = estimated_duration
+        self.generated_at = datetime.now(timezone.utc)
+
 
 class Waypoint(Base):
+    """single waypoint in a flight plan."""
+
     __tablename__ = "waypoint"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -88,6 +104,8 @@ class Waypoint(Base):
 
 
 class ValidationResult(Base):
+    """result of safety validation for a flight plan."""
+
     __tablename__ = "validation_result"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -104,6 +122,8 @@ class ValidationResult(Base):
 
 
 class ValidationViolation(Base):
+    """individual validation violation or warning."""
+
     __tablename__ = "validation_violation"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -119,6 +139,8 @@ class ValidationViolation(Base):
 
 
 class ExportResult(Base):
+    """exported flight plan file record."""
+
     __tablename__ = "export_result"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -139,6 +161,8 @@ class ExportResult(Base):
 
 
 class ConstraintRule(Base):
+    """flight constraint rule with type-specific parameters."""
+
     __tablename__ = "constraint_rule"
 
     id = Column(UUID, primary_key=True, default=uuid4)

@@ -1,7 +1,11 @@
+import logging
 import math
 from uuid import UUID
 
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
+from app.models.inspection import InspectionConfiguration
+from app.models.mission import DroneProfile
+from app.schemas.geometry import parse_ewkb
 from app.services.trajectory_types import (
     DEFAULT_GLIDE_SLOPE,
     DEFAULT_HEADING,
@@ -12,7 +16,6 @@ from app.services.trajectory_types import (
     MIN_ARC_RADIUS,
     MIN_ELEVATION_ANGLE,
     MIN_LHA_FOR_FOV_CHECK,
-    NORTH_BEARING,
     SPEED_FRAMERATE_MARGIN,
     Degrees,
     Meters,
@@ -24,10 +27,11 @@ from app.services.trajectory_types import (
 from app.utils.geo import (
     angular_span_at_distance,
     bearing_between,
-    center_of_points,
     elevation_angle,
     point_at_distance,
 )
+
+logger = logging.getLogger(__name__)
 
 # config fields that can be overridden per-inspection
 CONFIG_FIELDS = (
@@ -42,8 +46,8 @@ CONFIG_FIELDS = (
 )
 
 
-def overlay_config(result: ResolvedConfig, config) -> None:
-    """Overlay non-None fields from an ORM config onto resolved config."""
+def overlay_config(result: ResolvedConfig, config: InspectionConfiguration) -> None:
+    """overlay non-None fields from an ORM config onto resolved config."""
     for key in CONFIG_FIELDS:
         val = getattr(config, key, None)
         if val is not None:
@@ -51,33 +55,41 @@ def overlay_config(result: ResolvedConfig, config) -> None:
 
 
 def resolve_with_defaults(inspection, template) -> ResolvedConfig:
-    """Field-by-field merge: override > template > hardcoded."""
+    """field-by-field merge: override > template > hardcoded, delegates to model."""
     result = ResolvedConfig()
 
-    if template.default_config:
-        overlay_config(result, template.default_config)
-
     if inspection.config:
-        overlay_config(result, inspection.config)
+        merged = inspection.config.resolve_with_defaults(template.default_config)
+        for key, val in merged.items():
+            if val is not None:
+                setattr(result, key, val)
+    elif template.default_config:
+        overlay_config(result, template.default_config)
 
     return result
 
 
 def get_lha_positions(template) -> list[Point3D]:
-    """Extract 3D positions from all LHA units across template targets."""
-    from app.schemas.geometry import parse_ewkb
-
+    """extract 3D positions from all LHA units across template targets."""
     positions = []
     for agl in template.targets:
         for lha in agl.lhas:
-            c = parse_ewkb(lha.position.data)["coordinates"]
+            if not lha.position:
+                continue
+            try:
+                c = parse_ewkb(lha.position.data).get("coordinates")
+                if not c or len(c) < 3:
+                    continue
+            except Exception:
+                logger.warning("failed to parse LHA position for lha %s", lha.id)
+                continue
             positions.append(Point3D(lon=c[0], lat=c[1], alt=c[2]))
 
     return positions
 
 
 def get_lha_setting_angles(template) -> list[Degrees]:
-    """Collect and sort setting angles from all LHA units in template."""
+    """collect and sort setting angles from all LHA units in template."""
     angles = []
     for agl in template.targets:
         for lha in agl.lhas:
@@ -88,16 +100,19 @@ def get_lha_setting_angles(template) -> list[Degrees]:
 
 
 def get_glide_slope_angle(template) -> Degrees:
-    """Return the first non-null glide slope angle from template targets, or default."""
+    """return the first non-null glide slope angle from template targets, or default."""
     for agl in template.targets:
-        if agl.glide_slope_angle:
-            return agl.glide_slope_angle
+        if agl.glide_slope_angle is not None:
+            angle = agl.glide_slope_angle
+            if not (0 < angle < 90):
+                raise ValueError(f"glide slope angle {angle} out of valid range (0-90)")
+            return angle
 
     return DEFAULT_GLIDE_SLOPE
 
 
 def get_runway_heading(template, surfaces) -> Degrees:
-    """Return the heading of the runway surface associated with the template."""
+    """return the heading of the runway surface associated with the template."""
     for agl in template.targets:
         for surface in surfaces:
             if surface.id == agl.surface_id and surface.heading:
@@ -111,12 +126,12 @@ def compute_optimal_density(
     setting_angles: list[Degrees],
     config: ResolvedConfig,
 ) -> int | None:
-    """Compute minimum density to capture all transition angles.
+    """compute minimum density to capture all transition angles.
 
-    For vertical profiles with setting angles, the step must be
+    for vertical profiles with setting angles, the step must be
     <= 2 * HOVER_ANGLE_TOLERANCE so every setting angle has at least
     one waypoint within tolerance.
-    For arc sweeps, at least one point per degree of sweep.
+    for arc sweeps, at least one point per degree of sweep.
     """
     match method:
         case InspectionMethod.VERTICAL_PROFILE if setting_angles:
@@ -128,7 +143,7 @@ def compute_optimal_density(
             return optimal
 
         case InspectionMethod.ANGULAR_SWEEP:
-            half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+            half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             # at least one point per degree of sweep
             optimal = math.ceil(2 * half_sweep) + 1
 
@@ -142,13 +157,15 @@ def compute_optimal_speed(
     density: int,
     drone,
 ) -> MetersPerSecond | None:
-    """Compute speed that ensures camera captures at least one frame per waypoint spacing.
+    """compute speed that ensures camera captures at least one frame per waypoint spacing.
 
-    At speed v and frame_rate f, the camera captures every v/f meters.
-    For useful measurements, capture spacing must be <= waypoint spacing,
+    at speed v and frame_rate f, the camera captures every v/f meters.
+    for useful measurements, capture spacing must be <= waypoint spacing,
     so: v <= waypoint_spacing * frame_rate.
     """
     if not drone or not drone.camera_frame_rate or density < 2:
+        return None
+    if path_distance <= 0:
         return None
 
     waypoint_spacing = path_distance / (density - 1)
@@ -163,33 +180,37 @@ def compute_optimal_speed(
 
 def check_speed_framerate(
     speed: MetersPerSecond,
-    drone,
+    drone: DroneProfile,
     optimal_speed: MetersPerSecond | None = None,
 ) -> str | None:
-    """Check if speed is compatible with camera frame rate."""
+    """check if speed is compatible with camera frame rate."""
     if not drone.camera_frame_rate:
         return None
 
-    if optimal_speed and speed > optimal_speed:
+    if optimal_speed is not None and speed > optimal_speed:
         return (
             f"speed {speed:.1f} m/s exceeds optimal {optimal_speed:.1f} m/s "
             f"for frame rate {drone.camera_frame_rate} fps"
         )
 
-    if drone.max_speed and speed > drone.max_speed * SPEED_FRAMERATE_MARGIN:
+    # fallback check only when optimal_speed could not be computed
+    max_framerate_speed = (drone.max_speed or 0) * SPEED_FRAMERATE_MARGIN
+    if optimal_speed is None and drone.max_speed and speed > max_framerate_speed:
         return f"speed {speed:.1f} m/s may be too high for frame rate {drone.camera_frame_rate} fps"
 
     return None
 
 
-def check_sensor_fov(drone, lha_positions: list[Point3D], distance: Meters) -> str | None:
-    """Verify camera field of view covers all LHA units at the given distance."""
+def check_sensor_fov(
+    drone, lha_positions: list[Point3D], distance: Meters, approach_heading: Degrees = 0.0
+) -> str | None:
+    """verify camera field of view covers all LHA units at the given distance."""
     if not drone.sensor_fov or len(lha_positions) < MIN_LHA_FOR_FOV_CHECK:
         return None
 
     tuples = [p.to_tuple() for p in lha_positions]
-    center = center_of_points(tuples)
-    obs_lon, obs_lat = point_at_distance(center[0], center[1], NORTH_BEARING, distance)
+    center = Point3D.center(lha_positions)
+    obs_lon, obs_lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
     span = angular_span_at_distance(tuples, obs_lon, obs_lat)
 
     if span > drone.sensor_fov:
@@ -206,13 +227,12 @@ def resolve_density(
     setting_angles: list[Degrees],
     config: ResolvedConfig,
 ) -> tuple[int, str | None]:
-    """Resolve measurement density, auto-increasing if optimal exceeds configured value.
+    """resolve measurement density, auto-increasing if optimal exceeds configured value.
 
-    Returns the final density and an optional warning string if auto-increased.
+    returns the final density and an optional warning string if auto-increased.
     """
     optimal = compute_optimal_density(method, setting_angles, config)
-    if optimal and config.measurement_density < optimal:
-        config.measurement_density = optimal
+    if optimal is not None and config.measurement_density < optimal:
         warning = f"density auto-set to {optimal} to capture all transition angles"
         return optimal, warning
 
@@ -225,20 +245,21 @@ def resolve_speed(
     density: int,
     drone,
     default_speed: MetersPerSecond,
-) -> tuple[MetersPerSecond, str | None]:
-    """Resolve measurement speed from override, optimal calculation, or default.
+) -> tuple[MetersPerSecond, str | None, MetersPerSecond | None]:
+    """resolve measurement speed from override, optimal calculation, or default.
 
-    Returns the final speed and an optional warning string if auto-computed.
+    returns (final_speed, optional_warning, optimal_speed).
     """
-    if config.speed_override:
-        return config.speed_override, None
-
     optimal = compute_optimal_speed(path_distance, density, drone)
-    if optimal:
-        warning = f"speed auto-set to {optimal:.1f} m/s based on path geometry and frame rate"
-        return optimal, warning
 
-    return default_speed, None
+    if config.speed_override is not None:
+        return config.speed_override, None, optimal
+
+    if optimal is not None:
+        warning = f"speed auto-set to {optimal:.1f} m/s based on path geometry and frame rate"
+        return optimal, warning, optimal
+
+    return default_speed, None, optimal
 
 
 def determine_start_position(
@@ -248,26 +269,32 @@ def determine_start_position(
     runway_heading: Degrees,
     glide_slope: Degrees,
 ) -> Point3D:
-    """Compute start position of inspection pass based on method and geometry."""
+    """compute start position of inspection pass based on method and geometry."""
     # arc sweep is on the approach side (facing the PAPI front)
     approach = (runway_heading + 180) % 360
 
     match method:
         case InspectionMethod.ANGULAR_SWEEP:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
-            half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+            half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             angle = approach - half_sweep
             lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
             alt = center.alt + radius * math.tan(math.radians(glide_slope))
 
             return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
-        case _:
-            distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
+        case InspectionMethod.VERTICAL_PROFILE:
+            distance = (
+                config.horizontal_distance
+                if config.horizontal_distance is not None
+                else DEFAULT_HORIZONTAL_DISTANCE
+            )
             lon, lat = point_at_distance(center.lon, center.lat, approach, distance)
             alt = center.alt + distance * math.tan(math.radians(MIN_ELEVATION_ANGLE))
 
             return Point3D(lon=lon, lat=lat, alt=alt)
+
+    raise ValueError(f"unsupported inspection method: {method}")
 
 
 def determine_end_position(
@@ -277,25 +304,31 @@ def determine_end_position(
     runway_heading: Degrees,
     glide_slope: Degrees,
 ) -> Point3D:
-    """Compute end position of inspection pass based on method and geometry."""
+    """compute end position of inspection pass based on method and geometry."""
     approach = (runway_heading + 180) % 360
 
     match method:
         case InspectionMethod.ANGULAR_SWEEP:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
-            half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+            half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             angle = approach + half_sweep
             lon, lat = point_at_distance(center.lon, center.lat, angle, radius)
             alt = center.alt + radius * math.tan(math.radians(glide_slope))
 
             return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
-        case _:
-            distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
+        case InspectionMethod.VERTICAL_PROFILE:
+            distance = (
+                config.horizontal_distance
+                if config.horizontal_distance is not None
+                else DEFAULT_HORIZONTAL_DISTANCE
+            )
             lon, lat = point_at_distance(center.lon, center.lat, approach, distance)
             alt = center.alt + distance * math.tan(math.radians(MAX_ELEVATION_ANGLE))
 
             return Point3D(lon=lon, lat=lat, alt=alt)
+
+    raise ValueError(f"unsupported inspection method: {method}")
 
 
 def calculate_arc_path(
@@ -306,10 +339,10 @@ def calculate_arc_path(
     inspection_id: UUID | None,
     speed: MetersPerSecond,
 ) -> list[WaypointData]:
-    """Generate angular sweep arc path on the approach side of the PAPI."""
+    """generate angular sweep arc path on the approach side of the PAPI."""
     density = config.measurement_density
     radius = config.horizontal_distance or MIN_ARC_RADIUS
-    half_sweep = config.sweep_angle or DEFAULT_SWEEP_ANGLE
+    half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
     glide_height = radius * math.tan(math.radians(glide_slope_angle))
     arc_alt = center.alt + glide_height + config.altitude_offset
 
@@ -358,10 +391,14 @@ def calculate_vertical_path(
     speed: MetersPerSecond,
     setting_angles: list[Degrees],
 ) -> list[WaypointData]:
-    """Generate vertical profile path with HOVER at transition angles."""
+    """generate vertical profile path with HOVER at transition angles."""
     density = config.measurement_density
     hover_duration = config.hover_duration
-    distance = config.horizontal_distance or DEFAULT_HORIZONTAL_DISTANCE
+    distance = (
+        config.horizontal_distance
+        if config.horizontal_distance is not None
+        else DEFAULT_HORIZONTAL_DISTANCE
+    )
 
     approach_heading = (runway_heading + 180) % 360
     lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
@@ -416,7 +453,7 @@ def compute_measurement_trajectory(
     speed: MetersPerSecond,
     setting_angles: list[Degrees],
 ) -> list[WaypointData]:
-    """Dispatch to arc or vertical path computation based on inspection method."""
+    """dispatch to arc or vertical path computation based on inspection method."""
     if inspection.method == InspectionMethod.ANGULAR_SWEEP:
         return calculate_arc_path(center, runway_heading, glide_slope, config, inspection.id, speed)
 
@@ -425,4 +462,4 @@ def compute_measurement_trajectory(
             center, runway_heading, config, inspection.id, speed, setting_angles
         )
 
-    return []
+    raise ValueError(f"unsupported inspection method: {inspection.method}")

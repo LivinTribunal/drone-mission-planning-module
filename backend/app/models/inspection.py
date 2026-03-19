@@ -7,6 +7,7 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 
+# junction tables - no ORM class needed, just a Table for many-to-many with no extra columns
 insp_template_targets = Table(
     "insp_template_targets",
     Base.metadata,
@@ -38,6 +39,8 @@ insp_template_methods = Table(
 
 
 class InspectionConfiguration(Base):
+    """operator overrides for inspection parameters."""
+
     __tablename__ = "inspection_configuration"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -46,12 +49,37 @@ class InspectionConfiguration(Base):
     measurement_density = Column(Integer)
     custom_tolerances = Column(JSONB)
     density = Column(Float)
-    hover_duration = Column(Float)
+    hover_duration = Column(Float)  # seconds
     horizontal_distance = Column(Float)
     sweep_angle = Column(Float)
 
+    # config fields that can be overridden per-inspection
+    _MERGE_FIELDS = (
+        "altitude_offset",
+        "speed_override",
+        "measurement_density",
+        "custom_tolerances",
+        "density",
+        "hover_duration",
+        "horizontal_distance",
+        "sweep_angle",
+    )
+
+    def resolve_with_defaults(self, template_config):
+        """merge this config over template defaults, returning field dict."""
+        merged = {}
+        for key in self._MERGE_FIELDS:
+            template_val = getattr(template_config, key, None) if template_config else None
+            override_val = getattr(self, key, None)
+
+            merged[key] = override_val if override_val is not None else template_val
+
+        return merged
+
 
 class InspectionTemplate(Base):
+    """reusable inspection template with default config and targets."""
+
     __tablename__ = "inspection_template"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -70,15 +98,45 @@ class InspectionTemplate(Base):
 
 
 class Inspection(Base):
+    """single inspection pass within a mission."""
+
     __tablename__ = "inspection"
 
     id = Column(UUID, primary_key=True, default=uuid4)
     mission_id = Column(UUID, ForeignKey("mission.id", ondelete="CASCADE"), nullable=False)
     template_id = Column(UUID, ForeignKey("inspection_template.id"), nullable=False)
     config_id = Column(UUID, ForeignKey("inspection_configuration.id"))
-    method = Column(String(30), nullable=False)
+    method = Column(String(30), nullable=False)  # validated at schema level
     sequence_order = Column(Integer, nullable=False)
 
     mission = relationship("Mission", back_populates="inspections")
     template = relationship("InspectionTemplate")
     config = relationship("InspectionConfiguration")
+
+    def is_speed_compatible_with_frame_rate(
+        self, drone_profile, speed: float, path_distance: float = 0.0
+    ) -> bool:
+        """check if speed is compatible with camera frame rate at measurement density.
+
+        at speed v and frame_rate f, capture spacing is v/f meters.
+        speed is compatible when v/f <= waypoint_spacing (= path_distance / (density - 1)).
+        """
+        if not drone_profile or not drone_profile.camera_frame_rate:
+            return True
+        if not self.config or not self.config.measurement_density:
+            return True
+
+        density = self.config.measurement_density
+        if density < 2:
+            return True
+
+        if drone_profile.max_speed and speed > drone_profile.max_speed:
+            return False
+
+        if path_distance > 0:
+            waypoint_spacing = path_distance / (density - 1)
+            max_compatible_speed = waypoint_spacing * drone_profile.camera_frame_rate
+            if speed > max_compatible_speed:
+                return False
+
+        return True

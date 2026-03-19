@@ -9,6 +9,8 @@ from app.core.database import Base
 
 
 class Airport(Base):
+    """aggregate root - owns surfaces, obstacles, and safety zones."""
+
     __tablename__ = "airport"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -25,8 +27,25 @@ class Airport(Base):
         "SafetyZone", back_populates="airport", cascade="all, delete-orphan"
     )
 
+    def add_surface(self, surface):
+        """add surface to this airport."""
+        surface.airport_id = self.id
+        self.surfaces.append(surface)
+
+    def add_obstacle(self, obstacle):
+        """add obstacle to this airport."""
+        obstacle.airport_id = self.id
+        self.obstacles.append(obstacle)
+
+    def add_safety_zone(self, zone):
+        """add safety zone to this airport."""
+        zone.airport_id = self.id
+        self.safety_zones.append(zone)
+
 
 class AirfieldSurface(Base):
+    """runway or taxiway surface with geometry."""
+
     __tablename__ = "airfield_surface"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -62,14 +81,20 @@ class AirfieldSurface(Base):
 
 
 class Runway(AirfieldSurface):
+    """runway surface subtype."""
+
     __mapper_args__ = {"polymorphic_identity": "RUNWAY"}
 
 
 class Taxiway(AirfieldSurface):
+    """taxiway surface subtype."""
+
     __mapper_args__ = {"polymorphic_identity": "TAXIWAY"}
 
 
 class Obstacle(Base):
+    """airport obstacle with 3D geometry."""
+
     __tablename__ = "obstacle"
 
     id = Column(UUID, primary_key=True, default=uuid4)
@@ -95,6 +120,8 @@ class Obstacle(Base):
 
 
 class SafetyZone(Base):
+    """airspace restriction zone with altitude band."""
+
     __tablename__ = "safety_zone"
 
     id = Column(UUID, primary_key=True, default=uuid4)
