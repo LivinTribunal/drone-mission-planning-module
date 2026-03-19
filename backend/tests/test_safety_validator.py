@@ -287,3 +287,37 @@ def test_speed_framerate_fallback_skipped_with_optimal():
     warning = check_speed_framerate(speed=4.0, drone=drone, optimal_speed=5.0)
 
     assert warning is None
+
+
+# geometry parse failure paths
+
+
+def test_check_obstacle_null_position_altitude():
+    """obstacle with no position defaults altitude to 0"""
+    from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import WaypointData
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
+    obstacle = type("O", (), {"geometry": None, "position": None, "height": 10.0, "id": "o1"})()
+
+    # no geometry means no containment check - returns None
+    result = check_obstacle(None, wp, obstacle)
+    assert result is None
+
+
+def test_check_obstacle_corrupt_position():
+    """obstacle with corrupt position data falls back to 0 altitude"""
+    from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import WaypointData
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
+
+    # position with corrupt data that will fail parse_ewkb
+    corrupt_pos = type("P", (), {"data": b"\x00\x00\x00"})()
+    obstacle = type(
+        "O", (), {"geometry": None, "position": corrupt_pos, "height": 10.0, "id": "o1"}
+    )()
+
+    # no geometry means no containment check - returns None regardless of position
+    result = check_obstacle(None, wp, obstacle)
+    assert result is None

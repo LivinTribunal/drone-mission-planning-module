@@ -122,9 +122,10 @@ def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violati
     if obstacle.position:
         try:
             obs_pos = parse_ewkb(obstacle.position.data)
-            coords = obs_pos.get("coordinates", [])
-            obs_base_alt = coords[2] if len(coords) > 2 else 0.0
-        except Exception:
+            if obs_pos is not None:
+                coords = obs_pos.get("coordinates", [])
+                obs_base_alt = coords[2] if len(coords) > 2 else 0.0
+        except (IndexError, KeyError, ValueError):
             pass
 
     obs_top = obs_base_alt + (obstacle.height or 0)

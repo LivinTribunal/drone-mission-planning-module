@@ -25,5 +25,5 @@ class TrajectoryGenerationError(DomainError):
 
     def __init__(self, message: str, violations: list[dict] | None = None):
         """create trajectory generation error with optional violation details"""
-        self.violations = violations or []
+        self.violations = violations
         super().__init__(message, status_code=400)

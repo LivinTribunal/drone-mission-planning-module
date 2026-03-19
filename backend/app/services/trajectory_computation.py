@@ -3,6 +3,7 @@ import math
 from uuid import UUID
 
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
+from app.models.inspection import InspectionConfiguration
 from app.models.mission import DroneProfile
 from app.schemas.geometry import parse_ewkb
 from app.services.trajectory_types import (
@@ -45,7 +46,7 @@ CONFIG_FIELDS = (
 )
 
 
-def overlay_config(result: ResolvedConfig, config) -> None:
+def overlay_config(result: ResolvedConfig, config: InspectionConfiguration) -> None:
     """overlay non-None fields from an ORM config onto resolved config."""
     for key in CONFIG_FIELDS:
         val = getattr(config, key, None)

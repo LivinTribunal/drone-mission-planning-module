@@ -218,9 +218,10 @@ def _collect_graph_nodes_in_circle(
                 continue
             try:
                 geojson = parse_ewkb(surface.geometry.data)
-            except Exception:
-                logger.warning("failed to parse surface geometry for surface %s", surface.id)
-                continue
+            except Exception as e:
+                raise TrajectoryGenerationError(
+                    f"corrupted geometry for surface {surface.id}: {e}"
+                ) from e
             if geojson.get("type") != "LineString":
                 continue
 

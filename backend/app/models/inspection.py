@@ -49,7 +49,7 @@ class InspectionConfiguration(Base):
     measurement_density = Column(Integer)
     custom_tolerances = Column(JSONB)
     density = Column(Float)
-    hover_duration = Column(Float)
+    hover_duration = Column(Float)  # seconds
     horizontal_distance = Column(Float)
     sweep_angle = Column(Float)
 

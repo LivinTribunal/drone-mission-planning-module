@@ -84,8 +84,8 @@ def persist_flight_plan(
             )
         )
 
-    db.commit()
-    db.refresh(flight_plan)
+    # caller (orchestrator) handles commit after setting is_validated and status
+    db.flush()
 
     return flight_plan
 
