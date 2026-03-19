@@ -1,9 +1,22 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import { AuthProvider } from "./contexts/AuthContext";
+import { AirportProvider } from "./contexts/AirportContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import "./index.css";
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("root element not found - check index.html");
+
+ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider>
+      <AuthProvider>
+        <AirportProvider>
+          <App />
+        </AirportProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </React.StrictMode>,
-)
+);
