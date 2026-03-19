@@ -1,8 +1,11 @@
+import { useTranslation } from "react-i18next";
+
 export default function MissionListPage() {
+  const { t } = useTranslation();
+
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-bold mb-2">Missions</h1>
-      <p className="text-[var(--color-text-muted)]">Coming soon</p>
+    <div className="flex items-center justify-center h-full bg-tv-bg">
+      <p className="text-sm text-tv-text-muted">{t("nav.missions")}</p>
     </div>
   );
 }

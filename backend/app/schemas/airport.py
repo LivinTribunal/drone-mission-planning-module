@@ -16,6 +16,8 @@ class AirportCreate(BaseModel):
 
     icao_code: str = Field(min_length=4, max_length=4, pattern=r"^[A-Z]{4}$")
     name: str
+    city: str | None = None
+    country: str | None = None
     elevation: float
     location: PointZ
 
@@ -24,6 +26,8 @@ class AirportUpdate(BaseModel):
     """airport update schema"""
 
     name: str | None = None
+    city: str | None = None
+    country: str | None = None
     elevation: float | None = None
     location: PointZ | None = None
 
@@ -34,6 +38,8 @@ class AirportResponse(BaseModel):
     id: UUID
     icao_code: str
     name: str
+    city: str | None = None
+    country: str | None = None
     elevation: float
     location: PointZ
 
@@ -48,8 +54,23 @@ class AirportDetailResponse(AirportResponse):
     safety_zones: list[SafetyZoneResponse] = []
 
 
+class AirportSummaryResponse(AirportResponse):
+    """airport with infrastructure counts for the selection table."""
+
+    surfaces_count: int = 0
+    agls_count: int = 0
+    missions_count: int = 0
+
+
 class AirportListResponse(BaseModel):
     """airport list response schema"""
 
     data: list[AirportResponse]
+    meta: ListMeta
+
+
+class AirportSummaryListResponse(BaseModel):
+    """airport summary list response schema."""
+
+    data: list[AirportSummaryResponse]
     meta: ListMeta

@@ -1,0 +1,92 @@
+{
+  "common": {
+    "appTitle": "TarmacView Mission Control Center",
+    "loading": "Loading...",
+    "noResults": "No results found",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "comingSoon": "Coming soon"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "missions": "Missions",
+    "airport": "Airport",
+    "results": "Results",
+    "missionCenter": "Mission Center",
+    "configuratorCenter": "Configurator Center",
+    "airports": "Airports",
+    "inspections": "Inspections",
+    "drones": "Drones",
+    "chooseAirport": "Choose a airport",
+    "selectAirport": "Select an airport to get started"
+  },
+  "auth": {
+    "loginTitle": "Login to TarmacView",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "login": "Sign in",
+    "logout": "Logout",
+    "wrongCredentials": "Login failed"
+  },
+  "user": {
+    "settings": "Settings",
+    "language": "Language",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode"
+  },
+  "airportSelection": {
+    "searchPlaceholder": "Search airports by ICAO code, name, or city",
+    "noAirports": "No airports available",
+    "noMatch": "No airports match your search",
+    "loadError": "Failed to load airports",
+    "showing": "Showing {{from}}-{{to}} of {{total}}",
+    "columns": {
+      "icaoCode": "ICAO Code",
+      "name": "Name",
+      "city": "City",
+      "country": "Country",
+      "runways": "Runways",
+      "aglSystems": "AGL Systems",
+      "missions": "Missions"
+    }
+  },
+  "dashboard": {
+    "missionOverview": "Mission Overview",
+    "activeMissions": "Active Missions",
+    "droneStatus": "Drone Status",
+    "recentActivity": "Recent Activity",
+    "mapPlaceholder": "Map placeholder"
+  },
+  "mission": {
+    "overview": "Overview",
+    "configuration": "Configuration",
+    "map": "Map",
+    "validationExport": "Validation & Export"
+  },
+  "missionStatus": {
+    "DRAFT": "Draft",
+    "PLANNED": "Planned",
+    "VALIDATED": "Validated",
+    "EXPORTED": "Exported",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled"
+  },
+  "coordinator": {
+    "airports": "Airports",
+    "airportEditor": "Airport Editor",
+    "droneProfiles": "Drone Profiles",
+    "droneProfileEditor": "Drone Profile Editor",
+    "inspectionTemplates": "Inspection Templates",
+    "inspectionTemplateEditor": "Inspection Template Editor"
+  },
+  "languages": {
+    "en": "English"
+  }
+}

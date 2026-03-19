@@ -95,6 +95,28 @@ def test_create_agl_and_lha(client):
     assert r.json()["unit_number"] == 1
 
 
+def test_create_airport_invalid_icao(client):
+    """reject airports with invalid ICAO codes."""
+    invalid_codes = ["lkpr", "LKP", "LK12", "LKPRX"]
+    for code in invalid_codes:
+        payload = {**AIRPORT_PAYLOAD, "icao_code": code}
+        r = client.post("/api/v1/airports", json=payload)
+        assert r.status_code == 422, f"expected 422 for ICAO '{code}', got {r.status_code}"
+
+
+def test_airports_summary(client):
+    r = client.get("/api/v1/airports/summary")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["meta"]["total"] >= 1
+    item = body["data"][0]
+    assert "surfaces_count" in item
+    assert "agls_count" in item
+    assert "missions_count" in item
+    assert "city" in item
+    assert "country" in item
+
+
 def test_delete_airport(client):
     r = client.post("/api/v1/airports", json=THROWAWAY_AIRPORT_PAYLOAD)
     assert r.status_code == 201

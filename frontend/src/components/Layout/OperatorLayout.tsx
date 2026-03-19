@@ -1,42 +1,23 @@
 import { Outlet } from "react-router-dom";
-import { useAirport } from "@/contexts/AirportContext";
+import { useTranslation } from "react-i18next";
 import NavBar from "./NavBar";
 import type { NavItem } from "./NavBar";
 
-const operatorItems: NavItem[] = [
-  { label: "Dashboard", to: "/operator-center/dashboard" },
-  { label: "Missions", to: "/operator-center/missions" },
-  { label: "Airport", to: "/operator-center/airport" },
-  { label: "Results", to: "#", disabled: true },
-];
-
 export default function OperatorLayout() {
-  const { selectedAirport } = useAirport();
+  const { t } = useTranslation();
+
+  const operatorItems: NavItem[] = [
+    { label: t("nav.dashboard"), to: "/operator-center/dashboard" },
+    { label: t("nav.missions"), to: "/operator-center/missions" },
+    { label: t("nav.airport"), to: "/operator-center/airport" },
+    { label: t("nav.results"), to: "#", disabled: true },
+  ];
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
+    <div className="flex flex-col h-screen bg-tv-bg text-tv-text-primary">
       <NavBar items={operatorItems} role="operator" />
       <main className="flex-1 overflow-auto">
-        {selectedAirport ? (
-          <Outlet />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-[var(--color-text-muted)]">
-            <p className="text-lg mb-2">Select an airport to get started</p>
-            <svg
-              className="h-8 w-8 animate-bounce"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 10l7-7m0 0l7 7m-7-7v18"
-              />
-            </svg>
-          </div>
-        )}
+        <Outlet />
       </main>
     </div>
   );

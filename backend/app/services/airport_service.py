@@ -1,12 +1,14 @@
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
+from app.models.mission import Mission
 from app.models.value_objects import IcaoCode
-from app.schemas.airport import AirportCreate, AirportUpdate
+from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
 from app.schemas.infrastructure import (
     AGLCreate,
     AGLUpdate,
@@ -24,8 +26,62 @@ from app.services.geometry_converter import apply_schema_update, schema_to_model
 
 # airports
 def list_airports(db: Session) -> list[Airport]:
-    """list all airports"""
+    """list all airports."""
     return db.query(Airport).all()
+
+
+def list_airports_with_counts(db: Session) -> list[AirportSummaryResponse]:
+    """list all airports with infrastructure and mission counts."""
+    surfaces_sub = (
+        db.query(
+            AirfieldSurface.airport_id,
+            func.count(AirfieldSurface.id).label("surfaces_count"),
+        )
+        .group_by(AirfieldSurface.airport_id)
+        .subquery()
+    )
+
+    agls_sub = (
+        db.query(
+            AirfieldSurface.airport_id,
+            func.count(AGL.id).label("agls_count"),
+        )
+        .join(AGL, AGL.surface_id == AirfieldSurface.id)
+        .group_by(AirfieldSurface.airport_id)
+        .subquery()
+    )
+
+    missions_sub = (
+        db.query(
+            Mission.airport_id,
+            func.count(Mission.id).label("missions_count"),
+        )
+        .group_by(Mission.airport_id)
+        .subquery()
+    )
+
+    rows = (
+        db.query(
+            Airport,
+            func.coalesce(surfaces_sub.c.surfaces_count, 0).label("surfaces_count"),
+            func.coalesce(agls_sub.c.agls_count, 0).label("agls_count"),
+            func.coalesce(missions_sub.c.missions_count, 0).label("missions_count"),
+        )
+        .outerjoin(surfaces_sub, Airport.id == surfaces_sub.c.airport_id)
+        .outerjoin(agls_sub, Airport.id == agls_sub.c.airport_id)
+        .outerjoin(missions_sub, Airport.id == missions_sub.c.airport_id)
+        .all()
+    )
+
+    results = []
+    for airport, s_count, a_count, m_count in rows:
+        data = AirportSummaryResponse.model_validate(airport, from_attributes=True)
+        data.surfaces_count = s_count
+        data.agls_count = a_count
+        data.missions_count = m_count
+        results.append(data)
+
+    return results
 
 
 def get_airport(db: Session, airport_id: UUID) -> Airport:
@@ -253,13 +309,29 @@ def delete_safety_zone(db: Session, airport_id: UUID, zone_id: UUID):
 
 
 # AGLs
-def list_agls(db: Session, surface_id: UUID) -> list[AGL]:
-    """list AGLs for surface"""
+def list_agls(db: Session, airport_id: UUID, surface_id: UUID) -> list[AGL]:
+    """list AGLs for surface, validates surface belongs to airport."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     return db.query(AGL).options(joinedload(AGL.lhas)).filter(AGL.surface_id == surface_id).all()
 
 
-def create_agl(db: Session, surface_id: UUID, schema: AGLCreate) -> AGL:
-    """create AGL for surface"""
+def create_agl(db: Session, airport_id: UUID, surface_id: UUID, schema: AGLCreate) -> AGL:
+    """create AGL for surface, validates surface belongs to airport."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     data = schema_to_model_data(schema)
     agl = AGL(surface_id=surface_id, **data)
     db.add(agl)
@@ -293,13 +365,21 @@ def delete_agl(db: Session, surface_id: UUID, agl_id: UUID):
 
 
 # LHAs
-def list_lhas(db: Session, agl_id: UUID) -> list[LHA]:
-    """list LHAs for AGL"""
+def list_lhas(db: Session, surface_id: UUID, agl_id: UUID) -> list[LHA]:
+    """list LHAs for AGL, validates AGL belongs to surface."""
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
+    if not agl:
+        raise NotFoundError("agl not found")
+
     return db.query(LHA).filter(LHA.agl_id == agl_id).all()
 
 
-def create_lha(db: Session, agl_id: UUID, schema: LHACreate) -> LHA:
-    """create LHA for AGL"""
+def create_lha(db: Session, surface_id: UUID, agl_id: UUID, schema: LHACreate) -> LHA:
+    """create LHA for AGL, validates AGL belongs to surface."""
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
+    if not agl:
+        raise NotFoundError("agl not found")
+
     data = schema_to_model_data(schema)
     lha = LHA(agl_id=agl_id, **data)
     db.add(lha)

@@ -9,6 +9,7 @@ from app.schemas.airport import (
     AirportDetailResponse,
     AirportListResponse,
     AirportResponse,
+    AirportSummaryListResponse,
     AirportUpdate,
 )
 from app.schemas.common import DeleteResponse, ListMeta
@@ -42,10 +43,18 @@ router = APIRouter(prefix="/api/v1/airports", tags=["airports"])
 # airports
 @router.get("", response_model=AirportListResponse)
 def list_airports(db: Session = Depends(get_db)):
-    """list all avaible airports for user"""
+    """list all available airports for user."""
     airports = airport_service.list_airports(db)
 
     return AirportListResponse(data=airports, meta=ListMeta(total=len(airports)))
+
+
+@router.get("/summary", response_model=AirportSummaryListResponse)
+def list_airports_summary(db: Session = Depends(get_db)):
+    """list all airports with infrastructure and mission counts."""
+    summaries = airport_service.list_airports_with_counts(db)
+
+    return AirportSummaryListResponse(data=summaries, meta=ListMeta(total=len(summaries)))
 
 
 @router.get("/{airport_id}", response_model=AirportDetailResponse)
@@ -171,7 +180,7 @@ def delete_safety_zone(airport_id: UUID, zone_id: UUID, db: Session = Depends(ge
 @router.get("/{airport_id}/surfaces/{surface_id}/agls", response_model=AGLListResponse)
 def list_agls(airport_id: UUID, surface_id: UUID, db: Session = Depends(get_db)):
     """list all AGLs for surface"""
-    agls = airport_service.list_agls(db, surface_id)
+    agls = airport_service.list_agls(db, airport_id, surface_id)
 
     return AGLListResponse(data=agls, meta=ListMeta(total=len(agls)))
 
@@ -181,7 +190,7 @@ def list_agls(airport_id: UUID, surface_id: UUID, db: Session = Depends(get_db))
 )
 def create_agl(airport_id: UUID, surface_id: UUID, body: AGLCreate, db: Session = Depends(get_db)):
     """create AGL for surface"""
-    return airport_service.create_agl(db, surface_id, body)
+    return airport_service.create_agl(db, airport_id, surface_id, body)
 
 
 @router.put("/{airport_id}/surfaces/{surface_id}/agls/{agl_id}", response_model=AGLResponse)
@@ -210,7 +219,7 @@ def delete_agl(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = D
 )
 def list_lhas(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = Depends(get_db)):
     """list all LHAs for AGL"""
-    lhas = airport_service.list_lhas(db, agl_id)
+    lhas = airport_service.list_lhas(db, surface_id, agl_id)
 
     return LHAListResponse(data=lhas, meta=ListMeta(total=len(lhas)))
 
@@ -228,7 +237,7 @@ def create_lha(
     db: Session = Depends(get_db),
 ):
     """create LHA for AGL"""
-    return airport_service.create_lha(db, agl_id, body)
+    return airport_service.create_lha(db, surface_id, agl_id, body)
 
 
 @router.put(

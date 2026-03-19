@@ -426,7 +426,7 @@ jobs:
         if: steps.mode.outputs.mode == 'review-fix' && steps.rf-changes.outputs.has-changes == 'true' && steps.rf-quality.outputs.passed == 'true'
         id: rf-push
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ steps.rf-guard.outputs.branch }}"
           CYCLE="${{ steps.rf-guard.outputs.cycle }}"
@@ -454,7 +454,7 @@ jobs:
       - name: Dispatch CI pipelines for re-review
         if: steps.mode.outputs.mode == 'review-fix' && steps.rf-push.outputs.new-sha
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ inputs.pr_number }}
           REPO: ${{ github.repository }}
         run: |
@@ -870,7 +870,7 @@ jobs:
         if: steps.mode.outputs.mode == 'issue' && steps.changes.outputs.has-changes == 'true' && steps.quality.outputs.regressed == 'false'
         id: pr
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ steps.guard.outputs.branch }}"
           ISSUE_NUMBER="${{ steps.guard.outputs.issue-number }}"
@@ -964,7 +964,7 @@ jobs:
       - name: Dispatch CI pipelines for new PR
         if: steps.mode.outputs.mode == 'issue' && steps.pr.outputs.number
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           PR_NUM: ${{ steps.pr.outputs.number }}
           REPO: ${{ github.repository }}
         run: |

@@ -1,27 +1,29 @@
 import { Outlet } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAirport } from "@/contexts/AirportContext";
 import NavBar from "./NavBar";
 import type { NavItem } from "./NavBar";
 
-const coordinatorItems: NavItem[] = [
-  { label: "Mission Center", to: "/operator-center/dashboard" },
-  { label: "Airports", to: "/coordinator-center/airports" },
-  { label: "Inspections", to: "/coordinator-center/inspections" },
-  { label: "Drones", to: "/coordinator-center/drones" },
-];
-
 export default function CoordinatorLayout() {
   const { selectedAirport } = useAirport();
+  const { t } = useTranslation();
+
+  const coordinatorItems: NavItem[] = [
+    { label: t("nav.missionCenter"), to: "/operator-center/dashboard" },
+    { label: t("nav.airports"), to: "/coordinator-center/airports" },
+    { label: t("nav.inspections"), to: "/coordinator-center/inspections" },
+    { label: t("nav.drones"), to: "/coordinator-center/drones" },
+  ];
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
+    <div className="flex flex-col h-screen bg-tv-bg text-tv-text-primary">
       <NavBar items={coordinatorItems} role="coordinator" />
       <main className="flex-1 overflow-auto">
         {selectedAirport ? (
           <Outlet />
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-[var(--color-text-muted)]">
-            <p className="text-lg mb-2">Select an airport to get started</p>
+          <div className="flex flex-col items-center justify-center h-full text-tv-text-muted">
+            <p className="text-lg mb-2">{t("nav.selectAirport")}</p>
             <svg
               className="h-8 w-8 animate-bounce"
               fill="none"

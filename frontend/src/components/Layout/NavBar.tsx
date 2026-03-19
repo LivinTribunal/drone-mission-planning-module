@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAirport } from "@/contexts/AirportContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -21,10 +22,13 @@ export default function NavBar({ items, role }: NavBarProps) {
   const { selectedAirport } = useAirport();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const hasCoordinatorRole = user?.roles.includes("COORDINATOR");
+
+  const availableLanguages = Object.keys(i18n.options.resources ?? {});
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -43,120 +47,194 @@ export default function NavBar({ items, role }: NavBarProps) {
 
   return (
     <nav
-      className="flex items-center gap-1 px-4 h-14 border-b
-        border-[var(--color-border)] bg-[var(--color-nav-bg)]"
+      className="flex items-center gap-6 px-4 py-5 bg-tv-bg"
       data-testid="navbar"
     >
-      {/* logo */}
-      <NavLink
-        to={
-          role === "operator"
-            ? "/operator-center/dashboard"
-            : "/coordinator-center/airports"
-        }
-        className="font-bold text-lg text-[var(--color-accent)] mr-6"
-      >
-        TarmacView
-      </NavLink>
-
-      {/* nav items */}
-      <div className="flex items-center gap-1">
-        {items.map((item) => {
-          const disabled = item.disabled || !selectedAirport;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={(e) => disabled && e.preventDefault()}
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded text-sm transition-colors ${
-                  disabled
-                    ? "opacity-40 cursor-not-allowed text-[var(--color-text-muted)]"
-                    : isActive
-                      ? "bg-[var(--color-active)] text-[var(--color-text)]"
-                      : "text-[var(--color-text)] hover:bg-[var(--color-hover)]"
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          );
-        })}
+      {/* left section - 30% */}
+      <div className="w-[30%] flex-shrink-0">
+        <NavLink
+          to={
+            role === "operator"
+              ? "/operator-center/dashboard"
+              : "/coordinator-center/airports"
+          }
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-tv-surface px-4 h-11"
+        >
+          <svg
+            className="h-6 w-6 text-tv-accent"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          </svg>
+          <span className="text-sm font-semibold text-tv-text-primary">
+            {t("common.appTitle")}
+          </span>
+        </NavLink>
       </div>
 
-      <div className="flex-1" />
+      {/* right section - 70% */}
+      <div className="flex-1 flex items-center gap-4">
+        {/* nav pills */}
+        <div className="flex flex-1 items-center justify-center gap-1 rounded-full bg-tv-surface p-1 h-11">
+          {items.map((item) => {
+            const disabled = item.disabled || !selectedAirport;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={(e) => disabled && e.preventDefault()}
+                className={({ isActive }) =>
+                  `px-5 h-9 rounded-full text-sm font-medium transition-colors flex items-center ${
+                    disabled
+                      ? "opacity-50 cursor-not-allowed text-tv-text-muted"
+                      : isActive
+                        ? "bg-tv-nav-active-bg text-tv-nav-active-text"
+                        : "text-tv-text-primary hover:bg-tv-surface-hover"
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            );
+          })}
+        </div>
 
-      {/* airport selector */}
-      <AirportSelector />
+        {/* airport selector */}
+        <AirportSelector />
 
-      {/* user dropdown */}
-      <div ref={menuRef} className="relative ml-3">
-        <button
-          onClick={() => setUserMenuOpen(!userMenuOpen)}
-          className="flex items-center gap-1 rounded px-3 py-1.5 text-sm
-            text-[var(--color-text)] hover:bg-[var(--color-hover)]"
-          data-testid="user-menu-button"
-        >
-          {user?.name ?? "User"}
-          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </button>
-
-        {userMenuOpen && (
-          <div
-            className="absolute right-0 top-full mt-1 min-w-[180px] rounded border
-              border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg z-50"
-            data-testid="user-menu"
+        {/* theme toggle */}
+        <div className="flex items-center gap-1 rounded-full bg-tv-surface p-1 h-11">
+          <button
+            onClick={() => theme !== "light" && toggleTheme()}
+            className={`rounded-full p-2 transition-colors ${
+              theme === "light"
+                ? "bg-tv-nav-active-bg text-tv-nav-active-text"
+                : "text-tv-text-secondary hover:bg-tv-surface-hover"
+            }`}
+            aria-label={t("user.lightMode")}
           >
-            <button
-              onClick={toggleTheme}
-              className="block w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-hover)]"
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                fillRule="evenodd"
+                d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+          <button
+            onClick={() => theme !== "dark" && toggleTheme()}
+            className={`rounded-full p-2 transition-colors ${
+              theme === "dark"
+                ? "bg-tv-nav-active-bg text-tv-nav-active-text"
+                : "text-tv-text-secondary hover:bg-tv-surface-hover"
+            }`}
+            aria-label={t("user.darkMode")}
+          >
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* user dropdown */}
+        <div ref={menuRef} className="relative ml-auto">
+          <button
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            className="flex items-center gap-2 rounded-full px-4 h-11 text-sm font-medium
+              bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+            data-testid="user-menu-button"
+          >
+            {user?.name ?? "User"}
+            <svg
+              className={`h-4 w-4 transition-transform duration-200 ${userMenuOpen ? "rotate-180" : ""}`}
+              viewBox="0 0 20 20"
+              fill="currentColor"
             >
-              {theme === "light" ? "Dark mode" : "Light mode"}
-            </button>
-            <button
-              className="block w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-hover)] opacity-50 cursor-not-allowed"
-              disabled
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+
+          {userMenuOpen && (
+            <div
+              className="absolute right-0 top-full mt-1 min-w-[200px] rounded-2xl border
+                border-tv-border bg-tv-surface p-2 z-50"
+              data-testid="user-menu"
             >
-              Settings
-            </button>
-            {role === "operator" && hasCoordinatorRole && (
               <button
-                onClick={() => {
-                  setUserMenuOpen(false);
-                  navigate("/coordinator-center/airports");
-                }}
-                className="block w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-hover)]"
+                className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
+                  text-tv-text-primary opacity-50 cursor-not-allowed"
+                disabled
               >
-                Configurator Center
+                {t("user.settings")}
               </button>
-            )}
-            {role === "coordinator" && (
+              {role === "operator" && hasCoordinatorRole && (
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate("/coordinator-center/airports");
+                  }}
+                  className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
+                    text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                >
+                  {t("nav.configuratorCenter")}
+                </button>
+              )}
+              {role === "coordinator" && (
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate("/operator-center/dashboard");
+                  }}
+                  className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
+                    text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                >
+                  {t("nav.missionCenter")}
+                </button>
+              )}
+
+              {/* language selector */}
+              <hr className="my-1 border-tv-border" />
+              <div className="px-4 py-1.5 text-xs font-medium text-tv-text-muted uppercase tracking-wider">
+                {t("user.language")}
+              </div>
+              {availableLanguages.map((code) => (
+                <button
+                  key={code}
+                  onClick={() => i18n.changeLanguage(code)}
+                  className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 text-sm
+                    text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                >
+                  {i18n.language === code && (
+                    <svg className="h-4 w-4 text-tv-accent" viewBox="0 0 20 20" fill="currentColor">
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  )}
+                  {!i18n.language.startsWith(code) && <span className="w-4" />}
+                  {t(`languages.${code}`)}
+                </button>
+              ))}
+
+              <hr className="my-1 border-tv-border" />
               <button
-                onClick={() => {
-                  setUserMenuOpen(false);
-                  navigate("/operator-center/dashboard");
-                }}
-                className="block w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-hover)]"
+                onClick={handleLogout}
+                className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
+                  text-tv-error hover:bg-tv-surface-hover transition-colors"
+                data-testid="logout-button"
               >
-                Mission Center
+                {t("auth.logout")}
               </button>
-            )}
-            <hr className="border-[var(--color-border)]" />
-            <button
-              onClick={handleLogout}
-              className="block w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-[var(--color-hover)]"
-              data-testid="logout-button"
-            >
-              Logout
-            </button>
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     </nav>
   );

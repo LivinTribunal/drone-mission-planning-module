@@ -1,8 +1,11 @@
+import { useTranslation } from "react-i18next";
+
 export default function MissionConfigPage() {
+  const { t } = useTranslation();
+
   return (
-    <div>
-      <h1 className="text-xl font-bold mb-2">Mission Configuration</h1>
-      <p className="text-[var(--color-text-muted)]">Coming soon</p>
+    <div className="flex items-center justify-center py-12">
+      <p className="text-sm text-tv-text-muted">{t("mission.configuration")}</p>
     </div>
   );
 }
