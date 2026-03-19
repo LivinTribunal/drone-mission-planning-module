@@ -1,7 +1,11 @@
+import { useTranslation } from "react-i18next";
+
 export default function DroneEditPage() {
+  const { t } = useTranslation();
+
   return (
     <div className="flex items-center justify-center h-full bg-tv-bg">
-      <p className="text-sm text-tv-text-muted">Drone Profile Editor</p>
+      <p className="text-sm text-tv-text-muted">{t("coordinator.droneProfileEditor")}</p>
     </div>
   );
 }

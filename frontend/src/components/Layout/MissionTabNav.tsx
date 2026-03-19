@@ -1,14 +1,16 @@
 import { NavLink, Outlet, useParams } from "react-router-dom";
-
-const tabs = [
-  { label: "Overview", path: "overview" },
-  { label: "Configuration", path: "configuration" },
-  { label: "Map", path: "map" },
-  { label: "Validation & Export", path: "validation-export" },
-];
+import { useTranslation } from "react-i18next";
 
 export default function MissionTabNav() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useTranslation();
+
+  const tabs = [
+    { label: t("mission.overview"), path: "overview" },
+    { label: t("mission.configuration"), path: "configuration" },
+    { label: t("mission.map"), path: "map" },
+    { label: t("mission.validationExport"), path: "validation-export" },
+  ];
 
   return (
     <div>

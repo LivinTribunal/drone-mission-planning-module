@@ -11,8 +11,16 @@ export interface AirportResponse {
   id: string;
   icao_code: string;
   name: string;
+  city: string | null;
+  country: string | null;
   elevation: number;
   location: PointZ;
+}
+
+export interface AirportSummaryResponse extends AirportResponse {
+  surfaces_count: number;
+  agls_count: number;
+  missions_count: number;
 }
 
 export interface AirportDetailResponse extends AirportResponse {
@@ -84,6 +92,8 @@ export interface LHAResponse {
 export interface AirportCreate {
   icao_code: string;
   name: string;
+  city?: string | null;
+  country?: string | null;
   elevation: number;
   location: PointZ;
 }
@@ -91,6 +101,8 @@ export interface AirportCreate {
 export interface AirportUpdate {
   icao_code?: string;
   name?: string;
+  city?: string | null;
+  country?: string | null;
   elevation?: number;
   location?: PointZ;
 }

@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 type BadgeStatus =
   | "DRAFT"
   | "PLANNED"
@@ -27,11 +29,13 @@ const statusStyles: Record<BadgeStatus, string> = {
 };
 
 export default function Badge({ status, className = "" }: BadgeProps) {
+  const { t } = useTranslation();
+
   return (
     <span
       className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyles[status]} ${className}`}
     >
-      {status}
+      {t(`missionStatus.${status}`)}
     </span>
   );
 }

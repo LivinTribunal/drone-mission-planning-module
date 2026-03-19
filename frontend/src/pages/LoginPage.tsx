@@ -1,13 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(false);
 
   if (isAuthenticated) {
     return <Navigate to="/operator-center/dashboard" replace />;
@@ -15,12 +17,12 @@ export default function LoginPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setError("");
+    setError(false);
     try {
       await login(email, password);
       navigate("/operator-center/dashboard");
     } catch {
-      setError("Login failed");
+      setError(true);
     }
   }
 
@@ -28,18 +30,20 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-tv-bg">
       <div className="w-full max-w-sm p-6 rounded-2xl border border-tv-border bg-tv-surface">
         <h1 className="text-2xl font-semibold text-center mb-6 text-tv-text-primary">
-          Login to TarmacView
+          {t("auth.loginTitle")}
         </h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {error && (
-            <div className="text-tv-error text-sm text-center">{error}</div>
+            <div className="text-tv-error text-sm text-center">
+              {t("auth.wrongCredentials")}
+            </div>
           )}
           <div>
             <label
               htmlFor="email"
               className="block text-xs font-medium mb-1 text-tv-text-secondary"
             >
-              Email
+              {t("auth.email")}
             </label>
             <input
               id="email"
@@ -47,7 +51,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="you@example.com"
+              placeholder={t("auth.emailPlaceholder")}
               className="w-full px-4 py-2.5 rounded-full border border-tv-border
                 bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted
                 focus:outline-none focus:border-tv-accent transition-colors"
@@ -59,7 +63,7 @@ export default function LoginPage() {
               htmlFor="password"
               className="block text-xs font-medium mb-1 text-tv-text-secondary"
             >
-              Password
+              {t("auth.password")}
             </label>
             <input
               id="password"
@@ -67,7 +71,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder="Enter your password"
+              placeholder={t("auth.passwordPlaceholder")}
               className="w-full px-4 py-2.5 rounded-full border border-tv-border
                 bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted
                 focus:outline-none focus:border-tv-accent transition-colors"
@@ -80,7 +84,7 @@ export default function LoginPage() {
               hover:bg-tv-accent-hover transition-colors"
             data-testid="login-button"
           >
-            Sign in
+            {t("auth.login")}
           </button>
         </form>
       </div>

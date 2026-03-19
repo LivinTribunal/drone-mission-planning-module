@@ -1,6 +1,7 @@
 import type { ListMeta, DeleteResponse } from "@/types/common";
 import type {
   AirportResponse,
+  AirportSummaryResponse,
   AirportDetailResponse,
   AirportCreate,
   AirportUpdate,
@@ -27,6 +28,14 @@ export async function listAirports(params?: {
   offset?: number;
 }): Promise<{ data: AirportResponse[]; meta: ListMeta }> {
   const res = await client.get("/airports", { params });
+  return res.data;
+}
+
+export async function listAirportSummaries(): Promise<{
+  data: AirportSummaryResponse[];
+  meta: ListMeta;
+}> {
+  const res = await client.get("/airports/summary");
   return res.data;
 }
 

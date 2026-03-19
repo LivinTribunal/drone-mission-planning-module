@@ -14,13 +14,13 @@ export default function CollapsibleSection({
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   return (
-    <div className="bg-tv-surface border border-tv-border rounded-2xl">
+    <div className="bg-tv-surface border border-tv-border rounded-3xl">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center justify-between p-4 text-left"
         data-testid={`section-${title.toLowerCase().replace(/\s+/g, "-")}`}
       >
-        <span className="text-base font-semibold text-tv-text-primary">
+        <span className="text-base font-semibold text-tv-text-primary rounded-full px-3 py-1 bg-tv-section-label-bg">
           {title}
         </span>
         <svg

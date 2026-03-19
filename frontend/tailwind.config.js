@@ -21,6 +21,7 @@ export default {
           info: "var(--tv-info)",
           "nav-active-bg": "var(--tv-nav-active-bg)",
           "nav-active-text": "var(--tv-nav-active-text)",
+          "section-label-bg": "var(--tv-section-label-bg)",
         },
       },
       borderColor: {
@@ -29,7 +30,7 @@ export default {
         },
       },
       fontFamily: {
-        inter: ["Inter", "sans-serif"],
+        sans: ['"DM Sans"', "sans-serif"],
       },
     },
   },

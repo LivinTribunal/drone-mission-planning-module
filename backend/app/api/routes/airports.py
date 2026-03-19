@@ -9,6 +9,7 @@ from app.schemas.airport import (
     AirportDetailResponse,
     AirportListResponse,
     AirportResponse,
+    AirportSummaryListResponse,
     AirportUpdate,
 )
 from app.schemas.common import DeleteResponse, ListMeta
@@ -42,10 +43,18 @@ router = APIRouter(prefix="/api/v1/airports", tags=["airports"])
 # airports
 @router.get("", response_model=AirportListResponse)
 def list_airports(db: Session = Depends(get_db)):
-    """list all avaible airports for user"""
+    """list all available airports for user."""
     airports = airport_service.list_airports(db)
 
     return AirportListResponse(data=airports, meta=ListMeta(total=len(airports)))
+
+
+@router.get("/summary", response_model=AirportSummaryListResponse)
+def list_airports_summary(db: Session = Depends(get_db)):
+    """list all airports with infrastructure and mission counts."""
+    summaries = airport_service.list_airports_with_counts(db)
+
+    return AirportSummaryListResponse(data=summaries, meta=ListMeta(total=len(summaries)))
 
 
 @router.get("/{airport_id}", response_model=AirportDetailResponse)
