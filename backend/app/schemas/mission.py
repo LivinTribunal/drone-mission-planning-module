@@ -18,7 +18,7 @@ class InspectionConfigOverride(BaseModel):
     hover_duration: float | None = None
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
-    lha_ids: list[str] | None = None
+    lha_ids: list[UUID] | None = None
 
 
 class InspectionCreate(BaseModel):
@@ -46,6 +46,7 @@ class InspectionResponse(BaseModel):
     config_id: UUID | None = None
     method: str
     sequence_order: int
+    lha_ids: list[UUID] | None = None
 
     model_config = {"from_attributes": True}
 

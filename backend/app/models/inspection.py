@@ -117,6 +117,13 @@ class Inspection(Base):
     template = relationship("InspectionTemplate")
     config = relationship("InspectionConfiguration")
 
+    @property
+    def lha_ids(self) -> list[str] | None:
+        """lha ids from associated config, or none."""
+        if self.config:
+            return self.config.lha_ids
+        return None
+
     def is_speed_compatible_with_frame_rate(
         self, drone_profile, speed: float, path_distance: float = 0.0
     ) -> bool:

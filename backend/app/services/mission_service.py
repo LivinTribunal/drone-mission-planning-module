@@ -62,7 +62,7 @@ def get_mission(db: Session, mission_id: UUID) -> Mission:
     """get mission with inspections."""
     mission = (
         db.query(Mission)
-        .options(joinedload(Mission.inspections))
+        .options(joinedload(Mission.inspections).joinedload(Inspection.config))
         .filter(Mission.id == mission_id)
         .first()
     )
@@ -162,6 +162,7 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
                 hover_duration=insp.config.hover_duration,
                 horizontal_distance=insp.config.horizontal_distance,
                 sweep_angle=insp.config.sweep_angle,
+                lha_ids=insp.config.lha_ids,
             )
             db.add(new_config)
             db.flush()

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import CoordinateInput from "@/components/mission/CoordinateInput";
+import InspectionConfigForm from "@/components/mission/InspectionConfigForm";
 import WarningsPanel from "@/components/mission/WarningsPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
 import WaypointInfoPanel from "@/components/map/overlays/WaypointInfoPanel";
@@ -146,6 +147,109 @@ describe("StatsPanel", () => {
     expect(screen.getByText("5:00")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("9%")).toBeInTheDocument();
+  });
+});
+
+describe("InspectionConfigForm LHA toggle", () => {
+  const mockAgl = {
+    id: "agl-1",
+    surface_id: "srf-1",
+    agl_type: "PAPI",
+    name: "PAPI 09L",
+    position: { type: "Point" as const, coordinates: [17.21, 48.17, 133] as [number, number, number] },
+    side: null,
+    glide_slope_angle: null,
+    distance_from_threshold: null,
+    offset_from_centerline: null,
+    lhas: [
+      {
+        id: "lha-1",
+        agl_id: "agl-1",
+        unit_number: 1,
+        setting_angle: 3.0,
+        transition_sector_width: null,
+        lamp_type: "HALOGEN" as const,
+        position: { type: "Point" as const, coordinates: [17.21, 48.17, 133] as [number, number, number] },
+      },
+      {
+        id: "lha-2",
+        agl_id: "agl-1",
+        unit_number: 2,
+        setting_angle: 3.5,
+        transition_sector_width: null,
+        lamp_type: "HALOGEN" as const,
+        position: { type: "Point" as const, coordinates: [17.22, 48.18, 133] as [number, number, number] },
+      },
+    ],
+  };
+
+  const mockInspection = {
+    id: "insp-1",
+    mission_id: "m-1",
+    template_id: "tpl-1",
+    config_id: null,
+    method: "VERTICAL_PROFILE" as const,
+    sequence_order: 1,
+    lha_ids: null,
+  };
+
+  const mockTemplate = {
+    id: "tpl-1",
+    name: "Test Template",
+    description: null,
+    angular_tolerances: null,
+    created_by: null,
+    created_at: null,
+    default_config: null,
+    target_agl_ids: ["agl-1"],
+    methods: ["VERTICAL_PROFILE" as const],
+  };
+
+  it("toggles LHA checkbox and calls onToggleLha with correct id", () => {
+    const onToggleLha = vi.fn();
+    const onChange = vi.fn();
+
+    render(
+      <InspectionConfigForm
+        inspection={mockInspection}
+        template={mockTemplate}
+        agls={[mockAgl]}
+        droneProfile={null}
+        configOverride={{}}
+        onChange={onChange}
+        selectedLhaIds={new Set<string>()}
+        onToggleLha={onToggleLha}
+      />,
+    );
+
+    const checkbox = screen.getByTestId("lha-checkbox-lha-1");
+    fireEvent.click(checkbox);
+
+    expect(onToggleLha).toHaveBeenCalledWith("lha-1");
+  });
+
+  it("shows LHA as checked when in selectedLhaIds", () => {
+    const onToggleLha = vi.fn();
+    const onChange = vi.fn();
+
+    render(
+      <InspectionConfigForm
+        inspection={mockInspection}
+        template={mockTemplate}
+        agls={[mockAgl]}
+        droneProfile={null}
+        configOverride={{}}
+        onChange={onChange}
+        selectedLhaIds={new Set(["lha-1"])}
+        onToggleLha={onToggleLha}
+      />,
+    );
+
+    const checkbox = screen.getByTestId("lha-checkbox-lha-1") as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+
+    const checkbox2 = screen.getByTestId("lha-checkbox-lha-2") as HTMLInputElement;
+    expect(checkbox2.checked).toBe(false);
   });
 });
 

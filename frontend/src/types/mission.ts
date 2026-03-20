@@ -27,6 +27,7 @@ export interface InspectionResponse {
   config_id: string | null;
   method: InspectionMethod;
   sequence_order: number;
+  lha_ids: string[] | null;
 }
 
 export interface InspectionConfigOverride {
@@ -67,7 +68,6 @@ export interface MissionUpdate {
 export interface InspectionCreate {
   template_id: string;
   method: InspectionMethod;
-  sequence_order?: number;
   config?: InspectionConfigOverride | null;
 }
 

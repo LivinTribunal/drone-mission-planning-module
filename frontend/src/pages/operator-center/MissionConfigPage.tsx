@@ -176,15 +176,15 @@ export default function MissionConfigPage() {
         new Set(missionData.inspections.map((i) => i.id)),
       );
 
-      // load saved LHA selections from inspection config
+      // restore LHA selections - prefer dirty (unsaved) over backend
       const lhaInit: Record<string, Set<string>> = {};
       const currentDirty = inspectionDirtyRef.current;
       for (const insp of missionData.inspections) {
-        if (
-          currentDirty[insp.id]?.lha_ids &&
-          currentDirty[insp.id].lha_ids!.length > 0
-        ) {
-          lhaInit[insp.id] = new Set(currentDirty[insp.id].lha_ids!);
+        const dirtyIds = currentDirty[insp.id]?.lha_ids;
+        if (dirtyIds && dirtyIds.length > 0) {
+          lhaInit[insp.id] = new Set(dirtyIds);
+        } else if (insp.lha_ids && insp.lha_ids.length > 0) {
+          lhaInit[insp.id] = new Set(insp.lha_ids);
         }
       }
       setSelectedLhas((prev) => ({ ...prev, ...lhaInit }));
