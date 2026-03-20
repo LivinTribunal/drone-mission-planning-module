@@ -57,7 +57,10 @@ class InspectionConfiguration(Base):
     sweep_angle = Column(Float)
     lha_ids = Column(JSONB)
 
-    # config fields that can be overridden per-inspection
+    # config fields that can be overridden per-inspection.
+    # lha_ids is included for duplication support (duplicate_mission copies it)
+    # but is NOT consumed from ResolvedConfig in the trajectory path -
+    # the orchestrator reads inspection.lha_ids directly instead.
     _MERGE_FIELDS = (
         "altitude_offset",
         "speed_override",

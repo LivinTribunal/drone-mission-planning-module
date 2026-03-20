@@ -140,6 +140,12 @@ class Mission(Base):
         raise ValueError(f"inspection {inspection_id} not found")
 
     def change_drone_profile(self, drone_profile_id):
-        """change drone profile - invalidates trajectory, blocked after export."""
+        """change drone profile - invalidates trajectory, blocked after export.
+
+        note: mission_service.update_mission currently handles drone profile
+        changes via TRAJECTORY_FIELDS check + invalidate_trajectory() directly,
+        bypassing this method. kept as the canonical aggregate-root api for
+        programmatic callers and test coverage.
+        """
         self.invalidate_trajectory()
         self.drone_profile_id = drone_profile_id
