@@ -42,7 +42,7 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
     if not template:
         raise NotFoundError("template not found")
 
-    config_data = schema.config.model_dump() if schema.config else None
+    config_data = schema.config.model_dump(mode="json") if schema.config else None
     config_id = None
 
     if config_data:

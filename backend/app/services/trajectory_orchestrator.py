@@ -194,7 +194,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         # phase 2 - resolve config and pre-checks
         config = resolve_with_defaults(inspection, template)
 
-        lha_positions = get_lha_positions(template)
+        lha_positions = get_lha_positions(template, lha_ids=inspection.lha_ids)
         if not lha_positions:
             warnings.append(f"{template.name} #{inspection.sequence_order}: no LHA positions")
             continue
@@ -527,7 +527,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             altitude_diff = cur.alt - prev.alt
             d = math.sqrt(seg**2 + altitude_diff**2)
             total_dist += d
-            total_dur += d / max(cur.speed, MIN_SPEED_FLOOR)
+            total_dur += d / max(cur.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
 
         if all_waypoints[j].hover_duration is not None:
             total_dur += all_waypoints[j].hover_duration

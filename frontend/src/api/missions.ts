@@ -117,7 +117,7 @@ export async function removeInspection(
 export async function reorderInspections(
   missionId: string,
   data: ReorderRequest,
-): Promise<InspectionResponse[]> {
+): Promise<{ reordered: boolean }> {
   const res = await client.put(
     `/missions/${missionId}/inspections/reorder`,
     data,
