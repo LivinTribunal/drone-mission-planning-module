@@ -39,6 +39,10 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
     config_id = None
 
     if config_data:
+        # convert UUID lists to strings for JSONB columns
+        if "lha_ids" in config_data and config_data["lha_ids"] is not None:
+            config_data["lha_ids"] = [str(uid) for uid in config_data["lha_ids"]]
+
         config = InspectionConfiguration(**config_data)
         db.add(config)
         db.flush()
@@ -87,6 +91,10 @@ def update_inspection(
     config_data = data.pop("config", None)
 
     if config_data:
+        # convert UUID lists to strings for JSONB columns
+        if "lha_ids" in config_data and config_data["lha_ids"] is not None:
+            config_data["lha_ids"] = [str(uid) for uid in config_data["lha_ids"]]
+
         if inspection.config:
             apply_dict_update(inspection.config, config_data)
         else:
