@@ -179,9 +179,7 @@ export default function InspectionConfigForm({
             onChange={(e) =>
               handleNumberChange("measurement_density", e.target.value)
             }
-            className={`w-full px-3 py-2 rounded-full text-sm border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors ${
-              speedWarning ? "border-tv-warning" : "border-tv-border"
-            }`}
+            className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
             data-testid="inspection-measurement-density"
           />
         </div>

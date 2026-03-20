@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table
@@ -67,7 +69,7 @@ class InspectionConfiguration(Base):
         "lha_ids",
     )
 
-    def resolve_with_defaults(self, template_config):
+    def resolve_with_defaults(self, template_config: InspectionConfiguration | None):
         """merge this config over template defaults, returning field dict."""
         merged = {}
         for key in self._MERGE_FIELDS:

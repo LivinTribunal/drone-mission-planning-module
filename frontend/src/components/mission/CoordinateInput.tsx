@@ -34,30 +34,25 @@ export default function CoordinateInput({
     const num = raw === "" ? null : parseFloat(raw);
     if (raw !== "" && (num === null || isNaN(num as number))) return;
 
+    if (raw === "" && !value) return;
+
     const curLat = value ? value.coordinates[1] : 0;
     const curLon = value ? value.coordinates[0] : 0;
     const curAlt = value ? value.coordinates[2] : 0;
 
-    if (raw === "" && field === "lat" && !value) return;
-    if (raw === "" && field === "lon" && !value) return;
+    const newLat = field === "lat" ? num : curLat;
+    const newLon = field === "lon" ? num : curLon;
+    const newAlt = field === "alt" ? num : curAlt;
 
-    let newLat = curLat;
-    let newLon = curLon;
-    let newAlt = curAlt;
-
-    if (field === "lat") newLat = num ?? 0;
-    if (field === "lon") newLon = num ?? 0;
-    if (field === "alt") newAlt = num ?? 0;
-
-    // if all empty, set null
-    if (raw === "" && field === "lat" && curLon === 0 && curAlt === 0) {
+    // if all fields are cleared, set null
+    if (newLat === null && newLon === null && newAlt === null) {
       onChange(null);
       return;
     }
 
     onChange({
       type: "Point",
-      coordinates: [newLon, newLat, newAlt],
+      coordinates: [newLon ?? 0, newLat ?? 0, newAlt ?? 0],
     });
   }
 

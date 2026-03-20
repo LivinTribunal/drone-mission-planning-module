@@ -202,10 +202,20 @@ export default function MissionConfigPage() {
       }
 
       // save inspection-level changes
+      const failedInspections: Record<string, InspectionConfigOverride> = {};
       for (const [inspId, override] of Object.entries(inspectionDirty)) {
-        await updateInspection(id, inspId, { config: override });
+        try {
+          await updateInspection(id, inspId, { config: override });
+        } catch {
+          failedInspections[inspId] = override;
+        }
       }
-      setInspectionDirty({});
+      setInspectionDirty(failedInspections);
+
+      if (Object.keys(failedInspections).length > 0) {
+        showNotification(t("mission.config.savePartialError"));
+        return;
+      }
 
       showNotification(t("mission.config.saved"));
     } catch (err) {
@@ -352,8 +362,9 @@ export default function MissionConfigPage() {
       setMission(fresh);
     } catch (err) {
       if (isAxiosError(err) && (err.response?.status === 409 || err.response?.status === 422)) {
+        const detail = err.response?.data?.detail;
         showNotification(
-          err.response?.data?.detail ?? t("mission.config.trajectoryError"),
+          typeof detail === "string" ? detail : t("mission.config.trajectoryError"),
         );
       } else {
         showNotification(t("mission.config.trajectoryError"));
@@ -460,9 +471,10 @@ export default function MissionConfigPage() {
               configOverride={currentInspectionConfig}
               onChange={handleInspectionConfigChange}
               selectedLhaIds={inspectionLhas}
-              onToggleLha={(lhaId) =>
-                handleToggleLha(selectedInspectionId!, lhaId)
-              }
+              onToggleLha={(lhaId) => {
+                if (!selectedInspectionId) return;
+                handleToggleLha(selectedInspectionId, lhaId);
+              }}
             />
           ) : (
             <MissionConfigForm
