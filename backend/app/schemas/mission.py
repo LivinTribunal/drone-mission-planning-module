@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
@@ -12,9 +12,21 @@ class InspectionConfigOverride(BaseModel):
 
     altitude_offset: float | None = None
     speed_override: float | None = None
-    measurement_density: int | None = None
+    measurement_density: int | None = Field(default=None, ge=1)
     custom_tolerances: dict | None = None
     density: float | None = None
+    hover_duration: float | None = None
+    horizontal_distance: float | None = None
+    sweep_angle: float | None = None
+    lha_ids: list[UUID] | None = None
+
+    @field_validator("lha_ids", mode="before")
+    @classmethod
+    def coerce_lha_ids_to_strings(cls, v: list | None) -> list[UUID] | None:
+        """coerce mixed uuid/string lists so downstream jsonb storage is consistent."""
+        if v is None:
+            return None
+        return [UUID(str(i)) if not isinstance(i, UUID) else i for i in v]
 
 
 class InspectionCreate(BaseModel):
@@ -33,6 +45,22 @@ class InspectionUpdate(BaseModel):
     sequence_order: int | None = None
 
 
+class InspectionConfigResponse(BaseModel):
+    """inspection configuration values"""
+
+    altitude_offset: float | None = None
+    speed_override: float | None = None
+    measurement_density: int | None = None
+    custom_tolerances: dict | None = None
+    density: float | None = None
+    hover_duration: float | None = None
+    horizontal_distance: float | None = None
+    sweep_angle: float | None = None
+    lha_ids: list[UUID] | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class InspectionResponse(BaseModel):
     """inspection response"""
 
@@ -42,6 +70,8 @@ class InspectionResponse(BaseModel):
     config_id: UUID | None = None
     method: str
     sequence_order: int
+    lha_ids: list[UUID] | None = None
+    config: InspectionConfigResponse | None = None
 
     model_config = {"from_attributes": True}
 
@@ -92,6 +122,7 @@ class MissionResponse(BaseModel):
     status: str
     airport_id: UUID
     created_at: datetime
+    updated_at: datetime
     operator_notes: str | None = None
     drone_profile_id: UUID | None = None
     date_time: datetime | None = None

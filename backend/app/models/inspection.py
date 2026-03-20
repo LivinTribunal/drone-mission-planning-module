@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from uuid import UUID as PyUUID
 from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table
@@ -52,8 +55,12 @@ class InspectionConfiguration(Base):
     hover_duration = Column(Float)  # seconds
     horizontal_distance = Column(Float)
     sweep_angle = Column(Float)
+    lha_ids = Column(JSONB)
 
-    # config fields that can be overridden per-inspection
+    # config fields that can be overridden per-inspection.
+    # lha_ids is included for duplication support (duplicate_mission copies it)
+    # but is NOT consumed from ResolvedConfig in the trajectory path -
+    # the orchestrator reads inspection.lha_ids directly instead.
     _MERGE_FIELDS = (
         "altitude_offset",
         "speed_override",
@@ -63,9 +70,10 @@ class InspectionConfiguration(Base):
         "hover_duration",
         "horizontal_distance",
         "sweep_angle",
+        "lha_ids",
     )
 
-    def resolve_with_defaults(self, template_config):
+    def resolve_with_defaults(self, template_config: InspectionConfiguration | None):
         """merge this config over template defaults, returning field dict."""
         merged = {}
         for key in self._MERGE_FIELDS:
@@ -112,6 +120,13 @@ class Inspection(Base):
     mission = relationship("Mission", back_populates="inspections")
     template = relationship("InspectionTemplate")
     config = relationship("InspectionConfiguration")
+
+    @property
+    def lha_ids(self) -> list[PyUUID] | None:
+        """lha ids from associated config, or none."""
+        if self.config and self.config.lha_ids:
+            return [PyUUID(s) if isinstance(s, str) else s for s in self.config.lha_ids]
+        return None
 
     def is_speed_compatible_with_frame_rate(
         self, drone_profile, speed: float, path_distance: float = 0.0

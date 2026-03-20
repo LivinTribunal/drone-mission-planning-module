@@ -69,18 +69,23 @@ def resolve_with_defaults(inspection, template) -> ResolvedConfig:
     return result
 
 
-def get_lha_positions(template) -> list[Point3D]:
-    """extract 3D positions from all LHA units across template targets."""
+def get_lha_positions(template, lha_ids: list | None = None) -> list[Point3D]:
+    """extract 3D positions from LHA units, optionally filtered by lha_ids."""
+    # precompute set to avoid O(m*n) list rebuild per iteration
+    lha_id_set = {str(i) for i in lha_ids} if lha_ids else None
+
     positions = []
     for agl in template.targets:
         for lha in agl.lhas:
+            if lha_id_set and str(lha.id) not in lha_id_set:
+                continue
             if not lha.position:
                 continue
             try:
                 c = parse_ewkb(lha.position.data).get("coordinates")
                 if not c or len(c) < 3:
                     continue
-            except Exception:
+            except (KeyError, ValueError, TypeError):
                 logger.warning("failed to parse LHA position for lha %s", lha.id)
                 continue
             positions.append(Point3D(lon=c[0], lat=c[1], alt=c[2]))
@@ -88,11 +93,16 @@ def get_lha_positions(template) -> list[Point3D]:
     return positions
 
 
-def get_lha_setting_angles(template) -> list[Degrees]:
+def get_lha_setting_angles(template, lha_ids=None) -> list[Degrees]:
     """collect and sort setting angles from all LHA units in template."""
+    # precompute set to avoid O(m*n) list rebuild per iteration
+    lha_id_set = {str(i) for i in lha_ids} if lha_ids else None
+
     angles = []
     for agl in template.targets:
         for lha in agl.lhas:
+            if lha_id_set and str(lha.id) not in lha_id_set:
+                continue
             if lha.setting_angle is not None:
                 angles.append(lha.setting_angle)
 

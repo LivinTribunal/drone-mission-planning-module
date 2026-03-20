@@ -52,6 +52,27 @@ from app.services.trajectory_types import (
 from app.utils.geo import bearing_between, distance_between, total_path_distance
 
 
+def _parse_coordinate(ewkb_data, label: str) -> list[float]:
+    """parse and validate a 3D coordinate from EWKB geometry data."""
+    try:
+        parsed = parse_ewkb(ewkb_data)
+        if parsed is None:
+            raise TrajectoryGenerationError(f"{label} coordinate geometry is empty")
+        coords = parsed.get("coordinates")
+    except TrajectoryGenerationError:
+        raise
+    except Exception as e:
+        raise TrajectoryGenerationError(f"failed to parse {label} coordinate geometry") from e
+    if not coords or len(coords) < 3:
+        raise TrajectoryGenerationError(f"{label} coordinate must be a valid 3D point")
+    try:
+        Coordinate(lat=coords[1], lon=coords[0], alt=coords[2])
+    except ValueError as e:
+        raise TrajectoryGenerationError(f"invalid {label} coordinate: {e}")
+
+    return coords
+
+
 def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     """load all entities needed for trajectory generation in a single query phase.
 
@@ -157,21 +178,24 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
+    # delete existing flight plan before invalidation - db concern stays in service.
+    # must happen before invalidate_trajectory() per its contract.
+    existing_fp = mission.flight_plan
+    had_constraints = False
+    if existing_fp:
+        had_constraints = bool(existing_fp.constraints)
+        db.delete(existing_fp)
+        db.flush()
+
     # auto-regress VALIDATED so regeneration works without manual step
     if mission.status == MissionStatus.VALIDATED:
-        mission.regress_if_validated()
+        mission.invalidate_trajectory()
 
     # only DRAFT or PLANNED can generate - terminal states are blocked
     if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
         raise TrajectoryGenerationError(
             f"cannot generate trajectory for mission in {mission.status} status"
         )
-
-    had_constraints = False
-    if mission.flight_plan:
-        had_constraints = bool(mission.flight_plan.constraints)
-        db.delete(mission.flight_plan)
-        db.flush()
 
     warnings: list[str] = []
     if had_constraints:
@@ -189,7 +213,8 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         # phase 2 - resolve config and pre-checks
         config = resolve_with_defaults(inspection, template)
 
-        lha_positions = get_lha_positions(template)
+        lha_ids = inspection.lha_ids
+        lha_positions = get_lha_positions(template, lha_ids)
         if not lha_positions:
             warnings.append(f"{template.name} #{inspection.sequence_order}: no LHA positions")
             continue
@@ -197,7 +222,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         center = Point3D.center(lha_positions)
         glide_slope = get_glide_slope_angle(template)
         rwy_heading = get_runway_heading(template, data.surfaces)
-        setting_angles = get_lha_setting_angles(template)
+        setting_angles = get_lha_setting_angles(template, lha_ids)
 
         # compute optimal density if not overridden
         density, density_warning = resolve_density(inspection.method, setting_angles, config)
@@ -351,21 +376,9 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # takeoff + climb to safe altitude before transit
     if mission.takeoff_coordinate:
-        try:
-            parsed = parse_ewkb(mission.takeoff_coordinate.data)
-            if parsed is None:
-                raise TrajectoryGenerationError("takeoff coordinate geometry is empty")
-            tc = parsed.get("coordinates")
-        except TrajectoryGenerationError:
-            raise
-        except Exception:
-            raise TrajectoryGenerationError("failed to parse takeoff coordinate geometry")
-        if not tc or len(tc) < 3:
-            raise TrajectoryGenerationError("takeoff coordinate must be a valid 3D point")
-        try:
-            Coordinate(lat=tc[1], lon=tc[0], alt=tc[2])
-        except ValueError as e:
-            raise TrajectoryGenerationError(f"invalid takeoff coordinate: {e}")
+        tc = _parse_coordinate(mission.takeoff_coordinate.data, "takeoff")
+        if not inspection_passes[0].waypoints:
+            raise TrajectoryGenerationError("first inspection produced no waypoints")
         first_wp = inspection_passes[0].waypoints[0]
         all_waypoints.append(
             WaypointData(
@@ -415,21 +428,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # landing: transit to safe altitude above landing spot, then descend
     if mission.landing_coordinate:
-        try:
-            parsed = parse_ewkb(mission.landing_coordinate.data)
-            if parsed is None:
-                raise TrajectoryGenerationError("landing coordinate geometry is empty")
-            lc = parsed.get("coordinates")
-        except TrajectoryGenerationError:
-            raise
-        except Exception:
-            raise TrajectoryGenerationError("failed to parse landing coordinate geometry")
-        if not lc or len(lc) < 3:
-            raise TrajectoryGenerationError("landing coordinate must be a valid 3D point")
-        try:
-            Coordinate(lat=lc[1], lon=lc[0], alt=lc[2])
-        except ValueError as e:
-            raise TrajectoryGenerationError(f"invalid landing coordinate: {e}")
+        lc = _parse_coordinate(mission.landing_coordinate.data, "landing")
 
         safe_alt = lc[2] + settings.landing_safe_altitude
         last = all_waypoints[-1]
@@ -522,7 +521,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             altitude_diff = cur.alt - prev.alt
             d = math.sqrt(seg**2 + altitude_diff**2)
             total_dist += d
-            total_dur += d / max(cur.speed, MIN_SPEED_FLOOR)
+            total_dur += d / max(cur.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
 
         if all_waypoints[j].hover_duration is not None:
             total_dur += all_waypoints[j].hover_duration

@@ -5,9 +5,10 @@ import type { MapLayerConfig } from "@/types/map";
 interface LayerPanelProps {
   layers: MapLayerConfig;
   onToggle: (key: keyof MapLayerConfig) => void;
+  hasWaypoints?: boolean;
 }
 
-const layerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
+const baseLayerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
   { key: "runways", i18nKey: "dashboard.runways" },
   { key: "taxiways", i18nKey: "dashboard.taxiways" },
   { key: "safetyZones", i18nKey: "dashboard.safetyZones" },
@@ -15,9 +16,14 @@ const layerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
   { key: "aglSystems", i18nKey: "dashboard.aglSystems" },
 ];
 
-export default function LayerPanel({ layers, onToggle }: LayerPanelProps) {
+export default function LayerPanel({ layers, onToggle, hasWaypoints }: LayerPanelProps) {
+  /** layer visibility toggle panel. */
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
+
+  const layerKeys = hasWaypoints
+    ? [...baseLayerKeys, { key: "waypoints" as keyof MapLayerConfig, i18nKey: "dashboard.waypoints" }]
+    : baseLayerKeys;
 
   return (
     <div

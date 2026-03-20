@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
@@ -32,6 +32,12 @@ def list_missions(
     db: Session = Depends(get_db),
 ):
     """list missions with filters and pagination"""
+    _VALID_STATUSES = {"DRAFT", "PLANNED", "VALIDATED", "EXPORTED", "COMPLETED", "CANCELLED"}
+    if status is not None and status not in _VALID_STATUSES:
+        raise HTTPException(
+            status_code=400, detail=f"invalid status, must be one of {_VALID_STATUSES}"
+        )
+
     missions, total = mission_service.list_missions(
         db, airport_id=airport_id, status=status, limit=limit, offset=offset
     )
@@ -105,6 +111,15 @@ def add_inspection(mission_id: UUID, body: InspectionCreate, db: Session = Depen
     return inspection_service.add_inspection(db, mission_id, body)
 
 
+# reorder must be before {inspection_id} routes so "reorder" isn't parsed as a uuid
+@router.put("/{mission_id}/inspections/reorder", response_model=ReorderResponse)
+def reorder_inspections(mission_id: UUID, body: ReorderRequest, db: Session = Depends(get_db)):
+    """reorder inspections by sequence"""
+    inspection_service.reorder_inspections(db, mission_id, body.inspection_ids)
+
+    return ReorderResponse(reordered=True)
+
+
 @router.put("/{mission_id}/inspections/{inspection_id}", response_model=InspectionResponse)
 def update_inspection(
     mission_id: UUID,
@@ -122,11 +137,3 @@ def delete_inspection(mission_id: UUID, inspection_id: UUID, db: Session = Depen
     inspection_service.delete_inspection(db, mission_id, inspection_id)
 
     return DeleteResponse(deleted=True)
-
-
-@router.put("/{mission_id}/inspections/reorder", response_model=ReorderResponse)
-def reorder_inspections(mission_id: UUID, body: ReorderRequest, db: Session = Depends(get_db)):
-    """reorder inspections by sequence"""
-    inspection_service.reorder_inspections(db, mission_id, body.inspection_ids)
-
-    return ReorderResponse(reordered=True)

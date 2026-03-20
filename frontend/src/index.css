@@ -109,16 +109,43 @@ body {
   scrollbar-color: var(--tv-border) transparent;
 }
 
-/* maplibre navigation control - rounded to match design system */
+/* maplibre navigation control - design system styling */
 .maplibregl-ctrl-group {
   border-radius: 16px !important;
   overflow: hidden;
   border: 1px solid var(--tv-border) !important;
   box-shadow: none !important;
+  background: var(--tv-surface) !important;
 }
+
 .maplibregl-ctrl-group button {
   border-radius: 0 !important;
+  background-color: var(--tv-surface) !important;
+  color: var(--tv-text-primary) !important;
 }
-.maplibregl-ctrl-group button + button {
+
+.maplibregl-ctrl-group button:hover {
+  background-color: var(--tv-surface-hover) !important;
+}
+
+.maplibregl-ctrl-group button+button {
   border-top: 1px solid var(--tv-border) !important;
+}
+
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: var(--tv-maplibre-icon-filter, none);
+}
+
+.dark .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1);
+}
+
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+  margin-bottom: 62px;
+  margin-right: 14px;
+}
+
+@keyframes pulse-ring {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.5); }
 }
