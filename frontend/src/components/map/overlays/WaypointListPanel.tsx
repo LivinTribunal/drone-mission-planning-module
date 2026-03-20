@@ -85,13 +85,14 @@ export default function WaypointListPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
+  const groups = useMemo(() => {
+    const sorted = [...waypoints].sort(
+      (a, b) => a.sequence_order - b.sequence_order,
+    );
+    return buildGroups(sorted);
+  }, [waypoints]);
+
   if (waypoints.length === 0) return null;
-
-  const sorted = [...waypoints].sort(
-    (a, b) => a.sequence_order - b.sequence_order,
-  );
-
-  const groups = useMemo(() => buildGroups(sorted), [sorted]);
 
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {

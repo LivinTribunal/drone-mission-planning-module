@@ -57,12 +57,14 @@ export default function StatsPanel({
     );
   }
 
-  const distanceKm = flightPlan?.total_distance
-    ? (flightPlan.total_distance / 1000).toFixed(2)
-    : "\u2014";
-  const duration = flightPlan?.estimated_duration
-    ? formatDuration(flightPlan.estimated_duration)
-    : "\u2014";
+  const distanceKm =
+    flightPlan?.total_distance != null
+      ? (flightPlan.total_distance / 1000).toFixed(2)
+      : "\u2014";
+  const duration =
+    flightPlan?.estimated_duration != null
+      ? formatDuration(flightPlan.estimated_duration)
+      : "\u2014";
   const waypointCount = flightPlan?.waypoints.length ?? 0;
 
   let batteryPct = "\u2014";

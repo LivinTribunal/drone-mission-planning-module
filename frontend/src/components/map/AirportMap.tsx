@@ -150,6 +150,7 @@ export default function AirportMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const layersAddedRef = useRef(false);
+  const waypointsRef = useRef(waypoints);
 
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>({
     ...DEFAULT_LAYER_CONFIG,
@@ -224,99 +225,99 @@ export default function AirportMap({
     };
   }, [airport, addAllLayers]);
 
-  // waypoint layer rendering
+  // add or update waypoint layers on a map instance
+  const addWaypointLayers = useCallback((map: maplibregl.Map) => {
+    const wps = waypointsRef.current;
+    if (!wps || wps.length === 0) {
+      try {
+        if (map.getLayer(WAYPOINT_LABEL_LAYER)) map.removeLayer(WAYPOINT_LABEL_LAYER);
+        if (map.getLayer(WAYPOINT_CIRCLE_LAYER)) map.removeLayer(WAYPOINT_CIRCLE_LAYER);
+        if (map.getLayer(WAYPOINT_LINE_LAYER)) map.removeLayer(WAYPOINT_LINE_LAYER);
+        if (map.getSource(WAYPOINT_SOURCE)) map.removeSource(WAYPOINT_SOURCE);
+        if (map.getSource(`${WAYPOINT_SOURCE}-line`)) map.removeSource(`${WAYPOINT_SOURCE}-line`);
+      } catch {
+        // layers may not exist
+      }
+      return;
+    }
+
+    const pointData = waypointsToGeoJSON(wps);
+    const lineData = waypointsToLineGeoJSON(wps);
+
+    // update existing source data if already present
+    const existingSource = map.getSource(WAYPOINT_SOURCE) as maplibregl.GeoJSONSource | undefined;
+    if (existingSource) {
+      existingSource.setData(pointData);
+      const lineSource = map.getSource(`${WAYPOINT_SOURCE}-line`) as maplibregl.GeoJSONSource | undefined;
+      if (lineSource) lineSource.setData(lineData);
+      return;
+    }
+
+    map.addSource(WAYPOINT_SOURCE, { type: "geojson", data: pointData });
+    map.addSource(`${WAYPOINT_SOURCE}-line`, { type: "geojson", data: lineData });
+
+    map.addLayer({
+      id: WAYPOINT_LINE_LAYER,
+      type: "line",
+      source: `${WAYPOINT_SOURCE}-line`,
+      paint: {
+        "line-color": "#4595e5",
+        "line-width": 2,
+        "line-opacity": 0.7,
+        "line-dasharray": [2, 2],
+      },
+    });
+
+    map.addLayer({
+      id: WAYPOINT_CIRCLE_LAYER,
+      type: "circle",
+      source: WAYPOINT_SOURCE,
+      paint: {
+        "circle-radius": 8,
+        "circle-color": [
+          "match",
+          ["get", "waypoint_type"],
+          "TAKEOFF", "#4595e5",
+          "LANDING", "#e54545",
+          "MEASUREMENT", "#3bbb3b",
+          "HOVER", "#e5a545",
+          "TRANSIT", "#8a8a8a",
+          "#8a8a8a",
+        ],
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 2,
+      },
+    });
+
+    map.addLayer({
+      id: WAYPOINT_LABEL_LAYER,
+      type: "symbol",
+      source: WAYPOINT_SOURCE,
+      layout: {
+        "text-field": ["to-string", ["get", "sequence_order"]],
+        "text-size": 10,
+        "text-allow-overlap": true,
+      },
+      paint: {
+        "text-color": "#ffffff",
+      },
+    });
+  }, []);
+
+  // sync waypoints ref and re-render layers when waypoints change
   useEffect(() => {
+    waypointsRef.current = waypoints;
     const map = mapRef.current;
     if (!map) return;
 
-    function addWaypointLayers() {
-      if (!map || !waypoints || waypoints.length === 0) {
-        // remove existing
-        try {
-          if (map?.getLayer(WAYPOINT_LABEL_LAYER)) map.removeLayer(WAYPOINT_LABEL_LAYER);
-          if (map?.getLayer(WAYPOINT_CIRCLE_LAYER)) map.removeLayer(WAYPOINT_CIRCLE_LAYER);
-          if (map?.getLayer(WAYPOINT_LINE_LAYER)) map.removeLayer(WAYPOINT_LINE_LAYER);
-          if (map?.getSource(WAYPOINT_SOURCE)) map.removeSource(WAYPOINT_SOURCE);
-          if (map?.getSource(`${WAYPOINT_SOURCE}-line`)) map.removeSource(`${WAYPOINT_SOURCE}-line`);
-        } catch {
-          // layers may not exist
-        }
-        return;
-      }
-
-      const pointData = waypointsToGeoJSON(waypoints);
-      const lineData = waypointsToLineGeoJSON(waypoints);
-
-      // update or add source
-      const existingSource = map.getSource(WAYPOINT_SOURCE) as maplibregl.GeoJSONSource | undefined;
-      if (existingSource) {
-        existingSource.setData(pointData);
-        const lineSource = map.getSource(`${WAYPOINT_SOURCE}-line`) as maplibregl.GeoJSONSource | undefined;
-        if (lineSource) lineSource.setData(lineData);
-        return;
-      }
-
-      map.addSource(WAYPOINT_SOURCE, { type: "geojson", data: pointData });
-      map.addSource(`${WAYPOINT_SOURCE}-line`, { type: "geojson", data: lineData });
-
-      map.addLayer({
-        id: WAYPOINT_LINE_LAYER,
-        type: "line",
-        source: `${WAYPOINT_SOURCE}-line`,
-        paint: {
-          "line-color": "#4595e5",
-          "line-width": 2,
-          "line-opacity": 0.7,
-          "line-dasharray": [2, 2],
-        },
-      });
-
-      map.addLayer({
-        id: WAYPOINT_CIRCLE_LAYER,
-        type: "circle",
-        source: WAYPOINT_SOURCE,
-        paint: {
-          "circle-radius": 8,
-          "circle-color": [
-            "match",
-            ["get", "waypoint_type"],
-            "TAKEOFF", "#4595e5",
-            "LANDING", "#e54545",
-            "MEASUREMENT", "#3bbb3b",
-            "HOVER", "#e5a545",
-            "TRANSIT", "#8a8a8a",
-            "#8a8a8a",
-          ],
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 2,
-        },
-      });
-
-      map.addLayer({
-        id: WAYPOINT_LABEL_LAYER,
-        type: "symbol",
-        source: WAYPOINT_SOURCE,
-        layout: {
-          "text-field": ["to-string", ["get", "sequence_order"]],
-          "text-size": 10,
-          "text-allow-overlap": true,
-        },
-        paint: {
-          "text-color": "#ffffff",
-        },
-      });
-    }
-
     if (map.isStyleLoaded()) {
-      addWaypointLayers();
+      addWaypointLayers(map);
     } else {
-      map.on("load", addWaypointLayers);
+      const handler = () => addWaypointLayers(map);
+      map.on("load", handler);
+      return () => { map.off("load", handler); };
     }
-
-    return () => {
-      map.off("load", addWaypointLayers);
-    };
-  }, [waypoints]);
+  }, [waypoints, addWaypointLayers]);
 
   // click handler
   useEffect(() => {
@@ -474,6 +475,7 @@ export default function AirportMap({
         mapInstance.setPitch(pitch);
 
         addAllLayers(mapInstance);
+        addWaypointLayers(mapInstance);
 
         for (const [key, layerIds] of Object.entries(layerGroupMap)) {
           const visible = layerConfig[key as keyof MapLayerConfig];
@@ -494,7 +496,7 @@ export default function AirportMap({
       }
       mapInstance.on("data", onData);
     },
-    [airport, layerConfig, addAllLayers, setTerrainMode],
+    [airport, layerConfig, addAllLayers, addWaypointLayers, setTerrainMode],
   );
 
   const handleLayerToggle = useCallback((key: keyof MapLayerConfig) => {

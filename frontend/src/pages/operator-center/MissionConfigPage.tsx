@@ -109,6 +109,8 @@ export default function MissionConfigPage() {
   );
 
   const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inspectionDirtyRef = useRef(inspectionDirty);
+  inspectionDirtyRef.current = inspectionDirty;
 
   const isDirty =
     Object.keys(missionDirty).length > 0 ||
@@ -176,12 +178,13 @@ export default function MissionConfigPage() {
 
       // load saved LHA selections from inspection config
       const lhaInit: Record<string, Set<string>> = {};
+      const currentDirty = inspectionDirtyRef.current;
       for (const insp of missionData.inspections) {
         if (
-          inspectionDirty[insp.id]?.lha_ids &&
-          inspectionDirty[insp.id].lha_ids!.length > 0
+          currentDirty[insp.id]?.lha_ids &&
+          currentDirty[insp.id].lha_ids!.length > 0
         ) {
-          lhaInit[insp.id] = new Set(inspectionDirty[insp.id].lha_ids!);
+          lhaInit[insp.id] = new Set(currentDirty[insp.id].lha_ids!);
         }
       }
       setSelectedLhas((prev) => ({ ...prev, ...lhaInit }));
