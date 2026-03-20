@@ -97,6 +97,14 @@ class TestMissionInvalidateTrajectory:
         m.invalidate_trajectory()
         assert m.status == "DRAFT"
 
+    def test_invalidate_clears_flight_plan_reference(self):
+        """invalidate_trajectory sets flight_plan to None."""
+        m = self._make_mission("PLANNED")
+        m.flight_plan = FlightPlan(id=uuid4(), mission_id=m.id, airport_id=m.airport_id)
+        m.invalidate_trajectory()
+        assert m.flight_plan is None
+        assert m.status == "DRAFT"
+
     def test_draft_stays_draft(self):
         """DRAFT stays DRAFT (no-op)."""
         m = self._make_mission("DRAFT")

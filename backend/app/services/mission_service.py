@@ -107,6 +107,9 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
     # trajectory-affecting fields changed - regress to DRAFT
     trajectory_changed = any(k in TRAJECTORY_FIELDS for k in data.keys())
     if trajectory_changed:
+        if mission.flight_plan:
+            db.delete(mission.flight_plan)
+            db.flush()
         try:
             mission.invalidate_trajectory()
         except ValueError as e:
@@ -161,17 +164,10 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
     for insp in original.inspections:
         new_config_id = None
         if insp.config:
-            new_config = InspectionConfiguration(
-                altitude_offset=insp.config.altitude_offset,
-                speed_override=insp.config.speed_override,
-                measurement_density=insp.config.measurement_density,
-                custom_tolerances=insp.config.custom_tolerances,
-                density=insp.config.density,
-                hover_duration=insp.config.hover_duration,
-                horizontal_distance=insp.config.horizontal_distance,
-                sweep_angle=insp.config.sweep_angle,
-                lha_ids=insp.config.lha_ids,
-            )
+            config_fields = {
+                f: getattr(insp.config, f) for f in InspectionConfiguration._MERGE_FIELDS
+            }
+            new_config = InspectionConfiguration(**config_fields)
             db.add(new_config)
             db.flush()
             new_config_id = new_config.id

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
@@ -32,6 +32,12 @@ def list_missions(
     db: Session = Depends(get_db),
 ):
     """list missions with filters and pagination"""
+    _VALID_STATUSES = {"DRAFT", "PLANNED", "VALIDATED", "EXPORTED", "COMPLETED", "CANCELLED"}
+    if status is not None and status not in _VALID_STATUSES:
+        raise HTTPException(
+            status_code=400, detail=f"invalid status, must be one of {_VALID_STATUSES}"
+        )
+
     missions, total = mission_service.list_missions(
         db, airport_id=airport_id, status=status, limit=limit, offset=offset
     )

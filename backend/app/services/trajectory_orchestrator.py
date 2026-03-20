@@ -157,21 +157,26 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
-    # auto-regress VALIDATED so regeneration works without manual step
-    if mission.status == MissionStatus.VALIDATED:
-        mission.invalidate_trajectory()
-
-    # only DRAFT or PLANNED can generate - terminal states are blocked
-    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
+    # only DRAFT, PLANNED, or VALIDATED can generate - terminal states are blocked
+    if mission.status not in (
+        MissionStatus.DRAFT,
+        MissionStatus.PLANNED,
+        MissionStatus.VALIDATED,
+    ):
         raise TrajectoryGenerationError(
             f"cannot generate trajectory for mission in {mission.status} status"
         )
 
+    # delete existing flight plan before invalidating - db concern stays in service
     had_constraints = False
     if mission.flight_plan:
         had_constraints = bool(mission.flight_plan.constraints)
         db.delete(mission.flight_plan)
         db.flush()
+
+    # auto-regress VALIDATED so regeneration works without manual step
+    if mission.status == MissionStatus.VALIDATED:
+        mission.invalidate_trajectory()
 
     warnings: list[str] = []
     if had_constraints:

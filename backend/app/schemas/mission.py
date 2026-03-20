@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
@@ -19,6 +19,14 @@ class InspectionConfigOverride(BaseModel):
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
     lha_ids: list[UUID] | None = None
+
+    @field_validator("lha_ids", mode="before")
+    @classmethod
+    def serialize_lha_ids_to_strings(cls, v: list | None) -> list[str] | None:
+        """convert uuids to strings for JSONB storage."""
+        if v is None:
+            return None
+        return [str(uid) for uid in v]
 
 
 class InspectionCreate(BaseModel):

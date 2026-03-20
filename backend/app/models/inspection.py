@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from uuid import UUID as PyUUID
 from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table
@@ -118,10 +119,10 @@ class Inspection(Base):
     config = relationship("InspectionConfiguration")
 
     @property
-    def lha_ids(self) -> list[str] | None:
+    def lha_ids(self) -> list[PyUUID] | None:
         """lha ids from associated config, or none."""
-        if self.config:
-            return self.config.lha_ids
+        if self.config and self.config.lha_ids:
+            return [PyUUID(s) if isinstance(s, str) else s for s in self.config.lha_ids]
         return None
 
     def is_speed_compatible_with_frame_rate(

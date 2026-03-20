@@ -108,19 +108,15 @@ class Mission(Base):
         bypasses transition_to() because the state machine has no backward
         transitions by design - this is the intentional exception for config changes
         that invalidate the computed trajectory.
+
+        callers must db.delete(mission.flight_plan) before calling this if the
+        flight plan needs to be removed from the database - models don't touch sessions.
         """
         if self.status in self._TERMINAL:
             raise ValueError("cannot modify mission after export - duplicate to make changes")
         if self.status in (MissionStatus.PLANNED, MissionStatus.VALIDATED):
             self.status = MissionStatus.DRAFT
-            # clear stale flight plan
-            if self.flight_plan:
-                from sqlalchemy import inspect as sa_inspect
-
-                session = sa_inspect(self).session
-                if session:
-                    session.delete(self.flight_plan)
-                self.flight_plan = None
+            self.flight_plan = None
 
     def add_inspection(self, inspection):
         """add inspection - invalidates trajectory, blocked after export."""

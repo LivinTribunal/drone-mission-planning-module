@@ -24,6 +24,13 @@ def _get_mission(db: Session, mission_id: UUID) -> Mission:
     return mission
 
 
+def _delete_flight_plan_if_exists(db: Session, mission: Mission) -> None:
+    """delete flight plan from db before trajectory invalidation."""
+    if mission.flight_plan:
+        db.delete(mission.flight_plan)
+        db.flush()
+
+
 def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> Inspection:
     """add inspection to mission via aggregate root."""
     mission = _get_mission(db, mission_id)
@@ -39,10 +46,6 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
     config_id = None
 
     if config_data:
-        # convert UUID lists to strings for JSONB columns
-        if "lha_ids" in config_data and config_data["lha_ids"] is not None:
-            config_data["lha_ids"] = [str(uid) for uid in config_data["lha_ids"]]
-
         config = InspectionConfiguration(**config_data)
         db.add(config)
         db.flush()
@@ -61,6 +64,7 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
         sequence_order=next_order,
     )
 
+    _delete_flight_plan_if_exists(db, mission)
     try:
         mission.add_inspection(inspection)
     except ValueError as e:
@@ -90,10 +94,6 @@ def update_inspection(
     config_data = data.pop("config", None)
 
     if config_data:
-        # convert UUID lists to strings for JSONB columns
-        if "lha_ids" in config_data and config_data["lha_ids"] is not None:
-            config_data["lha_ids"] = [str(uid) for uid in config_data["lha_ids"]]
-
         if inspection.config:
             apply_dict_update(inspection.config, config_data)
         else:
@@ -104,6 +104,7 @@ def update_inspection(
 
     apply_dict_update(inspection, data)
 
+    _delete_flight_plan_if_exists(db, mission)
     try:
         mission.invalidate_trajectory()
     except ValueError as e:
@@ -119,6 +120,7 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     """delete inspection and reorder remaining."""
     mission = _get_mission(db, mission_id)
 
+    _delete_flight_plan_if_exists(db, mission)
     try:
         mission.remove_inspection(inspection_id)
     except ValueError:
@@ -143,6 +145,7 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
     """reorder inspections by provided id list."""
     mission = _get_mission(db, mission_id)
 
+    _delete_flight_plan_if_exists(db, mission)
     try:
         mission.invalidate_trajectory()
     except ValueError as e:
