@@ -67,6 +67,7 @@ class InspectionConfiguration(Base):
         "hover_duration",
         "horizontal_distance",
         "sweep_angle",
+        "lha_ids",
     )
 
     def resolve_with_defaults(self, template_config: InspectionConfiguration | None):

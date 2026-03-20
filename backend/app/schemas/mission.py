@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
@@ -12,7 +12,7 @@ class InspectionConfigOverride(BaseModel):
 
     altitude_offset: float | None = None
     speed_override: float | None = None
-    measurement_density: int | None = None
+    measurement_density: int | None = Field(default=None, ge=1)
     custom_tolerances: dict | None = None
     density: float | None = None
     hover_duration: float | None = None

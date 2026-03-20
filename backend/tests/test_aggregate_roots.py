@@ -482,3 +482,66 @@ class TestInspectionSpeedCompatibility:
         )
         insp.config = None
         assert insp.is_speed_compatible_with_frame_rate(None, 5.0) is True
+
+
+class TestMergeFieldsIncludesLhaIds:
+    """tests that _MERGE_FIELDS includes lha_ids so duplication preserves them."""
+
+    def test_lha_ids_in_merge_fields(self):
+        """lha_ids must be in _MERGE_FIELDS for duplicate_mission to copy them."""
+        assert "lha_ids" in InspectionConfiguration._MERGE_FIELDS
+
+    def test_resolve_with_defaults_carries_lha_ids(self):
+        """resolve_with_defaults includes lha_ids from override config."""
+        uid1 = uuid4()
+        uid2 = uuid4()
+        config = InspectionConfiguration(lha_ids=[str(uid1), str(uid2)])
+        template = InspectionConfiguration(lha_ids=None)
+
+        merged = config.resolve_with_defaults(template)
+        assert merged["lha_ids"] == [str(uid1), str(uid2)]
+
+    def test_resolve_with_defaults_falls_back_to_template_lha_ids(self):
+        """resolve_with_defaults falls back to template lha_ids when override is None."""
+        uid = uuid4()
+        config = InspectionConfiguration(lha_ids=None)
+        template = InspectionConfiguration(lha_ids=[str(uid)])
+
+        merged = config.resolve_with_defaults(template)
+        assert merged["lha_ids"] == [str(uid)]
+
+
+class TestMeasurementDensityValidation:
+    """tests that measurement_density=0 is rejected by schema validation."""
+
+    def test_zero_density_rejected(self):
+        """measurement_density=0 must be rejected."""
+        import pytest
+
+        from app.schemas.mission import InspectionConfigOverride
+
+        with pytest.raises(Exception):
+            InspectionConfigOverride(measurement_density=0)
+
+    def test_negative_density_rejected(self):
+        """negative measurement_density must be rejected."""
+        import pytest
+
+        from app.schemas.mission import InspectionConfigOverride
+
+        with pytest.raises(Exception):
+            InspectionConfigOverride(measurement_density=-5)
+
+    def test_valid_density_accepted(self):
+        """positive measurement_density is accepted."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        schema = InspectionConfigOverride(measurement_density=10)
+        assert schema.measurement_density == 10
+
+    def test_none_density_accepted(self):
+        """None measurement_density is accepted."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        schema = InspectionConfigOverride(measurement_density=None)
+        assert schema.measurement_density is None
