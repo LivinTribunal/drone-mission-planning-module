@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { MapPin, ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { MapPin, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
+import { useState, useMemo } from "react";
 import type { WaypointResponse } from "@/types/flightPlan";
 
 interface WaypointListPanelProps {
@@ -17,6 +17,65 @@ const typeColors: Record<string, string> = {
   HOVER: "text-tv-warning",
 };
 
+interface WaypointGroup {
+  key: string;
+  type: string;
+  waypoints: WaypointResponse[];
+  startSeq: number;
+  endSeq: number;
+}
+
+function buildGroups(sorted: WaypointResponse[]): WaypointGroup[] {
+  const groups: WaypointGroup[] = [];
+  let i = 0;
+
+  while (i < sorted.length) {
+    const wp = sorted[i];
+    const type = wp.waypoint_type;
+
+    // takeoff and landing are always individual
+    if (type === "TAKEOFF" || type === "LANDING") {
+      groups.push({
+        key: wp.id,
+        type,
+        waypoints: [wp],
+        startSeq: wp.sequence_order,
+        endSeq: wp.sequence_order,
+      });
+      i++;
+      continue;
+    }
+
+    // collect consecutive waypoints of the same type
+    const groupWps = [wp];
+    let j = i + 1;
+    while (j < sorted.length) {
+      const next = sorted[j];
+      if (next.waypoint_type === type) {
+        groupWps.push(next);
+        j++;
+      } else if (type === "MEASUREMENT" && next.waypoint_type === "HOVER") {
+        // hover within measurement sequence belongs to same group
+        groupWps.push(next);
+        j++;
+      } else {
+        break;
+      }
+    }
+
+    groups.push({
+      key: `${type}-${wp.sequence_order}`,
+      type,
+      waypoints: groupWps,
+      startSeq: groupWps[0].sequence_order,
+      endSeq: groupWps[groupWps.length - 1].sequence_order,
+    });
+    i = j;
+  }
+
+  return groups;
+}
+
 export default function WaypointListPanel({
   waypoints,
   selectedId,
@@ -24,6 +83,7 @@ export default function WaypointListPanel({
 }: WaypointListPanelProps) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   if (waypoints.length === 0) return null;
 
@@ -31,9 +91,46 @@ export default function WaypointListPanel({
     (a, b) => a.sequence_order - b.sequence_order,
   );
 
+  const groups = useMemo(() => buildGroups(sorted), [sorted]);
+
+  function toggleGroup(key: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function renderWaypointRow(wp: WaypointResponse) {
+    return (
+      <button
+        key={wp.id}
+        onClick={() => onSelect(selectedId === wp.id ? null : wp.id)}
+        className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
+          selectedId === wp.id
+            ? "bg-tv-accent/20 text-tv-accent"
+            : "text-tv-text-primary hover:bg-tv-surface-hover"
+        }`}
+        data-testid={`waypoint-item-${wp.id}`}
+      >
+        <MapPin
+          className={`h-3 w-3 flex-shrink-0 ${typeColors[wp.waypoint_type] ?? "text-tv-text-muted"}`}
+        />
+        <span className="font-medium w-6">{wp.sequence_order}</span>
+        <span className="flex-1 truncate">
+          {wp.waypoint_type.replace(/_/g, " ")}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div
-      className="bg-tv-surface/95 backdrop-blur-sm border border-tv-border rounded-2xl overflow-hidden"
+      className="bg-tv-surface border border-tv-border rounded-2xl overflow-hidden"
       data-testid="waypoint-list-panel"
     >
       <button
@@ -52,26 +149,44 @@ export default function WaypointListPanel({
 
       {!collapsed && (
         <div className="max-h-48 overflow-y-auto px-1 pb-1">
-          {sorted.map((wp) => (
-            <button
-              key={wp.id}
-              onClick={() => onSelect(selectedId === wp.id ? null : wp.id)}
-              className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
-                selectedId === wp.id
-                  ? "bg-tv-accent/20 text-tv-accent"
-                  : "text-tv-text-primary hover:bg-tv-surface-hover"
-              }`}
-              data-testid={`waypoint-item-${wp.id}`}
-            >
-              <MapPin
-                className={`h-3 w-3 flex-shrink-0 ${typeColors[wp.waypoint_type] ?? "text-tv-text-muted"}`}
-              />
-              <span className="font-medium w-6">{wp.sequence_order}</span>
-              <span className="flex-1 truncate">
-                {wp.waypoint_type.replace("_", " ")}
-              </span>
-            </button>
-          ))}
+          {groups.map((group) => {
+            // single-waypoint group or always-individual types
+            if (group.waypoints.length === 1) {
+              return renderWaypointRow(group.waypoints[0]);
+            }
+
+            // multi-waypoint collapsible group
+            const isExpanded = expandedGroups.has(group.key);
+
+            return (
+              <div key={group.key}>
+                <button
+                  onClick={() => toggleGroup(group.key)}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="h-3 w-3 flex-shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3 flex-shrink-0" />
+                  )}
+                  <MapPin
+                    className={`h-3 w-3 flex-shrink-0 ${typeColors[group.type] ?? "text-tv-text-muted"}`}
+                  />
+                  <span className="font-medium">
+                    {group.startSeq}-{group.endSeq}
+                  </span>
+                  <span className="flex-1 truncate">
+                    {group.type.replace(/_/g, " ")} ({group.waypoints.length})
+                  </span>
+                </button>
+                {isExpanded && (
+                  <div className="pl-3">
+                    {group.waypoints.map((wp) => renderWaypointRow(wp))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

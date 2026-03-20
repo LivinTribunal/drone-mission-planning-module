@@ -13,6 +13,7 @@ interface InspectionListProps {
   onAdd: () => void;
   onRemove: (id: string) => void;
   isDraft: boolean;
+  canReorder: boolean;
   visibleIds: Set<string>;
   onToggleVisibility: (id: string) => void;
 }
@@ -26,6 +27,7 @@ export default function InspectionList({
   onAdd,
   onRemove,
   isDraft,
+  canReorder,
   visibleIds,
   onToggleVisibility,
 }: InspectionListProps) {
@@ -46,14 +48,14 @@ export default function InspectionList({
 
   const handleDragStart = useCallback(
     (e: React.DragEvent, idx: number) => {
-      if (!isDraft) {
+      if (!canReorder) {
         e.preventDefault();
         return;
       }
       setDragIdx(idx);
       e.dataTransfer.effectAllowed = "move";
     },
-    [isDraft],
+    [canReorder],
   );
 
   const handleDragOver = useCallback(
@@ -103,7 +105,7 @@ export default function InspectionList({
           className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
             canAdd
               ? "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
-              : "bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"
+              : "border border-tv-border bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"
           }`}
           data-testid="add-inspection-btn"
         >
@@ -128,7 +130,7 @@ export default function InspectionList({
           return (
             <div
               key={insp.id}
-              draggable={isDraft}
+              draggable={canReorder}
               onDragStart={(e) => handleDragStart(e, idx)}
               onDragOver={(e) => handleDragOver(e, idx)}
               onDrop={(e) => handleDrop(e, idx)}
@@ -143,7 +145,7 @@ export default function InspectionList({
               } ${dragIdx === idx ? "opacity-50" : ""}`}
               data-testid={`inspection-row-${insp.id}`}
             >
-              {isDraft && (
+              {canReorder && (
                 <GripVertical className="h-4 w-4 text-tv-text-muted flex-shrink-0 cursor-grab" />
               )}
 

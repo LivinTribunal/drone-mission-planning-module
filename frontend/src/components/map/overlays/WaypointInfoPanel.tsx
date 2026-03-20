@@ -13,7 +13,7 @@ export default function WaypointInfoPanel({
   if (!waypoint) {
     return (
       <div
-        className="bg-tv-surface/95 backdrop-blur-sm border border-tv-border rounded-2xl px-3 py-2"
+        className="bg-tv-surface border border-tv-border rounded-2xl px-3 py-2"
         data-testid="waypoint-info-panel"
       >
         <p className="text-xs text-tv-text-muted">
@@ -27,7 +27,7 @@ export default function WaypointInfoPanel({
 
   const fields = [
     { label: t("mission.config.sequence"), value: waypoint.sequence_order },
-    { label: t("mission.config.type"), value: waypoint.waypoint_type.replace("_", " ") },
+    { label: t("mission.config.type"), value: waypoint.waypoint_type.replace(/_/g, " ") },
     {
       label: t("mission.config.position"),
       value: `${lat.toFixed(6)}, ${lon.toFixed(6)}, ${alt.toFixed(1)}m`,
@@ -55,7 +55,7 @@ export default function WaypointInfoPanel({
 
   return (
     <div
-      className="bg-tv-surface/95 backdrop-blur-sm border border-tv-border rounded-2xl px-3 py-2"
+      className="bg-tv-surface border border-tv-border rounded-2xl px-3 py-2"
       data-testid="waypoint-info-panel"
     >
       <h4 className="text-xs font-semibold text-tv-text-primary mb-1.5">

@@ -3,14 +3,19 @@ import { useTranslation } from "react-i18next";
 interface TerrainToggleProps {
   mode: "map" | "satellite";
   onToggle: (mode: "map" | "satellite") => void;
+  inline?: boolean;
 }
 
-export default function TerrainToggle({ mode, onToggle }: TerrainToggleProps) {
+export default function TerrainToggle({ mode, onToggle, inline }: TerrainToggleProps) {
   const { t } = useTranslation();
+
+  const wrapperClass = inline
+    ? "flex rounded-full border border-tv-border bg-tv-surface p-0.5"
+    : "absolute bottom-2 right-2 z-10 flex rounded-full border border-tv-border bg-tv-surface p-0.5";
 
   return (
     <div
-      className="absolute bottom-2 right-2 z-10 flex rounded-full border border-tv-border bg-tv-surface p-0.5"
+      className={wrapperClass}
       data-testid="terrain-toggle"
     >
       <button

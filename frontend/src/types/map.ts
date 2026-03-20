@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   AirportDetailResponse,
   SurfaceResponse,
@@ -6,6 +7,7 @@ import type {
   AGLResponse,
   LHAResponse,
 } from "./airport";
+import type { WaypointResponse } from "./flightPlan";
 
 export interface MapLayerConfig {
   runways: boolean;
@@ -63,7 +65,12 @@ export interface AirportMapProps {
   showPoiInfo?: boolean;
   showTerrainToggle?: boolean;
   onFeatureClick?: (feature: MapFeature) => void;
-  children?: React.ReactNode;
+  children?: ReactNode;
+  waypoints?: WaypointResponse[];
+  selectedWaypointId?: string | null;
+  onWaypointClick?: (id: string | null) => void;
+  terrainMode?: "map" | "satellite";
+  onTerrainChange?: (mode: "map" | "satellite") => void;
 }
 
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {

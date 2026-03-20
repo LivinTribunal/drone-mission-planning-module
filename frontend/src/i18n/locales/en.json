@@ -222,7 +222,9 @@
       "addError": "Failed to add inspection",
       "removeError": "Failed to remove inspection",
       "unitNumber": "Unit",
-      "settingAngle": "Angle"
+      "settingAngle": "Angle",
+      "selectMission": "Select a mission",
+      "recomputeTooltip": "Modify configuration to recompute"
     }
   },
   "missionStatus": {

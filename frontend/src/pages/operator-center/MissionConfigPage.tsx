@@ -29,7 +29,7 @@ import type {
 } from "@/types/mission";
 import type { DroneProfileResponse } from "@/types/droneProfile";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
-import type { FlightPlanResponse } from "@/types/flightPlan";
+import type { FlightPlanResponse, ValidationViolation } from "@/types/flightPlan";
 import type { InspectionMethod } from "@/types/enums";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
 import InspectionList from "@/components/mission/InspectionList";
@@ -41,7 +41,19 @@ import StatsPanel from "@/components/mission/StatsPanel";
 import AirportMap from "@/components/map/AirportMap";
 import WaypointListPanel from "@/components/map/overlays/WaypointListPanel";
 import WaypointInfoPanel from "@/components/map/overlays/WaypointInfoPanel";
+import TerrainToggle from "@/components/map/overlays/TerrainToggle";
 import Modal from "@/components/common/Modal";
+
+const STATUS_ORDER = [
+  "DRAFT",
+  "PLANNED",
+  "VALIDATED",
+  "EXPORTED",
+  "COMPLETED",
+  "CANCELLED",
+];
+
+const TERMINAL_STATUSES = ["EXPORTED", "COMPLETED", "CANCELLED"];
 
 export default function MissionConfigPage() {
   const { id } = useParams<{ id: string }>();
@@ -57,7 +69,7 @@ export default function MissionConfigPage() {
   );
   const [templates, setTemplates] = useState<InspectionTemplateResponse[]>([]);
   const [flightPlan, setFlightPlan] = useState<FlightPlanResponse | null>(null);
-  const [warnings, setWarnings] = useState<string[] | null>(null);
+  const [warnings, setWarnings] = useState<ValidationViolation[] | null>(null);
 
   // ui state
   const [loading, setLoading] = useState(true);
@@ -74,6 +86,11 @@ export default function MissionConfigPage() {
   const [notification, setNotification] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(
     null,
+  );
+
+  // terrain mode lifted from map for bottom bar toggle
+  const [terrainMode, setTerrainMode] = useState<"map" | "satellite">(
+    "satellite",
   );
 
   // dirty tracking for mission-level changes
@@ -157,12 +174,28 @@ export default function MissionConfigPage() {
         new Set(missionData.inspections.map((i) => i.id)),
       );
 
+      // load saved LHA selections from inspection config
+      const lhaInit: Record<string, Set<string>> = {};
+      for (const insp of missionData.inspections) {
+        if (
+          inspectionDirty[insp.id]?.lha_ids &&
+          inspectionDirty[insp.id].lha_ids!.length > 0
+        ) {
+          lhaInit[insp.id] = new Set(inspectionDirty[insp.id].lha_ids!);
+        }
+      }
+      setSelectedLhas((prev) => ({ ...prev, ...lhaInit }));
+
       // fetch existing flight plan
       try {
         const fp = await getFlightPlan(id);
         setFlightPlan(fp);
+
+        // load warnings from existing flight plan
+        if (fp.validation_result?.violations?.length) {
+          setWarnings(fp.validation_result.violations);
+        }
       } catch {
-        // 404 is expected if no flight plan exists yet
         setFlightPlan(null);
       }
     } catch {
@@ -186,8 +219,10 @@ export default function MissionConfigPage() {
       if (Object.keys(missionDirty).length > 0) {
         const updatedMission = await updateMission(id, missionDirty);
 
-        // check for status regression
-        if (updatedMission.status !== mission.status) {
+        // check for status regression only
+        const oldIdx = STATUS_ORDER.indexOf(mission.status);
+        const newIdx = STATUS_ORDER.indexOf(updatedMission.status);
+        if (newIdx < oldIdx) {
           showNotification(
             t("mission.config.statusRegressed", {
               status: updatedMission.status,
@@ -195,7 +230,6 @@ export default function MissionConfigPage() {
           );
         }
 
-        // re-fetch full mission
         const fresh = await getMission(id);
         setMission(fresh);
         setMissionDirty({});
@@ -216,6 +250,10 @@ export default function MissionConfigPage() {
         showNotification(t("mission.config.savePartialError"));
         return;
       }
+
+      // re-fetch mission after inspection saves to catch status regression
+      const fresh = await getMission(id);
+      setMission(fresh);
 
       showNotification(t("mission.config.saved"));
     } catch (err) {
@@ -356,8 +394,19 @@ export default function MissionConfigPage() {
     try {
       const result = await generateTrajectory(id);
       setFlightPlan(result.flight_plan);
-      setWarnings(result.warnings);
-      // re-read mission since status may have changed to PLANNED
+
+      // merge warnings from response + validation violations
+      const allWarnings: ValidationViolation[] = [];
+      if (result.warnings?.length) {
+        for (const w of result.warnings) {
+          allWarnings.push({ message: w, severity: "warning" });
+        }
+      }
+      if (result.flight_plan.validation_result?.violations?.length) {
+        allWarnings.push(...result.flight_plan.validation_result.violations);
+      }
+      setWarnings(allWarnings.length > 0 ? allWarnings : null);
+
       const fresh = await getMission(id);
       setMission(fresh);
     } catch (err) {
@@ -415,6 +464,12 @@ export default function MissionConfigPage() {
     return selectedLhas[selectedInspectionId] ?? new Set<string>();
   }, [selectedInspectionId, selectedLhas]);
 
+  const isDraft = mission?.status === "DRAFT";
+  const canReorder = mission
+    ? !TERMINAL_STATUSES.includes(mission.status)
+    : false;
+  const canCompute = isDraft;
+
   // loading state
   if (loading) {
     return (
@@ -442,10 +497,10 @@ export default function MissionConfigPage() {
 
   return (
     <div className="flex gap-4 h-[calc(100vh-12rem)]" data-testid="mission-config-page">
-      {/* left panel - scrollable config */}
-      <div className="w-96 flex-shrink-0 flex flex-col gap-4 overflow-y-auto pr-2">
+      {/* left panel - scrollable config, 30% to match nav title */}
+      <div className="w-[30%] flex-shrink-0 flex flex-col gap-4 overflow-y-auto pr-2">
         {/* inspection list */}
-        <div className="bg-tv-surface border border-tv-border rounded-3xl p-4">
+        <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
           <InspectionList
             inspections={mission.inspections}
             templates={templateMap}
@@ -454,28 +509,42 @@ export default function MissionConfigPage() {
             onReorder={handleReorder}
             onAdd={() => setShowTemplatePicker(true)}
             onRemove={handleRemoveInspection}
-            isDraft={mission.status === "DRAFT"}
+            isDraft={isDraft}
+            canReorder={canReorder}
             visibleIds={visibleInspectionIds}
             onToggleVisibility={handleToggleVisibility}
           />
         </div>
 
         {/* config area */}
-        <div className="bg-tv-surface border border-tv-border rounded-3xl p-4">
+        <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
           {selectedInspection && selectedTemplate ? (
-            <InspectionConfigForm
-              inspection={selectedInspection}
-              template={selectedTemplate}
-              agls={allAgls}
-              droneProfile={selectedDroneProfile}
-              configOverride={currentInspectionConfig}
-              onChange={handleInspectionConfigChange}
-              selectedLhaIds={inspectionLhas}
-              onToggleLha={(lhaId) => {
-                if (!selectedInspectionId) return;
-                handleToggleLha(selectedInspectionId, lhaId);
-              }}
-            />
+            <div className="space-y-4">
+              <InspectionConfigForm
+                inspection={selectedInspection}
+                template={selectedTemplate}
+                agls={allAgls}
+                droneProfile={selectedDroneProfile}
+                configOverride={currentInspectionConfig}
+                onChange={handleInspectionConfigChange}
+                selectedLhaIds={inspectionLhas}
+                onToggleLha={(lhaId) => {
+                  if (!selectedInspectionId) return;
+                  handleToggleLha(selectedInspectionId, lhaId);
+                }}
+              />
+
+              {/* separator */}
+              <hr className="border-tv-border" />
+
+              {/* mission config always visible below inspection config */}
+              <MissionConfigForm
+                mission={mission}
+                droneProfiles={droneProfiles}
+                values={missionDirty}
+                onChange={handleMissionChange}
+              />
+            </div>
           ) : (
             <MissionConfigForm
               mission={mission}
@@ -487,12 +556,12 @@ export default function MissionConfigPage() {
         </div>
 
         {/* warnings */}
-        <div className="bg-tv-surface border border-tv-border rounded-3xl p-4">
+        <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
           <WarningsPanel warnings={warnings} hasTrajectory={hasTrajectory} />
         </div>
 
         {/* stats */}
-        <div className="bg-tv-surface border border-tv-border rounded-3xl p-4">
+        <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
           <StatsPanel
             flightPlan={flightPlan}
             hasTrajectory={hasTrajectory}
@@ -500,39 +569,21 @@ export default function MissionConfigPage() {
             droneProfile={selectedDroneProfile}
           />
         </div>
-
-        {/* drone selector - always visible */}
-        <div className="bg-tv-surface border border-tv-border rounded-3xl p-4">
-          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-            {t("mission.config.droneProfile")}
-          </label>
-          <select
-            value={
-              missionDirty.drone_profile_id ?? mission.drone_profile_id ?? ""
-            }
-            onChange={(e) =>
-              handleMissionChange({
-                drone_profile_id: e.target.value || null,
-              })
-            }
-            className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
-            data-testid="bottom-drone-select"
-          >
-            <option value="">{t("mission.config.selectDrone")}</option>
-            {droneProfiles.map((dp) => (
-              <option key={dp.id} value={dp.id}>
-                {dp.name}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       {/* right panel - map */}
       <div className="flex-1 flex flex-col gap-3 min-w-0">
         {airportDetail ? (
-          <div className="flex-1 relative rounded-3xl overflow-hidden border border-tv-border">
-            <AirportMap airport={airportDetail}>
+          <div className="flex-1 relative rounded-2xl overflow-hidden border border-tv-border">
+            <AirportMap
+              airport={airportDetail}
+              terrainMode={terrainMode}
+              onTerrainChange={setTerrainMode}
+              showTerrainToggle={false}
+              waypoints={flightPlan?.waypoints ?? []}
+              selectedWaypointId={selectedWaypointId}
+              onWaypointClick={setSelectedWaypointId}
+            >
               {/* waypoint overlays */}
               {hasTrajectory && (
                 <div className="absolute top-3 left-56 z-10 flex flex-col gap-2 w-48">
@@ -547,22 +598,24 @@ export default function MissionConfigPage() {
             </AirportMap>
 
             {/* bottom bar inside map */}
-            <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between">
-              <div />
+            <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center gap-2">
               <button
                 onClick={handleEditWaypoints}
-                className="px-4 py-2 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface/95 backdrop-blur-sm text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                className="px-4 py-2 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
                 data-testid="edit-waypoints-btn"
               >
                 {t("mission.config.editWaypoints")}
               </button>
               <button
                 onClick={handleComputeTrajectory}
-                disabled={computing}
+                disabled={computing || !canCompute}
+                title={!canCompute && !computing ? t("mission.config.recomputeTooltip") : undefined}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
                   computing
                     ? "bg-tv-accent/50 text-tv-accent-text cursor-not-allowed"
-                    : "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
+                    : !canCompute
+                      ? "border border-tv-border text-tv-text-muted opacity-50 cursor-not-allowed"
+                      : "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
                 }`}
                 data-testid="compute-trajectory-btn"
               >
@@ -573,10 +626,12 @@ export default function MissionConfigPage() {
                   ? t("mission.config.computing")
                   : t("mission.config.computeTrajectory")}
               </button>
+              <div className="flex-1" />
+              <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-tv-surface rounded-3xl border border-tv-border">
+          <div className="flex-1 flex items-center justify-center bg-tv-surface rounded-2xl border border-tv-border">
             <Loader2 className="h-6 w-6 animate-spin text-tv-accent" />
           </div>
         )}
@@ -616,7 +671,7 @@ export default function MissionConfigPage() {
       {/* notification toast */}
       {notification && (
         <div
-          className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-tv-surface border border-tv-border shadow-lg text-sm text-tv-text-primary"
+          className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-tv-surface border border-tv-border text-sm text-tv-text-primary"
           data-testid="notification-toast"
         >
           {notification}

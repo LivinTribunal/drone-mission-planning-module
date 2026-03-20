@@ -87,7 +87,7 @@ export default function InspectionConfigForm({
             {t("mission.config.method")}
           </label>
           <p className="text-sm text-tv-text-primary">
-            {inspection.method.replace("_", " ")}
+            {inspection.method.replace(/_/g, " ")}
           </p>
         </div>
       </div>

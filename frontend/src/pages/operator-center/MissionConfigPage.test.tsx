@@ -84,7 +84,7 @@ describe("WarningsPanel", () => {
   it("shows warning messages after trajectory", () => {
     render(
       <WarningsPanel
-        warnings={["Speed too high", "Altitude violation"]}
+        warnings={[{ message: "Speed too high", severity: "warning" }, { message: "Altitude violation", severity: "warning" }]}
         hasTrajectory={true}
       />,
     );

@@ -75,7 +75,7 @@ export default function TemplatePicker({
               >
                 {tpl.methods.map((m) => (
                   <option key={m} value={m}>
-                    {m.replace("_", " ")}
+                    {m.replace(/_/g, " ")}
                   </option>
                 ))}
               </select>
@@ -83,7 +83,7 @@ export default function TemplatePicker({
 
             {tpl.methods.length === 1 && (
               <span className="px-2 py-1 rounded-full text-xs bg-tv-surface text-tv-text-secondary">
-                {tpl.methods[0]?.replace("_", " ")}
+                {tpl.methods[0]?.replace(/_/g, " ")}
               </span>
             )}
           </div>
