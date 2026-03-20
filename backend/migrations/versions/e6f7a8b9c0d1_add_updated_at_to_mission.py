@@ -31,7 +31,7 @@ def upgrade() -> None:
     )
 
     # backfill existing rows - semantically correct to match created_at
-    op.execute("UPDATE mission SET updated_at = created_at WHERE updated_at IS NULL")
+    op.execute("UPDATE mission SET updated_at = created_at")
 
 
 def downgrade() -> None:

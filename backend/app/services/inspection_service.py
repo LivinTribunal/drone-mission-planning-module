@@ -13,14 +13,14 @@ from app.services.geometry_converter import apply_dict_update
 def _get_mission(db: Session, mission_id: UUID, for_update: bool = False) -> Mission:
     """get mission or raise NotFoundError."""
     if for_update:
-        # lock the mission row first, then eagerly load relationships separately
-        # FOR UPDATE can't be combined with outer joins in PostgreSQL
+        # lock the row first, then load relationships with populate_existing
         db.query(Mission).filter(Mission.id == mission_id).with_for_update().first()
 
     mission = (
         db.query(Mission)
         .options(joinedload(Mission.inspections), joinedload(Mission.flight_plan))
         .filter(Mission.id == mission_id)
+        .execution_options(populate_existing=True)
         .first()
     )
     if not mission:
