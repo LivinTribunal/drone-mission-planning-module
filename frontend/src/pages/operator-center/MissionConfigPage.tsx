@@ -121,6 +121,13 @@ export default function MissionConfigPage() {
     );
   }, [flightPlan, selectedWaypointId]);
 
+  // cleanup notification timer on unmount
+  useEffect(() => {
+    return () => {
+      if (notificationTimer.current) clearTimeout(notificationTimer.current);
+    };
+  }, []);
+
   function showNotification(msg: string) {
     setNotification(msg);
     if (notificationTimer.current) clearTimeout(notificationTimer.current);
@@ -195,7 +202,7 @@ export default function MissionConfigPage() {
 
       // save inspection-level changes
       for (const [inspId, override] of Object.entries(inspectionDirty)) {
-        await updateInspection(id, inspId, { config_override: override });
+        await updateInspection(id, inspId, { config: override });
       }
       setInspectionDirty({});
 
@@ -260,6 +267,16 @@ export default function MissionConfigPage() {
       } else {
         next.add(lhaId);
       }
+
+      // persist lha_ids into inspectionDirty so they get sent to backend
+      setInspectionDirty((prevDirty) => ({
+        ...prevDirty,
+        [inspId]: {
+          ...(prevDirty[inspId] ?? {}),
+          lha_ids: Array.from(next),
+        },
+      }));
+
       return { ...prev, [inspId]: next };
     });
   }

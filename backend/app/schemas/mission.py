@@ -15,6 +15,7 @@ class InspectionConfigOverride(BaseModel):
     measurement_density: int | None = None
     custom_tolerances: dict | None = None
     density: float | None = None
+    lha_ids: list[str] | None = None
 
 
 class InspectionCreate(BaseModel):

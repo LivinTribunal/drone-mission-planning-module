@@ -32,7 +32,7 @@ export default function CoordinateInput({
 
   function handleChange(field: "lat" | "lon" | "alt", raw: string) {
     const num = raw === "" ? null : parseFloat(raw);
-    if (raw !== "" && num === null) return;
+    if (raw !== "" && (num === null || isNaN(num as number))) return;
 
     const curLat = value ? value.coordinates[1] : 0;
     const curLon = value ? value.coordinates[0] : 0;

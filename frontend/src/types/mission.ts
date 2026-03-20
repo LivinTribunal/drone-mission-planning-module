@@ -38,6 +38,7 @@ export interface InspectionConfigOverride {
   hover_duration?: number | null;
   horizontal_distance?: number | null;
   sweep_angle?: number | null;
+  lha_ids?: string[] | null;
 }
 
 export interface MissionCreate {
@@ -67,13 +68,13 @@ export interface InspectionCreate {
   template_id: string;
   method: InspectionMethod;
   sequence_order?: number;
-  config_override?: InspectionConfigOverride | null;
+  config?: InspectionConfigOverride | null;
 }
 
 export interface InspectionUpdate {
   method?: InspectionMethod;
   sequence_order?: number;
-  config_override?: InspectionConfigOverride | null;
+  config?: InspectionConfigOverride | null;
 }
 
 export interface ReorderRequest {

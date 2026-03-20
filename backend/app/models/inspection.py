@@ -52,6 +52,7 @@ class InspectionConfiguration(Base):
     hover_duration = Column(Float)  # seconds
     horizontal_distance = Column(Float)
     sweep_angle = Column(Float)
+    lha_ids = Column(JSONB)
 
     # config fields that can be overridden per-inspection
     _MERGE_FIELDS = (
@@ -63,6 +64,7 @@ class InspectionConfiguration(Base):
         "hover_duration",
         "horizontal_distance",
         "sweep_angle",
+        "lha_ids",
     )
 
     def resolve_with_defaults(self, template_config):
