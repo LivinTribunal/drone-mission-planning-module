@@ -1,43 +1,319 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { MissionStatus } from "@/types/enums";
+import type { MapLayerConfig } from "@/types/map";
 
-const zoneItems = [
-  { key: "ctr", color: "#4595e5", i18nKey: "dashboard.ctr" },
-  { key: "restricted", color: "#e5a545", i18nKey: "dashboard.restricted" },
-  { key: "prohibited", color: "#e54545", i18nKey: "dashboard.prohibited" },
-  {
-    key: "temporaryNoFly",
-    color: "#e5e545",
-    i18nKey: "dashboard.temporaryNoFly",
-  },
+type SwatchType =
+  | "rectangle"
+  | "circle"
+  | "circle-outline"
+  | "circle-border"
+  | "triangle"
+  | "dashed-hatch"
+  | "tower"
+  | "antenna"
+  | "tree"
+  | "rounded-square-letter"
+  | "hover-icon"
+  | "line-arrow";
+
+interface LegendItem {
+  key: string;
+  i18nKey: string;
+  swatch: SwatchType;
+  color: string;
+  size?: "sm" | "md";
+  letter?: string;
+}
+
+// ground surfaces
+const surfaceItems: LegendItem[] = [
+  { key: "runway", i18nKey: "dashboard.runways", swatch: "rectangle", color: "#4a4a4a" },
+  { key: "taxiway", i18nKey: "dashboard.taxiways", swatch: "rectangle", color: "#3a5a3a" },
 ];
 
-const obstacleItems = [
-  { key: "building", color: "#e54545", i18nKey: "dashboard.building" },
-  { key: "tower", color: "#9b59b6", i18nKey: "dashboard.tower" },
-  { key: "antenna", color: "#e5a545", i18nKey: "dashboard.antenna" },
-  { key: "vegetation", color: "#3bbb3b", i18nKey: "dashboard.vegetation" },
+// safety zones - crosshatched swatches
+const zoneItems: LegendItem[] = [
+  { key: "ctr", i18nKey: "dashboard.ctr", swatch: "dashed-hatch", color: "#4595e5" },
+  { key: "restricted", i18nKey: "dashboard.restricted", swatch: "dashed-hatch", color: "#e5a545" },
+  { key: "prohibited", i18nKey: "dashboard.prohibited", swatch: "dashed-hatch", color: "#e54545" },
+  { key: "temporaryNoFly", i18nKey: "dashboard.temporaryNoFly", swatch: "dashed-hatch", color: "#e5e545" },
 ];
 
-const otherItems = [
-  { key: "agl", color: "#4595e5", i18nKey: "dashboard.aglMarker" },
-  { key: "lha", color: "#60a5fa", i18nKey: "dashboard.lhaMarker" },
+// obstacles - per-type icons matching map symbology
+const obstacleItems: LegendItem[] = [
+  { key: "building", i18nKey: "dashboard.building", swatch: "triangle", color: "#e54545" },
+  { key: "tower", i18nKey: "dashboard.tower", swatch: "tower", color: "#9b59b6" },
+  { key: "antenna", i18nKey: "dashboard.antenna", swatch: "antenna", color: "#e5a545" },
+  { key: "vegetation", i18nKey: "dashboard.vegetation", swatch: "tree", color: "#3bbb3b" },
+  { key: "other", i18nKey: "dashboard.other", swatch: "triangle", color: "#6b6b6b" },
 ];
 
-export default function LegendPanel() {
+// features (agl / lha)
+const featureItems: LegendItem[] = [
+  { key: "agl", i18nKey: "dashboard.aglMarker", swatch: "rectangle", color: "#e91e90" },
+  { key: "lha", i18nKey: "dashboard.lhaUnits", swatch: "circle", color: "#e91e90", size: "sm" },
+];
+
+// flight plan - takeoff/landing only
+const takeoffLandingItems: LegendItem[] = [
+  { key: "takeoff", i18nKey: "dashboard.waypointTakeoff", swatch: "rounded-square-letter", color: "#4595e5", letter: "T" },
+  { key: "landing", i18nKey: "dashboard.waypointLanding", swatch: "rounded-square-letter", color: "#e54545", letter: "L" },
+];
+
+// flight plan - all waypoint types
+const allWaypointItems: LegendItem[] = [
+  { key: "measurement", i18nKey: "dashboard.measurement", swatch: "circle-outline", color: "#3bbb3b" },
+  { key: "transit", i18nKey: "dashboard.transit", swatch: "circle-border", color: "#ffffff" },
+  { key: "hover", i18nKey: "dashboard.hover", swatch: "hover-icon", color: "#e5a545" },
+  { key: "transit-path", i18nKey: "dashboard.transitPath", swatch: "line-arrow", color: "#7eb8e5" },
+  ...takeoffLandingItems,
+];
+
+const STATUSES_WITH_FULL_WAYPOINTS: MissionStatus[] = [
+  "PLANNED",
+  "VALIDATED",
+  "EXPORTED",
+  "COMPLETED",
+];
+
+function SectionChevron({ open }: { open: boolean }) {
+  /** small chevron indicator for collapsible sections. */
+  return (
+    <svg
+      className={`h-3 w-3 text-tv-text-muted transition-transform ${open ? "rotate-180" : ""}`}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+    >
+      <path
+        fillRule="evenodd"
+        d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+/** renders a swatch icon based on type. */
+function Swatch({ item }: { item: LegendItem }) {
+  const s = item.size === "sm" ? "h-2 w-2" : "h-2.5 w-2.5";
+
+  if (item.swatch === "rectangle") {
+    return (
+      <span
+        className={`inline-block ${s} rounded-sm`}
+        style={{ backgroundColor: item.color }}
+      />
+    );
+  }
+
+  if (item.swatch === "dashed-hatch") {
+    return (
+      <svg className={s} viewBox="0 0 10 10">
+        <rect
+          x="0.5" y="0.5" width="9" height="9" rx="1"
+          fill={item.color + "20"}
+          stroke={item.color}
+          strokeWidth="1"
+          strokeDasharray="2 1"
+        />
+        <line x1="0" y1="10" x2="10" y2="0" stroke={item.color} strokeWidth="0.7" opacity="0.5" />
+        <line x1="-3" y1="7" x2="7" y2="-3" stroke={item.color} strokeWidth="0.7" opacity="0.5" />
+        <line x1="3" y1="13" x2="13" y2="3" stroke={item.color} strokeWidth="0.7" opacity="0.5" />
+      </svg>
+    );
+  }
+
+  if (item.swatch === "triangle") {
+    return (
+      <svg className={s} viewBox="0 0 10 10">
+        <polygon points="5,1 9,9 1,9" fill={item.color} />
+      </svg>
+    );
+  }
+
+  if (item.swatch === "tower") {
+    return (
+      <svg className={s} viewBox="0 0 10 10">
+        <line x1="3" y1="9" x2="4.5" y2="3.5" stroke={item.color} strokeWidth="0.8" strokeLinecap="round" />
+        <line x1="7" y1="9" x2="5.5" y2="3.5" stroke={item.color} strokeWidth="0.8" strokeLinecap="round" />
+        <line x1="3.5" y1="6.5" x2="6.5" y2="6.5" stroke={item.color} strokeWidth="0.5" />
+        <line x1="4" y1="3.5" x2="6" y2="3.5" stroke={item.color} strokeWidth="0.7" strokeLinecap="round" />
+        <line x1="5" y1="3.5" x2="5" y2="1" stroke={item.color} strokeWidth="0.6" strokeLinecap="round" />
+        <circle cx="5" cy="1" r="0.5" fill={item.color} />
+      </svg>
+    );
+  }
+
+  if (item.swatch === "antenna") {
+    return (
+      <svg className={s} viewBox="0 0 10 10">
+        <line x1="5" y1="9" x2="5" y2="2" stroke={item.color} strokeWidth="0.8" strokeLinecap="round" />
+        <line x1="3.5" y1="9" x2="6.5" y2="9" stroke={item.color} strokeWidth="0.7" strokeLinecap="round" />
+        <path d="M3.5,4 A2,2 0 0,1 5,2.5" fill="none" stroke={item.color} strokeWidth="0.5" />
+        <path d="M6.5,4 A2,2 0 0,0 5,2.5" fill="none" stroke={item.color} strokeWidth="0.5" />
+        <path d="M2.5,5 A3.5,3.5 0 0,1 5,2" fill="none" stroke={item.color} strokeWidth="0.5" />
+        <path d="M7.5,5 A3.5,3.5 0 0,0 5,2" fill="none" stroke={item.color} strokeWidth="0.5" />
+        <circle cx="5" cy="2" r="0.5" fill={item.color} />
+      </svg>
+    );
+  }
+
+  if (item.swatch === "tree") {
+    return (
+      <svg className={s} viewBox="0 0 10 10">
+        <rect x="4.2" y="6" width="1.6" height="3" rx="0.3" fill="#8B6914" />
+        <polygon points="5,1 7.5,5 2.5,5" fill={item.color} />
+        <polygon points="5,2.5 8,6.5 2,6.5" fill={item.color} />
+      </svg>
+    );
+  }
+
+  // rounded square with letter - matches takeoff/landing map icons
+  if (item.swatch === "rounded-square-letter") {
+    return (
+      <svg className={s} viewBox="0 0 10 10">
+        <rect x="1" y="1" width="8" height="8" rx="2" fill={item.color} stroke="#ffffff" strokeWidth="0.6" />
+        <text x="5" y="5.5" textAnchor="middle" dominantBaseline="middle" fill="#ffffff" fontSize="5" fontWeight="bold">
+          {item.letter}
+        </text>
+      </svg>
+    );
+  }
+
+  // hover icon - circle with pause bars
+  if (item.swatch === "hover-icon") {
+    return (
+      <svg className={s} viewBox="0 0 10 10">
+        <circle cx="5" cy="5" r="4" fill={item.color} stroke="#ffffff" strokeWidth="0.5" />
+        <rect x="3.5" y="3.2" width="1" height="3.6" rx="0.2" fill="#ffffff" />
+        <rect x="5.5" y="3.2" width="1" height="3.6" rx="0.2" fill="#ffffff" />
+      </svg>
+    );
+  }
+
+  // line with chevron arrow - matches transit path direction indicators
+  if (item.swatch === "line-arrow") {
+    return (
+      <svg className={s} viewBox="0 0 10 10">
+        <line x1="0" y1="5" x2="10" y2="5" stroke={item.color} strokeWidth="2" />
+        <polyline points="5,2.5 8,5 5,7.5" fill="none" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  // circle with white outline - matches measurement waypoints
+  if (item.swatch === "circle-outline") {
+    return (
+      <span
+        className={`inline-block ${s} rounded-full`}
+        style={{
+          backgroundColor: item.color,
+          border: "1.5px solid #ffffff",
+          boxShadow: "0 0 0 0.5px var(--tv-text-muted)",
+        }}
+      />
+    );
+  }
+
+  // white circle with gray border - matches transit waypoints
+  if (item.swatch === "circle-border") {
+    return (
+      <span
+        className={`inline-block ${s} rounded-full`}
+        style={{
+          backgroundColor: item.color,
+          border: "1.5px solid #6b6b6b",
+        }}
+      />
+    );
+  }
+
+  // circle
+  return (
+    <span
+      className={`inline-block ${s} rounded-full`}
+      style={{ backgroundColor: item.color }}
+    />
+  );
+}
+
+interface LegendSectionProps {
+  title: string;
+  items: LegendItem[];
+  defaultOpen?: boolean;
+}
+
+function LegendSection({ title, items, defaultOpen = true }: LegendSectionProps) {
+  /** collapsible legend section with colored swatches. */
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between mb-1"
+      >
+        <p className="text-[10px] font-medium uppercase text-tv-text-muted">
+          {title}
+        </p>
+        <SectionChevron open={open} />
+      </button>
+      {open &&
+        items.map((item) => (
+          <div
+            key={item.key}
+            className="flex items-center gap-2 py-0.5 text-xs text-tv-text-secondary"
+          >
+            <Swatch item={item} />
+            {t(item.i18nKey)}
+          </div>
+        ))}
+    </div>
+  );
+}
+
+interface LegendPanelProps {
+  missionStatus?: MissionStatus;
+  hasTakeoff?: boolean;
+  hasLanding?: boolean;
+  layers?: MapLayerConfig;
+}
+
+export default function LegendPanel({
+  missionStatus,
+  hasTakeoff,
+  hasLanding,
+  layers,
+}: LegendPanelProps) {
+  /** map legend panel with aviation-chart symbology sections. */
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
 
+  const hasFullWaypoints =
+    missionStatus !== undefined && STATUSES_WITH_FULL_WAYPOINTS.includes(missionStatus);
+  const hasTakeoffLanding = hasTakeoff || hasLanding;
+
+  const showSurfaces = !layers || layers.runways || layers.taxiways;
+  const showZones = !layers || layers.safetyZones;
+  const showObstacles = !layers || layers.obstacles;
+  const showFeatures = !layers || layers.aglSystems;
+  const showWaypoints = !layers || layers.waypoints;
+
   return (
     <div
-      className="absolute top-3 right-3 z-10 w-44 rounded-2xl border border-tv-border bg-tv-bg"
+      className="absolute top-3 right-3 z-10 w-44 rounded-2xl border border-tv-border bg-tv-bg overflow-y-auto"
+      style={{ maxHeight: "calc(100% - 170px)" }}
       data-testid="legend-panel"
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-tv-text-primary"
       >
-        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border">{t("dashboard.legend")}</span>
+        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border">
+          {t("dashboard.legend")}
+        </span>
         <svg
           className={`ml-2 h-4 w-4 text-tv-text-secondary transition-transform ${collapsed ? "" : "rotate-180"}`}
           viewBox="0 0 20 20"
@@ -52,60 +328,43 @@ export default function LegendPanel() {
       </button>
       {!collapsed && (
         <div className="border-t border-tv-border px-3 pb-2 pt-1 space-y-2">
-          <div>
-            <p className="text-[10px] font-medium uppercase text-tv-text-muted mb-1">
-              {t("dashboard.safetyZones")}
-            </p>
-            {zoneItems.map((item) => (
-              <div
-                key={item.key}
-                className="flex items-center gap-2 py-0.5 text-xs text-tv-text-secondary"
-              >
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-sm border"
-                  style={{
-                    backgroundColor: item.color + "33",
-                    borderColor: item.color,
-                  }}
-                />
-                {t(item.i18nKey)}
-              </div>
-            ))}
-          </div>
-          <div>
-            <p className="text-[10px] font-medium uppercase text-tv-text-muted mb-1">
-              {t("dashboard.obstacles")}
-            </p>
-            {obstacleItems.map((item) => (
-              <div
-                key={item.key}
-                className="flex items-center gap-2 py-0.5 text-xs text-tv-text-secondary"
-              >
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: item.color }}
-                />
-                {t(item.i18nKey)}
-              </div>
-            ))}
-          </div>
-          <div>
-            <p className="text-[10px] font-medium uppercase text-tv-text-muted mb-1">
-              {t("dashboard.aglSystems")}
-            </p>
-            {otherItems.map((item) => (
-              <div
-                key={item.key}
-                className="flex items-center gap-2 py-0.5 text-xs text-tv-text-secondary"
-              >
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: item.color }}
-                />
-                {t(item.i18nKey)}
-              </div>
-            ))}
-          </div>
+          {showSurfaces && (
+            <LegendSection
+              title={t("dashboard.groundSurfaces")}
+              items={surfaceItems}
+              defaultOpen={false}
+            />
+          )}
+          {showZones && (
+            <LegendSection
+              title={t("dashboard.safetyZones")}
+              items={zoneItems}
+              defaultOpen={false}
+            />
+          )}
+          {showObstacles && (
+            <LegendSection
+              title={t("dashboard.obstacles")}
+              items={obstacleItems}
+            />
+          )}
+          {showFeatures && (
+            <LegendSection
+              title={t("dashboard.features")}
+              items={featureItems}
+            />
+          )}
+          {showWaypoints && hasFullWaypoints ? (
+            <LegendSection
+              title={t("dashboard.flightPlan")}
+              items={allWaypointItems}
+            />
+          ) : showWaypoints && hasTakeoffLanding ? (
+            <LegendSection
+              title={t("dashboard.flightPlan")}
+              items={takeoffLandingItems}
+            />
+          ) : null}
         </div>
       )}
     </div>

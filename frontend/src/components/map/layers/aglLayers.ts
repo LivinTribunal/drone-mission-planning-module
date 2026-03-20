@@ -6,7 +6,9 @@ export const AGL_POINT_LAYER = "agls-point";
 export const AGL_LABEL_LAYER = "agls-label";
 export const LHA_SOURCE = "lhas";
 export const LHA_POINT_LAYER = "lhas-point";
+export const LHA_LABEL_LAYER = "lhas-label";
 
+/** adds agl system and lha unit layers with green markers and labels. */
 export function addAglLayers(
   map: MaplibreMap,
   surfaces: SurfaceResponse[],
@@ -31,21 +33,22 @@ export function addAglLayers(
     },
   });
 
-  // zoom-dependent opacity: opaque when zoomed out, semi-transparent when zoomed in
+  // agl square markers
   map.addLayer({
     id: AGL_POINT_LAYER,
-    type: "circle",
+    type: "symbol",
     source: AGL_SOURCE,
+    layout: {
+      "icon-image": "agl-square",
+      "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.8, 16, 1.2],
+      "icon-allow-overlap": true,
+    },
     paint: {
-      "circle-radius": 7,
-      "circle-color": "#4595e5",
-      "circle-stroke-color": "#ffffff",
-      "circle-stroke-width": 2,
-      "circle-opacity": ["interpolate", ["linear"], ["zoom"], 16, 1, 17, 0.3],
-      "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 16, 1, 17, 0.3],
+      "icon-opacity": ["interpolate", ["linear"], ["zoom"], 14, 1, 15, 0.3],
     },
   });
 
+  // agl labels
   map.addLayer({
     id: AGL_LABEL_LAYER,
     type: "symbol",
@@ -53,11 +56,12 @@ export function addAglLayers(
     layout: {
       "text-field": ["get", "name"],
       "text-size": 11,
+      "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
       "text-offset": [0, 1.5],
       "text-anchor": "top",
     },
     paint: {
-      "text-color": "#4595e5",
+      "text-color": "#e91e90",
       "text-halo-color": "#000000",
       "text-halo-width": 1,
     },
@@ -74,6 +78,7 @@ export function addAglLayers(
           properties: {
             id: l.id,
             unitNumber: l.unit_number,
+            settingAngle: l.setting_angle,
             lampType: l.lamp_type,
             entityType: "lha",
           },
@@ -87,17 +92,47 @@ export function addAglLayers(
       type: "circle",
       source: LHA_SOURCE,
       paint: {
-        "circle-radius": 4,
-        "circle-color": "#60a5fa",
+        "circle-radius": 6,
+        "circle-color": "#e91e90",
         "circle-stroke-color": "#ffffff",
-        "circle-stroke-width": 1,
-        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 16, 0, 17, 1],
-        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 16, 0, 17, 1],
+        "circle-stroke-width": 1.5,
+        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
+        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
+      },
+    });
+
+    // lha labels
+    map.addLayer({
+      id: LHA_LABEL_LAYER,
+      type: "symbol",
+      source: LHA_SOURCE,
+      layout: {
+        "text-field": [
+          "concat",
+          "LHA ",
+          ["to-string", ["get", "unitNumber"]],
+          " (",
+          ["to-string", ["get", "settingAngle"]],
+          "\u00B0)",
+        ],
+        "text-size": 10,
+        "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+        "text-offset": [0, 1.5],
+        "text-anchor": "top",
+        "text-allow-overlap": false,
+      },
+      paint: {
+        "text-color": "#e91e90",
+        "text-halo-color": "#000000",
+        "text-halo-width": 1,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
       },
     });
   }
 
-  return lhas.length > 0
-    ? [AGL_POINT_LAYER, AGL_LABEL_LAYER, LHA_POINT_LAYER]
-    : [AGL_POINT_LAYER, AGL_LABEL_LAYER];
+  const layers = [AGL_POINT_LAYER, AGL_LABEL_LAYER];
+  if (lhas.length > 0) {
+    layers.push(LHA_POINT_LAYER, LHA_LABEL_LAYER);
+  }
+  return layers;
 }

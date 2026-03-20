@@ -77,7 +77,7 @@ export default function NavBar({ items, role }: NavBarProps) {
       </div>
 
       {/* right section - 70% */}
-      <div className="flex-1 flex items-center gap-4">
+      <div className="flex-1 flex items-center gap-4 min-w-0">
         {/* nav pills */}
         <div className="flex flex-1 items-center justify-center gap-1 rounded-full bg-tv-surface p-1 h-11">
           {items.map((item) => {
@@ -140,8 +140,8 @@ export default function NavBar({ items, role }: NavBarProps) {
           </button>
         </div>
 
-        {/* user dropdown */}
-        <div ref={menuRef} className="relative ml-auto">
+        {/* user dropdown - w-[140px] matches mission tab timestamp */}
+        <div ref={menuRef} className="relative w-[140px]">
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="flex items-center gap-2 rounded-full px-4 h-11 text-sm font-medium

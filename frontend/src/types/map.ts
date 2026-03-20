@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   AirportDetailResponse,
   SurfaceResponse,
@@ -6,6 +7,9 @@ import type {
   AGLResponse,
   LHAResponse,
 } from "./airport";
+import type { WaypointResponse } from "./flightPlan";
+import type { MissionStatus } from "./enums";
+import type { PointZ } from "./common";
 
 export interface MapLayerConfig {
   runways: boolean;
@@ -13,6 +17,7 @@ export interface MapLayerConfig {
   obstacles: boolean;
   safetyZones: boolean;
   aglSystems: boolean;
+  waypoints: boolean;
 }
 
 export type MapFeatureType =
@@ -20,7 +25,8 @@ export type MapFeatureType =
   | "obstacle"
   | "safety_zone"
   | "agl"
-  | "lha";
+  | "lha"
+  | "waypoint";
 
 export interface MapFeatureSurface {
   type: "surface";
@@ -47,12 +53,26 @@ export interface MapFeatureLHA {
   data: LHAResponse;
 }
 
+export interface MapFeatureWaypoint {
+  type: "waypoint";
+  data: {
+    id: string;
+    waypoint_type: string;
+    sequence_order: number;
+    position: PointZ;
+    stack_count: number;
+    alt_min?: number;
+    alt_max?: number;
+  };
+}
+
 export type MapFeature =
   | MapFeatureSurface
   | MapFeatureObstacle
   | MapFeatureSafetyZone
   | MapFeatureAGL
-  | MapFeatureLHA;
+  | MapFeatureLHA
+  | MapFeatureWaypoint;
 
 export interface AirportMapProps {
   airport: AirportDetailResponse;
@@ -63,7 +83,17 @@ export interface AirportMapProps {
   showPoiInfo?: boolean;
   showTerrainToggle?: boolean;
   onFeatureClick?: (feature: MapFeature) => void;
-  children?: React.ReactNode;
+  children?: ReactNode;
+  waypoints?: WaypointResponse[];
+  selectedWaypointId?: string | null;
+  onWaypointClick?: (id: string | null) => void;
+  terrainMode?: "map" | "satellite";
+  onTerrainChange?: (mode: "map" | "satellite") => void;
+  missionStatus?: MissionStatus;
+  onMapClick?: (lngLat: { lng: number; lat: number }) => void;
+  takeoffCoordinate?: PointZ | null;
+  landingCoordinate?: PointZ | null;
+  inspectionIndexMap?: Record<string, number>;
 }
 
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {
@@ -72,4 +102,5 @@ export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {
   obstacles: true,
   safetyZones: true,
   aglSystems: true,
+  waypoints: true,
 };

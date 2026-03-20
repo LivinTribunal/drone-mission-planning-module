@@ -17,6 +17,7 @@ class InspectionConfigCreate(BaseModel):
     hover_duration: float | None = None
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
+    lha_ids: list[UUID] | None = None
 
 
 class InspectionConfigResponse(BaseModel):
@@ -31,6 +32,7 @@ class InspectionConfigResponse(BaseModel):
     hover_duration: float | None = None
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
+    lha_ids: list[UUID] | None = None
 
     model_config = {"from_attributes": True}
 

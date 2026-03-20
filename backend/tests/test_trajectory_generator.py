@@ -577,3 +577,145 @@ def test_full_pipeline(client):
     fp2 = client.get(f"/api/v1/missions/{mission_id}/flight-plan")
     assert fp2.status_code == 200
     assert len(fp2.json()["waypoints"]) == len(fp["waypoints"])
+
+
+# get_lha_positions tests
+
+
+class _FakeLha:
+    """minimal LHA stub for get_lha_positions tests."""
+
+    def __init__(self, lha_id, position_data):
+        """create fake lha with id and position data."""
+        self.id = lha_id
+        self.position = position_data
+        self.setting_angle = 3.0
+
+
+class _FakePosition:
+    """minimal position stub wrapping raw EWKB-like data."""
+
+    def __init__(self, data):
+        """create fake position with data bytes."""
+        self.data = data
+
+
+class _FakeAgl:
+    """minimal AGL stub with lhas list."""
+
+    def __init__(self, lhas):
+        """create fake agl with lhas."""
+        self.lhas = lhas
+
+
+class _FakeTemplate:
+    """minimal template stub with targets list."""
+
+    def __init__(self, targets):
+        """create fake template with targets."""
+        self.targets = targets
+
+
+def _setup_lha_fixtures(client):
+    """create airport, surface, agl, and lhas via api, return (template targets, lha_ids)."""
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LPFT"},
+    ).json()
+    airport_id = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces", json=TRAJECTORY_SURFACE_PAYLOAD
+    ).json()
+    surface_id = surface["id"]
+
+    agl = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls",
+        json=TRAJECTORY_AGL_PAYLOAD,
+    ).json()
+    agl_id = agl["id"]
+
+    lha_ids = []
+    for i in range(1, 4):
+        lha = client.post(
+            f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas",
+            json=make_lha_payload(i),
+        ).json()
+        lha_ids.append(lha["id"])
+
+    return airport_id, agl_id, lha_ids
+
+
+def test_get_lha_positions_no_filter(client, db_engine):
+    """lha_ids=None returns all LHAs with valid positions."""
+    from sqlalchemy.orm import Session, joinedload
+
+    from app.models.agl import AGL
+    from app.services.trajectory_computation import get_lha_positions
+
+    airport_id, agl_id, lha_ids = _setup_lha_fixtures(client)
+
+    with Session(db_engine) as db:
+        agl = db.query(AGL).options(joinedload(AGL.lhas)).filter(AGL.id == agl_id).first()
+        template = type("T", (), {"targets": [agl]})()
+
+        positions = get_lha_positions(template, lha_ids=None)
+
+        assert len(positions) == 3
+
+
+def test_get_lha_positions_filtered(client, db_engine):
+    """specific lha_ids returns only matching LHAs."""
+    from sqlalchemy.orm import Session, joinedload
+
+    from app.models.agl import AGL
+    from app.services.trajectory_computation import get_lha_positions
+
+    # use different icao code to avoid conflict
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LPFG"},
+    ).json()
+    airport_id = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces", json=TRAJECTORY_SURFACE_PAYLOAD
+    ).json()
+    surface_id = surface["id"]
+
+    agl_resp = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls",
+        json=TRAJECTORY_AGL_PAYLOAD,
+    ).json()
+    agl_id = agl_resp["id"]
+
+    lha_ids = []
+    for i in range(1, 4):
+        lha = client.post(
+            f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas",
+            json=make_lha_payload(i),
+        ).json()
+        lha_ids.append(lha["id"])
+
+    with Session(db_engine) as db:
+        agl = db.query(AGL).options(joinedload(AGL.lhas)).filter(AGL.id == agl_id).first()
+        template = type("T", (), {"targets": [agl]})()
+
+        positions = get_lha_positions(template, lha_ids=[lha_ids[0]])
+
+        assert len(positions) == 1
+
+
+def test_get_lha_positions_skips_no_position():
+    """LHAs without position are skipped gracefully."""
+    from uuid import uuid4
+
+    from app.services.trajectory_computation import get_lha_positions
+
+    lha_with = type("L", (), {"id": uuid4(), "position": None, "setting_angle": 3.0})()
+    agl = type("A", (), {"lhas": [lha_with]})()
+    template = type("T", (), {"targets": [agl]})()
+
+    positions = get_lha_positions(template, lha_ids=None)
+
+    assert len(positions) == 0

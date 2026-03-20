@@ -62,7 +62,7 @@ def get_mission(db: Session, mission_id: UUID) -> Mission:
     """get mission with inspections."""
     mission = (
         db.query(Mission)
-        .options(joinedload(Mission.inspections))
+        .options(joinedload(Mission.inspections).joinedload(Inspection.config))
         .filter(Mission.id == mission_id)
         .first()
     )
@@ -92,17 +92,28 @@ def create_mission(db: Session, schema: MissionCreate) -> Mission:
 
 
 def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Mission:
-    """update mission - regresses VALIDATED -> PLANNED on trajectory changes."""
-    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    """update mission - invalidates trajectory on config changes."""
+    mission = (
+        db.query(Mission)
+        .options(joinedload(Mission.flight_plan))
+        .filter(Mission.id == mission_id)
+        .first()
+    )
     if not mission:
         raise NotFoundError("mission not found")
 
     data = schema.model_dump(exclude_unset=True)
 
-    # check if trajectory-affecting fields changed
+    # trajectory-affecting fields changed - regress to DRAFT
     trajectory_changed = any(k in TRAJECTORY_FIELDS for k in data.keys())
     if trajectory_changed:
-        mission.regress_if_validated()
+        if mission.flight_plan:
+            db.delete(mission.flight_plan)
+            db.flush()
+        try:
+            mission.invalidate_trajectory()
+        except ValueError as e:
+            raise DomainError(str(e), status_code=409)
 
     apply_schema_update(mission, schema)
     db.commit()
@@ -153,16 +164,10 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
     for insp in original.inspections:
         new_config_id = None
         if insp.config:
-            new_config = InspectionConfiguration(
-                altitude_offset=insp.config.altitude_offset,
-                speed_override=insp.config.speed_override,
-                measurement_density=insp.config.measurement_density,
-                custom_tolerances=insp.config.custom_tolerances,
-                density=insp.config.density,
-                hover_duration=insp.config.hover_duration,
-                horizontal_distance=insp.config.horizontal_distance,
-                sweep_angle=insp.config.sweep_angle,
-            )
+            config_fields = {
+                f: getattr(insp.config, f) for f in InspectionConfiguration._MERGE_FIELDS
+            }
+            new_config = InspectionConfiguration(**config_fields)
             db.add(new_config)
             db.flush()
             new_config_id = new_config.id

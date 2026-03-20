@@ -75,26 +75,59 @@ class TestMissionTransitions:
             m.transition_to("DRAFT")
 
 
-class TestMissionRegress:
-    """tests for Mission.regress_if_validated."""
+class TestMissionInvalidateTrajectory:
+    """tests for Mission.invalidate_trajectory."""
 
-    def test_regress_validated_to_planned(self):
-        """VALIDATED regresses to PLANNED."""
-        m = Mission(id=uuid4(), name="test", status="VALIDATED", airport_id=uuid4())
-        m.regress_if_validated()
-        assert m.status == "PLANNED"
+    def _make_mission(self, status="DRAFT"):
+        """create a mission with given status."""
+        m = Mission(id=uuid4(), name="test", status=status, airport_id=uuid4())
+        m.inspections = []
+        m.flight_plan = None
+        return m
 
-    def test_no_regress_planned(self):
-        """PLANNED stays PLANNED."""
-        m = Mission(id=uuid4(), name="test", status="PLANNED", airport_id=uuid4())
-        m.regress_if_validated()
-        assert m.status == "PLANNED"
-
-    def test_no_regress_draft(self):
-        """DRAFT stays DRAFT."""
-        m = Mission(id=uuid4(), name="test", status="DRAFT", airport_id=uuid4())
-        m.regress_if_validated()
+    def test_validated_regresses_to_draft(self):
+        """VALIDATED regresses to DRAFT."""
+        m = self._make_mission("VALIDATED")
+        m.invalidate_trajectory()
         assert m.status == "DRAFT"
+
+    def test_planned_regresses_to_draft(self):
+        """PLANNED regresses to DRAFT."""
+        m = self._make_mission("PLANNED")
+        m.invalidate_trajectory()
+        assert m.status == "DRAFT"
+
+    def test_invalidate_clears_flight_plan_reference(self):
+        """invalidate_trajectory sets flight_plan to None."""
+        m = self._make_mission("PLANNED")
+        m.flight_plan = FlightPlan(id=uuid4(), mission_id=m.id, airport_id=m.airport_id)
+        m.invalidate_trajectory()
+        assert m.flight_plan is None
+        assert m.status == "DRAFT"
+
+    def test_draft_stays_draft(self):
+        """DRAFT stays DRAFT (no-op)."""
+        m = self._make_mission("DRAFT")
+        m.invalidate_trajectory()
+        assert m.status == "DRAFT"
+
+    def test_exported_raises(self):
+        """EXPORTED rejects modification."""
+        m = self._make_mission("EXPORTED")
+        with pytest.raises(ValueError, match="cannot modify"):
+            m.invalidate_trajectory()
+
+    def test_completed_raises(self):
+        """COMPLETED rejects modification."""
+        m = self._make_mission("COMPLETED")
+        with pytest.raises(ValueError, match="cannot modify"):
+            m.invalidate_trajectory()
+
+    def test_cancelled_raises(self):
+        """CANCELLED rejects modification."""
+        m = self._make_mission("CANCELLED")
+        with pytest.raises(ValueError, match="cannot modify"):
+            m.invalidate_trajectory()
 
 
 class TestMissionInspections:
@@ -142,7 +175,7 @@ class TestMissionInspections:
         """cannot add inspection after mission is exported."""
         m = self._make_mission("EXPORTED")
         insp = self._make_inspection()
-        with pytest.raises(ValueError, match="exported"):
+        with pytest.raises(ValueError, match="cannot modify"):
             m.add_inspection(insp)
 
     def test_add_inspection_max_limit(self):
@@ -173,7 +206,7 @@ class TestMissionInspections:
         """cannot remove inspection after mission is exported."""
         insp = self._make_inspection()
         m = self._make_mission("EXPORTED", inspections=[insp])
-        with pytest.raises(ValueError, match="exported"):
+        with pytest.raises(ValueError, match="cannot modify"):
             m.remove_inspection(insp.id)
 
     def test_remove_inspection_not_found(self):
@@ -186,35 +219,125 @@ class TestMissionInspections:
 class TestMissionChangeDroneProfile:
     """tests for Mission.change_drone_profile."""
 
-    def test_change_drone_profile_regresses(self):
-        """changing drone profile regresses VALIDATED -> PLANNED."""
-        m = Mission(id=uuid4(), name="test", status="VALIDATED", airport_id=uuid4())
-        new_id = uuid4()
-        m.change_drone_profile(new_id)
-        assert m.drone_profile_id == new_id
-        assert m.status == "PLANNED"
+    def _make_mission(self, status="DRAFT"):
+        """create a mission with given status."""
+        m = Mission(id=uuid4(), name="test", status=status, airport_id=uuid4())
+        m.inspections = []
+        m.flight_plan = None
+        return m
 
-    def test_change_drone_profile_no_regress_draft(self):
-        """changing drone profile in DRAFT stays DRAFT."""
-        m = Mission(id=uuid4(), name="test", status="DRAFT", airport_id=uuid4())
+    def test_change_drone_profile_validated_to_draft(self):
+        """changing drone profile regresses VALIDATED -> DRAFT."""
+        m = self._make_mission("VALIDATED")
         new_id = uuid4()
         m.change_drone_profile(new_id)
         assert m.drone_profile_id == new_id
         assert m.status == "DRAFT"
 
-    def test_change_drone_profile_planned_stays_planned(self):
-        """changing drone profile in PLANNED stays PLANNED (no regression needed)."""
-        m = Mission(id=uuid4(), name="test", status="PLANNED", airport_id=uuid4())
+    def test_change_drone_profile_no_regress_draft(self):
+        """changing drone profile in DRAFT stays DRAFT."""
+        m = self._make_mission("DRAFT")
         new_id = uuid4()
         m.change_drone_profile(new_id)
         assert m.drone_profile_id == new_id
-        assert m.status == "PLANNED"
+        assert m.status == "DRAFT"
+
+    def test_change_drone_profile_planned_to_draft(self):
+        """changing drone profile in PLANNED regresses to DRAFT."""
+        m = self._make_mission("PLANNED")
+        new_id = uuid4()
+        m.change_drone_profile(new_id)
+        assert m.drone_profile_id == new_id
+        assert m.status == "DRAFT"
 
     def test_change_drone_profile_blocked_after_exported(self):
         """cannot change drone profile after mission is exported."""
-        m = Mission(id=uuid4(), name="test", status="EXPORTED", airport_id=uuid4())
-        with pytest.raises(ValueError, match="exported"):
+        m = self._make_mission("EXPORTED")
+        with pytest.raises(ValueError, match="cannot modify"):
             m.change_drone_profile(uuid4())
+
+
+class TestInspectionLhaIds:
+    """tests for Inspection.lha_ids property."""
+
+    def test_lha_ids_returns_uuids(self):
+        """string values in config.lha_ids are returned as UUID objects."""
+        uid1 = uuid4()
+        uid2 = uuid4()
+        config = InspectionConfiguration(lha_ids=[str(uid1), str(uid2)])
+        insp = Inspection(id=uuid4(), template_id=uuid4(), method="ANGULAR_SWEEP", sequence_order=1)
+        insp.config = config
+
+        result = insp.lha_ids
+
+        assert result is not None
+        assert len(result) == 2
+        assert result[0] == uid1
+        assert result[1] == uid2
+
+    def test_lha_ids_none_when_no_config(self):
+        """returns None when config is missing."""
+        insp = Inspection(id=uuid4(), template_id=uuid4(), method="ANGULAR_SWEEP", sequence_order=1)
+        insp.config = None
+
+        assert insp.lha_ids is None
+
+    def test_lha_ids_none_when_config_has_no_lha_ids(self):
+        """returns None when config.lha_ids is None."""
+        config = InspectionConfiguration(lha_ids=None)
+        insp = Inspection(id=uuid4(), template_id=uuid4(), method="ANGULAR_SWEEP", sequence_order=1)
+        insp.config = config
+
+        assert insp.lha_ids is None
+
+
+class TestCoerceLhaIdsValidator:
+    """tests for InspectionConfigOverride.coerce_lha_ids_to_strings validator."""
+
+    def test_uuids_accepted(self):
+        """UUID objects passed as lha_ids are accepted and stored as UUIDs."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        uid1 = uuid4()
+        uid2 = uuid4()
+        schema = InspectionConfigOverride(lha_ids=[uid1, uid2])
+
+        assert schema.lha_ids is not None
+        assert len(schema.lha_ids) == 2
+        # field type is list[UUID] so final values are UUIDs
+        assert schema.lha_ids[0] == uid1
+        assert schema.lha_ids[1] == uid2
+
+    def test_none_passes_through(self):
+        """None lha_ids passes through unchanged."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        schema = InspectionConfigOverride(lha_ids=None)
+
+        assert schema.lha_ids is None
+
+    def test_strings_accepted(self):
+        """string lha_ids are accepted and parsed to UUIDs."""
+        from uuid import UUID as PyUUID
+
+        from app.schemas.mission import InspectionConfigOverride
+
+        uid = uuid4()
+        schema = InspectionConfigOverride(lha_ids=[str(uid)])
+
+        assert schema.lha_ids is not None
+        assert isinstance(schema.lha_ids[0], PyUUID)
+        assert schema.lha_ids[0] == uid
+
+    def test_json_dump_produces_strings(self):
+        """model_dump(mode='json') produces string lha_ids for JSONB storage."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        uid = uuid4()
+        schema = InspectionConfigOverride(lha_ids=[uid])
+        dumped = schema.model_dump(mode="json")
+
+        assert dumped["lha_ids"] == [str(uid)]
 
 
 # airport aggregate root tests
@@ -359,3 +482,66 @@ class TestInspectionSpeedCompatibility:
         )
         insp.config = None
         assert insp.is_speed_compatible_with_frame_rate(None, 5.0) is True
+
+
+class TestMergeFieldsIncludesLhaIds:
+    """tests that _MERGE_FIELDS includes lha_ids so duplication preserves them."""
+
+    def test_lha_ids_in_merge_fields(self):
+        """lha_ids must be in _MERGE_FIELDS for duplicate_mission to copy them."""
+        assert "lha_ids" in InspectionConfiguration._MERGE_FIELDS
+
+    def test_resolve_with_defaults_carries_lha_ids(self):
+        """resolve_with_defaults includes lha_ids from override config."""
+        uid1 = uuid4()
+        uid2 = uuid4()
+        config = InspectionConfiguration(lha_ids=[str(uid1), str(uid2)])
+        template = InspectionConfiguration(lha_ids=None)
+
+        merged = config.resolve_with_defaults(template)
+        assert merged["lha_ids"] == [str(uid1), str(uid2)]
+
+    def test_resolve_with_defaults_falls_back_to_template_lha_ids(self):
+        """resolve_with_defaults falls back to template lha_ids when override is None."""
+        uid = uuid4()
+        config = InspectionConfiguration(lha_ids=None)
+        template = InspectionConfiguration(lha_ids=[str(uid)])
+
+        merged = config.resolve_with_defaults(template)
+        assert merged["lha_ids"] == [str(uid)]
+
+
+class TestMeasurementDensityValidation:
+    """tests that measurement_density=0 is rejected by schema validation."""
+
+    def test_zero_density_rejected(self):
+        """measurement_density=0 must be rejected."""
+        import pytest
+
+        from app.schemas.mission import InspectionConfigOverride
+
+        with pytest.raises(Exception):
+            InspectionConfigOverride(measurement_density=0)
+
+    def test_negative_density_rejected(self):
+        """negative measurement_density must be rejected."""
+        import pytest
+
+        from app.schemas.mission import InspectionConfigOverride
+
+        with pytest.raises(Exception):
+            InspectionConfigOverride(measurement_density=-5)
+
+    def test_valid_density_accepted(self):
+        """positive measurement_density is accepted."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        schema = InspectionConfigOverride(measurement_density=10)
+        assert schema.measurement_density == 10
+
+    def test_none_density_accepted(self):
+        """None measurement_density is accepted."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        schema = InspectionConfigOverride(measurement_density=None)
+        assert schema.measurement_density is None

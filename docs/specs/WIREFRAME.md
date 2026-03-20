@@ -252,7 +252,7 @@ Referenced throughout the app. Every list item (missions, airports, inspections,
 
 **Map Controls:** Pan, Select, Measure Distance, Zoom, Zoom Reset, Add START waypoint, Add END waypoint
 
-**Waypoint Editing Workflow:**
+**Waypoint Editing Workflow — NOT YET IMPLEMENTED (future work):**
 - **Toggle modes:** Camera edit mode vs. Waypoint edit mode
   - **Waypoint mode:** user can move waypoints on map, hover over line between two waypoints shows "+" to insert a new transit waypoint between them
   - **Camera mode:** user can edit camera heading target points for each waypoint. All waypoints have camera heading points (for PAPI: the LHA center point). This requires adding a `cameraTarget` field to the Waypoint entity.
@@ -261,23 +261,25 @@ Referenced throughout the app. Every list item (missions, airports, inspections,
 - **Waypoint deletion:** Click waypoint once → delete button appears. On deletion: previous and next waypoints relink (linked list behavior).
 - **Type changes:** Only TRANSIT can be added by operator. Operator cannot change MEASUREMENT, START, or END types. This keeps thesis scope manageable.
 
+**Current implementation:** Map is read-only for waypoints. Takeoff/landing coordinates set via CoordinateInput fields or pick-on-map in Configuration tab. Waypoint selection (click) shows details in WaypointInfoPanel. No drag/add/delete of waypoints on map.
+
 **Status effects:** ANY manual waypoint edit (add, move, delete, change) sets mission status back to PLANNED (invalidates VALIDATED status). User must revalidate.
 
 **Map Layers Detail:**
 - Runway geometry: polygon
 - Safety zones: colored polygons with labels, color-coded by SafetyZoneType. 2D: polygons only. 3D: objects with opacity.
-- Obstacles: point + height + bufferRadius (cylinder in 3D, circle in 2D), color-coded same as safety zones by ObstacleType
-- AGL targets: markers with type icons
-- Waypoint path: polyline with flight direction arrows (one arrow in middle of each line segment)
-- Waypoints: numbered circles, color-coded by type AND by inspection (5 fixed colors for inspections 1–5)
-  - TAKEOFF, TRANSIT, LANDING: dotted lines, distinct color
-  - MEASUREMENT: full lines, distinct color
-  - HOVER: full lines, distinct color
-  - LHA arc center point: different color and icon, measurement waypoints point at it and connected to it
-- Transit segments: dashed polyline
-- **Simplified trajectory toggle (layer):** Smooth Bezier interpolated curve without waypoint dots — clean visualization of overall path
+- Obstacles: point + height + bufferRadius (cylinder in 3D, circle in 2D), color-coded by ObstacleType with per-type icons (triangle/tower/antenna/tree)
+- AGL targets: rounded square markers (#e91e90), LHA units as smaller circles
+- Waypoint path: solid polyline colored by segment type, with repeating chevron direction arrows every ~80px along each segment (`symbol-placement: "line"`)
+  - Transit/takeoff/landing segments: solid blue (#7eb8e5)
+  - Measurement segments: solid, colored by inspection (5 fixed colors cycling for inspections 1-5)
+  - Camera target lines: dashed white from measurement waypoints to camera_target position
+- Waypoints: numbered circles, color-coded by type — green (#3bbb3b) for MEASUREMENT, white with gray stroke for TRANSIT, blue square (T) for TAKEOFF, red square (L) for LANDING, orange circle with pause bars for HOVER. Vertical stacks collapsed with x-count label.
+- LHA arc center point: different color and icon, measurement waypoints point at it and connected to it
+- **Overlapping path separation:** when two segments share the same ground path (e.g. transit to inspection and transit from inspection), both are offset ~5m to the left of their heading direction via arc midpoints — opposing directions naturally split apart, making both paths and their arrows visible
+- **NOT YET IMPLEMENTED:** Simplified trajectory toggle (Bezier curve), waypoint editing on map, undo/redo
 
-**3D View (Cesium):**
+**3D View (Cesium) — NOT YET IMPLEMENTED:**
 - Separate viewer (toggle between 2D MapLibre and 3D Cesium)
 - User can orbit trajectory from any angle
 - Altitude shown natively — no separate elevation panel needed
@@ -289,9 +291,11 @@ Referenced throughout the app. Every list item (missions, airports, inspections,
 - Scroll wheel: zoom
 - Pan mode selected: left click + drag to pan. OR right button held = pan.
 - Middle mouse button held: change 3D pitch/bearing view (MapLibre tilt)
-- Click waypoint: highlight + show info
-- Double-click waypoint: center/fly to
-- Hover line between waypoints: "+" appears to add transit waypoint
+- WASD / arrow keys: pan map (80px step)
+- Click waypoint: highlight ring + show info in WaypointInfoPanel
+- Click map feature (surface, obstacle, zone, AGL, LHA): show info in PoiInfoPanel
+- Click empty area: deselect
+- **NOT YET IMPLEMENTED:** Double-click waypoint (fly to), hover line "+" to add transit waypoint
 
 **Recompute Trajectory Logic:**
 - When triggered from Config tab ("Compute Trajectory"): full 5-phase pipeline, regenerates ALL waypoints from scratch

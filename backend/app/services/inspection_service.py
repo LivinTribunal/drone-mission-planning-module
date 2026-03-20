@@ -7,15 +7,20 @@ from app.core.exceptions import DomainError, NotFoundError
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.mission import InspectionCreate, InspectionUpdate
-from app.services.geometry_converter import apply_dict_update, schema_to_model_data
+from app.services.geometry_converter import apply_dict_update
 
 
-def _get_mission(db: Session, mission_id: UUID) -> Mission:
+def _get_mission(db: Session, mission_id: UUID, for_update: bool = False) -> Mission:
     """get mission or raise NotFoundError."""
+    if for_update:
+        # lock the row first, then load relationships with populate_existing
+        db.query(Mission).filter(Mission.id == mission_id).with_for_update().first()
+
     mission = (
         db.query(Mission)
-        .options(joinedload(Mission.inspections))
+        .options(joinedload(Mission.inspections), joinedload(Mission.flight_plan))
         .filter(Mission.id == mission_id)
+        .execution_options(populate_existing=True)
         .first()
     )
     if not mission:
@@ -24,9 +29,16 @@ def _get_mission(db: Session, mission_id: UUID) -> Mission:
     return mission
 
 
+def _delete_flight_plan_if_exists(db: Session, mission: Mission) -> None:
+    """delete flight plan from db before trajectory invalidation."""
+    if mission.flight_plan:
+        db.delete(mission.flight_plan)
+        db.flush()
+
+
 def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> Inspection:
     """add inspection to mission via aggregate root."""
-    mission = _get_mission(db, mission_id)
+    mission = _get_mission(db, mission_id, for_update=True)
 
     # validate template exists
     template = (
@@ -35,7 +47,7 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
     if not template:
         raise NotFoundError("template not found")
 
-    config_data = schema.config.model_dump() if schema.config else None
+    config_data = schema.config.model_dump(mode="json") if schema.config else None
     config_id = None
 
     if config_data:
@@ -57,12 +69,12 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
         sequence_order=next_order,
     )
 
+    _delete_flight_plan_if_exists(db, mission)
     try:
         mission.add_inspection(inspection)
     except ValueError as e:
         raise DomainError(str(e), status_code=409)
 
-    mission.regress_if_validated()
     db.commit()
     db.refresh(inspection)
 
@@ -90,14 +102,19 @@ def update_inspection(
         if inspection.config:
             apply_dict_update(inspection.config, config_data)
         else:
-            config = InspectionConfiguration(**schema_to_model_data(schema.config))
+            config = InspectionConfiguration(**config_data)
             db.add(config)
             db.flush()
             inspection.config_id = config.id
 
     apply_dict_update(inspection, data)
 
-    mission.regress_if_validated()
+    _delete_flight_plan_if_exists(db, mission)
+    try:
+        mission.invalidate_trajectory()
+    except ValueError as e:
+        raise DomainError(str(e), status_code=409)
+
     db.commit()
     db.refresh(inspection)
 
@@ -108,6 +125,13 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     """delete inspection and reorder remaining."""
     mission = _get_mission(db, mission_id)
 
+    # terminal-state check before remove - gives 409, not 404
+    if mission.status in Mission._TERMINAL:
+        raise DomainError(
+            "cannot modify mission after export - duplicate to make changes", status_code=409
+        )
+
+    _delete_flight_plan_if_exists(db, mission)
     try:
         mission.remove_inspection(inspection_id)
     except ValueError:
@@ -125,7 +149,6 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     for i, insp in enumerate(remaining, start=1):
         insp.sequence_order = i
 
-    mission.regress_if_validated()
     db.commit()
 
 
@@ -133,9 +156,11 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
     """reorder inspections by provided id list."""
     mission = _get_mission(db, mission_id)
 
-    terminal = {"EXPORTED", "COMPLETED", "CANCELLED"}
-    if mission.status in terminal:
-        raise DomainError("cannot reorder inspections after mission is exported", status_code=409)
+    _delete_flight_plan_if_exists(db, mission)
+    try:
+        mission.invalidate_trajectory()
+    except ValueError as e:
+        raise DomainError(str(e), status_code=409)
 
     # validate inspection_ids matches mission inspections exactly
     existing_ids = {insp.id for insp in mission.inspections}
@@ -161,5 +186,4 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
 
         inspection.sequence_order = i
 
-    mission.regress_if_validated()
     db.commit()

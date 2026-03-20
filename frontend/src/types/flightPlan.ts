@@ -39,3 +39,8 @@ export interface FlightPlanResponse {
   waypoints: WaypointResponse[];
   validation_result: ValidationResultResponse | null;
 }
+
+export interface GenerateTrajectoryResponse {
+  flight_plan: FlightPlanResponse;
+  warnings: string[];
+}
