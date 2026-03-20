@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { isAxiosError } from "axios";
 import { Loader2 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import {
@@ -611,9 +612,4 @@ export default function MissionConfigPage() {
       )}
     </div>
   );
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isAxiosError(err: unknown): err is { response?: { status: number; data?: any } } {
-  return typeof err === "object" && err !== null && "response" in err;
 }

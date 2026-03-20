@@ -41,14 +41,12 @@ export default function InspectionConfigForm({
   const hoverDuration =
     configOverride.hover_duration ?? defaultCfg?.hover_duration ?? "";
 
-  // speed/framerate warning
+  // speed/framerate warning - checks max_speed since path_distance is not available here
   const speedWarning = useMemo(() => {
     const speed = configOverride.speed_override ?? defaultCfg?.speed_override;
-    const density =
-      configOverride.measurement_density ?? defaultCfg?.measurement_density;
-    const frameRate = droneProfile?.camera_frame_rate;
+    if (!speed || !droneProfile) return false;
 
-    if (speed && density && frameRate && speed * density > frameRate) {
+    if (droneProfile.max_speed && speed > droneProfile.max_speed) {
       return true;
     }
     return false;

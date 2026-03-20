@@ -10,11 +10,11 @@ interface WaypointListPanelProps {
 }
 
 const typeColors: Record<string, string> = {
-  TAKEOFF: "text-green-400",
-  LANDING: "text-red-400",
+  TAKEOFF: "text-tv-info",
+  LANDING: "text-tv-error",
   MEASUREMENT: "text-tv-accent",
   TRANSIT: "text-tv-text-secondary",
-  HOVER: "text-yellow-400",
+  HOVER: "text-tv-warning",
 };
 
 export default function WaypointListPanel({
