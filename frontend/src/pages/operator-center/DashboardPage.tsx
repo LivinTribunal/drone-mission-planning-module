@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { listAirportSummaries } from "@/api/airports";
-import { listMissions, createMission } from "@/api/missions";
+import { listMissions } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { AirportSummaryResponse } from "@/types/airport";
 import type { MissionResponse } from "@/types/mission";
@@ -19,9 +19,8 @@ import type { DroneProfileResponse } from "@/types/droneProfile";
 import CollapsibleSection from "@/components/common/CollapsibleSection";
 import Badge from "@/components/common/Badge";
 import Button from "@/components/common/Button";
-import Input from "@/components/common/Input";
-import Modal from "@/components/common/Modal";
 import AirportMap from "@/components/map/AirportMap";
+import CreateMissionDialog from "@/components/mission/CreateMissionDialog";
 
 type SortKey =
   | "icao_code"
@@ -415,135 +414,6 @@ function MissionListSection({
         </div>
       )}
     </CollapsibleSection>
-  );
-}
-
-function CreateMissionDialog({
-  isOpen,
-  onClose,
-  airportId,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  airportId: string;
-}) {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [droneProfileId, setDroneProfileId] = useState("");
-  const [droneProfiles, setDroneProfiles] = useState<DroneProfileResponse[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [droneLoadError, setDroneLoadError] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      setDroneLoadError(false);
-      listDroneProfiles()
-        .then((res) => setDroneProfiles(res.data))
-        .catch(() => setDroneLoadError(true));
-      setName("");
-      setDroneProfileId("");
-      setFormError(null);
-      setSubmitError(null);
-    }
-  }, [isOpen]);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setFormError(null);
-    setSubmitError(null);
-
-    if (!name.trim()) {
-      setFormError(t("dashboard.nameRequired"));
-      return;
-    }
-    if (!droneProfileId) {
-      setFormError(t("dashboard.droneRequired"));
-      return;
-    }
-
-    setLoading(true);
-    createMission({
-      name: name.trim(),
-      airport_id: airportId,
-      drone_profile_id: droneProfileId,
-    })
-      .then((mission) => {
-        onClose();
-        navigate(`/operator-center/missions/${mission.id}/overview`);
-      })
-      .catch(() => {
-        setSubmitError(t("dashboard.createError"));
-      })
-      .finally(() => setLoading(false));
-  }
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t("dashboard.createMission")}>
-      <form onSubmit={handleSubmit} data-testid="create-mission-form">
-        <div className="space-y-4">
-          <Input
-            id="mission-name"
-            label={t("dashboard.missionName")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t("dashboard.missionNamePlaceholder")}
-            data-testid="mission-name-input"
-          />
-
-          <div>
-            <label
-              htmlFor="drone-profile"
-              className="block text-xs font-medium mb-1 text-tv-text-secondary"
-            >
-              {t("dashboard.selectDrone")}
-            </label>
-            <select
-              id="drone-profile"
-              value={droneProfileId}
-              onChange={(e) => setDroneProfileId(e.target.value)}
-              className="w-full rounded-full border border-tv-border bg-tv-bg px-4 py-2.5 text-sm
-                text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
-              data-testid="drone-profile-select"
-            >
-              <option value="">{t("dashboard.selectDronePlaceholder")}</option>
-              {droneProfiles.map((dp) => (
-                <option key={dp.id} value={dp.id}>
-                  {dp.name}
-                </option>
-              ))}
-            </select>
-            {droneLoadError && (
-              <p className="text-xs text-tv-error mt-1" data-testid="drone-load-error">
-                {t("dashboard.droneLoadError")}
-              </p>
-            )}
-          </div>
-
-          {formError && (
-            <p className="text-xs text-tv-error" data-testid="form-error">
-              {formError}
-            </p>
-          )}
-          {submitError && (
-            <p className="text-xs text-tv-error" data-testid="submit-error">
-              {submitError}
-            </p>
-          )}
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? t("common.loading") : t("common.create")}
-          </Button>
-        </div>
-      </form>
-    </Modal>
   );
 }
 

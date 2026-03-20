@@ -159,7 +159,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # auto-regress VALIDATED so regeneration works without manual step
     if mission.status == MissionStatus.VALIDATED:
-        mission.regress_if_validated()
+        mission.invalidate_trajectory()
 
     # only DRAFT or PLANNED can generate - terminal states are blocked
     if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):

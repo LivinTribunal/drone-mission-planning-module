@@ -75,26 +75,51 @@ class TestMissionTransitions:
             m.transition_to("DRAFT")
 
 
-class TestMissionRegress:
-    """tests for Mission.regress_if_validated."""
+class TestMissionInvalidateTrajectory:
+    """tests for Mission.invalidate_trajectory."""
 
-    def test_regress_validated_to_planned(self):
-        """VALIDATED regresses to PLANNED."""
-        m = Mission(id=uuid4(), name="test", status="VALIDATED", airport_id=uuid4())
-        m.regress_if_validated()
-        assert m.status == "PLANNED"
+    def _make_mission(self, status="DRAFT"):
+        """create a mission with given status."""
+        m = Mission(id=uuid4(), name="test", status=status, airport_id=uuid4())
+        m.inspections = []
+        m.flight_plan = None
+        return m
 
-    def test_no_regress_planned(self):
-        """PLANNED stays PLANNED."""
-        m = Mission(id=uuid4(), name="test", status="PLANNED", airport_id=uuid4())
-        m.regress_if_validated()
-        assert m.status == "PLANNED"
-
-    def test_no_regress_draft(self):
-        """DRAFT stays DRAFT."""
-        m = Mission(id=uuid4(), name="test", status="DRAFT", airport_id=uuid4())
-        m.regress_if_validated()
+    def test_validated_regresses_to_draft(self):
+        """VALIDATED regresses to DRAFT."""
+        m = self._make_mission("VALIDATED")
+        m.invalidate_trajectory()
         assert m.status == "DRAFT"
+
+    def test_planned_regresses_to_draft(self):
+        """PLANNED regresses to DRAFT."""
+        m = self._make_mission("PLANNED")
+        m.invalidate_trajectory()
+        assert m.status == "DRAFT"
+
+    def test_draft_stays_draft(self):
+        """DRAFT stays DRAFT (no-op)."""
+        m = self._make_mission("DRAFT")
+        m.invalidate_trajectory()
+        assert m.status == "DRAFT"
+
+    def test_exported_raises(self):
+        """EXPORTED rejects modification."""
+        m = self._make_mission("EXPORTED")
+        with pytest.raises(ValueError, match="cannot modify"):
+            m.invalidate_trajectory()
+
+    def test_completed_raises(self):
+        """COMPLETED rejects modification."""
+        m = self._make_mission("COMPLETED")
+        with pytest.raises(ValueError, match="cannot modify"):
+            m.invalidate_trajectory()
+
+    def test_cancelled_raises(self):
+        """CANCELLED rejects modification."""
+        m = self._make_mission("CANCELLED")
+        with pytest.raises(ValueError, match="cannot modify"):
+            m.invalidate_trajectory()
 
 
 class TestMissionInspections:
@@ -142,7 +167,7 @@ class TestMissionInspections:
         """cannot add inspection after mission is exported."""
         m = self._make_mission("EXPORTED")
         insp = self._make_inspection()
-        with pytest.raises(ValueError, match="exported"):
+        with pytest.raises(ValueError, match="cannot modify"):
             m.add_inspection(insp)
 
     def test_add_inspection_max_limit(self):
@@ -173,7 +198,7 @@ class TestMissionInspections:
         """cannot remove inspection after mission is exported."""
         insp = self._make_inspection()
         m = self._make_mission("EXPORTED", inspections=[insp])
-        with pytest.raises(ValueError, match="exported"):
+        with pytest.raises(ValueError, match="cannot modify"):
             m.remove_inspection(insp.id)
 
     def test_remove_inspection_not_found(self):
@@ -186,34 +211,41 @@ class TestMissionInspections:
 class TestMissionChangeDroneProfile:
     """tests for Mission.change_drone_profile."""
 
-    def test_change_drone_profile_regresses(self):
-        """changing drone profile regresses VALIDATED -> PLANNED."""
-        m = Mission(id=uuid4(), name="test", status="VALIDATED", airport_id=uuid4())
-        new_id = uuid4()
-        m.change_drone_profile(new_id)
-        assert m.drone_profile_id == new_id
-        assert m.status == "PLANNED"
+    def _make_mission(self, status="DRAFT"):
+        """create a mission with given status."""
+        m = Mission(id=uuid4(), name="test", status=status, airport_id=uuid4())
+        m.inspections = []
+        m.flight_plan = None
+        return m
 
-    def test_change_drone_profile_no_regress_draft(self):
-        """changing drone profile in DRAFT stays DRAFT."""
-        m = Mission(id=uuid4(), name="test", status="DRAFT", airport_id=uuid4())
+    def test_change_drone_profile_validated_to_draft(self):
+        """changing drone profile regresses VALIDATED -> DRAFT."""
+        m = self._make_mission("VALIDATED")
         new_id = uuid4()
         m.change_drone_profile(new_id)
         assert m.drone_profile_id == new_id
         assert m.status == "DRAFT"
 
-    def test_change_drone_profile_planned_stays_planned(self):
-        """changing drone profile in PLANNED stays PLANNED (no regression needed)."""
-        m = Mission(id=uuid4(), name="test", status="PLANNED", airport_id=uuid4())
+    def test_change_drone_profile_no_regress_draft(self):
+        """changing drone profile in DRAFT stays DRAFT."""
+        m = self._make_mission("DRAFT")
         new_id = uuid4()
         m.change_drone_profile(new_id)
         assert m.drone_profile_id == new_id
-        assert m.status == "PLANNED"
+        assert m.status == "DRAFT"
+
+    def test_change_drone_profile_planned_to_draft(self):
+        """changing drone profile in PLANNED regresses to DRAFT."""
+        m = self._make_mission("PLANNED")
+        new_id = uuid4()
+        m.change_drone_profile(new_id)
+        assert m.drone_profile_id == new_id
+        assert m.status == "DRAFT"
 
     def test_change_drone_profile_blocked_after_exported(self):
         """cannot change drone profile after mission is exported."""
-        m = Mission(id=uuid4(), name="test", status="EXPORTED", airport_id=uuid4())
-        with pytest.raises(ValueError, match="exported"):
+        m = self._make_mission("EXPORTED")
+        with pytest.raises(ValueError, match="cannot modify"):
             m.change_drone_profile(uuid4())
 
 

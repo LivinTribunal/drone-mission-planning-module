@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { GripVertical, Trash2, Eye, EyeOff, Plus } from "lucide-react";
+import { GripVertical, Trash2, Eye, EyeOff, Plus, ChevronDown, ChevronUp } from "lucide-react";
 import type { InspectionResponse } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 
@@ -33,7 +33,9 @@ export default function InspectionList({
 }: InspectionListProps) {
   const { t } = useTranslation();
   const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const dragNode = useRef<HTMLDivElement | null>(null);
 
   const sorted = [...inspections].sort(
     (a, b) => a.sequence_order - b.sequence_order,
@@ -46,150 +48,174 @@ export default function InspectionList({
       ? t("mission.config.addDisabledMaxReached")
       : undefined;
 
-  const handleDragStart = useCallback(
-    (e: React.DragEvent, idx: number) => {
-      if (!canReorder) {
-        e.preventDefault();
-        return;
-      }
-      setDragIdx(idx);
-      e.dataTransfer.effectAllowed = "move";
-    },
-    [canReorder],
-  );
-
-  const handleDragOver = useCallback(
-    (e: React.DragEvent, idx: number) => {
+  function handleDragStart(e: React.DragEvent, idx: number) {
+    if (!canReorder) {
       e.preventDefault();
-      if (dragIdx === null) return;
-      setDragOverIdx(idx);
-    },
-    [dragIdx],
-  );
+      return;
+    }
+    setDragIdx(idx);
+    dragNode.current = e.currentTarget as HTMLDivElement;
+    e.dataTransfer.effectAllowed = "move";
+    // make the dragged element semi-transparent after a tick
+    requestAnimationFrame(() => {
+      if (dragNode.current) dragNode.current.style.opacity = "0.4";
+    });
+  }
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent, targetIdx: number) => {
-      e.preventDefault();
-      if (dragIdx === null || dragIdx === targetIdx) {
-        setDragIdx(null);
-        setDragOverIdx(null);
-        return;
-      }
+  function handleDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragIdx === null || idx === dragIdx) {
+      setDropIdx(null);
+      return;
+    }
+    setDropIdx(idx);
+  }
 
-      const reordered = [...sorted];
-      const [moved] = reordered.splice(dragIdx, 1);
-      reordered.splice(targetIdx, 0, moved);
+  function handleDrop(e: React.DragEvent, targetIdx: number) {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === targetIdx) {
+      resetDrag();
+      return;
+    }
 
-      onReorder(reordered.map((insp) => insp.id));
-      setDragIdx(null);
-      setDragOverIdx(null);
-    },
-    [dragIdx, sorted, onReorder],
-  );
+    const reordered = [...sorted];
+    const [moved] = reordered.splice(dragIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    onReorder(reordered.map((insp) => insp.id));
+    resetDrag();
+  }
 
-  const handleDragEnd = useCallback(() => {
+  function resetDrag() {
+    if (dragNode.current) dragNode.current.style.opacity = "1";
+    dragNode.current = null;
     setDragIdx(null);
-    setDragOverIdx(null);
-  }, []);
+    setDropIdx(null);
+  }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-tv-text-primary">
-          {t("mission.config.inspections")} ({inspections.length}/10)
-        </h3>
-        <button
-          onClick={onAdd}
-          disabled={!canAdd}
-          title={addTooltip}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-            canAdd
-              ? "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
-              : "border border-tv-border bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"
-          }`}
-          data-testid="add-inspection-btn"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {t("mission.config.addInspection")}
-        </button>
+    <div>
+      <div
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        <span className="text-sm font-semibold text-tv-text-primary flex items-center gap-2">
+          {t("mission.config.inspections")}
+          <span
+            className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-tv-accent-text"
+            style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
+          >
+            {inspections.length}/10
+          </span>
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); onAdd(); }}
+            disabled={!canAdd}
+            title={addTooltip}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              canAdd
+                ? "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
+                : "border border-tv-border bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"
+            }`}
+            data-testid="add-inspection-btn"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("mission.config.addInspection")}
+          </button>
+          {collapsed ? (
+            <ChevronDown className="h-4 w-4 text-tv-text-primary" />
+          ) : (
+            <ChevronUp className="h-4 w-4 text-tv-text-primary" />
+          )}
+        </div>
       </div>
 
-      {sorted.length === 0 && (
+      {!collapsed && sorted.length === 0 && (
         <p className="text-sm text-tv-text-muted py-4 text-center">
           {t("mission.config.noInspectionSelected")}
         </p>
       )}
 
-      <div className="space-y-1">
+      {!collapsed && (
+      <div className="space-y-1 mt-2">
         {sorted.map((insp, idx) => {
           const template = templates.get(insp.template_id);
           const isSelected = selectedId === insp.id;
           const isVisible = visibleIds.has(insp.id);
-          const isDragOver = dragOverIdx === idx && dragIdx !== idx;
+          const isDropTarget = dropIdx === idx && dragIdx !== idx;
 
           return (
-            <div
-              key={insp.id}
-              draggable={canReorder}
-              onDragStart={(e) => handleDragStart(e, idx)}
-              onDragOver={(e) => handleDragOver(e, idx)}
-              onDrop={(e) => handleDrop(e, idx)}
-              onDragEnd={handleDragEnd}
-              onClick={() => onSelect(isSelected ? null : insp.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-2xl text-sm cursor-pointer transition-colors border ${
-                isSelected
-                  ? "border-tv-accent bg-tv-surface"
-                  : isDragOver
-                    ? "border-tv-accent/50 bg-tv-surface-hover"
-                    : "border-transparent hover:bg-tv-surface-hover"
-              } ${dragIdx === idx ? "opacity-50" : ""}`}
-              data-testid={`inspection-row-${insp.id}`}
-            >
-              {canReorder && (
-                <GripVertical className="h-4 w-4 text-tv-text-muted flex-shrink-0 cursor-grab" />
+            <div key={insp.id}>
+              {/* drop indicator line - above */}
+              {isDropTarget && dragIdx !== null && dragIdx > idx && (
+                <div className="h-0.5 bg-tv-accent rounded-full mx-3 -mb-0.5" />
               )}
-
-              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-tv-accent/20 text-tv-accent text-xs font-semibold flex-shrink-0">
-                {idx + 1}
-              </span>
-
-              <span className="flex-1 text-tv-text-primary truncate">
-                {template?.name ?? insp.template_id.slice(0, 8)}
-              </span>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleVisibility(insp.id);
-                }}
-                className="p-1 rounded-full hover:bg-tv-surface-hover transition-colors"
-                title={t("mission.config.visible")}
-                data-testid={`toggle-visibility-${insp.id}`}
+              <div
+                draggable={canReorder}
+                onDragStart={(e) => handleDragStart(e, idx)}
+                onDragOver={(e) => handleDragOver(e, idx)}
+                onDrop={(e) => handleDrop(e, idx)}
+                onDragEnd={resetDrag}
+                onClick={() => onSelect(isSelected ? null : insp.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-2xl text-sm cursor-pointer transition-colors border ${
+                  isSelected
+                    ? "border-tv-accent bg-tv-surface"
+                    : "border-transparent hover:bg-tv-surface-hover"
+                }`}
+                data-testid={`inspection-row-${insp.id}`}
               >
-                {isVisible ? (
-                  <Eye className="h-3.5 w-3.5 text-tv-accent" />
-                ) : (
-                  <EyeOff className="h-3.5 w-3.5 text-tv-text-muted" />
+                {canReorder && (
+                  <GripVertical className="h-4 w-4 text-tv-text-muted flex-shrink-0 cursor-grab" />
                 )}
-              </button>
 
-              {isDraft && (
+                <span className="flex items-center justify-center h-5 w-5 rounded-full bg-tv-accent/20 text-tv-accent text-xs font-semibold flex-shrink-0">
+                  {idx + 1}
+                </span>
+
+                <span className="flex-1 text-tv-text-primary truncate">
+                  {template?.name ?? insp.template_id.slice(0, 8)}
+                </span>
+
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRemove(insp.id);
+                    onToggleVisibility(insp.id);
                   }}
-                  className="p-1 rounded-full hover:bg-tv-error/10 transition-colors"
-                  title={t("mission.config.removeInspection")}
-                  data-testid={`remove-inspection-${insp.id}`}
+                  className="p-1 rounded-full hover:bg-tv-surface-hover transition-colors"
+                  title={t("mission.config.visible")}
+                  data-testid={`toggle-visibility-${insp.id}`}
                 >
-                  <Trash2 className="h-3.5 w-3.5 text-tv-error" />
+                  {isVisible ? (
+                    <Eye className="h-3.5 w-3.5 text-tv-accent" />
+                  ) : (
+                    <EyeOff className="h-3.5 w-3.5 text-tv-text-muted" />
+                  )}
                 </button>
+
+                {isDraft && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemove(insp.id);
+                    }}
+                    className="p-1 rounded-full hover:bg-tv-error/10 transition-colors"
+                    title={t("mission.config.removeInspection")}
+                    data-testid={`remove-inspection-${insp.id}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-tv-error" />
+                  </button>
+                )}
+              </div>
+              {/* drop indicator line - below */}
+              {isDropTarget && dragIdx !== null && dragIdx < idx && (
+                <div className="h-0.5 bg-tv-accent rounded-full mx-3 -mt-0.5" />
               )}
             </div>
           );
         })}
       </div>
+      )}
     </div>
   );
 }

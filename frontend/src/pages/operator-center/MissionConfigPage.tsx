@@ -7,7 +7,7 @@ import {
 } from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { isAxiosError } from "axios";
+import { isAxiosError } from "@/api/client";
 import { Loader2 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import {
@@ -39,8 +39,6 @@ import InspectionConfigForm from "@/components/mission/InspectionConfigForm";
 import WarningsPanel from "@/components/mission/WarningsPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
 import AirportMap from "@/components/map/AirportMap";
-import WaypointListPanel from "@/components/map/overlays/WaypointListPanel";
-import WaypointInfoPanel from "@/components/map/overlays/WaypointInfoPanel";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
 import Modal from "@/components/common/Modal";
 
@@ -60,7 +58,8 @@ export default function MissionConfigPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext } = useOutletContext<MissionTabOutletContext>();
+  const { setSaveContext, setComputeContext, refreshMissions } =
+    useOutletContext<MissionTabOutletContext>();
 
   // core data
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
@@ -93,6 +92,11 @@ export default function MissionConfigPage() {
     "satellite",
   );
 
+  // coordinate pick-on-map mode
+  const [pickingCoord, setPickingCoord] = useState<"takeoff" | "landing" | null>(null);
+
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
   // dirty tracking for mission-level changes
   const [missionDirty, setMissionDirty] = useState<Partial<MissionUpdate>>({});
   // dirty tracking for inspection-level config overrides
@@ -111,6 +115,13 @@ export default function MissionConfigPage() {
   const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inspectionDirtyRef = useRef(inspectionDirty);
   inspectionDirtyRef.current = inspectionDirty;
+
+  const isDraft = mission?.status === "DRAFT";
+  const canModify = mission
+    ? !TERMINAL_STATUSES.includes(mission.status)
+    : false;
+
+  const computeRef = useRef<() => void>(() => {});
 
   const isDirty =
     Object.keys(missionDirty).length > 0 ||
@@ -133,13 +144,6 @@ export default function MissionConfigPage() {
     return droneProfiles.find((dp) => dp.id === dpId) ?? null;
   }, [droneProfiles, missionDirty, mission]);
 
-  // selected waypoint
-  const selectedWaypoint = useMemo(() => {
-    if (!flightPlan || !selectedWaypointId) return null;
-    return (
-      flightPlan.waypoints.find((wp) => wp.id === selectedWaypointId) ?? null
-    );
-  }, [flightPlan, selectedWaypointId]);
 
   // cleanup notification timer on unmount
   useEffect(() => {
@@ -152,6 +156,22 @@ export default function MissionConfigPage() {
     setNotification(msg);
     if (notificationTimer.current) clearTimeout(notificationTimer.current);
     notificationTimer.current = setTimeout(() => setNotification(null), 4000);
+  }
+
+  function updateMissionState(fresh: MissionDetailResponse, previousStatus?: string) {
+    /** update local mission state, detect regression, and refresh nav. */
+    if (previousStatus) {
+      const oldIdx = STATUS_ORDER.indexOf(previousStatus);
+      const newIdx = STATUS_ORDER.indexOf(fresh.status);
+      if (newIdx < oldIdx) {
+        // status regressed - keep stale flight plan visible with warning
+        showNotification(
+          t("mission.config.statusRegressed", { status: fresh.status }),
+        );
+      }
+    }
+    setMission(fresh);
+    refreshMissions();
   }
 
   // fetch mission data
@@ -170,6 +190,13 @@ export default function MissionConfigPage() {
       setMission(missionData);
       setDroneProfiles(dpData.data);
       setTemplates(tplData.data);
+
+      // initialize last saved from db timestamp
+      if (missionData.updated_at) {
+        setLastSaved(new Date(missionData.updated_at));
+      } else if (missionData.created_at) {
+        setLastSaved(new Date(missionData.created_at));
+      }
 
       // set all inspections visible by default
       setVisibleInspectionIds(
@@ -216,25 +243,12 @@ export default function MissionConfigPage() {
   const handleSave = useCallback(async () => {
     if (!id || !mission) return;
     setSaving(true);
+    const previousStatus = mission.status;
 
     try {
       // save mission-level changes
       if (Object.keys(missionDirty).length > 0) {
-        const updatedMission = await updateMission(id, missionDirty);
-
-        // check for status regression only
-        const oldIdx = STATUS_ORDER.indexOf(mission.status);
-        const newIdx = STATUS_ORDER.indexOf(updatedMission.status);
-        if (newIdx < oldIdx) {
-          showNotification(
-            t("mission.config.statusRegressed", {
-              status: updatedMission.status,
-            }),
-          );
-        }
-
-        const fresh = await getMission(id);
-        setMission(fresh);
+        await updateMission(id, missionDirty);
         setMissionDirty({});
       }
 
@@ -254,11 +268,18 @@ export default function MissionConfigPage() {
         return;
       }
 
-      // re-fetch mission after inspection saves to catch status regression
+      // re-fetch mission after all saves to detect status regression
       const fresh = await getMission(id);
-      setMission(fresh);
+      updateMissionState(fresh, previousStatus);
 
-      showNotification(t("mission.config.saved"));
+      setLastSaved(new Date());
+
+      // only show "saved" if no regression notification was already shown
+      const oldIdx = STATUS_ORDER.indexOf(previousStatus);
+      const newIdx = STATUS_ORDER.indexOf(fresh.status);
+      if (newIdx >= oldIdx) {
+        showNotification(t("mission.config.saved"));
+      }
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : t("mission.config.saveError");
@@ -274,7 +295,7 @@ export default function MissionConfigPage() {
       onSave: handleSave,
       isDirty,
       isSaving: saving,
-      lastSaved: null,
+      lastSaved,
     });
 
     return () => {
@@ -285,7 +306,28 @@ export default function MissionConfigPage() {
         lastSaved: null,
       });
     };
-  }, [setSaveContext, handleSave, isDirty, saving]);
+  }, [setSaveContext, handleSave, isDirty, saving, lastSaved]);
+
+  // wire up compute context to tab nav
+  useEffect(() => {
+    computeRef.current = handleComputeTrajectory;
+  });
+
+  useEffect(() => {
+    setComputeContext({
+      onCompute: () => computeRef.current(),
+      canCompute: isDraft,
+      isComputing: computing,
+    });
+
+    return () => {
+      setComputeContext({
+        onCompute: null,
+        canCompute: false,
+        isComputing: false,
+      });
+    };
+  }, [setComputeContext, isDraft, computing]);
 
   // unsaved changes on beforeunload
   useEffect(() => {
@@ -337,12 +379,41 @@ export default function MissionConfigPage() {
     templateId: string,
     method: InspectionMethod,
   ) {
-    if (!id) return;
+    if (!id || !mission) return;
+    const previousStatus = mission.status;
     try {
       await addInspection(id, { template_id: templateId, method });
       const fresh = await getMission(id);
-      setMission(fresh);
+      updateMissionState(fresh, previousStatus);
       setVisibleInspectionIds(new Set(fresh.inspections.map((i) => i.id)));
+
+      // default all LHAs from template targets as selected for the new inspection
+      const template = templateMap.get(templateId);
+      if (template) {
+        const allLhaIds = allAgls
+          .filter((agl) => template.target_agl_ids.includes(agl.id))
+          .flatMap((agl) => agl.lhas.map((lha) => lha.id));
+
+        // find the newly added inspection (highest sequence_order)
+        const newInsp = fresh.inspections.reduce((a, b) =>
+          a.sequence_order > b.sequence_order ? a : b,
+        );
+        if (allLhaIds.length > 0) {
+          // persist lha_ids to backend immediately
+          try {
+            await updateInspection(id, newInsp.id, { config: { lha_ids: allLhaIds } });
+          } catch {
+            // non-critical - user can re-select manually
+          }
+          setSelectedLhas((prev) => ({
+            ...prev,
+            [newInsp.id]: new Set(allLhaIds),
+          }));
+        }
+      }
+
+      setLastSaved(new Date());
+      showNotification(t("mission.config.saved"));
     } catch (err) {
       if (isAxiosError(err) && err.response?.status === 409) {
         showNotification(t("mission.config.domainError"));
@@ -353,12 +424,21 @@ export default function MissionConfigPage() {
   }
 
   async function handleRemoveInspection(inspId: string) {
-    if (!id) return;
+    if (!id || !mission) return;
+    const previousStatus = mission.status;
     try {
       await removeInspection(id, inspId);
       if (selectedInspectionId === inspId) setSelectedInspectionId(null);
+      // clear any pending dirty state for the removed inspection
+      setInspectionDirty((prev) => {
+        const next = { ...prev };
+        delete next[inspId];
+        return next;
+      });
       const fresh = await getMission(id);
-      setMission(fresh);
+      updateMissionState(fresh, previousStatus);
+      setLastSaved(new Date());
+      showNotification(t("mission.config.saved"));
     } catch (err) {
       if (isAxiosError(err) && err.response?.status === 409) {
         showNotification(t("mission.config.domainError"));
@@ -369,11 +449,19 @@ export default function MissionConfigPage() {
   }
 
   async function handleReorder(ids: string[]) {
-    if (!id) return;
+    if (!id || !mission) return;
+    const previousStatus = mission.status;
     try {
       await reorderInspections(id, { inspection_ids: ids });
       const fresh = await getMission(id);
-      setMission(fresh);
+      updateMissionState(fresh, previousStatus);
+      setLastSaved(new Date());
+
+      const oldIdx = STATUS_ORDER.indexOf(previousStatus);
+      const newIdx = STATUS_ORDER.indexOf(fresh.status);
+      if (newIdx >= oldIdx) {
+        showNotification(t("mission.config.saved"));
+      }
     } catch {
       showNotification(t("mission.config.saveError"));
     }
@@ -411,7 +499,7 @@ export default function MissionConfigPage() {
       setWarnings(allWarnings.length > 0 ? allWarnings : null);
 
       const fresh = await getMission(id);
-      setMission(fresh);
+      updateMissionState(fresh);
     } catch (err) {
       if (isAxiosError(err) && (err.response?.status === 409 || err.response?.status === 422)) {
         const detail = err.response?.data?.detail;
@@ -434,6 +522,44 @@ export default function MissionConfigPage() {
     }
   }
 
+  // use refs for map click to avoid stale closures and excess re-renders
+  const pickingCoordRef = useRef(pickingCoord);
+  pickingCoordRef.current = pickingCoord;
+  const missionDirtyRef = useRef(missionDirty);
+  missionDirtyRef.current = missionDirty;
+  const missionRef = useRef(mission);
+  missionRef.current = mission;
+
+  const handleMapClick = useCallback(
+    (lngLat: { lng: number; lat: number }) => {
+      /** set takeoff or landing coordinate from map click. */
+      const target = pickingCoordRef.current;
+      if (!target) return;
+      const key =
+        target === "takeoff"
+          ? "takeoff_coordinate"
+          : "landing_coordinate";
+
+      // preserve existing altitude if any
+      const dirty = missionDirtyRef.current;
+      const m = missionRef.current;
+      const existing =
+        target === "takeoff"
+          ? dirty.takeoff_coordinate ?? m?.takeoff_coordinate
+          : dirty.landing_coordinate ?? m?.landing_coordinate;
+      const alt = existing ? existing.coordinates[2] : 0;
+
+      handleMissionChange({
+        [key]: {
+          type: "Point" as const,
+          coordinates: [lngLat.lng, lngLat.lat, alt],
+        },
+      });
+      setPickingCoord(null);
+    },
+    [],
+  );
+
   function confirmDiscard() {
     setMissionDirty({});
     setInspectionDirty({});
@@ -448,6 +574,13 @@ export default function MissionConfigPage() {
     () => mission?.inspections.find((i) => i.id === selectedInspectionId),
     [mission, selectedInspectionId],
   );
+
+  // inspection index map for waypoint labels
+  const inspectionIndexMap = useMemo(() => {
+    if (!mission) return undefined;
+    const sorted = [...mission.inspections].sort((a, b) => a.sequence_order - b.sequence_order);
+    return Object.fromEntries(sorted.map((insp, i) => [insp.id, i + 1]));
+  }, [mission]);
 
   const selectedTemplate = useMemo(
     () =>
@@ -466,12 +599,6 @@ export default function MissionConfigPage() {
     if (!selectedInspectionId) return new Set<string>();
     return selectedLhas[selectedInspectionId] ?? new Set<string>();
   }, [selectedInspectionId, selectedLhas]);
-
-  const isDraft = mission?.status === "DRAFT";
-  const canReorder = mission
-    ? !TERMINAL_STATUSES.includes(mission.status)
-    : false;
-  const canCompute = isDraft;
 
   // loading state
   if (loading) {
@@ -498,10 +625,18 @@ export default function MissionConfigPage() {
 
   const hasTrajectory = flightPlan !== null;
 
+  const currentTakeoff = missionDirty.takeoff_coordinate !== undefined
+    ? missionDirty.takeoff_coordinate
+    : mission.takeoff_coordinate;
+  const currentLanding = missionDirty.landing_coordinate !== undefined
+    ? missionDirty.landing_coordinate
+    : mission.landing_coordinate;
+
   return (
-    <div className="flex gap-4 h-[calc(100vh-12rem)]" data-testid="mission-config-page">
-      {/* left panel - scrollable config, 30% to match nav title */}
-      <div className="w-[30%] flex-shrink-0 flex flex-col gap-4 overflow-y-auto pr-2">
+    <div className="flex px-4 h-[calc(100vh-12rem)]" data-testid="mission-config-page">
+      {/* left panel - 30%, mirrors NavBar left section */}
+      <div className="w-[30%] flex-shrink-0 flex">
+        <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-4" style={{ scrollbarGutter: "stable" }}>
         {/* inspection list */}
         <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
           <InspectionList
@@ -512,50 +647,42 @@ export default function MissionConfigPage() {
             onReorder={handleReorder}
             onAdd={() => setShowTemplatePicker(true)}
             onRemove={handleRemoveInspection}
-            isDraft={isDraft}
-            canReorder={canReorder}
+            isDraft={canModify}
+            canReorder={canModify}
             visibleIds={visibleInspectionIds}
             onToggleVisibility={handleToggleVisibility}
           />
         </div>
 
-        {/* config area */}
-        <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-          {selectedInspection && selectedTemplate ? (
-            <div className="space-y-4">
-              <InspectionConfigForm
-                inspection={selectedInspection}
-                template={selectedTemplate}
-                agls={allAgls}
-                droneProfile={selectedDroneProfile}
-                configOverride={currentInspectionConfig}
-                onChange={handleInspectionConfigChange}
-                selectedLhaIds={inspectionLhas}
-                onToggleLha={(lhaId) => {
-                  if (!selectedInspectionId) return;
-                  handleToggleLha(selectedInspectionId, lhaId);
-                }}
-              />
-
-              {/* separator */}
-              <hr className="border-tv-border" />
-
-              {/* mission config always visible below inspection config */}
-              <MissionConfigForm
-                mission={mission}
-                droneProfiles={droneProfiles}
-                values={missionDirty}
-                onChange={handleMissionChange}
-              />
-            </div>
-          ) : (
-            <MissionConfigForm
-              mission={mission}
-              droneProfiles={droneProfiles}
-              values={missionDirty}
-              onChange={handleMissionChange}
+        {/* inspection config - separate container, only when selected */}
+        {selectedInspection && selectedTemplate && (
+          <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+            <InspectionConfigForm
+              inspection={selectedInspection}
+              template={selectedTemplate}
+              agls={allAgls}
+              droneProfile={selectedDroneProfile}
+              configOverride={currentInspectionConfig}
+              onChange={handleInspectionConfigChange}
+              selectedLhaIds={inspectionLhas}
+              onToggleLha={(lhaId) => {
+                if (!selectedInspectionId) return;
+                handleToggleLha(selectedInspectionId, lhaId);
+              }}
             />
-          )}
+          </div>
+        )}
+
+        {/* mission config - always visible, separate container */}
+        <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+          <MissionConfigForm
+            mission={mission}
+            droneProfiles={droneProfiles}
+            values={missionDirty}
+            onChange={handleMissionChange}
+            pickingCoord={pickingCoord}
+            onPickCoord={setPickingCoord}
+          />
         </div>
 
         {/* warnings */}
@@ -572,12 +699,14 @@ export default function MissionConfigPage() {
             droneProfile={selectedDroneProfile}
           />
         </div>
+        </div>
+        <div className="w-2.5 flex-shrink-0" />
       </div>
 
-      {/* right panel - map */}
+      {/* right panel - map, flex-1 matches NavBar right section */}
       <div className="flex-1 flex flex-col gap-3 min-w-0">
         {airportDetail ? (
-          <div className="flex-1 relative rounded-2xl overflow-hidden border border-tv-border">
+          <div className={`flex-1 relative rounded-2xl overflow-hidden border border-tv-border ${pickingCoord ? "cursor-crosshair" : ""}`}>
             <AirportMap
               airport={airportDetail}
               terrainMode={terrainMode}
@@ -586,50 +715,51 @@ export default function MissionConfigPage() {
               waypoints={flightPlan?.waypoints ?? []}
               selectedWaypointId={selectedWaypointId}
               onWaypointClick={setSelectedWaypointId}
+              missionStatus={mission?.status}
+              onMapClick={pickingCoord ? handleMapClick : undefined}
+              takeoffCoordinate={currentTakeoff}
+              landingCoordinate={currentLanding}
+              inspectionIndexMap={inspectionIndexMap}
             >
-              {/* waypoint overlays */}
-              {hasTrajectory && (
-                <div className="absolute top-3 left-56 z-10 flex flex-col gap-2 w-48">
-                  <WaypointListPanel
-                    waypoints={flightPlan!.waypoints}
-                    selectedId={selectedWaypointId}
-                    onSelect={setSelectedWaypointId}
-                  />
-                  <WaypointInfoPanel waypoint={selectedWaypoint} />
+              {/* pick-on-map banner */}
+              {pickingCoord && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-tv-accent text-tv-accent-text text-sm font-semibold">
+                  {t("mission.config.pickingOnMap", {
+                    field: pickingCoord === "takeoff"
+                      ? t("mission.config.takeoffCoordinate")
+                      : t("mission.config.landingCoordinate"),
+                  })}
                 </div>
               )}
+
+              {/* stale trajectory warning */}
+              {isDraft && hasTrajectory && (
+                <div
+                  className="absolute top-3 right-52 z-10 flex items-center gap-2 px-4 py-2 rounded-full border border-tv-warning bg-tv-bg text-tv-warning text-xs font-semibold"
+                  data-testid="stale-trajectory-warning"
+                >
+                  <svg className="h-4 w-4 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {t("mission.config.staleTrajectory")}
+                </div>
+              )}
+
             </AirportMap>
 
             {/* bottom bar inside map */}
-            <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center gap-2">
+            <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">
               <button
                 onClick={handleEditWaypoints}
-                className="px-4 py-2 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                className="px-4 py-2.5 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
                 data-testid="edit-waypoints-btn"
               >
                 {t("mission.config.editWaypoints")}
               </button>
-              <button
-                onClick={handleComputeTrajectory}
-                disabled={computing || !canCompute}
-                title={!canCompute && !computing ? t("mission.config.recomputeTooltip") : undefined}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  computing
-                    ? "bg-tv-accent/50 text-tv-accent-text cursor-not-allowed"
-                    : !canCompute
-                      ? "border border-tv-border text-tv-text-muted opacity-50 cursor-not-allowed"
-                      : "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
-                }`}
-                data-testid="compute-trajectory-btn"
-              >
-                {computing && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                )}
-                {computing
-                  ? t("mission.config.computing")
-                  : t("mission.config.computeTrajectory")}
-              </button>
-              <div className="flex-1" />
               <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />
             </div>
           </div>
@@ -646,6 +776,7 @@ export default function MissionConfigPage() {
         onClose={() => setShowTemplatePicker(false)}
         templates={templates}
         onSelect={handleAddInspection}
+        usedTemplateIds={new Set(mission.inspections.map((i) => i.template_id))}
       />
 
       {/* unsaved changes dialog */}

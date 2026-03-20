@@ -92,17 +92,25 @@ def create_mission(db: Session, schema: MissionCreate) -> Mission:
 
 
 def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Mission:
-    """update mission - regresses VALIDATED -> PLANNED on trajectory changes."""
-    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    """update mission - invalidates trajectory on config changes."""
+    mission = (
+        db.query(Mission)
+        .options(joinedload(Mission.flight_plan))
+        .filter(Mission.id == mission_id)
+        .first()
+    )
     if not mission:
         raise NotFoundError("mission not found")
 
     data = schema.model_dump(exclude_unset=True)
 
-    # check if trajectory-affecting fields changed
+    # trajectory-affecting fields changed - regress to DRAFT
     trajectory_changed = any(k in TRAJECTORY_FIELDS for k in data.keys())
     if trajectory_changed:
-        mission.regress_if_validated()
+        try:
+            mission.invalidate_trajectory()
+        except ValueError as e:
+            raise DomainError(str(e), status_code=409)
 
     apply_schema_update(mission, schema)
     db.commit()

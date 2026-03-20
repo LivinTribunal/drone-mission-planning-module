@@ -133,6 +133,12 @@
     "other": "Other",
     "aglMarker": "AGL System",
     "lhaMarker": "LHA Unit",
+    "waypoints": "Waypoints",
+    "waypointTakeoff": "Takeoff",
+    "waypointLanding": "Landing",
+    "waypointMeasurement": "Measurement",
+    "waypointHover": "Hover",
+    "waypointTransit": "Transit",
     "mapHelpTitle": "Map Controls",
     "mapHelpDrag": "Left-click drag - move around",
     "mapHelpRotate": "Right-click drag - rotate / tilt",
@@ -141,7 +147,16 @@
     "mostUsedDrone": "Most Used Drone",
     "allDrones": "All Drone Profiles",
     "showAll": "Show all",
-    "showLess": "Show less"
+    "showLess": "Show less",
+    "airportInfrastructure": "Airport Infrastructure",
+    "groundSurfaces": "Ground Surfaces",
+    "features": "Features",
+    "flightPlan": "Flight Plan",
+    "measurement": "Measurement",
+    "transit": "Transit",
+    "hover": "Hover",
+    "transitPath": "Transit Path",
+    "lhaUnits": "LHA Units"
   },
   "mission": {
     "overview": "Overview",
@@ -224,8 +239,45 @@
       "unitNumber": "Unit",
       "settingAngle": "Angle",
       "selectMission": "Select a mission",
-      "recomputeTooltip": "Modify configuration to recompute"
+      "recomputeTooltip": "Modify configuration to recompute",
+      "notSavedYet": "Not saved yet",
+      "inMission": "in mission",
+      "pickOnMap": "Pick on Map",
+      "pickingOnMap": "Click on the map to set {{field}}",
+      "staleTrajectory": "Trajectory is outdated - recompute to update"
     }
+  },
+  "missionList": {
+    "searchPlaceholder": "Search missions by name...",
+    "newMission": "+ New Mission",
+    "noMissions": "No missions available",
+    "noMatch": "No missions match your filters",
+    "loadError": "Failed to load missions",
+    "showing": "Showing {{from}}-{{to}} of {{total}}",
+    "columns": {
+      "name": "Name",
+      "status": "Status",
+      "drone": "Drone",
+      "inspections": "Inspections",
+      "duration": "Duration",
+      "created": "Created",
+      "lastUpdated": "Last Updated"
+    },
+    "filters": {
+      "allDrones": "All Drones",
+      "hasFlightPlan": "Has Flight Plan",
+      "from": "From",
+      "to": "To",
+      "all": "All"
+    },
+    "actions": {
+      "duplicate": "Duplicate",
+      "rename": "Rename",
+      "delete": "Delete"
+    },
+    "deleteConfirm": "Are you sure you want to delete \"{{name}}\"?",
+    "renameTitle": "Rename Mission",
+    "renamePlaceholder": "Enter new name"
   },
   "missionStatus": {
     "DRAFT": "Draft",

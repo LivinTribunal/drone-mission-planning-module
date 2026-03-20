@@ -3,47 +3,65 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { AirportMapProps, MapFeature, MapLayerConfig } from "@/types/map";
-import type { WaypointResponse } from "@/types/flightPlan";
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
+import { registerAllMapImages } from "./layers/mapImages";
 import {
   addSurfaceLayers,
-  RUNWAY_LAYER,
-  TAXIWAY_LAYER,
+  RUNWAY_FILL_LAYER,
+  RUNWAY_STROKE_LAYER,
+  RUNWAY_CENTERLINE_LAYER,
+  RUNWAY_LABEL_LAYER,
+  TAXIWAY_FILL_LAYER,
+  TAXIWAY_STROKE_LAYER,
+  TAXIWAY_LABEL_LAYER,
 } from "./layers/surfaceLayers";
 import {
   addObstacleLayers,
-  OBSTACLE_POINT_LAYER,
+  OBSTACLE_ICON_LAYER,
   OBSTACLE_RADIUS_LAYER,
+  OBSTACLE_LABEL_LAYER,
 } from "./layers/obstacleLayers";
 import {
   addSafetyZoneLayers,
   SAFETY_ZONE_FILL_LAYER,
+  SAFETY_ZONE_HATCH_LAYER,
   SAFETY_ZONE_BORDER_LAYER,
+  SAFETY_ZONE_LABEL_LAYER,
 } from "./layers/safetyZoneLayers";
 import {
   addAglLayers,
   AGL_POINT_LAYER,
   AGL_LABEL_LAYER,
   LHA_POINT_LAYER,
+  LHA_LABEL_LAYER,
 } from "./layers/aglLayers";
+import {
+  addWaypointLayers as addWaypointLayersFn,
+  updateSelectedFilter,
+  getWaypointLayerIds,
+  WAYPOINT_CIRCLE_LAYER,
+  WAYPOINT_TAKEOFF_LAYER,
+  WAYPOINT_LANDING_LAYER,
+  WAYPOINT_HOVER_LAYER,
+} from "./layers/waypointLayers";
 import LayerPanel from "./overlays/LayerPanel";
 import LegendPanel from "./overlays/LegendPanel";
 import PoiInfoPanel from "./overlays/PoiInfoPanel";
 import TerrainToggle from "./overlays/TerrainToggle";
 import MapHelpPanel from "./overlays/MapHelpPanel";
+import WaypointListPanel from "./overlays/WaypointListPanel";
 
 const ESRI_TILES =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-const WAYPOINT_SOURCE = "waypoints-source";
-const WAYPOINT_CIRCLE_LAYER = "waypoints-circles";
-const WAYPOINT_LABEL_LAYER = "waypoints-labels";
-const WAYPOINT_LINE_LAYER = "waypoints-line";
+const GLYPHS_URL =
+  "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
 
 function makeSatelliteStyle(): maplibregl.StyleSpecification {
   return {
     version: 8,
+    glyphs: GLYPHS_URL,
     sources: {
       satellite: {
         type: "raster",
@@ -59,6 +77,7 @@ function makeSatelliteStyle(): maplibregl.StyleSpecification {
 function makeMapStyle(): maplibregl.StyleSpecification {
   return {
     version: 8,
+    glyphs: GLYPHS_URL,
     sources: {
       osm: {
         type: "raster",
@@ -71,64 +90,43 @@ function makeMapStyle(): maplibregl.StyleSpecification {
   };
 }
 
-function waypointsToGeoJSON(waypoints: WaypointResponse[]): GeoJSON.FeatureCollection {
-  const sorted = [...waypoints].sort(
-    (a, b) => a.sequence_order - b.sequence_order,
-  );
-  const features: GeoJSON.Feature[] = sorted.map((wp) => ({
-    type: "Feature",
-    properties: {
-      id: wp.id,
-      sequence_order: wp.sequence_order,
-      waypoint_type: wp.waypoint_type,
-    },
-    geometry: {
-      type: "Point",
-      coordinates: wp.position.coordinates,
-    },
-  }));
-  return { type: "FeatureCollection", features };
-}
-
-function waypointsToLineGeoJSON(waypoints: WaypointResponse[]): GeoJSON.FeatureCollection {
-  const sorted = [...waypoints].sort(
-    (a, b) => a.sequence_order - b.sequence_order,
-  );
-  if (sorted.length < 2) {
-    return { type: "FeatureCollection", features: [] };
-  }
-  return {
-    type: "FeatureCollection",
-    features: [
-      {
-        type: "Feature",
-        properties: {},
-        geometry: {
-          type: "LineString",
-          coordinates: sorted.map((wp) => wp.position.coordinates),
-        },
-      },
-    ],
-  };
-}
-
 // map layer id groups keyed by layer config key
 const layerGroupMap: Record<keyof MapLayerConfig, string[]> = {
-  runways: [RUNWAY_LAYER],
-  taxiways: [TAXIWAY_LAYER],
-  obstacles: [OBSTACLE_POINT_LAYER, OBSTACLE_RADIUS_LAYER],
-  safetyZones: [SAFETY_ZONE_FILL_LAYER, SAFETY_ZONE_BORDER_LAYER],
-  aglSystems: [AGL_POINT_LAYER, AGL_LABEL_LAYER, LHA_POINT_LAYER],
+  runways: [
+    RUNWAY_FILL_LAYER,
+    RUNWAY_STROKE_LAYER,
+    RUNWAY_CENTERLINE_LAYER,
+    RUNWAY_LABEL_LAYER,
+  ],
+  taxiways: [TAXIWAY_FILL_LAYER, TAXIWAY_STROKE_LAYER, TAXIWAY_LABEL_LAYER],
+  obstacles: [OBSTACLE_ICON_LAYER, OBSTACLE_RADIUS_LAYER, OBSTACLE_LABEL_LAYER],
+  safetyZones: [
+    SAFETY_ZONE_FILL_LAYER,
+    SAFETY_ZONE_HATCH_LAYER,
+    SAFETY_ZONE_BORDER_LAYER,
+    SAFETY_ZONE_LABEL_LAYER,
+  ],
+  aglSystems: [AGL_POINT_LAYER, AGL_LABEL_LAYER, LHA_POINT_LAYER, LHA_LABEL_LAYER],
+  waypoints: getWaypointLayerIds(),
 };
 
 // all interactive layer ids for click handling
 const INTERACTIVE_LAYERS = [
-  RUNWAY_LAYER,
-  TAXIWAY_LAYER,
-  OBSTACLE_POINT_LAYER,
+  RUNWAY_FILL_LAYER,
+  TAXIWAY_FILL_LAYER,
+  OBSTACLE_ICON_LAYER,
   SAFETY_ZONE_FILL_LAYER,
   AGL_POINT_LAYER,
   LHA_POINT_LAYER,
+];
+
+// layers that show cursor pointer on hover
+const POINTER_LAYERS = [
+  ...INTERACTIVE_LAYERS,
+  WAYPOINT_CIRCLE_LAYER,
+  WAYPOINT_TAKEOFF_LAYER,
+  WAYPOINT_LANDING_LAYER,
+  WAYPOINT_HOVER_LAYER,
 ];
 
 export default function AirportMap({
@@ -146,11 +144,22 @@ export default function AirportMap({
   onWaypointClick,
   terrainMode: terrainModeProp,
   onTerrainChange: onTerrainChangeProp,
+  missionStatus,
+  onMapClick,
+  takeoffCoordinate,
+  landingCoordinate,
+  inspectionIndexMap,
 }: AirportMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const layersAddedRef = useRef(false);
   const waypointsRef = useRef(waypoints);
+  const takeoffRef = useRef(takeoffCoordinate);
+  takeoffRef.current = takeoffCoordinate;
+  const landingRef = useRef(landingCoordinate);
+  landingRef.current = landingCoordinate;
+  const indexMapRef = useRef(inspectionIndexMap);
+  indexMapRef.current = inspectionIndexMap;
 
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>({
     ...DEFAULT_LAYER_CONFIG,
@@ -161,6 +170,7 @@ export default function AirportMap({
   );
   const terrainMode = terrainModeProp ?? internalTerrainMode;
   const setTerrainMode = onTerrainChangeProp ?? setInternalTerrainMode;
+  const appliedTerrainRef = useRef(terrainMode);
 
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(
     null,
@@ -178,9 +188,10 @@ export default function AirportMap({
       center: [lon, lat],
       zoom: 14.5,
       interactive,
+      attributionControl: false,
     });
 
-    map.addControl(new maplibregl.NavigationControl(), "bottom-right");
+    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "bottom-right");
 
     mapRef.current = map;
 
@@ -195,6 +206,7 @@ export default function AirportMap({
   const addAllLayers = useCallback(
     (map: maplibregl.Map) => {
       if (layersAddedRef.current) return;
+      registerAllMapImages(map);
       addSafetyZoneLayers(map, airport.safety_zones);
       addSurfaceLayers(map, airport.surfaces);
       addObstacleLayers(map, airport.obstacles);
@@ -225,86 +237,18 @@ export default function AirportMap({
     };
   }, [airport, addAllLayers]);
 
-  // add or update waypoint layers on a map instance
+  // add or update waypoint layers
   const addWaypointLayers = useCallback((map: maplibregl.Map) => {
     const wps = waypointsRef.current;
-    if (!wps || wps.length === 0) {
-      try {
-        if (map.getLayer(WAYPOINT_LABEL_LAYER)) map.removeLayer(WAYPOINT_LABEL_LAYER);
-        if (map.getLayer(WAYPOINT_CIRCLE_LAYER)) map.removeLayer(WAYPOINT_CIRCLE_LAYER);
-        if (map.getLayer(WAYPOINT_LINE_LAYER)) map.removeLayer(WAYPOINT_LINE_LAYER);
-        if (map.getSource(WAYPOINT_SOURCE)) map.removeSource(WAYPOINT_SOURCE);
-        if (map.getSource(`${WAYPOINT_SOURCE}-line`)) map.removeSource(`${WAYPOINT_SOURCE}-line`);
-      } catch {
-        // layers may not exist
-      }
-      return;
-    }
+    const takeoff = takeoffRef.current;
+    const landing = landingRef.current;
+    const idxMap = indexMapRef.current;
 
-    const pointData = waypointsToGeoJSON(wps);
-    const lineData = waypointsToLineGeoJSON(wps);
+    registerAllMapImages(map);
+    addWaypointLayersFn(map, wps ?? [], takeoff, landing, selectedWaypointId, idxMap);
+  }, [selectedWaypointId]);
 
-    // update existing source data if already present
-    const existingSource = map.getSource(WAYPOINT_SOURCE) as maplibregl.GeoJSONSource | undefined;
-    if (existingSource) {
-      existingSource.setData(pointData);
-      const lineSource = map.getSource(`${WAYPOINT_SOURCE}-line`) as maplibregl.GeoJSONSource | undefined;
-      if (lineSource) lineSource.setData(lineData);
-      return;
-    }
-
-    map.addSource(WAYPOINT_SOURCE, { type: "geojson", data: pointData });
-    map.addSource(`${WAYPOINT_SOURCE}-line`, { type: "geojson", data: lineData });
-
-    map.addLayer({
-      id: WAYPOINT_LINE_LAYER,
-      type: "line",
-      source: `${WAYPOINT_SOURCE}-line`,
-      paint: {
-        "line-color": "#4595e5",
-        "line-width": 2,
-        "line-opacity": 0.7,
-        "line-dasharray": [2, 2],
-      },
-    });
-
-    map.addLayer({
-      id: WAYPOINT_CIRCLE_LAYER,
-      type: "circle",
-      source: WAYPOINT_SOURCE,
-      paint: {
-        "circle-radius": 8,
-        "circle-color": [
-          "match",
-          ["get", "waypoint_type"],
-          "TAKEOFF", "#4595e5",
-          "LANDING", "#e54545",
-          "MEASUREMENT", "#3bbb3b",
-          "HOVER", "#e5a545",
-          "TRANSIT", "#8a8a8a",
-          "#8a8a8a",
-        ],
-        "circle-stroke-color": "#ffffff",
-        "circle-stroke-width": 2,
-      },
-    });
-
-    map.addLayer({
-      id: WAYPOINT_LABEL_LAYER,
-      type: "symbol",
-      source: WAYPOINT_SOURCE,
-      layout: {
-        "text-field": ["to-string", ["get", "sequence_order"]],
-        "text-size": 10,
-        "text-allow-overlap": true,
-      },
-      paint: {
-        "text-color": "#ffffff",
-      },
-    });
-  }, []);
-
-  // sync waypoints ref and re-render layers when waypoints change
+  // sync waypoints ref and re-render layers when waypoints or coords change
   useEffect(() => {
     waypointsRef.current = waypoints;
     const map = mapRef.current;
@@ -317,7 +261,76 @@ export default function AirportMap({
       map.on("load", handler);
       return () => { map.off("load", handler); };
     }
-  }, [waypoints, addWaypointLayers]);
+  }, [waypoints, takeoffCoordinate, landingCoordinate, inspectionIndexMap, addWaypointLayers]);
+
+  // update selected waypoint highlight and feature info
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    updateSelectedFilter(map, selectedWaypointId);
+
+    // sync feature info when selection changes (e.g. from waypoint list click)
+    if (!selectedWaypointId) return;
+    const wps = waypointsRef.current ?? [];
+    const wp = wps.find((w) => w.id === selectedWaypointId);
+    if (wp) {
+      setSelectedFeature({
+        type: "waypoint",
+        data: {
+          id: wp.id,
+          waypoint_type: wp.waypoint_type,
+          sequence_order: wp.sequence_order,
+          position: wp.position,
+          stack_count: 1,
+        },
+      });
+    }
+  }, [selectedWaypointId]);
+
+  // cursor and hover effects
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !interactive) return;
+
+    function handleMouseEnter() {
+      if (map) map.getCanvas().style.cursor = "pointer";
+    }
+    function handleMouseLeave() {
+      if (map) map.getCanvas().style.cursor = "";
+    }
+
+    function bindCursor() {
+      if (!map) return;
+      for (const layerId of POINTER_LAYERS) {
+        try {
+          if (map.getLayer(layerId)) {
+            map.on("mouseenter", layerId, handleMouseEnter);
+            map.on("mouseleave", layerId, handleMouseLeave);
+          }
+        } catch {
+          // layer may not exist
+        }
+      }
+    }
+
+    if (map.isStyleLoaded()) {
+      bindCursor();
+    } else {
+      map.on("load", bindCursor);
+    }
+
+    return () => {
+      for (const layerId of POINTER_LAYERS) {
+        try {
+          map.off("mouseenter", layerId, handleMouseEnter);
+          map.off("mouseleave", layerId, handleMouseLeave);
+        } catch {
+          // cleanup
+        }
+      }
+      map.off("load", bindCursor);
+    };
+  }, [interactive]);
 
   // click handler
   useEffect(() => {
@@ -327,38 +340,28 @@ export default function AirportMap({
     function handleClick(e: maplibregl.MapMouseEvent) {
       if (!map) return;
 
-      // check waypoint click first
-      if (onWaypointClick) {
-        try {
-          const wpFeatures = map.queryRenderedFeatures(e.point, {
-            layers: [WAYPOINT_CIRCLE_LAYER].filter((id) => {
-              try {
-                return map.getLayer(id);
-              } catch {
-                return false;
-              }
-            }),
-          });
-          if (wpFeatures.length > 0) {
-            const wpId = wpFeatures[0].properties?.id as string;
-            if (wpId) {
-              onWaypointClick(selectedWaypointId === wpId ? null : wpId);
-              return;
-            }
-          }
-        } catch {
-          // layer may not exist
-        }
+      // pick mode takes priority
+      if (onMapClick) {
+        onMapClick({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+        return;
       }
 
+      // query all interactive layers + waypoint layers in one pass
+      const waypointQueryLayers = [
+        WAYPOINT_CIRCLE_LAYER,
+        WAYPOINT_TAKEOFF_LAYER,
+        WAYPOINT_LANDING_LAYER,
+        WAYPOINT_HOVER_LAYER,
+      ];
+      const allQueryLayers = [...INTERACTIVE_LAYERS, ...waypointQueryLayers].filter((id) => {
+        try {
+          return map.getLayer(id);
+        } catch {
+          return false;
+        }
+      });
       const features = map.queryRenderedFeatures(e.point, {
-        layers: INTERACTIVE_LAYERS.filter((id) => {
-          try {
-            return map.getLayer(id);
-          } catch {
-            return false;
-          }
-        }),
+        layers: allQueryLayers,
       });
 
       if (!features.length) {
@@ -367,7 +370,42 @@ export default function AirportMap({
         return;
       }
 
-      const f = features[0];
+      // check for waypoint hit first (highest priority)
+      const wpHit = features.find((f) =>
+        waypointQueryLayers.includes(f.layer?.id ?? ""),
+      );
+      if (wpHit) {
+        const wpId = wpHit.properties?.id as string;
+        if (wpId) {
+          if (onWaypointClick) {
+            onWaypointClick(selectedWaypointId === wpId ? null : wpId);
+          }
+          const coords = (wpHit.geometry as GeoJSON.Point).coordinates;
+          const stackCount = (wpHit.properties?.stack_count as number) ?? 1;
+          setSelectedFeature({
+            type: "waypoint",
+            data: {
+              id: wpId,
+              waypoint_type: wpHit.properties?.waypoint_type as string,
+              sequence_order: wpHit.properties?.sequence_order as number,
+              position: { type: "Point", coordinates: [coords[0], coords[1], coords[2] ?? 0] },
+              stack_count: stackCount,
+              alt_min: stackCount > 1 ? (wpHit.properties?.alt_min as number) : undefined,
+              alt_max: stackCount > 1 ? (wpHit.properties?.alt_max as number) : undefined,
+            },
+          });
+          return;
+        }
+      }
+
+      // prioritize point features over fill layers
+      const pointFeature = features.find(
+        (f) =>
+          f.layer?.id !== SAFETY_ZONE_FILL_LAYER &&
+          f.layer?.id !== SAFETY_ZONE_HATCH_LAYER &&
+          f.layer?.id !== SAFETY_ZONE_BORDER_LAYER,
+      );
+      const f = pointFeature ?? features[0];
       const props = f.properties;
       if (!props) return;
 
@@ -406,7 +444,7 @@ export default function AirportMap({
     return () => {
       map.off("click", handleClick);
     };
-  }, [airport, interactive, onFeatureClick, onWaypointClick, selectedWaypointId]);
+  }, [airport, interactive, onFeatureClick, onWaypointClick, selectedWaypointId, onMapClick]);
 
   // sync layer visibility
   useEffect(() => {
@@ -447,6 +485,7 @@ export default function AirportMap({
   // terrain mode switch
   const handleTerrainChange = useCallback(
     (mode: "map" | "satellite") => {
+      appliedTerrainRef.current = mode;
       setTerrainMode(mode);
       const map = mapRef.current;
       if (!map) return;
@@ -499,6 +538,14 @@ export default function AirportMap({
     [airport, layerConfig, addAllLayers, addWaypointLayers, setTerrainMode],
   );
 
+  // sync terrain mode when changed externally (e.g. from parent toggle)
+  useEffect(() => {
+    if (terrainMode !== appliedTerrainRef.current) {
+      appliedTerrainRef.current = terrainMode;
+      handleTerrainChange(terrainMode);
+    }
+  }, [terrainMode, handleTerrainChange]);
+
   const handleLayerToggle = useCallback((key: keyof MapLayerConfig) => {
     setLayerConfig((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
@@ -542,11 +589,27 @@ export default function AirportMap({
     >
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* top-left: layers panel + poi info */}
-      <div className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-52">
+      {/* top-left: layers, waypoints, poi info */}
+      <div
+        className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-52 overflow-y-auto"
+        style={{ maxHeight: "calc(100% - 68px)" }}
+      >
         {showLayerPanel && (
-          <LayerPanel layers={layerConfig} onToggle={handleLayerToggle} />
+          <LayerPanel
+            layers={layerConfig}
+            onToggle={handleLayerToggle}
+            hasWaypoints={!!(waypoints?.length || takeoffCoordinate || landingCoordinate)}
+          />
         )}
+        {layerConfig.waypoints && (waypoints?.length || takeoffCoordinate || landingCoordinate) ? (
+          <WaypointListPanel
+            waypoints={waypoints ?? []}
+            selectedId={selectedWaypointId ?? null}
+            onSelect={onWaypointClick ?? (() => {})}
+            takeoffCoordinate={takeoffCoordinate}
+            landingCoordinate={landingCoordinate}
+          />
+        ) : null}
         {showPoiInfo && (
           <PoiInfoPanel
             feature={selectedFeature}
@@ -556,7 +619,14 @@ export default function AirportMap({
       </div>
 
       {/* top-right: legend */}
-      {showLegend && <LegendPanel />}
+      {showLegend && (
+        <LegendPanel
+          missionStatus={missionStatus}
+          hasTakeoff={!!takeoffCoordinate}
+          hasLanding={!!landingCoordinate}
+          layers={layerConfig}
+        />
+      )}
 
       {/* bottom-left: map help */}
       <div className="absolute bottom-3 left-3 z-10">

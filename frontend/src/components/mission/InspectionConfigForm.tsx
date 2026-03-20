@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import type { InspectionResponse, InspectionConfigOverride } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -29,28 +29,29 @@ export default function InspectionConfigForm({
 }: InspectionConfigFormProps) {
   const { t } = useTranslation();
 
-  // resolve values: override takes precedence, then template defaults
+  // resolve values: dirty override > saved config > template defaults
+  const savedCfg = inspection.config;
   const defaultCfg = template?.default_config;
 
   const altitudeOffset =
-    configOverride.altitude_offset ?? defaultCfg?.altitude_offset ?? "";
+    configOverride.altitude_offset ?? savedCfg?.altitude_offset ?? defaultCfg?.altitude_offset ?? "";
   const speedOverride =
-    configOverride.speed_override ?? defaultCfg?.speed_override ?? "";
+    configOverride.speed_override ?? savedCfg?.speed_override ?? defaultCfg?.speed_override ?? "";
   const measurementDensity =
-    configOverride.measurement_density ?? defaultCfg?.measurement_density ?? "";
+    configOverride.measurement_density ?? savedCfg?.measurement_density ?? defaultCfg?.measurement_density ?? "";
   const hoverDuration =
-    configOverride.hover_duration ?? defaultCfg?.hover_duration ?? "";
+    configOverride.hover_duration ?? savedCfg?.hover_duration ?? defaultCfg?.hover_duration ?? "";
 
   // speed/framerate warning - checks max_speed since path_distance is not available here
   const speedWarning = useMemo(() => {
-    const speed = configOverride.speed_override ?? defaultCfg?.speed_override;
+    const speed = configOverride.speed_override ?? savedCfg?.speed_override ?? defaultCfg?.speed_override;
     if (!speed || !droneProfile) return false;
 
     if (droneProfile.max_speed && speed > droneProfile.max_speed) {
       return true;
     }
     return false;
-  }, [configOverride, defaultCfg, droneProfile]);
+  }, [configOverride, savedCfg, defaultCfg, droneProfile]);
 
   // find target AGLs for this template
   const targetAgls = useMemo(() => {
@@ -66,11 +67,24 @@ export default function InspectionConfigForm({
     onChange({ ...configOverride, [field]: val });
   }
 
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
-    <div className="space-y-4" data-testid="inspection-config-form">
-      <h3 className="text-sm font-semibold text-tv-text-primary">
-        {t("mission.config.inspectionConfig")}
-      </h3>
+    <div data-testid="inspection-config-form">
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
+      >
+        <span>{t("mission.config.inspectionConfig")}</span>
+        {collapsed ? (
+          <ChevronDown className="h-4 w-4" />
+        ) : (
+          <ChevronUp className="h-4 w-4" />
+        )}
+      </button>
+
+      {!collapsed && (
+      <div className="space-y-4 mt-3">
 
       {/* read-only fields */}
       <div className="grid grid-cols-2 gap-3">
@@ -212,6 +226,8 @@ export default function InspectionConfigForm({
             {t("mission.config.speedFramerateWarning")}
           </p>
         </div>
+      )}
+      </div>
       )}
     </div>
   );

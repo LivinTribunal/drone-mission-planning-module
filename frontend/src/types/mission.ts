@@ -7,6 +7,7 @@ export interface MissionResponse {
   status: MissionStatus;
   airport_id: string;
   created_at: string;
+  updated_at: string;
   operator_notes: string | null;
   drone_profile_id: string | null;
   date_time: string | null;
@@ -20,6 +21,18 @@ export interface MissionDetailResponse extends MissionResponse {
   inspections: InspectionResponse[];
 }
 
+export interface InspectionConfigResponse {
+  altitude_offset: number | null;
+  speed_override: number | null;
+  measurement_density: number | null;
+  custom_tolerances: Record<string, number> | null;
+  density: number | null;
+  hover_duration: number | null;
+  horizontal_distance: number | null;
+  sweep_angle: number | null;
+  lha_ids: string[] | null;
+}
+
 export interface InspectionResponse {
   id: string;
   mission_id: string;
@@ -28,6 +41,7 @@ export interface InspectionResponse {
   method: InspectionMethod;
   sequence_order: number;
   lha_ids: string[] | null;
+  config: InspectionConfigResponse | null;
 }
 
 export interface InspectionConfigOverride {

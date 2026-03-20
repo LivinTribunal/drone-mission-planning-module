@@ -7,14 +7,14 @@ from app.core.exceptions import DomainError, NotFoundError
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.mission import InspectionCreate, InspectionUpdate
-from app.services.geometry_converter import apply_dict_update, schema_to_model_data
+from app.services.geometry_converter import apply_dict_update
 
 
 def _get_mission(db: Session, mission_id: UUID) -> Mission:
     """get mission or raise NotFoundError."""
     mission = (
         db.query(Mission)
-        .options(joinedload(Mission.inspections))
+        .options(joinedload(Mission.inspections), joinedload(Mission.flight_plan))
         .filter(Mission.id == mission_id)
         .first()
     )
@@ -66,7 +66,6 @@ def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> I
     except ValueError as e:
         raise DomainError(str(e), status_code=409)
 
-    mission.regress_if_validated()
     db.commit()
     db.refresh(inspection)
 
@@ -98,14 +97,18 @@ def update_inspection(
         if inspection.config:
             apply_dict_update(inspection.config, config_data)
         else:
-            config = InspectionConfiguration(**schema_to_model_data(schema.config))
+            config = InspectionConfiguration(**config_data)
             db.add(config)
             db.flush()
             inspection.config_id = config.id
 
     apply_dict_update(inspection, data)
 
-    mission.regress_if_validated()
+    try:
+        mission.invalidate_trajectory()
+    except ValueError as e:
+        raise DomainError(str(e), status_code=409)
+
     db.commit()
     db.refresh(inspection)
 
@@ -133,7 +136,6 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     for i, insp in enumerate(remaining, start=1):
         insp.sequence_order = i
 
-    mission.regress_if_validated()
     db.commit()
 
 
@@ -141,9 +143,10 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
     """reorder inspections by provided id list."""
     mission = _get_mission(db, mission_id)
 
-    terminal = {"EXPORTED", "COMPLETED", "CANCELLED"}
-    if mission.status in terminal:
-        raise DomainError("cannot reorder inspections after mission is exported", status_code=409)
+    try:
+        mission.invalidate_trajectory()
+    except ValueError as e:
+        raise DomainError(str(e), status_code=409)
 
     # validate inspection_ids matches mission inspections exactly
     existing_ids = {insp.id for insp in mission.inspections}
@@ -169,5 +172,4 @@ def reorder_inspections(db: Session, mission_id: UUID, inspection_ids: list[UUID
 
         inspection.sequence_order = i
 
-    mission.regress_if_validated()
     db.commit()

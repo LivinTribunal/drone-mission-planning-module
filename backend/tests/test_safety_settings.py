@@ -133,27 +133,29 @@ def test_geofence_null_containment_flags_violation(monkeypatch):
 # mission status enum usage
 
 
-def test_mission_regress_uses_enum():
-    """regress_if_validated uses MissionStatus enum values"""
+def test_mission_invalidate_trajectory_uses_enum():
+    """invalidate_trajectory uses MissionStatus enum values."""
     from uuid import uuid4
 
     from app.models.mission import Mission
 
     m = Mission(id=uuid4(), name="test", status="VALIDATED", airport_id=uuid4())
     m.inspections = []
-    m.regress_if_validated()
-    assert m.status == MissionStatus.PLANNED
+    m.flight_plan = None
+    m.invalidate_trajectory()
+    assert m.status == MissionStatus.DRAFT
 
 
-def test_mission_regress_noop_for_draft():
-    """regress_if_validated does nothing for DRAFT status"""
+def test_mission_invalidate_trajectory_noop_for_draft():
+    """invalidate_trajectory does nothing for DRAFT status."""
     from uuid import uuid4
 
     from app.models.mission import Mission
 
     m = Mission(id=uuid4(), name="test", status="DRAFT", airport_id=uuid4())
     m.inspections = []
-    m.regress_if_validated()
+    m.flight_plan = None
+    m.invalidate_trajectory()
     assert m.status == MissionStatus.DRAFT
 
 

@@ -23,7 +23,7 @@ TRANSITIONS = {
     "CANCELLED": [],
 }
 
-# fields that affect trajectory - changing these regresses VALIDATED -> PLANNED
+# fields that affect trajectory - changing these invalidates computed trajectory
 TRAJECTORY_FIELDS = {
     "drone_profile_id",
     "default_speed",
@@ -66,6 +66,9 @@ class Mission(Base):
         default="DRAFT",
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
     airport_id = Column(UUID, ForeignKey("airport.id", ondelete="CASCADE"), nullable=False)
     operator_notes = Column(String)
     drone_profile_id = Column(UUID, ForeignKey("drone_profile.id", ondelete="SET NULL"))
@@ -96,53 +99,51 @@ class Mission(Base):
             )
         self.status = target_status
 
-    def regress_if_validated(self):
-        """regress VALIDATED -> PLANNED when trajectory-affecting data changes.
-
-        bypasses transition_to() because the state machine has no backward
-        transitions by design - this is the one intentional exception.
-        """
-        if self.status == MissionStatus.VALIDATED:
-            self.status = MissionStatus.PLANNED
-
     # terminal states - no modifications allowed, user must duplicate
     _TERMINAL = {"EXPORTED", "COMPLETED", "CANCELLED"}
 
-    def add_inspection(self, inspection):
-        """add inspection - allowed in DRAFT/PLANNED/VALIDATED, blocked after EXPORTED."""
+    def invalidate_trajectory(self):
+        """regress PLANNED/VALIDATED -> DRAFT when trajectory-affecting data changes.
+
+        bypasses transition_to() because the state machine has no backward
+        transitions by design - this is the intentional exception for config changes
+        that invalidate the computed trajectory.
+        """
         if self.status in self._TERMINAL:
-            raise ValueError("cannot modify inspections after mission is exported")
+            raise ValueError("cannot modify mission after export - duplicate to make changes")
+        if self.status in (MissionStatus.PLANNED, MissionStatus.VALIDATED):
+            self.status = MissionStatus.DRAFT
+            # clear stale flight plan
+            if self.flight_plan:
+                from sqlalchemy import inspect as sa_inspect
+
+                session = sa_inspect(self).session
+                if session:
+                    session.delete(self.flight_plan)
+                self.flight_plan = None
+
+    def add_inspection(self, inspection):
+        """add inspection - invalidates trajectory, blocked after export."""
+        self.invalidate_trajectory()
         if len(self.inspections) >= MAX_INSPECTIONS:
             raise ValueError(f"mission already has {MAX_INSPECTIONS} inspections (max limit)")
 
         inspection.mission_id = self.id
         self.inspections.append(inspection)
 
-        # adding inspection invalidates trajectory - regress to DRAFT
-        if self.status in (MissionStatus.PLANNED, MissionStatus.VALIDATED):
-            self.status = MissionStatus.DRAFT
-
     def remove_inspection(self, inspection_id):
-        """remove inspection by id - allowed in DRAFT/PLANNED/VALIDATED, blocked after EXPORTED."""
-        if self.status in self._TERMINAL:
-            raise ValueError("cannot modify inspections after mission is exported")
+        """remove inspection by id - invalidates trajectory, blocked after export."""
+        self.invalidate_trajectory()
 
         target = PyUUID(str(inspection_id))
         for insp in self.inspections:
             if insp.id == target:
                 self.inspections.remove(insp)
-                # removing inspection invalidates trajectory - regress to DRAFT
-                if self.status in (MissionStatus.PLANNED, MissionStatus.VALIDATED):
-                    self.status = MissionStatus.DRAFT
                 return insp
 
         raise ValueError(f"inspection {inspection_id} not found")
 
     def change_drone_profile(self, drone_profile_id):
-        """change drone profile - allowed in DRAFT/PLANNED/VALIDATED, blocked after EXPORTED."""
-        if self.status in self._TERMINAL:
-            raise ValueError("cannot change drone profile after mission is exported")
-
+        """change drone profile - invalidates trajectory, blocked after export."""
+        self.invalidate_trajectory()
         self.drone_profile_id = drone_profile_id
-        # drone change invalidates trajectory but not inspections - regress to PLANNED
-        self.regress_if_validated()

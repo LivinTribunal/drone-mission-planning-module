@@ -37,6 +37,22 @@ class InspectionUpdate(BaseModel):
     sequence_order: int | None = None
 
 
+class InspectionConfigResponse(BaseModel):
+    """inspection configuration values"""
+
+    altitude_offset: float | None = None
+    speed_override: float | None = None
+    measurement_density: int | None = None
+    custom_tolerances: dict | None = None
+    density: float | None = None
+    hover_duration: float | None = None
+    horizontal_distance: float | None = None
+    sweep_angle: float | None = None
+    lha_ids: list[UUID] | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class InspectionResponse(BaseModel):
     """inspection response"""
 
@@ -47,6 +63,7 @@ class InspectionResponse(BaseModel):
     method: str
     sequence_order: int
     lha_ids: list[UUID] | None = None
+    config: InspectionConfigResponse | None = None
 
     model_config = {"from_attributes": True}
 
@@ -97,6 +114,7 @@ class MissionResponse(BaseModel):
     status: str
     airport_id: UUID
     created_at: datetime
+    updated_at: datetime
     operator_notes: str | None = None
     drone_profile_id: UUID | None = None
     date_time: datetime | None = None

@@ -1,4 +1,6 @@
-import axios from "axios";
+import axios, { isAxiosError } from "axios";
+
+export { isAxiosError };
 
 const TOKEN_KEY = "tarmacview_token";
 

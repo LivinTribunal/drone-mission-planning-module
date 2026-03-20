@@ -191,6 +191,7 @@ describe("InspectionConfigForm LHA toggle", () => {
     method: "VERTICAL_PROFILE" as const,
     sequence_order: 1,
     lha_ids: null,
+    config: null,
   };
 
   const mockTemplate = {

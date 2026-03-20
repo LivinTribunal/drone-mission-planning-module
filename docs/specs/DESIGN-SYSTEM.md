@@ -63,7 +63,9 @@ Used for mission status badges throughout the app.
 | COMPLETED | #d1fae5 | #059669 | #064e3b | #34d399 |
 | CANCELLED | #fee2e2 | #dc2626 | #450a0a | #f87171 |
 
-### Inspection Colors (for waypoints on map)
+### Inspection Colors (for path segments on map)
+
+Used for line segments leading to measurement waypoints. Cycles for inspections 1-5+.
 
 | Inspection | Color |
 |---|---|
@@ -72,6 +74,22 @@ Used for mission status badges throughout the app.
 | Inspection 3 | #e5a545 (orange) |
 | Inspection 4 | #9b59b6 (purple) |
 | Inspection 5 | #e54545 (red) |
+
+### Transit Path Color
+
+| Element | Color |
+|---|---|
+| Transit/takeoff/landing path lines | #7eb8e5 (muted blue) |
+| Direction arrows on all paths | #ffffff (white chevron, 0.6 scale, 80px spacing) |
+
+### Map Icon Generation
+
+All map icons are rendered as canvas ImageData at 32px with pixelRatio 2 in `mapImages.ts`:
+- Obstacle icons: triangle (building), tower, antenna, tree, other
+- Waypoint icons: rounded squares with letters (T=takeoff blue, L=landing red)
+- Hover icon: circle with pause bars (orange)
+- AGL marker: rounded square (#e91e90)
+- Path arrow: white chevron for direction indication
 
 ### Safety Zone Colors (for map polygons)
 
@@ -181,10 +199,11 @@ This means the section title and its content are visually part of the same round
 
 - Dark background (#1a1a1a light mode, #0a0a0a dark mode) with rounded-2xl corners
 - Overlay controls use pill-shaped containers with surface background and border
-- Layers: dropdown in top-left with checkboxes per layer
-- Legend: small card in top-right showing color keys for active layers
-- Terrain switcher: pill-shaped segmented control in bottom-right (Map | Satellite)
-- PoI info panel: appears in bottom-left when a map feature is clicked. Shows entity details (name, type, coordinates, etc.). Pill-shaped container with surface background.
+- **Top-left column** (stacked, scrollable): LayerPanel (checkboxes per layer group), WaypointListPanel (sortable waypoint table, appears when waypoints exist), PoiInfoPanel (entity details on click)
+- **Top-right**: LegendPanel (collapsible sections: ground surfaces, safety zones, obstacles, features, flight plan with waypoint type swatches and transit path swatch)
+- **Bottom-left**: MapHelpPanel (keyboard shortcuts)
+- **Bottom-right**: TerrainToggle (pill-shaped segmented control: Map | Satellite)
+- Legend swatch types: rectangle, circle, circle-outline, circle-border, triangle, dashed-hatch, tower, antenna, tree, rounded-square-letter, hover-icon, line-arrow
 
 ## Component Patterns
 

@@ -9,6 +9,7 @@ interface TemplatePickerProps {
   onClose: () => void;
   templates: InspectionTemplateResponse[];
   onSelect: (templateId: string, method: InspectionMethod) => void;
+  usedTemplateIds?: Set<string>;
 }
 
 export default function TemplatePicker({
@@ -16,6 +17,7 @@ export default function TemplatePicker({
   onClose,
   templates,
   onSelect,
+  usedTemplateIds,
 }: TemplatePickerProps) {
   const { t } = useTranslation();
   const [selectedMethod, setSelectedMethod] = useState<
@@ -41,7 +43,9 @@ export default function TemplatePicker({
             {t("common.noResults")}
           </p>
         )}
-        {templates.map((tpl) => (
+        {templates.map((tpl) => {
+          const isUsed = usedTemplateIds?.has(tpl.id) ?? false;
+          return (
           <div
             key={tpl.id}
             className="flex items-center gap-3 p-3 rounded-2xl border border-tv-border hover:bg-tv-surface-hover cursor-pointer transition-colors"
@@ -49,9 +53,16 @@ export default function TemplatePicker({
             data-testid={`template-option-${tpl.id}`}
           >
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-tv-text-primary truncate">
-                {tpl.name}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-tv-text-primary truncate">
+                  {tpl.name}
+                </p>
+                {isUsed && (
+                  <span className="flex-shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border border-tv-accent/30 bg-tv-accent/10 text-tv-accent">
+                    {t("mission.config.inMission")}
+                  </span>
+                )}
+              </div>
               {tpl.description && (
                 <p className="text-xs text-tv-text-muted truncate mt-0.5">
                   {tpl.description}
@@ -70,7 +81,7 @@ export default function TemplatePicker({
                   }));
                 }}
                 onClick={(e) => e.stopPropagation()}
-                className="px-2 py-1 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary"
+                className="px-2.5 py-1 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary"
                 data-testid={`method-select-${tpl.id}`}
               >
                 {tpl.methods.map((m) => (
@@ -82,12 +93,13 @@ export default function TemplatePicker({
             )}
 
             {tpl.methods.length === 1 && (
-              <span className="px-2 py-1 rounded-full text-xs bg-tv-surface text-tv-text-secondary">
+              <span className="px-2.5 py-1 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary">
                 {tpl.methods[0]?.replace(/_/g, " ")}
               </span>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </Modal>
   );

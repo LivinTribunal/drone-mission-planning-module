@@ -1,12 +1,15 @@
 import { useTranslation } from "react-i18next";
-import { MapPin, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
+import { MapPin, ChevronDown, ChevronRight } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { WaypointResponse } from "@/types/flightPlan";
+import type { PointZ } from "@/types/common";
 
 interface WaypointListPanelProps {
   waypoints: WaypointResponse[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  takeoffCoordinate?: PointZ | null;
+  landingCoordinate?: PointZ | null;
 }
 
 const typeColors: Record<string, string> = {
@@ -80,7 +83,10 @@ export default function WaypointListPanel({
   waypoints,
   selectedId,
   onSelect,
+  takeoffCoordinate,
+  landingCoordinate,
 }: WaypointListPanelProps) {
+  /** collapsible panel listing waypoints and takeoff/landing markers. */
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -92,7 +98,10 @@ export default function WaypointListPanel({
     return buildGroups(sorted);
   }, [waypoints]);
 
-  if (waypoints.length === 0) return null;
+  const hasTakeoff = !!takeoffCoordinate;
+  const hasLanding = !!landingCoordinate;
+
+  if (waypoints.length === 0 && !hasTakeoff && !hasLanding) return null;
 
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
@@ -129,27 +138,53 @@ export default function WaypointListPanel({
     );
   }
 
+  const count = waypoints.length || ((hasTakeoff ? 1 : 0) + (hasLanding ? 1 : 0));
+
   return (
     <div
-      className="bg-tv-surface border border-tv-border rounded-2xl overflow-hidden"
+      className="rounded-2xl border border-tv-border bg-tv-bg overflow-hidden"
       data-testid="waypoint-list-panel"
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center justify-between w-full px-3 py-2 text-sm font-semibold text-tv-text-primary"
+        className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-tv-text-primary"
       >
-        <span>
-          {t("mission.config.waypoints")} ({waypoints.length})
-        </span>
-        {collapsed ? (
-          <ChevronDown className="h-4 w-4" />
-        ) : (
-          <ChevronUp className="h-4 w-4" />
-        )}
+        <div className="flex items-center gap-2">
+          <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border">
+            {t("mission.config.waypoints")}
+          </span>
+          <span className="rounded-full px-2.5 py-0.5 bg-tv-accent text-tv-accent-text text-xs font-semibold">
+            {count}
+          </span>
+        </div>
+        <svg
+          className={`ml-2 h-4 w-4 text-tv-text-secondary transition-transform ${collapsed ? "" : "rotate-180"}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+            clipRule="evenodd"
+          />
+        </svg>
       </button>
 
       {!collapsed && (
-        <div className="max-h-48 overflow-y-auto px-1 pb-1">
+        <div className="max-h-48 overflow-y-auto border-t border-tv-border px-1 pb-1 pt-1">
+          {/* show standalone takeoff/landing when no trajectory waypoints */}
+          {waypoints.length === 0 && hasTakeoff && (
+            <div className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-tv-text-primary">
+              <MapPin className="h-3 w-3 flex-shrink-0 text-tv-info" />
+              <span className="font-medium">{t("dashboard.waypointTakeoff")}</span>
+            </div>
+          )}
+          {waypoints.length === 0 && hasLanding && (
+            <div className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-tv-text-primary">
+              <MapPin className="h-3 w-3 flex-shrink-0 text-tv-error" />
+              <span className="font-medium">{t("dashboard.waypointLanding")}</span>
+            </div>
+          )}
           {groups.map((group) => {
             // single-waypoint group or always-individual types
             if (group.waypoints.length === 1) {

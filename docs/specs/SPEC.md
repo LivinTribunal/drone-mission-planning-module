@@ -30,15 +30,15 @@
 
 **insp_template_methods** — template_id (FK), method (VARCHAR 30). Junction table.
 
-**inspection_configuration** — altitude_offset, speed_override, measurement_density (INTEGER), custom_tolerances, density
+**inspection_configuration** — altitude_offset, speed_override, measurement_density (INTEGER), custom_tolerances, density, hover_duration, horizontal_distance, sweep_angle, lha_ids (JSONB — array of UUID)
 
 ### Mission & Inspection
 
-**mission** — name, status (MissionStatus enum), created_at, operator_notes, drone_profile_id (FK), date_time, default_speed, default_altitude_offset, takeoff_coordinate (PointZ 4326), landing_coordinate (PointZ 4326)
+**mission** — name, status (MissionStatus enum), created_at, updated_at, operator_notes, drone_profile_id (FK), date_time, default_speed, default_altitude_offset, takeoff_coordinate (PointZ 4326), landing_coordinate (PointZ 4326)
 
 **drone_profile** — name, manufacturer, model, max_speed, max_climb_rate, max_altitude, battery_capacity, endurance_minutes, camera_resolution, camera_frame_rate (INTEGER), sensor_fov, weight
 
-**inspection** — mission_id (FK), template_id (FK), config_id (FK → inspection_configuration), method (VARCHAR 30), sequence_order
+**inspection** — mission_id (FK), template_id (FK), config_id (FK → inspection_configuration), method (VARCHAR 30), sequence_order, lha_ids (JSONB — array of UUID, denormalized from config for quick access)
 
 ### Flight Plan & Output
 
@@ -169,7 +169,7 @@ Full-screen MapLibre. Toolbar: undo/redo (10 max, per-session), save, recompute.
 **3D View:** CesiumJS separate viewer toggle. Orbit from any angle. Altitude native. View-only (editing is 2D only).
 
 ### Page 07 — Mission Configuration (`/operator-center/missions/:id/configuration`)
-Left: reorderable inspection list with add/remove, per-inspection params (altitudeOffset, speedOverride, measurementDensity, customTolerances, hoverDuration), speed/framerate warning, LHA checkboxes, drone selector, takeoff/landing coordinates. Right: map preview, waypoint list (after generation). "Compute Trajectory" button (blocks UI). "Edit Waypoints" → Map tab.
+Two-column layout. Left scrollable panel: MissionConfigForm (drone profile select, default speed, altitude offset, takeoff/landing CoordinateInputs with pick-on-map, operator notes), InspectionList (reorderable, add via TemplatePicker modal, remove, visibility toggle, count badge X/10), InspectionConfigForm (template name, method read-only, LHA checkboxes, altitudeOffset, speedOverride, measurementDensity, hoverDuration — with speed/framerate warning), StatsPanel (distance, duration, waypoint count, battery % — post-computation only), WarningsPanel (validation violations — post-computation only). Right: AirportMap with flight path visualization (direction arrows on path segments, blue transit paths #7eb8e5, per-inspection colored measurement segments, overlapping paths offset ~5m left of heading for visibility), WaypointListPanel (sortable list), WaypointInfoPanel (selected waypoint details). "Compute Trajectory" button in MissionTabNav bar. Schema uses `config` (not `config_override`) in InspectionCreate/InspectionUpdate.
 
 ### Page 08 — Validation & Export (`/operator-center/missions/:id/validation-export`)
 Left: per-constraint breakdown (pass/fail/warning), "Edit Configuration" → Config tab, "Accept" → VALIDATED. Right: map + export section (KML/KMZ/JSON/MAVLink checkboxes, download button). Export disabled until VALIDATED. Complete/Cancel disabled until EXPORTED. Delete available always.
@@ -221,9 +221,9 @@ Airport list, inspection template editor (AGL selector, LHA checkboxes, default 
 ### Business Methods on Entities
 
 - `Mission.transition_to(target_status)` — enforces state machine
-- `Mission.regress_if_validated()` — VALIDATED -> PLANNED on trajectory changes
-- `Mission.add_inspection(inspection)` / `remove_inspection(id)` — DRAFT-only with max 10
-- `Mission.change_drone_profile(id)` — auto-regresses
+- `Mission.invalidate_trajectory()` — PLANNED/VALIDATED -> DRAFT on trajectory changes, clears flight plan
+- `Mission.add_inspection(inspection)` / `remove_inspection(id)` — invalidates trajectory, max 10
+- `Mission.change_drone_profile(id)` — invalidates trajectory
 - `Airport.add_surface/obstacle/safety_zone()` — sets airport_id on child
 - `InspectionConfiguration.resolve_with_defaults(template_config)` — merges overrides
 - `AGL.calculate_lha_center_point()` — centroid of LHA positions

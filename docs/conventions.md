@@ -148,8 +148,9 @@ def create_mission(db: Session, data: MissionCreate) -> Mission:
 ### Frontend
 
 - **Framework**: Vitest + React Testing Library
-- **Location**: co-located or in `__tests__/` directories
-- **Naming**: `{Component}.test.tsx` or `{module}.test.ts`
+- **Location**: co-located `{Component}.test.tsx` or grouped `{group}.test.tsx` for lightweight components
+- **Naming**: `{Component}.test.tsx`, `{module}.test.ts`, or `{group}.test.tsx` for shared test files
+- **Grouped tests**: simple/related components can share a test file (e.g. `common.test.tsx` for Button, Input, Modal, Badge, Card, Dropdown, CollapsibleSection, RowActionMenu)
 - **Command**: `npx vitest run`
 
 ### What Must Be Tested
@@ -157,6 +158,7 @@ def create_mission(db: Session, data: MissionCreate) -> Mission:
 - All service methods (unit tests)
 - All API routes (integration tests with real PostGIS)
 - Complex UI interactions (component tests with Testing Library)
+- Context providers (auth, airport, theme state management)
 - Trajectory generation and safety validation (T3 - thorough coverage required)
 
 ---

@@ -90,6 +90,12 @@ drone-mission-planning-module/
 │   ├── src/
 │   │   ├── pages/          # operator-center/ and coordinator-center/ routes
 │   │   ├── components/     # Reusable React components
+│   │   │   ├── common/     # Button, Input, Modal, Badge, Card, Dropdown, etc.
+│   │   │   ├── mission/    # MissionConfigForm, InspectionList, TemplatePicker, etc.
+│   │   │   ├── map/        # AirportMap + layers/ + overlays/
+│   │   │   ├── Layout/     # NavBar, MissionTabNav, OperatorLayout, etc.
+│   │   │   └── Auth/       # ProtectedRoute
+│   │   ├── contexts/       # AuthContext, AirportContext, ThemeContext
 │   │   ├── api/            # Axios client + API functions
 │   │   ├── i18n/           # i18next config + locale JSON files
 │   │   └── types/          # TypeScript interfaces matching Pydantic schemas
@@ -115,6 +121,8 @@ frontend/src/ → Axios client → /api/v1/* → FastAPI routers → services �
 - `backend/app/core/` — config, database, auth, dependencies
 - `frontend/src/api/client.ts` — Axios with JWT interceptor, all API calls go through here
 - `frontend/src/pages/` — operator-center and coordinator-center routes
+- `frontend/src/components/map/layers/` — MapLibre GL layer modules (surfaceLayers, obstacleLayers, safetyZoneLayers, aglLayers, waypointLayers, mapImages)
+- `frontend/src/components/map/overlays/` — map UI overlays (LayerPanel, LegendPanel, PoiInfoPanel, WaypointListPanel, WaypointInfoPanel, TerrainToggle, MapHelpPanel)
 
 **Dependency rule**: routes → services → models/schemas. Routes never import models directly.
 

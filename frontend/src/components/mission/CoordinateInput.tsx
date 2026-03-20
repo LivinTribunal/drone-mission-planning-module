@@ -1,25 +1,28 @@
 import { useTranslation } from "react-i18next";
+import { MapPin } from "lucide-react";
 import type { PointZ } from "@/types/common";
 
 interface CoordinateInputProps {
   label: string;
   value: PointZ | null;
   onChange: (value: PointZ | null) => void;
+  picking?: boolean;
+  onPickOnMap?: () => void;
 }
 
 export default function CoordinateInput({
   label,
   value,
   onChange,
+  picking,
+  onPickOnMap,
 }: CoordinateInputProps) {
+  /** lat/lon/alt input group with optional pick-on-map button. */
   const { t } = useTranslation();
 
   const lat = value ? value.coordinates[1] : "";
   const lon = value ? value.coordinates[0] : "";
   const alt = value ? value.coordinates[2] : "";
-
-  const latNum = typeof lat === "number" ? lat : NaN;
-  const lonNum = typeof lon === "number" ? lon : NaN;
 
   const latError =
     typeof lat === "number" && (lat < -90 || lat > 90)
@@ -31,6 +34,7 @@ export default function CoordinateInput({
       : null;
 
   function handleChange(field: "lat" | "lon" | "alt", raw: string) {
+    /** update a single coordinate field. */
     const num = raw === "" ? null : parseFloat(raw);
     if (raw !== "" && (num === null || isNaN(num as number))) return;
 
@@ -58,9 +62,26 @@ export default function CoordinateInput({
 
   return (
     <div>
-      <label className="block text-xs font-medium mb-1.5 text-tv-text-secondary">
-        {label}
-      </label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="text-xs font-medium text-tv-text-secondary">
+          {label}
+        </label>
+        {onPickOnMap && (
+          <button
+            type="button"
+            onClick={onPickOnMap}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
+              picking
+                ? "border-tv-accent bg-tv-accent text-tv-accent-text"
+                : "border-tv-accent text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
+            }`}
+            data-testid={`${label.toLowerCase().replace(/\s+/g, "-")}-pick-map`}
+          >
+            <MapPin className="h-3 w-3" />
+            {t("mission.config.pickOnMap")}
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-3 gap-2">
         <div>
           <input
@@ -106,11 +127,6 @@ export default function CoordinateInput({
           />
         </div>
       </div>
-      {!isNaN(latNum) && !isNaN(lonNum) && !latError && !lonError && (
-        <p className="mt-1 text-xs text-tv-text-muted">
-          {latNum.toFixed(6)}, {lonNum.toFixed(6)}
-        </p>
-      )}
     </div>
   );
 }
