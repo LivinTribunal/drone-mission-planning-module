@@ -71,7 +71,9 @@ def resolve_with_defaults(inspection, template) -> ResolvedConfig:
 
 def get_lha_positions(template, lha_ids: list | None = None) -> list[Point3D]:
     """extract 3D positions from LHA units, optionally filtered by lha_ids."""
+    # precompute set to avoid O(m*n) list rebuild per iteration
     lha_id_set = {str(i) for i in lha_ids} if lha_ids else None
+
     positions = []
     for agl in template.targets:
         for lha in agl.lhas:
@@ -91,11 +93,16 @@ def get_lha_positions(template, lha_ids: list | None = None) -> list[Point3D]:
     return positions
 
 
-def get_lha_setting_angles(template) -> list[Degrees]:
+def get_lha_setting_angles(template, lha_ids=None) -> list[Degrees]:
     """collect and sort setting angles from all LHA units in template."""
+    # precompute set to avoid O(m*n) list rebuild per iteration
+    lha_id_set = {str(i) for i in lha_ids} if lha_ids else None
+
     angles = []
     for agl in template.targets:
         for lha in agl.lhas:
+            if lha_id_set and str(lha.id) not in lha_id_set:
+                continue
             if lha.setting_angle is not None:
                 angles.append(lha.setting_angle)
 

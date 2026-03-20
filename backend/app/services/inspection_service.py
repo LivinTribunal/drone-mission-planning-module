@@ -127,7 +127,9 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
 
     # terminal-state check before remove - gives 409, not 404
     if mission.status in Mission._TERMINAL:
-        raise DomainError("cannot modify mission after export", status_code=409)
+        raise DomainError(
+            "cannot modify mission after export - duplicate to make changes", status_code=409
+        )
 
     _delete_flight_plan_if_exists(db, mission)
     try:

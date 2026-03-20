@@ -22,11 +22,11 @@ class InspectionConfigOverride(BaseModel):
 
     @field_validator("lha_ids", mode="before")
     @classmethod
-    def coerce_lha_ids_to_strings(cls, v: list | None) -> list[str] | None:
-        """coerce uuids to strings on input for JSONB storage."""
+    def coerce_lha_ids_to_strings(cls, v: list | None) -> list[UUID] | None:
+        """coerce mixed uuid/string lists so downstream jsonb storage is consistent."""
         if v is None:
             return None
-        return [str(uid) for uid in v]
+        return [UUID(str(i)) if not isinstance(i, UUID) else i for i in v]
 
 
 class InspectionCreate(BaseModel):

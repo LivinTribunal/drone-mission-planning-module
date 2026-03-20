@@ -178,14 +178,14 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
-    # only DRAFT, PLANNED, or VALIDATED can generate - terminal states are blocked.
-    # for PLANNED missions, the old flight plan is deleted and regenerated in-place.
-    # if generation fails mid-way, the session rolls back so no data is lost.
-    if mission.status not in (
-        MissionStatus.DRAFT,
-        MissionStatus.PLANNED,
-        MissionStatus.VALIDATED,
-    ):
+    # auto-regress VALIDATED so regeneration works without manual step.
+    # PLANNED doesn't need regression - the old flight plan is deleted below
+    # and the session rolls back on failure, so no stale state is left behind.
+    if mission.status == MissionStatus.VALIDATED:
+        mission.invalidate_trajectory()
+
+    # only DRAFT or PLANNED can generate - terminal states are blocked
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
         raise TrajectoryGenerationError(
             f"cannot generate trajectory for mission in {mission.status} status"
         )
@@ -196,10 +196,6 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         had_constraints = bool(mission.flight_plan.constraints)
         db.delete(mission.flight_plan)
         db.flush()
-
-    # auto-regress VALIDATED so regeneration works without manual step
-    if mission.status == MissionStatus.VALIDATED:
-        mission.invalidate_trajectory()
 
     warnings: list[str] = []
     if had_constraints:
@@ -217,7 +213,8 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         # phase 2 - resolve config and pre-checks
         config = resolve_with_defaults(inspection, template)
 
-        lha_positions = get_lha_positions(template, lha_ids=inspection.lha_ids)
+        lha_ids = inspection.lha_ids
+        lha_positions = get_lha_positions(template, lha_ids)
         if not lha_positions:
             warnings.append(f"{template.name} #{inspection.sequence_order}: no LHA positions")
             continue
@@ -225,7 +222,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         center = Point3D.center(lha_positions)
         glide_slope = get_glide_slope_angle(template)
         rwy_heading = get_runway_heading(template, data.surfaces)
-        setting_angles = get_lha_setting_angles(template)
+        setting_angles = get_lha_setting_angles(template, lha_ids)
 
         # compute optimal density if not overridden
         density, density_warning = resolve_density(inspection.method, setting_angles, config)

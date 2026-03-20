@@ -20,6 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """add updated_at column to mission table."""
+    # onupdate=func.now() on the ORM model is orm-only - not a db trigger.
+    # acceptable since all writes go through the ORM layer.
     op.add_column(
         "mission",
         sa.Column(
@@ -35,4 +38,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """remove updated_at column from mission table."""
     op.drop_column("mission", "updated_at")
