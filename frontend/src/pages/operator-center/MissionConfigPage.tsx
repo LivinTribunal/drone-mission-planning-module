@@ -403,7 +403,7 @@ export default function MissionConfigPage() {
           try {
             await updateInspection(id, newInsp.id, { config: { lha_ids: allLhaIds } });
           } catch {
-            // non-critical - user can re-select manually
+            showNotification(t("mission.config.lhaSaveError"));
           }
           setSelectedLhas((prev) => ({
             ...prev,

@@ -20,7 +20,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # onupdate=func.now() is orm client-side only - raw sql updates will not set updated_at
     op.add_column(
         "mission",
         sa.Column(
@@ -30,6 +29,9 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
+
+    # backfill existing rows - semantically correct to match created_at
+    op.execute("UPDATE mission SET updated_at = created_at WHERE updated_at IS NULL")
 
 
 def downgrade() -> None:

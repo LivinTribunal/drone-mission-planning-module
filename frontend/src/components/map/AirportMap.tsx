@@ -374,24 +374,26 @@ export default function AirportMap({
       const wpHit = features.find((f) =>
         waypointQueryLayers.includes(f.layer?.id ?? ""),
       );
-      if (wpHit) {
-        const wpId = wpHit.properties?.id as string;
+      if (wpHit && wpHit.properties) {
+        const wpId = String(wpHit.properties.id ?? "");
         if (wpId) {
           if (onWaypointClick) {
             onWaypointClick(selectedWaypointId === wpId ? null : wpId);
           }
-          const coords = (wpHit.geometry as GeoJSON.Point).coordinates;
-          const stackCount = (wpHit.properties?.stack_count as number) ?? 1;
+          const coords = wpHit.geometry && "coordinates" in wpHit.geometry
+            ? (wpHit.geometry as GeoJSON.Point).coordinates
+            : [0, 0, 0];
+          const stackCount = Number(wpHit.properties.stack_count ?? 1);
           setSelectedFeature({
             type: "waypoint",
             data: {
               id: wpId,
-              waypoint_type: wpHit.properties?.waypoint_type as string,
-              sequence_order: wpHit.properties?.sequence_order as number,
+              waypoint_type: String(wpHit.properties.waypoint_type ?? ""),
+              sequence_order: Number(wpHit.properties.sequence_order ?? 0),
               position: { type: "Point", coordinates: [coords[0], coords[1], coords[2] ?? 0] },
               stack_count: stackCount,
-              alt_min: stackCount > 1 ? (wpHit.properties?.alt_min as number) : undefined,
-              alt_max: stackCount > 1 ? (wpHit.properties?.alt_max as number) : undefined,
+              alt_min: stackCount > 1 ? Number(wpHit.properties.alt_min) : undefined,
+              alt_max: stackCount > 1 ? Number(wpHit.properties.alt_max) : undefined,
             },
           });
           return;

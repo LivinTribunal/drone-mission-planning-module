@@ -244,7 +244,8 @@
       "inMission": "in mission",
       "pickOnMap": "Pick on Map",
       "pickingOnMap": "Click on the map to set {{field}}",
-      "staleTrajectory": "Trajectory is outdated - recompute to update"
+      "staleTrajectory": "Trajectory is outdated - recompute to update",
+      "lhaSaveError": "Failed to save LHA selection - re-select manually"
     }
   },
   "missionList": {

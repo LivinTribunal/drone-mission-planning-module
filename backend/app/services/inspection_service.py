@@ -10,8 +10,13 @@ from app.schemas.mission import InspectionCreate, InspectionUpdate
 from app.services.geometry_converter import apply_dict_update
 
 
-def _get_mission(db: Session, mission_id: UUID) -> Mission:
+def _get_mission(db: Session, mission_id: UUID, for_update: bool = False) -> Mission:
     """get mission or raise NotFoundError."""
+    if for_update:
+        # lock the mission row first, then eagerly load relationships separately
+        # FOR UPDATE can't be combined with outer joins in PostgreSQL
+        db.query(Mission).filter(Mission.id == mission_id).with_for_update().first()
+
     mission = (
         db.query(Mission)
         .options(joinedload(Mission.inspections), joinedload(Mission.flight_plan))
@@ -33,7 +38,7 @@ def _delete_flight_plan_if_exists(db: Session, mission: Mission) -> None:
 
 def add_inspection(db: Session, mission_id: UUID, schema: InspectionCreate) -> Inspection:
     """add inspection to mission via aggregate root."""
-    mission = _get_mission(db, mission_id)
+    mission = _get_mission(db, mission_id, for_update=True)
 
     # validate template exists
     template = (

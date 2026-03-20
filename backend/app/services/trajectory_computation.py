@@ -83,7 +83,7 @@ def get_lha_positions(template, lha_ids: list | None = None) -> list[Point3D]:
                 c = parse_ewkb(lha.position.data).get("coordinates")
                 if not c or len(c) < 3:
                     continue
-            except Exception:
+            except (KeyError, ValueError, TypeError):
                 logger.warning("failed to parse LHA position for lha %s", lha.id)
                 continue
             positions.append(Point3D(lon=c[0], lat=c[1], alt=c[2]))

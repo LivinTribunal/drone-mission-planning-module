@@ -52,6 +52,27 @@ from app.services.trajectory_types import (
 from app.utils.geo import bearing_between, distance_between, total_path_distance
 
 
+def _parse_coordinate(ewkb_data, label: str) -> list[float]:
+    """parse and validate a 3D coordinate from EWKB geometry data."""
+    try:
+        parsed = parse_ewkb(ewkb_data)
+        if parsed is None:
+            raise TrajectoryGenerationError(f"{label} coordinate geometry is empty")
+        coords = parsed.get("coordinates")
+    except TrajectoryGenerationError:
+        raise
+    except Exception:
+        raise TrajectoryGenerationError(f"failed to parse {label} coordinate geometry")
+    if not coords or len(coords) < 3:
+        raise TrajectoryGenerationError(f"{label} coordinate must be a valid 3D point")
+    try:
+        Coordinate(lat=coords[1], lon=coords[0], alt=coords[2])
+    except ValueError as e:
+        raise TrajectoryGenerationError(f"invalid {label} coordinate: {e}")
+
+    return coords
+
+
 def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     """load all entities needed for trajectory generation in a single query phase.
 
@@ -358,21 +379,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # takeoff + climb to safe altitude before transit
     if mission.takeoff_coordinate:
-        try:
-            parsed = parse_ewkb(mission.takeoff_coordinate.data)
-            if parsed is None:
-                raise TrajectoryGenerationError("takeoff coordinate geometry is empty")
-            tc = parsed.get("coordinates")
-        except TrajectoryGenerationError:
-            raise
-        except Exception:
-            raise TrajectoryGenerationError("failed to parse takeoff coordinate geometry")
-        if not tc or len(tc) < 3:
-            raise TrajectoryGenerationError("takeoff coordinate must be a valid 3D point")
-        try:
-            Coordinate(lat=tc[1], lon=tc[0], alt=tc[2])
-        except ValueError as e:
-            raise TrajectoryGenerationError(f"invalid takeoff coordinate: {e}")
+        tc = _parse_coordinate(mission.takeoff_coordinate.data, "takeoff")
         if not inspection_passes[0].waypoints:
             raise TrajectoryGenerationError("first inspection produced no waypoints")
         first_wp = inspection_passes[0].waypoints[0]
@@ -424,21 +431,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # landing: transit to safe altitude above landing spot, then descend
     if mission.landing_coordinate:
-        try:
-            parsed = parse_ewkb(mission.landing_coordinate.data)
-            if parsed is None:
-                raise TrajectoryGenerationError("landing coordinate geometry is empty")
-            lc = parsed.get("coordinates")
-        except TrajectoryGenerationError:
-            raise
-        except Exception:
-            raise TrajectoryGenerationError("failed to parse landing coordinate geometry")
-        if not lc or len(lc) < 3:
-            raise TrajectoryGenerationError("landing coordinate must be a valid 3D point")
-        try:
-            Coordinate(lat=lc[1], lon=lc[0], alt=lc[2])
-        except ValueError as e:
-            raise TrajectoryGenerationError(f"invalid landing coordinate: {e}")
+        lc = _parse_coordinate(mission.landing_coordinate.data, "landing")
 
         safe_alt = lc[2] + settings.landing_safe_altitude
         last = all_waypoints[-1]
