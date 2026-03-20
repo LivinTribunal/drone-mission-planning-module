@@ -61,8 +61,8 @@ def _parse_coordinate(ewkb_data, label: str) -> list[float]:
         coords = parsed.get("coordinates")
     except TrajectoryGenerationError:
         raise
-    except Exception:
-        raise TrajectoryGenerationError(f"failed to parse {label} coordinate geometry")
+    except Exception as e:
+        raise TrajectoryGenerationError(f"failed to parse {label} coordinate geometry") from e
     if not coords or len(coords) < 3:
         raise TrajectoryGenerationError(f"{label} coordinate must be a valid 3D point")
     try:
@@ -178,9 +178,16 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
-    # auto-regress VALIDATED so regeneration works without manual step.
-    # PLANNED doesn't need regression - the old flight plan is deleted below
-    # and the session rolls back on failure, so no stale state is left behind.
+    # delete existing flight plan before invalidation - db concern stays in service.
+    # must happen before invalidate_trajectory() per its contract.
+    existing_fp = mission.flight_plan
+    had_constraints = False
+    if existing_fp:
+        had_constraints = bool(existing_fp.constraints)
+        db.delete(existing_fp)
+        db.flush()
+
+    # auto-regress VALIDATED so regeneration works without manual step
     if mission.status == MissionStatus.VALIDATED:
         mission.invalidate_trajectory()
 
@@ -189,13 +196,6 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         raise TrajectoryGenerationError(
             f"cannot generate trajectory for mission in {mission.status} status"
         )
-
-    # delete existing flight plan before invalidating - db concern stays in service
-    had_constraints = False
-    if mission.flight_plan:
-        had_constraints = bool(mission.flight_plan.constraints)
-        db.delete(mission.flight_plan)
-        db.flush()
 
     warnings: list[str] = []
     if had_constraints:

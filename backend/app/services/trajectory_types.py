@@ -111,7 +111,6 @@ class ResolvedConfig:
     hover_duration: Seconds | None = None
     horizontal_distance: Meters | None = None
     sweep_angle: Degrees | None = None
-    lha_ids: list | None = None
 
 
 @dataclass
