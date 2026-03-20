@@ -257,6 +257,89 @@ class TestMissionChangeDroneProfile:
             m.change_drone_profile(uuid4())
 
 
+class TestInspectionLhaIds:
+    """tests for Inspection.lha_ids property."""
+
+    def test_lha_ids_returns_uuids(self):
+        """string values in config.lha_ids are returned as UUID objects."""
+        uid1 = uuid4()
+        uid2 = uuid4()
+        config = InspectionConfiguration(lha_ids=[str(uid1), str(uid2)])
+        insp = Inspection(id=uuid4(), template_id=uuid4(), method="ANGULAR_SWEEP", sequence_order=1)
+        insp.config = config
+
+        result = insp.lha_ids
+
+        assert result is not None
+        assert len(result) == 2
+        assert result[0] == uid1
+        assert result[1] == uid2
+
+    def test_lha_ids_none_when_no_config(self):
+        """returns None when config is missing."""
+        insp = Inspection(id=uuid4(), template_id=uuid4(), method="ANGULAR_SWEEP", sequence_order=1)
+        insp.config = None
+
+        assert insp.lha_ids is None
+
+    def test_lha_ids_none_when_config_has_no_lha_ids(self):
+        """returns None when config.lha_ids is None."""
+        config = InspectionConfiguration(lha_ids=None)
+        insp = Inspection(id=uuid4(), template_id=uuid4(), method="ANGULAR_SWEEP", sequence_order=1)
+        insp.config = config
+
+        assert insp.lha_ids is None
+
+
+class TestCoerceLhaIdsValidator:
+    """tests for InspectionConfigOverride.coerce_lha_ids_to_strings validator."""
+
+    def test_uuids_accepted(self):
+        """UUID objects passed as lha_ids are accepted and stored as UUIDs."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        uid1 = uuid4()
+        uid2 = uuid4()
+        schema = InspectionConfigOverride(lha_ids=[uid1, uid2])
+
+        assert schema.lha_ids is not None
+        assert len(schema.lha_ids) == 2
+        # field type is list[UUID] so final values are UUIDs
+        assert schema.lha_ids[0] == uid1
+        assert schema.lha_ids[1] == uid2
+
+    def test_none_passes_through(self):
+        """None lha_ids passes through unchanged."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        schema = InspectionConfigOverride(lha_ids=None)
+
+        assert schema.lha_ids is None
+
+    def test_strings_accepted(self):
+        """string lha_ids are accepted and parsed to UUIDs."""
+        from uuid import UUID as PyUUID
+
+        from app.schemas.mission import InspectionConfigOverride
+
+        uid = uuid4()
+        schema = InspectionConfigOverride(lha_ids=[str(uid)])
+
+        assert schema.lha_ids is not None
+        assert isinstance(schema.lha_ids[0], PyUUID)
+        assert schema.lha_ids[0] == uid
+
+    def test_json_dump_produces_strings(self):
+        """model_dump(mode='json') produces string lha_ids for JSONB storage."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        uid = uuid4()
+        schema = InspectionConfigOverride(lha_ids=[uid])
+        dumped = schema.model_dump(mode="json")
+
+        assert dumped["lha_ids"] == [str(uid)]
+
+
 # airport aggregate root tests
 
 

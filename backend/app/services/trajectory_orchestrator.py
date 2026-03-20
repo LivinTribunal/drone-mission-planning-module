@@ -157,7 +157,9 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
-    # only DRAFT, PLANNED, or VALIDATED can generate - terminal states are blocked
+    # only DRAFT, PLANNED, or VALIDATED can generate - terminal states are blocked.
+    # for PLANNED missions, the old flight plan is deleted and regenerated in-place.
+    # if generation fails mid-way, the session rolls back so no data is lost.
     if mission.status not in (
         MissionStatus.DRAFT,
         MissionStatus.PLANNED,
@@ -371,6 +373,8 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             Coordinate(lat=tc[1], lon=tc[0], alt=tc[2])
         except ValueError as e:
             raise TrajectoryGenerationError(f"invalid takeoff coordinate: {e}")
+        if not inspection_passes[0].waypoints:
+            raise TrajectoryGenerationError("first inspection produced no waypoints")
         first_wp = inspection_passes[0].waypoints[0]
         all_waypoints.append(
             WaypointData(

@@ -22,8 +22,8 @@ class InspectionConfigOverride(BaseModel):
 
     @field_validator("lha_ids", mode="before")
     @classmethod
-    def serialize_lha_ids_to_strings(cls, v: list | None) -> list[str] | None:
-        """convert uuids to strings for JSONB storage."""
+    def coerce_lha_ids_to_strings(cls, v: list | None) -> list[str] | None:
+        """coerce uuids to strings on input for JSONB storage."""
         if v is None:
             return None
         return [str(uid) for uid in v]

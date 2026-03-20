@@ -71,10 +71,11 @@ def resolve_with_defaults(inspection, template) -> ResolvedConfig:
 
 def get_lha_positions(template, lha_ids: list | None = None) -> list[Point3D]:
     """extract 3D positions from LHA units, optionally filtered by lha_ids."""
+    lha_id_set = {str(i) for i in lha_ids} if lha_ids else None
     positions = []
     for agl in template.targets:
         for lha in agl.lhas:
-            if lha_ids and str(lha.id) not in [str(i) for i in lha_ids]:
+            if lha_id_set and str(lha.id) not in lha_id_set:
                 continue
             if not lha.position:
                 continue

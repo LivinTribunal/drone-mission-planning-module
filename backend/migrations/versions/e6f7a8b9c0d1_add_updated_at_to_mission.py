@@ -20,6 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # onupdate=func.now() is orm client-side only - raw sql updates will not set updated_at
     op.add_column(
         "mission",
         sa.Column(
