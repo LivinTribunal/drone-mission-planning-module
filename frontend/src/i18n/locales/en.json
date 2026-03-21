@@ -156,13 +156,37 @@
     "transit": "Transit",
     "hover": "Hover",
     "transitPath": "Transit Path",
-    "lhaUnits": "LHA Units"
+    "lhaUnits": "LHA Units",
+    "simplifiedTrajectory": "Simplified Trajectory"
   },
   "mission": {
     "overview": "Overview",
     "configuration": "Configuration",
     "map": "Map",
     "validationExport": "Validation & Export",
+    "overview": {
+      "missionInfo": "Mission Info",
+      "validationStatus": "Validation Status",
+      "overallStatus": "Overall Status",
+      "passed": "Passed",
+      "failed": "Failed",
+      "notValidated": "Not Validated",
+      "warningCount": "Warnings",
+      "violationCount": "Violations",
+      "noFlightPlan": "No data — Flight Plan needs to be generated",
+      "openMap": "Open Map",
+      "modifyParameters": "Modify Parameters",
+      "runway": "Runway",
+      "droneProfile": "Drone Profile",
+      "inspectionCount": "Inspection Count",
+      "created": "Created",
+      "lastUpdated": "Last Updated",
+      "operatorNotes": "Operator Notes",
+      "missionName": "Mission Name",
+      "status": "Status",
+      "transitDistance": "Transit Distance",
+      "measurementDistance": "Measurement Distance"
+    },
     "config": {
       "inspections": "Inspections",
       "addInspection": "Add Inspection",

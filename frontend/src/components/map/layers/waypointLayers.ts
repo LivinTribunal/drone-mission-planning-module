@@ -1,3 +1,4 @@
+import type maplibregl from "maplibre-gl";
 import type { Map as MaplibreMap } from "maplibre-gl";
 import type { WaypointResponse } from "@/types/flightPlan";
 import type { PointZ } from "@/types/common";
@@ -13,6 +14,13 @@ export const WAYPOINT_LANDING_LAYER = "waypoints-landing";
 export const WAYPOINT_HOVER_LAYER = "waypoints-hover";
 export const WAYPOINT_CAMERA_LINE_LAYER = "waypoints-camera-lines";
 export const WAYPOINT_ARROW_LAYER = "waypoints-arrows";
+
+export const SIMPLIFIED_LINE_SOURCE = "simplified-trajectory-source";
+export const SIMPLIFIED_LINE_LAYER = "simplified-trajectory-line";
+export const SIMPLIFIED_TAKEOFF_SOURCE = "simplified-takeoff-source";
+export const SIMPLIFIED_LANDING_SOURCE = "simplified-landing-source";
+export const SIMPLIFIED_TAKEOFF_LAYER = "simplified-takeoff";
+export const SIMPLIFIED_LANDING_LAYER = "simplified-landing";
 
 const TRANSIT_PATH_COLOR = "#7eb8e5";
 const DEFAULT_MEASUREMENT_COLOR = "#3bbb3b";
@@ -543,4 +551,184 @@ export function getWaypointLayerIds(): string[] {
     WAYPOINT_LABEL_LAYER,
     WAYPOINT_SELECTED_LAYER,
   ];
+}
+
+/** returns simplified trajectory layer ids for layer group mapping. */
+export function getSimplifiedTrajectoryLayerIds(): string[] {
+  return [
+    SIMPLIFIED_LINE_LAYER,
+    SIMPLIFIED_TAKEOFF_LAYER,
+    SIMPLIFIED_LANDING_LAYER,
+  ];
+}
+
+/** builds a simplified polyline from waypoints - no dots, just colored path segments. */
+export function waypointsToSimplifiedLineGeoJSON(
+  waypoints: WaypointResponse[],
+): GeoJSON.FeatureCollection {
+  const sorted = [...waypoints].sort(
+    (a, b) => a.sequence_order - b.sequence_order,
+  );
+  if (sorted.length < 2) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  const SIMPLIFIED_TRANSIT_COLOR = "#6b6b6b";
+  const features: GeoJSON.Feature[] = [];
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const from = sorted[i];
+    const to = sorted[i + 1];
+    const toType = to.waypoint_type;
+
+    const color =
+      toType === "TRANSIT" || toType === "TAKEOFF" || toType === "LANDING"
+        ? SIMPLIFIED_TRANSIT_COLOR
+        : DEFAULT_MEASUREMENT_COLOR;
+
+    features.push({
+      type: "Feature",
+      properties: { color },
+      geometry: {
+        type: "LineString",
+        coordinates: [from.position.coordinates, to.position.coordinates],
+      },
+    });
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
+/** adds simplified trajectory layers - polyline only with takeoff/landing markers. */
+export function addSimplifiedTrajectoryLayers(
+  map: MaplibreMap,
+  waypoints: WaypointResponse[],
+  takeoff?: PointZ | null,
+  landing?: PointZ | null,
+): void {
+  if (waypoints.length === 0 && !takeoff && !landing) {
+    removeSimplifiedTrajectoryLayers(map);
+    return;
+  }
+
+  const lineData = waypointsToSimplifiedLineGeoJSON(waypoints);
+
+  // find takeoff/landing from waypoints if not provided
+  const sorted = [...waypoints].sort(
+    (a, b) => a.sequence_order - b.sequence_order,
+  );
+  const takeoffWp = sorted.find((w) => w.waypoint_type === "TAKEOFF");
+  const landingWp = [...sorted].reverse().find((w: WaypointResponse) => w.waypoint_type === "LANDING");
+
+  const takeoffCoords = takeoff?.coordinates ?? takeoffWp?.position.coordinates;
+  const landingCoords = landing?.coordinates ?? landingWp?.position.coordinates;
+
+  const takeoffData: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: takeoffCoords
+      ? [
+          {
+            type: "Feature",
+            properties: { waypoint_type: "TAKEOFF" },
+            geometry: { type: "Point", coordinates: takeoffCoords },
+          },
+        ]
+      : [],
+  };
+
+  const landingData: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: landingCoords
+      ? [
+          {
+            type: "Feature",
+            properties: { waypoint_type: "LANDING" },
+            geometry: { type: "Point", coordinates: landingCoords },
+          },
+        ]
+      : [],
+  };
+
+  // update existing sources if present
+  const existingLineSrc = map.getSource(SIMPLIFIED_LINE_SOURCE) as
+    | maplibregl.GeoJSONSource
+    | undefined;
+  if (existingLineSrc) {
+    existingLineSrc.setData(lineData);
+    const tkSrc = map.getSource(SIMPLIFIED_TAKEOFF_SOURCE) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (tkSrc) tkSrc.setData(takeoffData);
+    const ldSrc = map.getSource(SIMPLIFIED_LANDING_SOURCE) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (ldSrc) ldSrc.setData(landingData);
+    return;
+  }
+
+  // add sources
+  map.addSource(SIMPLIFIED_LINE_SOURCE, { type: "geojson", data: lineData });
+  map.addSource(SIMPLIFIED_TAKEOFF_SOURCE, { type: "geojson", data: takeoffData });
+  map.addSource(SIMPLIFIED_LANDING_SOURCE, { type: "geojson", data: landingData });
+
+  // polyline path
+  map.addLayer({
+    id: SIMPLIFIED_LINE_LAYER,
+    type: "line",
+    source: SIMPLIFIED_LINE_SOURCE,
+    paint: {
+      "line-color": ["get", "color"],
+      "line-width": 3,
+      "line-opacity": 0.9,
+    },
+  });
+
+  // takeoff marker
+  map.addLayer({
+    id: SIMPLIFIED_TAKEOFF_LAYER,
+    type: "symbol",
+    source: SIMPLIFIED_TAKEOFF_SOURCE,
+    layout: {
+      "icon-image": "takeoff-square",
+      "icon-size": 1.5,
+      "icon-allow-overlap": true,
+    },
+  });
+
+  // landing marker
+  map.addLayer({
+    id: SIMPLIFIED_LANDING_LAYER,
+    type: "symbol",
+    source: SIMPLIFIED_LANDING_SOURCE,
+    layout: {
+      "icon-image": "landing-square",
+      "icon-size": 1.5,
+      "icon-allow-overlap": true,
+    },
+  });
+}
+
+/** removes simplified trajectory layers and sources. */
+export function removeSimplifiedTrajectoryLayers(map: MaplibreMap): void {
+  const layers = [
+    SIMPLIFIED_LANDING_LAYER,
+    SIMPLIFIED_TAKEOFF_LAYER,
+    SIMPLIFIED_LINE_LAYER,
+  ];
+  const sources = [
+    SIMPLIFIED_LANDING_SOURCE,
+    SIMPLIFIED_TAKEOFF_SOURCE,
+    SIMPLIFIED_LINE_SOURCE,
+  ];
+
+  try {
+    for (const id of layers) {
+      if (map.getLayer(id)) map.removeLayer(id);
+    }
+    for (const id of sources) {
+      if (map.getSource(id)) map.removeSource(id);
+    }
+  } catch {
+    // layers may not exist
+  }
 }

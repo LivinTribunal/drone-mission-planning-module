@@ -18,6 +18,7 @@ export interface MapLayerConfig {
   safetyZones: boolean;
   aglSystems: boolean;
   waypoints: boolean;
+  simplifiedTrajectory: boolean;
 }
 
 export type MapFeatureType =
@@ -84,6 +85,8 @@ export interface AirportMapProps {
   showTerrainToggle?: boolean;
   onFeatureClick?: (feature: MapFeature) => void;
   children?: ReactNode;
+  showWaypointList?: boolean;
+  simplifiedTrajectory?: boolean;
   waypoints?: WaypointResponse[];
   selectedWaypointId?: string | null;
   onWaypointClick?: (id: string | null) => void;
@@ -103,4 +106,5 @@ export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {
   safetyZones: true,
   aglSystems: true,
   waypoints: true,
+  simplifiedTrajectory: false,
 };

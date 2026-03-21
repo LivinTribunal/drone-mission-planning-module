@@ -37,8 +37,10 @@ import {
 } from "./layers/aglLayers";
 import {
   addWaypointLayers as addWaypointLayersFn,
+  addSimplifiedTrajectoryLayers,
   updateSelectedFilter,
   getWaypointLayerIds,
+  getSimplifiedTrajectoryLayerIds,
   WAYPOINT_CIRCLE_LAYER,
   WAYPOINT_TAKEOFF_LAYER,
   WAYPOINT_LANDING_LAYER,
@@ -92,6 +94,7 @@ function makeMapStyle(): maplibregl.StyleSpecification {
 
 // map layer id groups keyed by layer config key
 const layerGroupMap: Record<keyof MapLayerConfig, string[]> = {
+  simplifiedTrajectory: getSimplifiedTrajectoryLayerIds(),
   runways: [
     RUNWAY_FILL_LAYER,
     RUNWAY_STROKE_LAYER,
@@ -137,6 +140,8 @@ export default function AirportMap({
   showLegend = true,
   showPoiInfo = true,
   showTerrainToggle = true,
+  showWaypointList = true,
+  simplifiedTrajectory = false,
   onFeatureClick,
   children,
   waypoints,
@@ -163,6 +168,7 @@ export default function AirportMap({
 
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>({
     ...DEFAULT_LAYER_CONFIG,
+    simplifiedTrajectory,
     ...layersProp,
   });
   const [internalTerrainMode, setInternalTerrainMode] = useState<"map" | "satellite">(
@@ -246,6 +252,7 @@ export default function AirportMap({
 
     registerAllMapImages(map);
     addWaypointLayersFn(map, wps ?? [], takeoff, landing, selectedWaypointId, idxMap);
+    addSimplifiedTrajectoryLayers(map, wps ?? [], takeoff, landing);
   }, [selectedWaypointId]);
 
   // sync waypoints ref and re-render layers when waypoints or coords change
@@ -601,9 +608,10 @@ export default function AirportMap({
             layers={layerConfig}
             onToggle={handleLayerToggle}
             hasWaypoints={!!(waypoints?.length || takeoffCoordinate || landingCoordinate)}
+            hasSimplifiedTrajectory={!!(waypoints?.length)}
           />
         )}
-        {layerConfig.waypoints && (waypoints?.length || takeoffCoordinate || landingCoordinate) ? (
+        {showWaypointList && layerConfig.waypoints && (waypoints?.length || takeoffCoordinate || landingCoordinate) ? (
           <WaypointListPanel
             waypoints={waypoints ?? []}
             selectedId={selectedWaypointId ?? null}

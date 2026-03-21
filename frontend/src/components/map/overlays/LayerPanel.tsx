@@ -6,6 +6,7 @@ interface LayerPanelProps {
   layers: MapLayerConfig;
   onToggle: (key: keyof MapLayerConfig) => void;
   hasWaypoints?: boolean;
+  hasSimplifiedTrajectory?: boolean;
 }
 
 const baseLayerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
@@ -16,14 +17,20 @@ const baseLayerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
   { key: "aglSystems", i18nKey: "dashboard.aglSystems" },
 ];
 
-export default function LayerPanel({ layers, onToggle, hasWaypoints }: LayerPanelProps) {
+export default function LayerPanel({ layers, onToggle, hasWaypoints, hasSimplifiedTrajectory }: LayerPanelProps) {
   /** layer visibility toggle panel. */
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const layerKeys = hasWaypoints
-    ? [...baseLayerKeys, { key: "waypoints" as keyof MapLayerConfig, i18nKey: "dashboard.waypoints" }]
-    : baseLayerKeys;
+  const layerKeys = [
+    ...baseLayerKeys,
+    ...(hasWaypoints
+      ? [{ key: "waypoints" as keyof MapLayerConfig, i18nKey: "dashboard.waypoints" }]
+      : []),
+    ...(hasSimplifiedTrajectory
+      ? [{ key: "simplifiedTrajectory" as keyof MapLayerConfig, i18nKey: "dashboard.simplifiedTrajectory" }]
+      : []),
+  ];
 
   return (
     <div
