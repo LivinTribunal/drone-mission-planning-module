@@ -508,29 +508,23 @@ export default function AirportMap({
 
       map.setStyle(mode === "satellite" ? makeSatelliteStyle() : makeMapStyle());
 
-      const mapInstance = map;
-      function onData() {
-        if (!mapRef.current) {
-          mapInstance.off("data", onData);
-          return;
-        }
-        if (!mapInstance.isStyleLoaded()) return;
-        mapInstance.off("data", onData);
+      map.once("style.load", () => {
+        if (!mapRef.current) return;
 
-        mapInstance.setCenter(center);
-        mapInstance.setZoom(zoom);
-        mapInstance.setBearing(bearing);
-        mapInstance.setPitch(pitch);
+        map.setCenter(center);
+        map.setZoom(zoom);
+        map.setBearing(bearing);
+        map.setPitch(pitch);
 
-        addAllLayers(mapInstance);
-        addWaypointLayers(mapInstance);
+        addAllLayers(map);
+        addWaypointLayers(map);
 
         for (const [key, layerIds] of Object.entries(layerGroupMap)) {
           const visible = layerConfig[key as keyof MapLayerConfig];
           for (const layerId of layerIds) {
             try {
-              if (mapInstance.getLayer(layerId)) {
-                mapInstance.setLayoutProperty(
+              if (map.getLayer(layerId)) {
+                map.setLayoutProperty(
                   layerId,
                   "visibility",
                   visible ? "visible" : "none",
@@ -541,8 +535,7 @@ export default function AirportMap({
             }
           }
         }
-      }
-      mapInstance.on("data", onData);
+      });
     },
     [airport, layerConfig, addAllLayers, addWaypointLayers, setTerrainMode],
   );

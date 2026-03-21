@@ -138,7 +138,7 @@ export default function MissionTabNav() {
   }
 
   const tabs = [
-    { label: t("mission.overview"), path: "overview" },
+    { label: t("mission.overviewTab"), path: "overview" },
     { label: t("mission.configuration"), path: "configuration" },
     { label: t("mission.map"), path: "map" },
     { label: t("mission.validationExport"), path: "validation-export" },

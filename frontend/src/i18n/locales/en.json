@@ -160,7 +160,7 @@
     "simplifiedTrajectory": "Simplified Trajectory"
   },
   "mission": {
-    "overview": "Overview",
+    "overviewTab": "Overview",
     "configuration": "Configuration",
     "map": "Map",
     "validationExport": "Validation & Export",
