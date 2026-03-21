@@ -46,13 +46,19 @@ export default function MissionOverviewPage() {
     };
   }, [setSaveContext, mission]);
 
-  // no compute button on overview
+  // "modify parameters" button in header - navigates to configuration tab
   useEffect(() => {
-    setComputeContext({ onCompute: null, canCompute: false, isComputing: false });
+    setComputeContext({
+      onCompute: () => navigate(`/operator-center/missions/${id}/configuration`),
+      canCompute: true,
+      isComputing: false,
+      label: t("mission.overview.modifyParameters"),
+      variant: "secondary",
+    });
     return () => {
       setComputeContext({ onCompute: null, canCompute: false, isComputing: false });
     };
-  }, [setComputeContext]);
+  }, [setComputeContext, navigate, id, t]);
 
   const fetchData = useCallback(async () => {
     /** load mission, drone profiles, and flight plan. */
@@ -129,7 +135,7 @@ export default function MissionOverviewPage() {
       {/* left panel - 30% */}
       <div className="w-[30%] flex-shrink-0 flex">
         <div
-          className="flex-1 overflow-y-auto flex flex-col gap-4 pr-4"
+          className="flex-1 overflow-y-auto flex flex-col gap-4"
           style={{ scrollbarGutter: "stable" }}
         >
           {/* mission info */}
@@ -138,12 +144,8 @@ export default function MissionOverviewPage() {
               mission={mission}
               droneProfileName={selectedDroneProfile?.name ?? null}
               runwayName={runwayName}
+              validationPassed={flightPlan?.validation_result?.passed ?? null}
             />
-          </div>
-
-          {/* warnings */}
-          <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-            <WarningsPanel warnings={warnings} hasTrajectory={hasTrajectory} />
           </div>
 
           {/* stats */}
@@ -161,10 +163,16 @@ export default function MissionOverviewPage() {
             <ValidationStatusPanel
               flightPlan={flightPlan}
               hasTrajectory={hasTrajectory}
+              missionStatus={mission.status}
             />
           </div>
+
+          {/* warnings */}
+          <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+            <WarningsPanel warnings={warnings} hasTrajectory={hasTrajectory} />
+          </div>
         </div>
-        <div className="w-2.5 flex-shrink-0" />
+        <div className="w-6 flex-shrink-0" />
       </div>
 
       {/* right panel - map */}
@@ -178,6 +186,16 @@ export default function MissionOverviewPage() {
               showTerrainToggle={false}
               showWaypointList={false}
               simplifiedTrajectory={true}
+              layers={{
+                simplifiedTrajectory: true,
+                trajectory: false,
+                transitWaypoints: false,
+                measurementWaypoints: false,
+                path: false,
+                takeoffLanding: false,
+                cameraHeading: false,
+                pathHeading: false,
+              }}
               waypoints={flightPlan?.waypoints ?? []}
               missionStatus={mission.status}
               takeoffCoordinate={mission.takeoff_coordinate}
@@ -192,13 +210,6 @@ export default function MissionOverviewPage() {
                 data-testid="open-map-btn"
               >
                 {t("mission.overview.openMap")}
-              </button>
-              <button
-                onClick={() => navigate(`/operator-center/missions/${id}/configuration`)}
-                className="px-4 py-2.5 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-                data-testid="modify-parameters-btn"
-              >
-                {t("mission.overview.modifyParameters")}
               </button>
               <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />
             </div>

@@ -1,30 +1,36 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import Badge from "@/components/common/Badge";
 import type { MissionDetailResponse } from "@/types/mission";
-import type { MissionStatus } from "@/types/enums";
 
 interface MissionInfoPanelProps {
   mission: MissionDetailResponse;
   droneProfileName: string | null;
   runwayName: string | null;
+  validationPassed: boolean | null;
 }
 
-function formatDate(iso: string): string {
-  /** formats an iso date string to a readable format. */
+function formatDateTime(iso: string): string {
+  /** formats an iso date string to dd/mm/yyyy HH:MM. */
   const d = new Date(iso);
-  return d.toLocaleDateString("en-GB", {
+  const date = d.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
+  const time = d.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${date} ${time}`;
 }
 
 export default function MissionInfoPanel({
   mission,
   droneProfileName,
   runwayName,
+  validationPassed,
 }: MissionInfoPanelProps) {
   /** read-only mission info collapsible card. */
   const { t } = useTranslation();
@@ -36,54 +42,79 @@ export default function MissionInfoPanel({
         onClick={() => setCollapsed(!collapsed)}
         className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
       >
-        <span>{t("mission.overview.missionInfo")}</span>
+        <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.overview.missionInfo")}</span>
         {collapsed ? (
           <ChevronDown className="h-4 w-4" />
         ) : (
           <ChevronUp className="h-4 w-4" />
         )}
       </button>
+      {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
 
       {!collapsed && (
-        <div className="flex flex-col gap-2 mt-2">
-          <p className="text-base font-semibold text-tv-text-primary">
-            {mission.name}
-          </p>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-tv-text-secondary">
-              {t("mission.overview.status")}
-            </span>
-            <Badge status={mission.status as MissionStatus} />
+        <div className="mt-3">
+          {/* two-column grid */}
+          <div className="grid grid-cols-2 gap-2">
+            <div
+              className="p-2 rounded-xl"
+              style={{
+                backgroundColor: `var(--tv-status-${mission.status.toLowerCase()}-bg)`,
+                color: `var(--tv-status-${mission.status.toLowerCase()}-text)`,
+              }}
+            >
+              <p className="text-xs opacity-75">{t("mission.overview.missionStatus")}:</p>
+              <p className="text-sm font-semibold">{t(`missionStatus.${mission.status}`)}</p>
+            </div>
+            <div
+              className="p-2 rounded-xl"
+              style={{
+                backgroundColor: validationPassed === null
+                  ? "var(--tv-status-draft-bg)"
+                  : validationPassed
+                    ? "var(--tv-status-validated-bg)"
+                    : "var(--tv-status-cancelled-bg)",
+                color: validationPassed === null
+                  ? "var(--tv-status-draft-text)"
+                  : validationPassed
+                    ? "var(--tv-status-validated-text)"
+                    : "var(--tv-status-cancelled-text)",
+              }}
+            >
+              <p className="text-xs opacity-75">{t("mission.overview.validationStatusLabel")}:</p>
+              <p className="text-sm font-semibold">
+                {validationPassed === null
+                  ? t("mission.overview.notValidated")
+                  : validationPassed
+                    ? t("mission.overview.passed")
+                    : t("mission.overview.failed")}
+              </p>
+            </div>
+            <InfoCell
+              label={t("mission.overview.inspectionCount")}
+              value={String(mission.inspections.length)}
+            />
+            <InfoCell
+              label={t("mission.overview.groundSurfaces")}
+              value={runwayName ?? "\u2014"}
+            />
+            <InfoCell
+              label={t("mission.overview.droneProfile")}
+              value={droneProfileName ?? "\u2014"}
+            />
+            <InfoCell
+              label={t("mission.overview.created")}
+              value={formatDateTime(mission.created_at)}
+            />
+            <InfoCell
+              label={t("mission.overview.lastUpdated")}
+              value={formatDateTime(mission.updated_at)}
+            />
           </div>
 
-          <InfoRow
-            label={t("mission.overview.inspectionCount")}
-            value={String(mission.inspections.length)}
-          />
-          <InfoRow
-            label={t("mission.overview.runway")}
-            value={runwayName ?? "\u2014"}
-          />
-          <InfoRow
-            label={t("mission.overview.droneProfile")}
-            value={droneProfileName ?? "\u2014"}
-          />
-          <InfoRow
-            label={t("mission.overview.created")}
-            value={formatDate(mission.created_at)}
-          />
-          <InfoRow
-            label={t("mission.overview.lastUpdated")}
-            value={formatDate(mission.updated_at)}
-          />
-
           {mission.operator_notes && (
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-tv-text-secondary">
-                {t("mission.overview.operatorNotes")}
-              </span>
-              <p className="text-sm text-tv-text-primary whitespace-pre-wrap">
+            <div className="mt-2 p-2 rounded-xl bg-tv-bg">
+              <p className="text-xs text-tv-text-muted">{t("mission.overview.operatorNotes")}:</p>
+              <p className="text-sm text-tv-text-primary mt-0.5 whitespace-pre-wrap">
                 {mission.operator_notes}
               </p>
             </div>
@@ -94,12 +125,12 @@ export default function MissionInfoPanel({
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  /** single label-value row for mission info. */
+function InfoCell({ label, value }: { label: string; value: string }) {
+  /** single cell in the two-column grid. */
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-tv-text-secondary">{label}</span>
-      <span className="text-sm text-tv-text-primary">{value}</span>
+    <div className="p-2 rounded-xl bg-tv-bg">
+      <p className="text-xs text-tv-text-muted truncate">{label}:</p>
+      <p className="text-sm font-semibold text-tv-text-primary">{value}</p>
     </div>
   );
 }

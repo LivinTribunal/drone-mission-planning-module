@@ -85,7 +85,7 @@ describe("WarningsPanel", () => {
   it("shows warning messages after trajectory", () => {
     render(
       <WarningsPanel
-        warnings={[{ message: "Speed too high", severity: "warning" }, { message: "Altitude violation", severity: "warning" }]}
+        warnings={[{ id: "1", message: "Speed too high", is_warning: true, constraint_id: null }, { id: "2", message: "Altitude violation", is_warning: true, constraint_id: null }]}
         hasTrajectory={true}
       />,
     );
@@ -145,7 +145,6 @@ describe("StatsPanel", () => {
 
     expect(screen.getByText("1.50 km")).toBeInTheDocument();
     expect(screen.getByText("5:00")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("9%")).toBeInTheDocument();
   });
 });

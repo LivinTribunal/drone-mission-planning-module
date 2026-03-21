@@ -39,12 +39,16 @@ import {
   addWaypointLayers as addWaypointLayersFn,
   addSimplifiedTrajectoryLayers,
   updateSelectedFilter,
-  getWaypointLayerIds,
   getSimplifiedTrajectoryLayerIds,
-  WAYPOINT_CIRCLE_LAYER,
+  WAYPOINT_TRANSIT_CIRCLE_LAYER,
+  WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
   WAYPOINT_TAKEOFF_LAYER,
   WAYPOINT_LANDING_LAYER,
   WAYPOINT_HOVER_LAYER,
+  WAYPOINT_LINE_LAYER,
+  WAYPOINT_LABEL_LAYER,
+  WAYPOINT_CAMERA_LINE_LAYER,
+  WAYPOINT_ARROW_LAYER,
 } from "./layers/waypointLayers";
 import LayerPanel from "./overlays/LayerPanel";
 import LegendPanel from "./overlays/LegendPanel";
@@ -93,7 +97,8 @@ function makeMapStyle(): maplibregl.StyleSpecification {
 }
 
 // map layer id groups keyed by layer config key
-const layerGroupMap: Record<keyof MapLayerConfig, string[]> = {
+// trajectory is a virtual parent with no own layers
+const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
   simplifiedTrajectory: getSimplifiedTrajectoryLayerIds(),
   runways: [
     RUNWAY_FILL_LAYER,
@@ -110,7 +115,12 @@ const layerGroupMap: Record<keyof MapLayerConfig, string[]> = {
     SAFETY_ZONE_LABEL_LAYER,
   ],
   aglSystems: [AGL_POINT_LAYER, AGL_LABEL_LAYER, LHA_POINT_LAYER, LHA_LABEL_LAYER],
-  waypoints: getWaypointLayerIds(),
+  transitWaypoints: [WAYPOINT_TRANSIT_CIRCLE_LAYER],
+  measurementWaypoints: [WAYPOINT_MEASUREMENT_CIRCLE_LAYER, WAYPOINT_HOVER_LAYER, WAYPOINT_LABEL_LAYER],
+  path: [WAYPOINT_LINE_LAYER],
+  takeoffLanding: [WAYPOINT_TAKEOFF_LAYER, WAYPOINT_LANDING_LAYER],
+  cameraHeading: [WAYPOINT_CAMERA_LINE_LAYER],
+  pathHeading: [WAYPOINT_ARROW_LAYER],
 };
 
 // all interactive layer ids for click handling
@@ -126,7 +136,8 @@ const INTERACTIVE_LAYERS = [
 // layers that show cursor pointer on hover
 const POINTER_LAYERS = [
   ...INTERACTIVE_LAYERS,
-  WAYPOINT_CIRCLE_LAYER,
+  WAYPOINT_TRANSIT_CIRCLE_LAYER,
+  WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
   WAYPOINT_TAKEOFF_LAYER,
   WAYPOINT_LANDING_LAYER,
   WAYPOINT_HOVER_LAYER,
@@ -154,6 +165,7 @@ export default function AirportMap({
   takeoffCoordinate,
   landingCoordinate,
   inspectionIndexMap,
+  visibleInspectionIds,
 }: AirportMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -355,7 +367,8 @@ export default function AirportMap({
 
       // query all interactive layers + waypoint layers in one pass
       const waypointQueryLayers = [
-        WAYPOINT_CIRCLE_LAYER,
+        WAYPOINT_TRANSIT_CIRCLE_LAYER,
+        WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
         WAYPOINT_TAKEOFF_LAYER,
         WAYPOINT_LANDING_LAYER,
         WAYPOINT_HOVER_LAYER,
@@ -491,6 +504,43 @@ export default function AirportMap({
     };
   }, [layerConfig]);
 
+  // sync inspection visibility filters
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !visibleInspectionIds) return;
+
+    const ids = [...visibleInspectionIds];
+    const visFilter: maplibregl.ExpressionSpecification = [
+      "any",
+      ["!", ["has", "inspection_id"]],
+      ["==", ["get", "inspection_id"], ""],
+      ["in", ["get", "inspection_id"], ["literal", ids]],
+    ];
+
+    const layersToFilter = [
+      { id: WAYPOINT_TRANSIT_CIRCLE_LAYER, base: ["==", ["get", "waypoint_type"], "TRANSIT"] as maplibregl.ExpressionSpecification },
+      { id: WAYPOINT_MEASUREMENT_CIRCLE_LAYER, base: ["==", ["get", "waypoint_type"], "MEASUREMENT"] as maplibregl.ExpressionSpecification },
+      { id: WAYPOINT_HOVER_LAYER, base: ["==", ["get", "waypoint_type"], "HOVER"] as maplibregl.ExpressionSpecification },
+      { id: WAYPOINT_LABEL_LAYER, base: ["==", ["get", "waypoint_type"], "MEASUREMENT"] as maplibregl.ExpressionSpecification },
+      { id: WAYPOINT_LINE_LAYER, base: null },
+      { id: WAYPOINT_ARROW_LAYER, base: null },
+      { id: WAYPOINT_CAMERA_LINE_LAYER, base: null },
+    ];
+
+    for (const { id, base } of layersToFilter) {
+      try {
+        if (map.getLayer(id)) {
+          const filter = base
+            ? (["all", base, visFilter] as maplibregl.ExpressionSpecification)
+            : visFilter;
+          map.setFilter(id, filter);
+        }
+      } catch {
+        // layer may not exist
+      }
+    }
+  }, [visibleInspectionIds]);
+
   // terrain mode switch
   const handleTerrainChange = useCallback(
     (mode: "map" | "satellite") => {
@@ -548,8 +598,67 @@ export default function AirportMap({
     }
   }, [terrainMode, handleTerrainChange]);
 
-  const handleLayerToggle = useCallback((key: keyof MapLayerConfig) => {
-    setLayerConfig((prev) => ({ ...prev, [key]: !prev[key] }));
+  const TRAJECTORY_CHILDREN: (keyof MapLayerConfig)[] = [
+    "transitWaypoints", "measurementWaypoints", "path", "takeoffLanding", "cameraHeading", "pathHeading",
+  ];
+
+  const handleLayerToggle = useCallback((key: string) => {
+    /** toggle a layer with parent-child cascade and mutual exclusion. */
+    setLayerConfig((prev) => {
+      const next = { ...prev };
+
+      if (key === "simplifiedTrajectory") {
+        next.simplifiedTrajectory = !prev.simplifiedTrajectory;
+        if (next.simplifiedTrajectory) {
+          next.trajectory = false;
+          for (const k of TRAJECTORY_CHILDREN) next[k] = false;
+        }
+        return next;
+      }
+
+      if (key === "trajectory") {
+        next.trajectory = !prev.trajectory;
+        if (next.trajectory) {
+          next.simplifiedTrajectory = false;
+          next.transitWaypoints = true;
+          next.measurementWaypoints = true;
+          next.path = true;
+          next.takeoffLanding = true;
+          next.cameraHeading = false;
+          next.pathHeading = true;
+        } else {
+          for (const k of TRAJECTORY_CHILDREN) next[k] = false;
+        }
+        return next;
+      }
+
+      // "waypoints" virtual parent
+      if (key === "waypoints") {
+        const newVal = !(prev.transitWaypoints && prev.measurementWaypoints);
+        next.transitWaypoints = newVal;
+        next.measurementWaypoints = newVal;
+        if (newVal) {
+          next.trajectory = true;
+          next.simplifiedTrajectory = false;
+        }
+        return next;
+      }
+
+      // individual toggle
+      const k = key as keyof MapLayerConfig;
+      if (k in next) {
+        next[k] = !prev[k];
+
+        // if a trajectory child toggled on, ensure parent on + simplified off
+        if (TRAJECTORY_CHILDREN.includes(key as keyof MapLayerConfig)) {
+          const anyOn = TRAJECTORY_CHILDREN.some((k) => next[k]);
+          next.trajectory = anyOn;
+          if (anyOn) next.simplifiedTrajectory = false;
+        }
+      }
+
+      return next;
+    });
   }, []);
 
   // wasd / arrow key navigation
@@ -604,13 +713,14 @@ export default function AirportMap({
             hasSimplifiedTrajectory={!!(waypoints?.length)}
           />
         )}
-        {showWaypointList && layerConfig.waypoints && (waypoints?.length || takeoffCoordinate || landingCoordinate) ? (
+        {showWaypointList && layerConfig.trajectory && (waypoints?.length || takeoffCoordinate || landingCoordinate) ? (
           <WaypointListPanel
             waypoints={waypoints ?? []}
             selectedId={selectedWaypointId ?? null}
             onSelect={onWaypointClick ?? (() => {})}
             takeoffCoordinate={takeoffCoordinate}
             landingCoordinate={landingCoordinate}
+            visibleInspectionIds={visibleInspectionIds}
           />
         ) : null}
         {showPoiInfo && (

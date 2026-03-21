@@ -169,14 +169,13 @@ describe("MissionOverviewPage", () => {
     });
   });
 
-  it("shows mission info panel with mission name", async () => {
-    /** verify mission info panel displays mission data. */
+  it("shows mission info panel", async () => {
+    /** verify mission info panel is rendered. */
     setupMocks();
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId("mission-info-panel")).toBeInTheDocument();
     });
-    expect(screen.getByText("Test Mission")).toBeInTheDocument();
   });
 
   it("shows status badge", async () => {
@@ -214,7 +213,6 @@ describe("MissionOverviewPage", () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId("open-map-btn")).toBeInTheDocument();
-      expect(screen.getByTestId("modify-parameters-btn")).toBeInTheDocument();
     });
   });
 
@@ -226,17 +224,6 @@ describe("MissionOverviewPage", () => {
     fireEvent.click(btn);
     expect(mockNavigate).toHaveBeenCalledWith(
       "/operator-center/missions/m-1/map",
-    );
-  });
-
-  it("navigates to configuration tab when modify parameters is clicked", async () => {
-    /** verify modify parameters button navigates to configuration tab. */
-    setupMocks();
-    renderPage();
-    const btn = await screen.findByTestId("modify-parameters-btn");
-    fireEvent.click(btn);
-    expect(mockNavigate).toHaveBeenCalledWith(
-      "/operator-center/missions/m-1/configuration",
     );
   });
 

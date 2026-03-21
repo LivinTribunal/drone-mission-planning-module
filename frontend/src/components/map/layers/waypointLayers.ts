@@ -5,7 +5,8 @@ import type { PointZ } from "@/types/common";
 
 export const WAYPOINT_SOURCE = "waypoints-source";
 export const WAYPOINT_LINE_SOURCE = "waypoints-line-source";
-export const WAYPOINT_CIRCLE_LAYER = "waypoints-circles";
+export const WAYPOINT_TRANSIT_CIRCLE_LAYER = "waypoints-transit-circles";
+export const WAYPOINT_MEASUREMENT_CIRCLE_LAYER = "waypoints-measurement-circles";
 export const WAYPOINT_LABEL_LAYER = "waypoints-labels";
 export const WAYPOINT_LINE_LAYER = "waypoints-line";
 export const WAYPOINT_SELECTED_LAYER = "waypoints-selected";
@@ -21,6 +22,8 @@ export const SIMPLIFIED_TAKEOFF_SOURCE = "simplified-takeoff-source";
 export const SIMPLIFIED_LANDING_SOURCE = "simplified-landing-source";
 export const SIMPLIFIED_TAKEOFF_LAYER = "simplified-takeoff";
 export const SIMPLIFIED_LANDING_LAYER = "simplified-landing";
+export const SIMPLIFIED_CORNERS_SOURCE = "simplified-corners-source";
+export const SIMPLIFIED_CORNERS_LAYER = "simplified-corners";
 
 const TRANSIT_PATH_COLOR = "#7eb8e5";
 const DEFAULT_MEASUREMENT_COLOR = "#3bbb3b";
@@ -240,7 +243,7 @@ export function waypointsToLineGeoJSON(
 
     features.push({
       type: "Feature",
-      properties: { color },
+      properties: { color, inspection_id: to.inspection_id ?? null },
       geometry: {
         type: "LineString",
         coordinates: coords,
@@ -260,7 +263,7 @@ export function waypointsToCameraLineGeoJSON(
     if (wp.camera_target && wp.waypoint_type === "MEASUREMENT") {
       features.push({
         type: "Feature",
-        properties: {},
+        properties: { inspection_id: wp.inspection_id ?? null },
         geometry: {
           type: "LineString",
           coordinates: [
@@ -391,33 +394,31 @@ export function addWaypointLayers(
     },
   });
 
-  // measurement + transit circles (stacks get larger radius)
+  // transit waypoint circles
   map.addLayer({
-    id: WAYPOINT_CIRCLE_LAYER,
+    id: WAYPOINT_TRANSIT_CIRCLE_LAYER,
     type: "circle",
     source: WAYPOINT_SOURCE,
-    filter: [
-      "!",
-      ["in", ["get", "waypoint_type"], ["literal", ["TAKEOFF", "LANDING", "HOVER"]]],
-    ],
+    filter: ["==", ["get", "waypoint_type"], "TRANSIT"],
     paint: {
-      "circle-radius": [
-        "case",
-        [">", ["get", "stack_count"], 1], 13,
-        ["match", ["get", "waypoint_type"], "MEASUREMENT", 10, "TRANSIT", 8, 8],
-      ],
+      "circle-radius": ["case", [">", ["get", "stack_count"], 1], 13, 8],
       "circle-color": ["get", "color"],
-      "circle-stroke-color": [
-        "match",
-        ["get", "waypoint_type"],
-        "TRANSIT", "#6b6b6b",
-        "#ffffff",
-      ],
-      "circle-stroke-width": [
-        "case",
-        [">", ["get", "stack_count"], 1], 2,
-        ["match", ["get", "waypoint_type"], "MEASUREMENT", 1.5, "TRANSIT", 1.5, 1],
-      ],
+      "circle-stroke-color": "#6b6b6b",
+      "circle-stroke-width": ["case", [">", ["get", "stack_count"], 1], 2, 1.5],
+    },
+  });
+
+  // measurement waypoint circles
+  map.addLayer({
+    id: WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
+    type: "circle",
+    source: WAYPOINT_SOURCE,
+    filter: ["==", ["get", "waypoint_type"], "MEASUREMENT"],
+    paint: {
+      "circle-radius": ["case", [">", ["get", "stack_count"], 1], 13, 10],
+      "circle-color": ["get", "color"],
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": ["case", [">", ["get", "stack_count"], 1], 2, 1.5],
     },
   });
 
@@ -519,7 +520,8 @@ export function removeWaypointLayers(map: MaplibreMap): void {
     WAYPOINT_LANDING_LAYER,
     WAYPOINT_TAKEOFF_LAYER,
     WAYPOINT_HOVER_LAYER,
-    WAYPOINT_CIRCLE_LAYER,
+    WAYPOINT_TRANSIT_CIRCLE_LAYER,
+    WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
     WAYPOINT_CAMERA_LINE_LAYER,
     WAYPOINT_ARROW_LAYER,
     WAYPOINT_LINE_LAYER,
@@ -544,7 +546,8 @@ export function getWaypointLayerIds(): string[] {
     WAYPOINT_LINE_LAYER,
     WAYPOINT_ARROW_LAYER,
     WAYPOINT_CAMERA_LINE_LAYER,
-    WAYPOINT_CIRCLE_LAYER,
+    WAYPOINT_TRANSIT_CIRCLE_LAYER,
+    WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
     WAYPOINT_HOVER_LAYER,
     WAYPOINT_TAKEOFF_LAYER,
     WAYPOINT_LANDING_LAYER,
@@ -557,6 +560,7 @@ export function getWaypointLayerIds(): string[] {
 export function getSimplifiedTrajectoryLayerIds(): string[] {
   return [
     SIMPLIFIED_LINE_LAYER,
+    SIMPLIFIED_CORNERS_LAYER,
     SIMPLIFIED_TAKEOFF_LAYER,
     SIMPLIFIED_LANDING_LAYER,
   ];
@@ -573,7 +577,7 @@ export function waypointsToSimplifiedLineGeoJSON(
     return { type: "FeatureCollection", features: [] };
   }
 
-  const SIMPLIFIED_TRANSIT_COLOR = "#6b6b6b";
+  const SIMPLIFIED_TRANSIT_COLOR = TRANSIT_PATH_COLOR;
   const features: GeoJSON.Feature[] = [];
 
   for (let i = 0; i < sorted.length - 1; i++) {
@@ -599,6 +603,51 @@ export function waypointsToSimplifiedLineGeoJSON(
   return { type: "FeatureCollection", features };
 }
 
+/** builds corner dots for simplified trajectory - points where the path changes direction. */
+export function waypointsToSimplifiedCornersGeoJSON(
+  waypoints: WaypointResponse[],
+): GeoJSON.FeatureCollection {
+  const sorted = [...waypoints].sort(
+    (a, b) => a.sequence_order - b.sequence_order,
+  );
+  if (sorted.length < 3) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  const features: GeoJSON.Feature[] = [];
+  for (let i = 1; i < sorted.length - 1; i++) {
+    const prev = sorted[i - 1].position.coordinates;
+    const curr = sorted[i].position.coordinates;
+    const next = sorted[i + 1].position.coordinates;
+
+    // skip takeoff/landing - they have their own markers
+    const type = sorted[i].waypoint_type;
+    if (type === "TAKEOFF" || type === "LANDING") continue;
+
+    // check if direction changes (compare heading before and after)
+    const dxA = curr[0] - prev[0];
+    const dyA = curr[1] - prev[1];
+    const dxB = next[0] - curr[0];
+    const dyB = next[1] - curr[1];
+    const dot = dxA * dxB + dyA * dyB;
+    const magA = Math.sqrt(dxA * dxA + dyA * dyA);
+    const magB = Math.sqrt(dxB * dxB + dyB * dyB);
+    if (magA === 0 || magB === 0) continue;
+    const cos = dot / (magA * magB);
+
+    // if angle > ~10 degrees, it's a corner
+    if (cos < 0.985) {
+      features.push({
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: curr },
+      });
+    }
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
 /** adds simplified trajectory layers - polyline only with takeoff/landing markers. */
 export function addSimplifiedTrajectoryLayers(
   map: MaplibreMap,
@@ -612,6 +661,7 @@ export function addSimplifiedTrajectoryLayers(
   }
 
   const lineData = waypointsToSimplifiedLineGeoJSON(waypoints);
+  const cornersData = waypointsToSimplifiedCornersGeoJSON(waypoints);
 
   // find takeoff/landing from waypoints if not provided
   const sorted = [...waypoints].sort(
@@ -663,11 +713,16 @@ export function addSimplifiedTrajectoryLayers(
       | maplibregl.GeoJSONSource
       | undefined;
     if (ldSrc) ldSrc.setData(landingData);
+    const cornerSrc = map.getSource(SIMPLIFIED_CORNERS_SOURCE) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (cornerSrc) cornerSrc.setData(cornersData);
     return;
   }
 
   // add sources
   map.addSource(SIMPLIFIED_LINE_SOURCE, { type: "geojson", data: lineData });
+  map.addSource(SIMPLIFIED_CORNERS_SOURCE, { type: "geojson", data: cornersData });
   map.addSource(SIMPLIFIED_TAKEOFF_SOURCE, { type: "geojson", data: takeoffData });
   map.addSource(SIMPLIFIED_LANDING_SOURCE, { type: "geojson", data: landingData });
 
@@ -678,8 +733,22 @@ export function addSimplifiedTrajectoryLayers(
     source: SIMPLIFIED_LINE_SOURCE,
     paint: {
       "line-color": ["get", "color"],
-      "line-width": 3,
+      "line-width": 5,
       "line-opacity": 0.9,
+    },
+  });
+
+  // corner dots where path changes direction
+  map.addLayer({
+    id: SIMPLIFIED_CORNERS_LAYER,
+    type: "circle",
+    source: SIMPLIFIED_CORNERS_SOURCE,
+    paint: {
+      "circle-radius": 4,
+      "circle-color": "#000000",
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 1,
+      "circle-opacity": 0.8,
     },
   });
 
@@ -713,11 +782,13 @@ export function removeSimplifiedTrajectoryLayers(map: MaplibreMap): void {
   const layers = [
     SIMPLIFIED_LANDING_LAYER,
     SIMPLIFIED_TAKEOFF_LAYER,
+    SIMPLIFIED_CORNERS_LAYER,
     SIMPLIFIED_LINE_LAYER,
   ];
   const sources = [
     SIMPLIFIED_LANDING_SOURCE,
     SIMPLIFIED_TAKEOFF_SOURCE,
+    SIMPLIFIED_CORNERS_SOURCE,
     SIMPLIFIED_LINE_SOURCE,
   ];
 

@@ -75,13 +75,14 @@ export default function InspectionConfigForm({
         onClick={() => setCollapsed(!collapsed)}
         className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
       >
-        <span>{t("mission.config.inspectionConfig")}</span>
+        <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.inspectionConfig")}</span>
         {collapsed ? (
           <ChevronDown className="h-4 w-4" />
         ) : (
           <ChevronUp className="h-4 w-4" />
         )}
       </button>
+      {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
 
       {!collapsed && (
       <div className="space-y-4 mt-3">
