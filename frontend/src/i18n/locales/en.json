@@ -14,7 +14,9 @@
     "close": "Close",
     "error": "Something went wrong",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "warning": "warning",
+    "violation": "violation"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -27,6 +29,7 @@
     "inspections": "Inspections",
     "drones": "Drones",
     "chooseAirport": "Choose a airport",
+    "searchAirports": "Search airports...",
     "selectAirport": "Select an airport to get started"
   },
   "auth": {
@@ -156,14 +159,74 @@
     "transit": "Transit",
     "hover": "Hover",
     "transitPath": "Transit Path",
-    "lhaUnits": "LHA Units"
+    "lhaUnits": "LHA Units",
+    "simplifiedTrajectory": "Simplified Trajectory"
+  },
+  "map": {
+    "simplifiedTrajectory": "Simplified Trajectory",
+    "trajectory": "Trajectory",
+    "transitWaypoints": "Transit Waypoints",
+    "measurementWaypoints": "Measurement Waypoints",
+    "path": "Path",
+    "takeoffLanding": "Takeoff & Landing",
+    "cameraHeading": "Camera Heading",
+    "pathHeading": "Path Heading"
   },
   "mission": {
-    "overview": "Overview",
+    "label": "Mission",
+    "overviewTab": "Overview",
     "configuration": "Configuration",
     "map": "Map",
     "validationExport": "Validation & Export",
+    "overview": {
+      "missionInfo": "Mission Info",
+      "validationStatus": "Validation Status",
+      "overallStatus": "Overall Status",
+      "passed": "Passed",
+      "approved": "Approved",
+      "warnings": "Warnings Detected",
+      "failed": "Violations Detected",
+      "notValidated": "Not Validated",
+      "needsManualApproval": "Needs Manual Approval",
+      "statusBadge": {
+        "approved": "Approved",
+        "passed": "Passed",
+        "warnings": "Not Passed",
+        "failed": "Not Passed",
+        "notValidated": "Not Validated"
+      },
+      "warningCount": "Warnings",
+      "violationCount": "Violations",
+      "checksPassed": "checks passed",
+      "checkDetails": "Show validation details",
+      "noFlightPlan": "No data — Flight Plan needs to be generated",
+      "openMap": "Open Map",
+      "modifyParameters": "Modify Parameters",
+      "groundSurfaces": "Ground Surfaces",
+      "missionStatus": "Mission Status",
+      "validationStatusLabel": "Validation Status",
+      "droneProfile": "Drone Profile",
+      "inspectionCount": "Inspection Count",
+      "created": "Created",
+      "lastUpdated": "Last Updated",
+      "operatorNotes": "Operator Notes",
+      "missionName": "Mission Name",
+      "status": "Status",
+      "transitDistance": "Transit Distance",
+      "measurementDistance": "Measurement Distance",
+      "checks": {
+        "altitudeCheck": "Altitude Check",
+        "speedCheck": "Speed Check",
+        "geofenceCheck": "Geofence Check",
+        "batteryCheck": "Battery Check",
+        "cameraObstructionCheck": "Camera View Obstruction",
+        "speedFramerateCheck": "Speed/Framerate Compatibility",
+        "runwayBuffer": "Runway Buffer",
+        "obstacleClearance": "Obstacle Clearance"
+      }
+    },
     "config": {
+      "searchMissions": "Search missions...",
       "inspections": "Inspections",
       "addInspection": "Add Inspection",
       "removeInspection": "Remove",
@@ -188,6 +251,7 @@
       "customTolerances": "Custom Tolerances",
       "hoverDuration": "Hover Duration (s)",
       "warnings": "Warnings",
+      "warningsAndViolations": "Warnings & Violations",
       "estimatedStats": "Estimated Stats",
       "computeTrajectory": "Compute Trajectory",
       "computing": "Computing...",
@@ -196,7 +260,7 @@
       "computeToSeeWarnings": "Compute trajectory to see warnings",
       "computeToSeeStats": "Compute trajectory to see estimates",
       "totalDistance": "Total Distance",
-      "estimatedDuration": "Estimated Duration",
+      "estimatedDuration": "Duration",
       "waypointCount": "Waypoints",
       "inspectionCount": "Inspections",
       "batteryConsumption": "Battery Consumption",

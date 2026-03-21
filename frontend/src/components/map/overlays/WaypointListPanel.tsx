@@ -10,6 +10,7 @@ interface WaypointListPanelProps {
   onSelect: (id: string | null) => void;
   takeoffCoordinate?: PointZ | null;
   landingCoordinate?: PointZ | null;
+  visibleInspectionIds?: Set<string>;
 }
 
 const typeColors: Record<string, string> = {
@@ -85,6 +86,7 @@ export default function WaypointListPanel({
   onSelect,
   takeoffCoordinate,
   landingCoordinate,
+  visibleInspectionIds,
 }: WaypointListPanelProps) {
   /** collapsible panel listing waypoints and takeoff/landing markers. */
   const { t } = useTranslation();
@@ -92,11 +94,17 @@ export default function WaypointListPanel({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const groups = useMemo(() => {
-    const sorted = [...waypoints].sort(
+    let filtered = [...waypoints];
+    if (visibleInspectionIds) {
+      filtered = filtered.filter(
+        (wp) => !wp.inspection_id || visibleInspectionIds.has(wp.inspection_id),
+      );
+    }
+    const sorted = filtered.sort(
       (a, b) => a.sequence_order - b.sequence_order,
     );
     return buildGroups(sorted);
-  }, [waypoints]);
+  }, [waypoints, visibleInspectionIds]);
 
   const hasTakeoff = !!takeoffCoordinate;
   const hasLanding = !!landingCoordinate;

@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
 def generate(mission_id: UUID, db: Session = Depends(get_db)):
     """run 5-phase trajectory generation pipeline"""
     try:
-        flight_plan, warnings = generate_trajectory(db, mission_id)
+        flight_plan, _warnings = generate_trajectory(db, mission_id)
     except TrajectoryGenerationError as error:
         detail = (
             {"error": error.message, "violations": error.violations}
@@ -37,7 +37,7 @@ def generate(mission_id: UUID, db: Session = Depends(get_db)):
     except DomainError as error:
         raise HTTPException(status_code=error.status_code, detail=error.message)
 
-    return GenerateTrajectoryResponse(flight_plan=fp, warnings=warnings)
+    return GenerateTrajectoryResponse(flight_plan=fp)
 
 
 @router.get("/{mission_id}/flight-plan", response_model=FlightPlanResponse)

@@ -67,4 +67,3 @@ class GenerateTrajectoryResponse(BaseModel):
     """response from trajectory generation"""
 
     flight_plan: FlightPlanResponse
-    warnings: list[str] = []

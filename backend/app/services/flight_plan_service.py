@@ -48,11 +48,12 @@ def persist_flight_plan(
     warnings: list[str],
     total_distance: float,
     estimated_duration: float,
+    violations: list[str] | None = None,
 ) -> FlightPlan:
     """persist flight plan with waypoints and validation result.
 
-    caller must filter out hard violations before calling - all warnings
-    are stored as soft violations (is_warning=True).
+    warnings are stored with is_warning=True.
+    violations are stored with is_warning=False but don't abort generation.
     """
     flight_plan = FlightPlan(
         mission_id=mission.id,
@@ -65,22 +66,30 @@ def persist_flight_plan(
     for i, wp in enumerate(all_waypoints, start=1):
         db.add(_waypoint_to_model(wp, flight_plan.id, i))
 
-    # validation result - always created so serialization never gets None
-    # passed=True means no hard violations - soft warnings may still exist
+    # validation result - passed=False when non-aborting violations exist
+    has_violations = bool(violations)
     val_result = ValidationResult(
         flight_plan_id=flight_plan.id,
-        passed=True,
+        passed=not has_violations,
     )
     db.add(val_result)
     db.flush()
 
-    # defensive dedup - orchestrator already deduplicates but this protects against direct callers
     for w in dict.fromkeys(warnings):
         db.add(
             ValidationViolation(
                 validation_result_id=val_result.id,
                 is_warning=True,
                 message=w,
+            )
+        )
+
+    for v in dict.fromkeys(violations or []):
+        db.add(
+            ValidationViolation(
+                validation_result_id=val_result.id,
+                is_warning=False,
+                message=v,
             )
         )
 

@@ -21,13 +21,26 @@ export default function WarningsPanel({
         onClick={() => setCollapsed(!collapsed)}
         className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
       >
-        <span>{t("mission.config.warnings")}</span>
-        {collapsed ? (
-          <ChevronDown className="h-4 w-4" />
-        ) : (
-          <ChevronUp className="h-4 w-4" />
-        )}
+        <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.warningsAndViolations")}</span>
+        <div className="flex items-center gap-2">
+          {warnings && warnings.filter((w) => w.is_warning).length > 0 && (
+            <span className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-white bg-tv-warning">
+              {warnings.filter((w) => w.is_warning).length}
+            </span>
+          )}
+          {warnings && warnings.filter((w) => !w.is_warning).length > 0 && (
+            <span className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-white bg-tv-error">
+              {warnings.filter((w) => !w.is_warning).length}
+            </span>
+          )}
+          {collapsed ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronUp className="h-4 w-4" />
+          )}
+        </div>
       </button>
+      {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
 
       {!collapsed && (
         <div className="mt-2">
@@ -54,8 +67,8 @@ export default function WarningsPanel({
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-tv-text-primary">{w.message}</p>
                   </div>
-                  <span className="text-xs font-medium text-tv-warning flex-shrink-0">
-                    {w.severity}
+                  <span className={`text-xs font-medium flex-shrink-0 ${w.is_warning ? "text-tv-warning" : "text-tv-error"}`}>
+                    {w.is_warning ? t("common.warning") : t("common.violation")}
                   </span>
                 </div>
               ))}

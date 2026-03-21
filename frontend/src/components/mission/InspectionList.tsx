@@ -100,7 +100,9 @@ export default function InspectionList({
         onClick={() => setCollapsed(!collapsed)}
       >
         <span className="text-sm font-semibold text-tv-text-primary flex items-center gap-2">
-          {t("mission.config.inspections")}
+          <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">
+            {t("mission.config.inspections")}
+          </span>
           <span
             className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-tv-accent-text"
             style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
@@ -130,6 +132,7 @@ export default function InspectionList({
           )}
         </div>
       </div>
+      {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
 
       {!collapsed && sorted.length === 0 && (
         <p className="text-sm text-tv-text-muted py-4 text-center">
