@@ -8,16 +8,17 @@ interface ValidationStatusPanelProps {
   hasTrajectory: boolean;
 }
 
+// each check has a stable key for i18n and a set of keywords for matching violations
 const VALIDATION_CHECKS = [
-  "Altitude Check",
-  "Speed Check",
-  "Geofence Check",
-  "Battery Check",
-  "Camera FOV Check",
-  "Speed/Framerate Compatibility",
-  "Runway Buffer",
-  "Obstacle Clearance",
-];
+  { key: "altitudeCheck", keywords: ["altitude"] },
+  { key: "speedCheck", keywords: ["speed"] },
+  { key: "geofenceCheck", keywords: ["geofence"] },
+  { key: "batteryCheck", keywords: ["battery"] },
+  { key: "cameraFovCheck", keywords: ["camera", "fov"] },
+  { key: "speedFramerateCheck", keywords: ["framerate", "frame rate", "frame_rate"] },
+  { key: "runwayBuffer", keywords: ["runway", "buffer"] },
+  { key: "obstacleClearance", keywords: ["obstacle", "clearance"] },
+] as const;
 
 export default function ValidationStatusPanel({
   flightPlan,
@@ -35,8 +36,8 @@ export default function ValidationStatusPanel({
   for (const v of violations) {
     const msg = v.message.toLowerCase();
     for (const check of VALIDATION_CHECKS) {
-      if (msg.includes(check.toLowerCase())) {
-        failedChecks.add(check);
+      if (check.keywords.some((kw) => msg.includes(kw))) {
+        failedChecks.add(check.key);
       }
     }
   }
@@ -94,10 +95,10 @@ export default function ValidationStatusPanel({
 
               <div className="flex flex-col gap-1">
                 {VALIDATION_CHECKS.map((check) => {
-                  const failed = failedChecks.has(check);
+                  const failed = failedChecks.has(check.key);
                   return (
                     <div
-                      key={check}
+                      key={check.key}
                       className="flex items-center gap-2 text-xs"
                     >
                       {failed ? (
@@ -105,7 +106,9 @@ export default function ValidationStatusPanel({
                       ) : (
                         <CheckCircle className="h-3.5 w-3.5 text-tv-success flex-shrink-0" />
                       )}
-                      <span className="text-tv-text-primary">{check}</span>
+                      <span className="text-tv-text-primary">
+                        {t(`mission.overview.checks.${check.key}`)}
+                      </span>
                     </div>
                   );
                 })}

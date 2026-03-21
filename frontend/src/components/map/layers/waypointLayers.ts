@@ -189,7 +189,7 @@ function offsetSegmentLeft(
   const mid3Lon = from[0] + dx * 0.75 + perpLon * degOffset * 0.7;
   const mid3Lat = from[1] + dy * 0.75 + perpLat * degOffset * 0.7;
 
-  const alt = (from[2] ?? 0 + (to[2] ?? 0)) / 2;
+  const alt = ((from[2] ?? 0) + (to[2] ?? 0)) / 2;
   return [
     from,
     [mid1Lon, mid1Lat, alt],

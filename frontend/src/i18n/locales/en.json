@@ -185,7 +185,17 @@
       "missionName": "Mission Name",
       "status": "Status",
       "transitDistance": "Transit Distance",
-      "measurementDistance": "Measurement Distance"
+      "measurementDistance": "Measurement Distance",
+      "checks": {
+        "altitudeCheck": "Altitude Check",
+        "speedCheck": "Speed Check",
+        "geofenceCheck": "Geofence Check",
+        "batteryCheck": "Battery Check",
+        "cameraFovCheck": "Camera FOV Check",
+        "speedFramerateCheck": "Speed/Framerate Compatibility",
+        "runwayBuffer": "Runway Buffer",
+        "obstacleClearance": "Obstacle Clearance"
+      }
     },
     "config": {
       "inspections": "Inspections",
