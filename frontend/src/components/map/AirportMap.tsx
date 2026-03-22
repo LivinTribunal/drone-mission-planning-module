@@ -183,6 +183,10 @@ export default function AirportMap({
     simplifiedTrajectory,
     ...layersProp,
   });
+  const layerConfigRef = useRef(layerConfig);
+  layerConfigRef.current = layerConfig;
+  const visibleInspectionIdsRef = useRef(visibleInspectionIds);
+  visibleInspectionIdsRef.current = visibleInspectionIds;
   const [internalTerrainMode, setInternalTerrainMode] = useState<"map" | "satellite">(
     "satellite",
   );
@@ -255,6 +259,63 @@ export default function AirportMap({
     };
   }, [airport, addAllLayers]);
 
+  // apply inspection visibility filters to waypoint layers
+  const syncInspectionFilters = useCallback((map: maplibregl.Map) => {
+    /** apply inspection_id filters to waypoint layers. */
+    const inspIds = visibleInspectionIdsRef.current;
+    if (!inspIds) return;
+
+    const ids = [...inspIds];
+    const visFilter: maplibregl.ExpressionSpecification = [
+      "any",
+      ["!", ["has", "inspection_id"]],
+      ["!", ["to-boolean", ["get", "inspection_id"]]],
+      ["in", ["get", "inspection_id"], ["literal", ids]],
+    ];
+
+    const layersToFilter = [
+      { id: WAYPOINT_TRANSIT_CIRCLE_LAYER, base: ["==", ["get", "waypoint_type"], "TRANSIT"] as maplibregl.ExpressionSpecification },
+      { id: WAYPOINT_MEASUREMENT_CIRCLE_LAYER, base: ["==", ["get", "waypoint_type"], "MEASUREMENT"] as maplibregl.ExpressionSpecification },
+      { id: WAYPOINT_HOVER_LAYER, base: ["==", ["get", "waypoint_type"], "HOVER"] as maplibregl.ExpressionSpecification },
+      { id: WAYPOINT_LABEL_LAYER, base: ["==", ["get", "waypoint_type"], "MEASUREMENT"] as maplibregl.ExpressionSpecification },
+      { id: WAYPOINT_LINE_LAYER, base: null },
+      { id: WAYPOINT_ARROW_LAYER, base: null },
+      { id: WAYPOINT_CAMERA_LINE_LAYER, base: null },
+    ];
+
+    for (const { id, base } of layersToFilter) {
+      try {
+        if (map.getLayer(id)) {
+          const filter = base
+            ? (["all", base, visFilter] as maplibregl.ExpressionSpecification)
+            : visFilter;
+          map.setFilter(id, filter);
+        }
+      } catch {
+        // layer may not exist
+      }
+    }
+  }, []);
+
+  // apply current layer config visibility to all map layers
+  const syncLayerVisibility = useCallback((map: maplibregl.Map) => {
+    /** sync layer toggle state to maplibre visibility properties. */
+    const cfg = layerConfigRef.current;
+    for (const [key, layerIds] of Object.entries(layerGroupMap)) {
+      const visible = cfg[key as keyof MapLayerConfig];
+      if (visible === undefined) continue;
+      for (const layerId of layerIds) {
+        try {
+          if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+          }
+        } catch {
+          // layer may not exist
+        }
+      }
+    }
+  }, []);
+
   // add or update waypoint layers
   const addWaypointLayers = useCallback((map: maplibregl.Map) => {
     const wps = waypointsRef.current;
@@ -265,7 +326,11 @@ export default function AirportMap({
     registerAllMapImages(map);
     addWaypointLayersFn(map, wps ?? [], takeoff, landing, selectedWaypointId, idxMap);
     addSimplifiedTrajectoryLayers(map, wps ?? [], takeoff, landing);
-  }, [selectedWaypointId]);
+
+    // re-sync visibility and filters after layers are added
+    syncLayerVisibility(map);
+    syncInspectionFilters(map);
+  }, [selectedWaypointId, syncLayerVisibility, syncInspectionFilters]);
 
   // sync waypoints ref and re-render layers when waypoints or coords change
   useEffect(() => {
@@ -508,38 +573,8 @@ export default function AirportMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !visibleInspectionIds) return;
-
-    const ids = [...visibleInspectionIds];
-    const visFilter: maplibregl.ExpressionSpecification = [
-      "any",
-      ["!", ["has", "inspection_id"]],
-      ["==", ["get", "inspection_id"], ""],
-      ["in", ["get", "inspection_id"], ["literal", ids]],
-    ];
-
-    const layersToFilter = [
-      { id: WAYPOINT_TRANSIT_CIRCLE_LAYER, base: ["==", ["get", "waypoint_type"], "TRANSIT"] as maplibregl.ExpressionSpecification },
-      { id: WAYPOINT_MEASUREMENT_CIRCLE_LAYER, base: ["==", ["get", "waypoint_type"], "MEASUREMENT"] as maplibregl.ExpressionSpecification },
-      { id: WAYPOINT_HOVER_LAYER, base: ["==", ["get", "waypoint_type"], "HOVER"] as maplibregl.ExpressionSpecification },
-      { id: WAYPOINT_LABEL_LAYER, base: ["==", ["get", "waypoint_type"], "MEASUREMENT"] as maplibregl.ExpressionSpecification },
-      { id: WAYPOINT_LINE_LAYER, base: null },
-      { id: WAYPOINT_ARROW_LAYER, base: null },
-      { id: WAYPOINT_CAMERA_LINE_LAYER, base: null },
-    ];
-
-    for (const { id, base } of layersToFilter) {
-      try {
-        if (map.getLayer(id)) {
-          const filter = base
-            ? (["all", base, visFilter] as maplibregl.ExpressionSpecification)
-            : visFilter;
-          map.setFilter(id, filter);
-        }
-      } catch {
-        // layer may not exist
-      }
-    }
-  }, [visibleInspectionIds]);
+    syncInspectionFilters(map);
+  }, [visibleInspectionIds, syncInspectionFilters]);
 
   // terrain mode switch
   const handleTerrainChange = useCallback(
