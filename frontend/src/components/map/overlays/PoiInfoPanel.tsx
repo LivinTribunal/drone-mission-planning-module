@@ -93,7 +93,10 @@ export default function PoiInfoPanel({ feature, onClose }: PoiInfoPanelProps) {
           return (
             <>
               <InfoRow label={t("mission.config.type")} value={w.waypoint_type.replace(/_/g, " ")} />
-              <InfoRow label={t("mission.config.waypointCount")} value={String(w.stack_count)} />
+              <InfoRow
+                label={t("dashboard.waypoints")}
+                value={w.seq_min != null && w.seq_max != null ? `${w.seq_min}-${w.seq_max} (${w.stack_count})` : String(w.stack_count)}
+              />
               {w.alt_min != null && w.alt_max != null && (
                 <InfoRow
                   label={t("dashboard.poiAltitude")}
@@ -117,7 +120,7 @@ export default function PoiInfoPanel({ feature, onClose }: PoiInfoPanelProps) {
 
   return (
     <div
-      className="w-full rounded-2xl border border-tv-border bg-tv-bg"
+      className="w-full rounded-2xl border border-tv-border bg-tv-bg flex-shrink-0"
       data-testid="poi-info-panel"
     >
       <div className="flex items-center justify-between px-3 py-2">

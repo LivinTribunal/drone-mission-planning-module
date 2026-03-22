@@ -117,6 +117,8 @@ export function waypointsToGeoJSON(
           color: resolveWaypointColor(first.waypoint_type),
           has_camera_target: "no",
           stack_count: group.length,
+          seq_min: Math.min(...seqs),
+          seq_max: Math.max(...seqs),
           alt_min: Math.min(...alts),
           alt_max: Math.max(...alts),
         },

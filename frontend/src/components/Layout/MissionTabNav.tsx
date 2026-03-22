@@ -346,7 +346,7 @@ export default function MissionTabNav() {
                   ? t("mission.config.recomputeTooltip")
                   : undefined
               }
-              className={`flex items-center justify-center gap-2 min-w-[280px] h-11 rounded-full text-sm font-semibold transition-colors ${
+              className={`flex items-center justify-center gap-2 w-[280px] shrink h-11 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
                 computeCtx.variant === "secondary"
                   ? "border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover"
                   : computeCtx.isComputing
@@ -371,7 +371,7 @@ export default function MissionTabNav() {
             <button
               onClick={() => saveCtx.onSave?.()}
               disabled={!saveCtx.isDirty || saveCtx.isSaving}
-              className={`rounded-full px-4 h-11 min-w-[81px] text-sm font-semibold transition-colors border ${
+              className={`rounded-full px-4 h-11 min-w-[81px] flex-shrink-0 text-sm font-semibold transition-colors border ${
                 saveCtx.isDirty && !saveCtx.isSaving
                   ? "border-tv-accent bg-tv-surface text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
                   : "border-tv-border bg-tv-surface text-tv-text-muted cursor-not-allowed"

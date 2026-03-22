@@ -150,7 +150,7 @@ export default function WaypointListPanel({
 
   return (
     <div
-      className="rounded-2xl border border-tv-border bg-tv-bg overflow-hidden"
+      className="rounded-2xl border border-tv-border bg-tv-bg overflow-hidden flex-shrink-0"
       data-testid="waypoint-list-panel"
     >
       <button

@@ -139,25 +139,23 @@ export default function ValidationStatusPanel({
             <div className="flex flex-col gap-2">
               {/* summary card */}
               <div className={`rounded-xl p-3 ${styles.bg}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <p className={`text-sm font-semibold ${styles.text}`}>
-                      {t(`mission.overview.${overallStatus}`)}
-                    </p>
-                    {(overallStatus === "warnings" || overallStatus === "failed") && (
-                      <button
-                        onClick={() => navigate(`/operator-center/missions/${id}/validation-export`)}
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border transition-colors ${
-                          overallStatus === "warnings"
-                            ? "text-tv-warning border-tv-warning/30 hover:bg-tv-warning hover:text-white hover:border-tv-warning"
-                            : "text-tv-error border-tv-error/30 hover:bg-tv-error hover:text-white hover:border-tv-error"
-                        }`}
-                      >
-                        {t("mission.overview.needsManualApproval")}
-                      </button>
-                    )}
-                  </div>
-                  <span className={`text-xs ${styles.label}`}>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <p className={`text-sm font-semibold ${styles.text}`}>
+                    {t(`mission.overview.${overallStatus}`)}
+                  </p>
+                  {(overallStatus === "warnings" || overallStatus === "failed") && (
+                    <button
+                      onClick={() => navigate(`/operator-center/missions/${id}/validation-export`)}
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border transition-colors whitespace-nowrap ${
+                        overallStatus === "warnings"
+                          ? "text-tv-warning border-tv-warning/30 hover:bg-tv-warning hover:text-white hover:border-tv-warning"
+                          : "text-tv-error border-tv-error/30 hover:bg-tv-error hover:text-white hover:border-tv-error"
+                      }`}
+                    >
+                      {t("mission.overview.needsManualApproval")}
+                    </button>
+                  )}
+                  <span className={`text-xs ${styles.label} ml-auto`}>
                     {passedCount}/{VALIDATION_CHECKS.length} {t("mission.overview.checksPassed")}
                   </span>
                 </div>

@@ -512,10 +512,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                         non_aborting_violations.append(msg)
 
     for (seq, surface_label), count in measurement_crossings.items():
-        msg = (
-            f"inspection {seq} crosses {surface_label} "
-            f"during measurement ({count} segments)"
-        )
+        msg = f"inspection {seq} crosses {surface_label} " f"during measurement ({count} segments)"
         non_aborting_violations.append(msg)
 
     # final validation of assembled path
@@ -562,7 +559,12 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             total_dur += all_waypoints[j].hover_duration
 
     flight_plan = persist_flight_plan(
-        db, mission, all_waypoints, warnings, total_dist, total_dur,
+        db,
+        mission,
+        all_waypoints,
+        warnings,
+        total_dist,
+        total_dur,
         violations=non_aborting_violations,
     )
 

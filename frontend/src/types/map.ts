@@ -68,6 +68,8 @@ export interface MapFeatureWaypoint {
     sequence_order: number;
     position: PointZ;
     stack_count: number;
+    seq_min?: number;
+    seq_max?: number;
     alt_min?: number;
     alt_max?: number;
   };

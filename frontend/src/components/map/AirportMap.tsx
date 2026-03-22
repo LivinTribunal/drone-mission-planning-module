@@ -477,6 +477,8 @@ export default function AirportMap({
               sequence_order: Number(wpHit.properties.sequence_order ?? 0),
               position: { type: "Point", coordinates: [coords[0], coords[1], coords[2] ?? 0] },
               stack_count: stackCount,
+              seq_min: stackCount > 1 ? Number(wpHit.properties.seq_min) : undefined,
+              seq_max: stackCount > 1 ? Number(wpHit.properties.seq_max) : undefined,
               alt_min: stackCount > 1 ? Number(wpHit.properties.alt_min) : undefined,
               alt_max: stackCount > 1 ? Number(wpHit.properties.alt_max) : undefined,
             },
@@ -737,7 +739,7 @@ export default function AirportMap({
 
       {/* top-left: layers, waypoints, poi info */}
       <div
-        className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-52 overflow-y-auto"
+        className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-[220px] overflow-y-auto"
         style={{ maxHeight: "calc(100% - 68px)" }}
       >
         {showLayerPanel && (
