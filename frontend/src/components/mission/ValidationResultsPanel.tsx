@@ -21,19 +21,14 @@ interface ValidationResultsPanelProps {
 }
 
 const VALIDATION_CHECKS = [
-  { key: "altitudeCheck", keywords: ["altitude"], isHard: true },
-  {
-    key: "speedCheck",
-    keywords: ["speed"],
-    exclude: ["framerate", "frame rate"],
-    isHard: true,
-  },
-  { key: "geofenceCheck", keywords: ["geofence"], isHard: true },
-  { key: "batteryCheck", keywords: ["battery"], isHard: false },
-  { key: "runwayBuffer", keywords: ["runway"], isHard: true },
-  { key: "obstacleClearance", keywords: ["obstacle"], isHard: true },
-  { key: "cameraObstructionCheck", keywords: ["obstructed"], isHard: true },
-  { key: "speedFramerateCompat", keywords: ["framerate"], isHard: false },
+  { key: "altitudeCheck", kind: "altitude", isHard: true },
+  { key: "speedCheck", kind: "speed", isHard: true },
+  { key: "geofenceCheck", kind: "geofence", isHard: true },
+  { key: "batteryCheck", kind: "battery", isHard: false },
+  { key: "runwayBuffer", kind: "runway_buffer", isHard: true },
+  { key: "obstacleClearance", kind: "obstacle", isHard: true },
+  { key: "cameraObstructionCheck", kind: "camera_obstruction", isHard: true },
+  { key: "speedFramerateCompat", kind: "speed_framerate", isHard: false },
 ] as const;
 
 type CheckResult = "pass" | "fail" | "warn" | "none";
@@ -43,13 +38,7 @@ function getCheckResult(
   violations: ValidationViolation[],
 ): CheckResult {
   for (const v of violations) {
-    const msg = v.message.toLowerCase();
-    const excluded =
-      "exclude" in check &&
-      (check as { exclude: readonly string[] }).exclude?.some((kw) =>
-        msg.includes(kw),
-      );
-    if (!excluded && check.keywords.every((kw) => msg.includes(kw))) {
+    if (v.violation_kind === check.kind) {
       return v.is_warning ? "warn" : "fail";
     }
   }

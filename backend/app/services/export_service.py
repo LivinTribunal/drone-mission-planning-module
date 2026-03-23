@@ -217,14 +217,17 @@ _EXPORT_GENERATORS = {
 
 def _sanitize_filename(name: str) -> str:
     """remove characters unsafe for content-disposition header filenames."""
+    # strip non-ASCII for RFC 7230 compliance
+    sanitized = name.encode("ascii", errors="ignore").decode("ascii")
+
     # strip control characters (RFC 7230 prohibits octets 0-31 and 127)
-    sanitized = re.sub(r"[\x00-\x1f\x7f]", "", name)
+    sanitized = re.sub(r"[\x00-\x1f\x7f]", "", sanitized)
     sanitized = re.sub(r'["\\/]', "", sanitized)
 
     # prevent path traversal sequences
     while ".." in sanitized:
         sanitized = sanitized.replace("..", "")
-    return sanitized
+    return sanitized.strip() or "mission"
 
 
 def export_mission(
@@ -239,6 +242,24 @@ def export_mission(
     if not mission:
         raise NotFoundError("mission not found")
 
+    # verify flight plan and airport exist before committing status transition
+    flight_plan = (
+        db.query(FlightPlan)
+        .options(joinedload(FlightPlan.waypoints))
+        .filter(FlightPlan.mission_id == mission_id)
+        .first()
+    )
+    if not flight_plan:
+        raise NotFoundError("no flight plan found for this mission")
+
+    airport = db.query(Airport).filter(Airport.id == flight_plan.airport_id).first()
+    if not airport or airport.elevation is None:
+        raise DomainError(
+            "airport elevation is required for export - AGL altitudes cannot be calculated",
+            status_code=422,
+        )
+    airport_elevation = airport.elevation
+
     if mission.status == "VALIDATED":
         try:
             mission.transition_to("EXPORTED")
@@ -251,24 +272,6 @@ def export_mission(
             f"mission must be VALIDATED or EXPORTED to export, current: {mission.status}",
             status_code=409,
         )
-
-    flight_plan = (
-        db.query(FlightPlan)
-        .options(joinedload(FlightPlan.waypoints))
-        .filter(FlightPlan.mission_id == mission_id)
-        .first()
-    )
-    if not flight_plan:
-        raise NotFoundError("no flight plan found for this mission")
-
-    # get airport elevation for AGL conversion
-    airport = db.query(Airport).filter(Airport.id == flight_plan.airport_id).first()
-    if not airport or airport.elevation is None:
-        raise DomainError(
-            "airport elevation is required for export - AGL altitudes cannot be calculated",
-            status_code=422,
-        )
-    airport_elevation = airport.elevation
 
     safe_name = _sanitize_filename(mission.name)
 

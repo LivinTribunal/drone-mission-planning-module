@@ -304,7 +304,7 @@ function resolveLabel(
   inspectionId: string | null,
   indexMap?: Record<string, number>,
 ): string {
-  if (type === "MEASUREMENT" && inspectionId && indexMap?.[inspectionId]) {
+  if (type === "MEASUREMENT" && inspectionId && indexMap?.[inspectionId] !== undefined) {
     return String(indexMap[inspectionId]);
   }
   return "";

@@ -189,9 +189,12 @@ export default function MissionValidationPage() {
       }
 
       document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      try {
+        a.click();
+      } finally {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
 
       await fetchData();
     } catch (err) {
