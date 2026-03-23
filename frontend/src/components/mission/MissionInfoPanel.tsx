@@ -35,6 +35,7 @@ export default function MissionInfoPanel({
   /** read-only mission info collapsible card. */
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
+  const isApproved = mission.status === "VALIDATED" || mission.status === "EXPORTED" || mission.status === "COMPLETED";
 
   return (
     <div data-testid="mission-info-panel">
@@ -68,25 +69,31 @@ export default function MissionInfoPanel({
             <div
               className="p-2 rounded-xl"
               style={{
-                backgroundColor: validationPassed === null
-                  ? "var(--tv-status-draft-bg)"
-                  : validationPassed
-                    ? "var(--tv-status-validated-bg)"
-                    : "var(--tv-status-cancelled-bg)",
-                color: validationPassed === null
-                  ? "var(--tv-status-draft-text)"
-                  : validationPassed
-                    ? "var(--tv-status-validated-text)"
-                    : "var(--tv-status-cancelled-text)",
+                backgroundColor: isApproved
+                  ? "var(--tv-status-validated-bg)"
+                  : validationPassed === null
+                    ? "var(--tv-status-draft-bg)"
+                    : validationPassed
+                      ? "var(--tv-status-validated-bg)"
+                      : "var(--tv-status-cancelled-bg)",
+                color: isApproved
+                  ? "var(--tv-status-validated-text)"
+                  : validationPassed === null
+                    ? "var(--tv-status-draft-text)"
+                    : validationPassed
+                      ? "var(--tv-status-validated-text)"
+                      : "var(--tv-status-cancelled-text)",
               }}
             >
               <p className="text-xs opacity-75">{t("mission.overview.validationStatusLabel")}:</p>
               <p className="text-sm font-semibold">
-                {validationPassed === null
-                  ? t("mission.overview.notValidated")
-                  : validationPassed
-                    ? t("mission.overview.passed")
-                    : t("mission.overview.failed")}
+                {isApproved
+                  ? t("mission.overview.approved")
+                  : validationPassed === null
+                    ? t("mission.overview.notValidated")
+                    : validationPassed
+                      ? t("mission.overview.passed")
+                      : t("mission.overview.failed")}
               </p>
             </div>
             <InfoCell

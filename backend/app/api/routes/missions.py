@@ -1,10 +1,14 @@
+import io
+import zipfile
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
 from app.schemas.common import DeleteResponse, ListMeta
+from app.schemas.export import ExportRequest
 from app.schemas.mission import (
     InspectionCreate,
     InspectionResponse,
@@ -17,7 +21,7 @@ from app.schemas.mission import (
     ReorderRequest,
     ReorderResponse,
 )
-from app.services import inspection_service, mission_service
+from app.services import export_service, inspection_service, mission_service
 
 router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
 
@@ -86,10 +90,31 @@ def validate_mission(mission_id: UUID, db: Session = Depends(get_db)):
     return mission_service.transition_mission(db, mission_id, "VALIDATED")
 
 
-@router.post("/{mission_id}/export", response_model=MissionResponse)
-def export_mission(mission_id: UUID, db: Session = Depends(get_db)):
-    """VALIDATED -> EXPORTED"""
-    return mission_service.transition_mission(db, mission_id, "EXPORTED")
+@router.post("/{mission_id}/export")
+def export_mission(mission_id: UUID, body: ExportRequest, db: Session = Depends(get_db)):
+    """generate export files and transition VALIDATED -> EXPORTED."""
+    files, safe_name = export_service.export_mission(db, mission_id, body.formats)
+
+    # single file - return directly
+    if len(files) == 1:
+        filename, (data, content_type) = next(iter(files.items()))
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    # multiple files - zip them
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for filename, (data, _) in files.items():
+            zf.writestr(filename, data)
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="mission_{safe_name}_export.zip"'},
+    )
 
 
 @router.post("/{mission_id}/complete", response_model=MissionResponse)

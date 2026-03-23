@@ -21,6 +21,7 @@ export interface ValidationViolation {
   is_warning: boolean;
   message: string;
   constraint_id: string | null;
+  violation_kind: string | null;
 }
 
 export interface ValidationResultResponse {

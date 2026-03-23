@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from app.schemas.geometry import PointZ
 
@@ -25,6 +25,32 @@ class WaypointResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# keyword-to-kind mapping for structured violation classification
+_VIOLATION_KIND_RULES: list[tuple[str, list[str], list[str]]] = [
+    ("speed_framerate", ["framerate"], []),
+    ("speed_framerate", ["frame rate"], []),
+    ("altitude", ["altitude"], []),
+    ("speed", ["speed"], ["framerate", "frame rate"]),
+    ("geofence", ["geofence"], []),
+    ("battery", ["battery"], []),
+    ("runway_buffer", ["runway"], []),
+    ("obstacle", ["obstacle"], []),
+    ("camera_obstruction", ["obstructed"], []),
+    ("safety_zone", ["zone"], []),
+]
+
+
+def _classify_violation(message: str) -> str | None:
+    """derive violation kind from message content."""
+    msg = message.lower()
+    for kind, keywords, excludes in _VIOLATION_KIND_RULES:
+        if any(kw in msg for kw in excludes):
+            continue
+        if all(kw in msg for kw in keywords):
+            return kind
+    return None
+
+
 class ValidationViolationResponse(BaseModel):
     """validation violation"""
 
@@ -32,6 +58,12 @@ class ValidationViolationResponse(BaseModel):
     is_warning: bool
     message: str
     constraint_id: UUID | None = None
+
+    @computed_field
+    @property
+    def violation_kind(self) -> str | None:
+        """structured violation type derived from message content."""
+        return _classify_violation(self.message)
 
     model_config = {"from_attributes": True}
 

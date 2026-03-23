@@ -2,14 +2,14 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Loader2, Pencil, X, Check } from "lucide-react";
+import { ChevronDown, Loader2, Pencil, X, Check, Upload } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { listMissions, updateMission } from "@/api/missions";
 import type { MissionResponse } from "@/types/mission";
 import Badge from "@/components/common/Badge";
 import type { MissionStatus } from "@/types/enums";
 
-function formatSavedTime(date: Date): string {
+function formatSavedTime(date: Date, t: (key: string, opts?: Record<string, string>) => string): string {
   const now = new Date();
   const hh = String(date.getHours()).padStart(2, "0");
   const mm = String(date.getMinutes()).padStart(2, "0");
@@ -17,11 +17,11 @@ function formatSavedTime(date: Date): string {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const saved = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diff = Math.floor((today.getTime() - saved.getTime()) / 86400000);
-  if (diff === 0) return `Saved today ${time}`;
-  if (diff === 1) return `Saved yesterday ${time}`;
+  if (diff === 0) return t("mission.config.savedToday", { time });
+  if (diff === 1) return t("mission.config.savedYesterday", { time });
   const dd = String(date.getDate()).padStart(2, "0");
   const mo = String(date.getMonth() + 1).padStart(2, "0");
-  return `Saved ${dd}.${mo}. ${time}`;
+  return t("mission.config.savedOn", { date: `${dd}.${mo}.`, time });
 }
 
 export interface SaveContext {
@@ -37,6 +37,7 @@ export interface ComputeContext {
   isComputing: boolean;
   label?: string;
   variant?: "primary" | "secondary";
+  icon?: "upload";
 }
 
 export interface MissionTabOutletContext {
@@ -360,6 +361,9 @@ export default function MissionTabNav() {
               {computeCtx.isComputing && (
                 <Loader2 className="h-4 w-4 animate-spin" />
               )}
+              {!computeCtx.isComputing && computeCtx.icon === "upload" && (
+                <Upload className="h-4 w-4" />
+              )}
               {computeCtx.isComputing
                 ? t("mission.config.computing")
                 : computeCtx.label ?? t("mission.config.computeTrajectory")}
@@ -388,7 +392,7 @@ export default function MissionTabNav() {
           <div className="w-[140px] flex-shrink-0">
             <span className="flex items-center justify-center rounded-full px-4 h-11 text-xs text-tv-text-muted whitespace-nowrap">
               {saveCtx.lastSaved
-                ? formatSavedTime(saveCtx.lastSaved)
+                ? formatSavedTime(saveCtx.lastSaved, t)
                 : t("mission.config.notSavedYet")}
             </span>
           </div>
