@@ -12,6 +12,7 @@ import type {
 import type {
   FlightPlanResponse,
   GenerateTrajectoryResponse,
+  WaypointPositionUpdate,
 } from "@/types/flightPlan";
 import client from "./client";
 
@@ -145,5 +146,16 @@ export async function getFlightPlan(
   missionId: string,
 ): Promise<FlightPlanResponse> {
   const res = await client.get(`/missions/${missionId}/flight-plan`);
+  return res.data;
+}
+
+export async function batchUpdateWaypoints(
+  missionId: string,
+  updates: WaypointPositionUpdate[],
+): Promise<FlightPlanResponse> {
+  const res = await client.put(
+    `/missions/${missionId}/flight-plan/waypoints`,
+    { updates },
+  );
   return res.data;
 }
