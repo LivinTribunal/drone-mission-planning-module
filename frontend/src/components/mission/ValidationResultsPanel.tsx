@@ -86,7 +86,7 @@ export default function ValidationResultsPanel({
   } else if (violationCount > 0) {
     overallStatus = "failed";
   } else {
-    overallStatus = "passed";
+    overallStatus = validation.passed ? "passed" : "failed";
   }
 
   const canAccept = missionStatus === "PLANNED";

@@ -253,3 +253,7 @@ class TestSanitizeFilename:
     def test_normal_name_unchanged(self):
         """normal mission names pass through unchanged."""
         assert export_service._sanitize_filename("Test Mission 1") == "Test Mission 1"
+
+    def test_strips_null_bytes(self):
+        """null bytes and control characters are removed."""
+        assert export_service._sanitize_filename("mis\x00sion\x01test\x7f") == "missiontest"

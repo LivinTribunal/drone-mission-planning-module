@@ -217,7 +217,10 @@ _EXPORT_GENERATORS = {
 
 def _sanitize_filename(name: str) -> str:
     """remove characters unsafe for content-disposition header filenames."""
-    sanitized = re.sub(r'["\r\n/\\]', "", name)
+    # strip control characters (RFC 7230 prohibits octets 0-31 and 127)
+    sanitized = re.sub(r"[\x00-\x1f\x7f]", "", name)
+    sanitized = re.sub(r'["\\/]', "", sanitized)
+
     # prevent path traversal sequences
     while ".." in sanitized:
         sanitized = sanitized.replace("..", "")
@@ -260,9 +263,12 @@ def export_mission(
 
     # get airport elevation for AGL conversion
     airport = db.query(Airport).filter(Airport.id == flight_plan.airport_id).first()
-    airport_elevation = 0
-    if airport and airport.elevation is not None:
-        airport_elevation = airport.elevation
+    if not airport or airport.elevation is None:
+        raise DomainError(
+            "airport elevation is required for export - AGL altitudes cannot be calculated",
+            status_code=422,
+        )
+    airport_elevation = airport.elevation
 
     safe_name = _sanitize_filename(mission.name)
 

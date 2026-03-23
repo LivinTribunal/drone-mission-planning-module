@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
@@ -101,11 +101,13 @@ export default function MissionValidationPage() {
         setFlightPlan(fp);
         const violations = fp.validation_result?.violations ?? [];
         setWarnings(violations.length > 0 ? violations : null);
-      } catch {
+      } catch (err) {
+        console.error("failed to load flight plan:", err instanceof Error ? err.message : String(err));
         setFlightPlan(null);
         setWarnings(null);
       }
-    } catch {
+    } catch (err) {
+      console.error("failed to load mission:", err instanceof Error ? err.message : String(err));
       setError("mission.config.loadError");
     } finally {
       setLoading(false);
@@ -132,9 +134,18 @@ export default function MissionValidationPage() {
     };
   }, [fetchData]);
 
+  const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimer.current) clearTimeout(notificationTimer.current);
+    };
+  }, []);
+
   function showNotification(msg: string) {
+    if (notificationTimer.current) clearTimeout(notificationTimer.current);
     setNotification(msg);
-    setTimeout(() => setNotification(null), 4000);
+    notificationTimer.current = setTimeout(() => setNotification(null), 4000);
   }
 
   async function handleValidate() {
@@ -143,7 +154,8 @@ export default function MissionValidationPage() {
     try {
       await validateMission(id);
       await fetchData();
-    } catch {
+    } catch (err) {
+      console.error("validation failed:", err instanceof Error ? err.message : String(err));
       showNotification(t("mission.validationExportPage.acceptError"));
     } finally {
       setIsValidating(false);
@@ -182,7 +194,8 @@ export default function MissionValidationPage() {
       document.body.removeChild(a);
 
       await fetchData();
-    } catch {
+    } catch (err) {
+      console.error("export failed:", err instanceof Error ? err.message : String(err));
       showNotification(t("mission.validationExportPage.exportError"));
     } finally {
       setIsExporting(false);
@@ -194,7 +207,8 @@ export default function MissionValidationPage() {
     try {
       await completeMission(id);
       await fetchData();
-    } catch {
+    } catch (err) {
+      console.error("complete failed:", err instanceof Error ? err.message : String(err));
       showNotification(t("mission.validationExportPage.completeError"));
     }
   }
@@ -204,7 +218,8 @@ export default function MissionValidationPage() {
     try {
       await cancelMission(id);
       await fetchData();
-    } catch {
+    } catch (err) {
+      console.error("cancel failed:", err instanceof Error ? err.message : String(err));
       showNotification(t("mission.validationExportPage.cancelError"));
     }
   }
@@ -214,7 +229,8 @@ export default function MissionValidationPage() {
     try {
       await deleteMission(id);
       navigate("/operator-center/missions");
-    } catch {
+    } catch (err) {
+      console.error("delete failed:", err instanceof Error ? err.message : String(err));
       showNotification(t("mission.validationExportPage.deleteError"));
     }
   }
