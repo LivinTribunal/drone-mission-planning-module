@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Download } from "lucide-react";
 import type { MissionStatus } from "@/types/enums";
@@ -13,6 +13,7 @@ interface ExportPanelProps {
   onCancel: () => void;
   onDelete: () => void;
   isExporting: boolean;
+  statsSlot?: ReactNode;
 }
 
 const EXPORT_FORMATS = [
@@ -37,6 +38,7 @@ export default function ExportPanel({
   onCancel,
   onDelete,
   isExporting,
+  statsSlot,
 }: ExportPanelProps) {
   const { t } = useTranslation();
   const [exportCollapsed, setExportCollapsed] = useState(false);
@@ -110,11 +112,18 @@ export default function ExportPanel({
           <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">
             {t("mission.validationExportPage.export")}
           </span>
-          {exportCollapsed ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronUp className="h-4 w-4" />
-          )}
+          <div className="flex items-center gap-2">
+            {!exportEnabled && !terminal && (
+              <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-tv-warning text-white">
+                {t("mission.validationExportPage.needsValidation")}
+              </span>
+            )}
+            {exportCollapsed ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronUp className="h-4 w-4" />
+            )}
+          </div>
         </button>
 
         {!exportCollapsed && (
@@ -156,12 +165,7 @@ export default function ExportPanel({
               ))}
             </div>
 
-            {/* status message */}
-            {!exportEnabled && !terminal && (
-              <p className="text-xs text-tv-text-muted italic">
-                {t("mission.validationExportPage.validateFirst")}
-              </p>
-            )}
+            {/* terminal status message */}
             {terminal && (
               <p className="text-xs text-tv-text-muted italic">
                 {t("mission.validationExportPage.exportDisabledTerminal")}
@@ -175,6 +179,7 @@ export default function ExportPanel({
               disabled={
                 !exportEnabled || selectedFormats.size === 0 || isExporting
               }
+              title={!exportEnabled && !terminal ? t("mission.validationExportPage.needsValidation") : undefined}
               className="w-full flex items-center justify-center gap-2"
               data-testid="download-export-btn"
             >
@@ -187,6 +192,8 @@ export default function ExportPanel({
         )}
       </div>
 
+      {statsSlot}
+
       {/* lifecycle buttons */}
       <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
         <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border text-sm font-semibold text-tv-text-primary">
@@ -194,21 +201,26 @@ export default function ExportPanel({
         </span>
         <div className="border-b border-tv-border -mx-4 mt-3" />
         <div className="mt-3 flex flex-col gap-2">
-          <Button
-            variant="secondary"
+          <button
             onClick={() => setConfirmModal("complete")}
             disabled={!canComplete}
-            className="w-full"
+            title={!canComplete ? t("mission.validationExportPage.completeTooltip") : undefined}
+            className={`w-full px-4 py-2.5 text-sm font-semibold rounded-full transition-colors border ${
+              canComplete
+                ? "border-tv-accent text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
+                : "opacity-50 cursor-not-allowed border-tv-border text-tv-text-muted"
+            }`}
             data-testid="complete-btn"
           >
             {t("mission.validationExportPage.completeMission")}
-          </Button>
+          </button>
           <button
             onClick={() => setConfirmModal("cancel")}
             disabled={!canCancelMission}
+            title={!canCancelMission ? t("mission.validationExportPage.cancelTooltip") : undefined}
             className={`w-full px-4 py-2.5 text-sm font-semibold rounded-full transition-colors border ${
               canCancelMission
-                ? "bg-tv-warning text-white border-tv-warning hover:opacity-90"
+                ? "border-tv-warning text-tv-warning hover:bg-tv-warning hover:text-white"
                 : "opacity-50 cursor-not-allowed border-tv-border text-tv-text-muted"
             }`}
             data-testid="cancel-mission-btn"

@@ -23,6 +23,8 @@ export const SIMPLIFIED_LANDING_SOURCE = "simplified-landing-source";
 export const SIMPLIFIED_TAKEOFF_LAYER = "simplified-takeoff";
 export const SIMPLIFIED_LANDING_LAYER = "simplified-landing";
 export const SIMPLIFIED_CORNERS_SOURCE = "simplified-corners-source";
+export const SIMPLIFIED_MEASUREMENT_SOURCE = "simplified-measurement-source";
+export const SIMPLIFIED_MEASUREMENT_LAYER = "simplified-measurement-dots";
 export const SIMPLIFIED_CORNERS_LAYER = "simplified-corners";
 
 const TRANSIT_PATH_COLOR = "#7eb8e5";
@@ -563,6 +565,7 @@ export function getSimplifiedTrajectoryLayerIds(): string[] {
   return [
     SIMPLIFIED_LINE_LAYER,
     SIMPLIFIED_CORNERS_LAYER,
+    SIMPLIFIED_MEASUREMENT_LAYER,
     SIMPLIFIED_TAKEOFF_LAYER,
     SIMPLIFIED_LANDING_LAYER,
   ];
@@ -650,6 +653,39 @@ export function waypointsToSimplifiedCornersGeoJSON(
   return { type: "FeatureCollection", features };
 }
 
+/** builds measurement position dots for simplified trajectory - only vertical stacks. */
+export function waypointsToSimplifiedMeasurementGeoJSON(
+  waypoints: WaypointResponse[],
+): GeoJSON.FeatureCollection {
+  // count measurement/hover waypoints per ground position
+  const counts = new Map<string, { coords: number[]; count: number }>();
+
+  for (const wp of waypoints) {
+    if (wp.waypoint_type !== "MEASUREMENT" && wp.waypoint_type !== "HOVER") continue;
+    const key = coordKey(wp.position.coordinates[0], wp.position.coordinates[1]);
+    const entry = counts.get(key);
+    if (entry) {
+      entry.count++;
+    } else {
+      counts.set(key, { coords: wp.position.coordinates, count: 1 });
+    }
+  }
+
+  // only show dots for stacked positions (vertical profiles, count > 1)
+  const features: GeoJSON.Feature[] = [];
+  for (const { coords, count } of counts.values()) {
+    if (count > 1) {
+      features.push({
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: coords },
+      });
+    }
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
 /** adds simplified trajectory layers - polyline only with takeoff/landing markers. */
 export function addSimplifiedTrajectoryLayers(
   map: MaplibreMap,
@@ -664,6 +700,7 @@ export function addSimplifiedTrajectoryLayers(
 
   const lineData = waypointsToSimplifiedLineGeoJSON(waypoints);
   const cornersData = waypointsToSimplifiedCornersGeoJSON(waypoints);
+  const measurementData = waypointsToSimplifiedMeasurementGeoJSON(waypoints);
 
   // find takeoff/landing from waypoints if not provided
   const sorted = [...waypoints].sort(
@@ -719,12 +756,17 @@ export function addSimplifiedTrajectoryLayers(
       | maplibregl.GeoJSONSource
       | undefined;
     if (cornerSrc) cornerSrc.setData(cornersData);
+    const measSrc = map.getSource(SIMPLIFIED_MEASUREMENT_SOURCE) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (measSrc) measSrc.setData(measurementData);
     return;
   }
 
   // add sources
   map.addSource(SIMPLIFIED_LINE_SOURCE, { type: "geojson", data: lineData });
   map.addSource(SIMPLIFIED_CORNERS_SOURCE, { type: "geojson", data: cornersData });
+  map.addSource(SIMPLIFIED_MEASUREMENT_SOURCE, { type: "geojson", data: measurementData });
   map.addSource(SIMPLIFIED_TAKEOFF_SOURCE, { type: "geojson", data: takeoffData });
   map.addSource(SIMPLIFIED_LANDING_SOURCE, { type: "geojson", data: landingData });
 
@@ -751,6 +793,20 @@ export function addSimplifiedTrajectoryLayers(
       "circle-stroke-color": "#ffffff",
       "circle-stroke-width": 1,
       "circle-opacity": 0.8,
+    },
+  });
+
+  // measurement position dots
+  map.addLayer({
+    id: SIMPLIFIED_MEASUREMENT_LAYER,
+    type: "circle",
+    source: SIMPLIFIED_MEASUREMENT_SOURCE,
+    paint: {
+      "circle-radius": 6,
+      "circle-color": DEFAULT_MEASUREMENT_COLOR,
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 1.5,
+      "circle-opacity": 0.9,
     },
   });
 
@@ -784,12 +840,14 @@ export function removeSimplifiedTrajectoryLayers(map: MaplibreMap): void {
   const layers = [
     SIMPLIFIED_LANDING_LAYER,
     SIMPLIFIED_TAKEOFF_LAYER,
+    SIMPLIFIED_MEASUREMENT_LAYER,
     SIMPLIFIED_CORNERS_LAYER,
     SIMPLIFIED_LINE_LAYER,
   ];
   const sources = [
     SIMPLIFIED_LANDING_SOURCE,
     SIMPLIFIED_TAKEOFF_SOURCE,
+    SIMPLIFIED_MEASUREMENT_SOURCE,
     SIMPLIFIED_CORNERS_SOURCE,
     SIMPLIFIED_LINE_SOURCE,
   ];

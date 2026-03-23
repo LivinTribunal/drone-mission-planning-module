@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, field_validator
 
-from app.models.enums import ExportFormat
+_VALID_FORMATS = {"KML", "KMZ", "JSON", "MAVLINK"}
 
 
 class ExportRequest(BaseModel):
@@ -17,9 +17,8 @@ class ExportRequest(BaseModel):
         if not v:
             raise ValueError("at least one format is required")
 
-        valid = {f.value for f in ExportFormat}
         for fmt in v:
-            if fmt not in valid:
-                raise ValueError(f"invalid format '{fmt}', must be one of {valid}")
+            if fmt not in _VALID_FORMATS:
+                raise ValueError(f"invalid format '{fmt}', must be one of {_VALID_FORMATS}")
 
         return list(dict.fromkeys(v))

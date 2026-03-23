@@ -118,9 +118,7 @@ describe("ValidationResultsPanel", () => {
         {...defaultProps}
       />,
     );
-    expect(screen.getByTestId("overall-status-badge")).toHaveTextContent(
-      "mission.validationExportPage.passed",
-    );
+    expect(screen.getByText("mission.validationExportPage.passed")).toBeInTheDocument();
   });
 
   it("shows FAILED badge when violations exist", () => {
@@ -131,12 +129,10 @@ describe("ValidationResultsPanel", () => {
         {...defaultProps}
       />,
     );
-    expect(screen.getByTestId("overall-status-badge")).toHaveTextContent(
-      "mission.validationExportPage.failed",
-    );
+    expect(screen.getByText("mission.validationExportPage.failed")).toBeInTheDocument();
   });
 
-  it("shows NOT VALIDATED badge when no trajectory", () => {
+  it("shows no badge when no trajectory", () => {
     render(
       <ValidationResultsPanel
         flightPlan={null}
@@ -144,10 +140,8 @@ describe("ValidationResultsPanel", () => {
         {...defaultProps}
       />,
     );
-    // no badge when no trajectory - the no data message is shown instead
-    expect(
-      screen.queryByTestId("overall-status-badge"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("mission.validationExportPage.passed")).not.toBeInTheDocument();
+    expect(screen.queryByText("mission.validationExportPage.failed")).not.toBeInTheDocument();
   });
 
   it("accept button disabled when not PLANNED", () => {

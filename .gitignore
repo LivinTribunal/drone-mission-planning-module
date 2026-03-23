@@ -35,6 +35,9 @@ Thumbs.db
 # Build artifacts
 .harness/
 
+# Puppeteer browser downloads
+chrome/
+
 # notebooks
 notebooks/
 *.ipynb

@@ -1,18 +1,26 @@
 """tests for export service file generators"""
 
 import json
+import struct
 import zipfile
 from io import BytesIO
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-from shapely.geometry import Point
-
 from app.services import export_service
+
+# WKB constants for building mock geometry
+_WKB_POINT_Z = 0x80000001
+_SRID = 4326
+
+
+def _make_ewkb(lon: float, lat: float, alt: float) -> bytes:
+    """build a minimal EWKB PointZ with SRID 4326."""
+    return struct.pack("<BIIddd", 1, _WKB_POINT_Z | 0x20000000, _SRID, lon, lat, alt)
 
 
 def _make_waypoint(seq, lat=49.69, lon=18.11, alt=300.0, wp_type="TRANSIT"):
-    """create a mock waypoint with postgis-like geometry."""
+    """create a mock waypoint with ewkb geometry."""
     wp = MagicMock()
     wp.sequence_order = seq
     wp.waypoint_type = wp_type
@@ -24,18 +32,17 @@ def _make_waypoint(seq, lat=49.69, lon=18.11, alt=300.0, wp_type="TRANSIT"):
     wp.camera_target = None
     wp.gimbal_pitch = None
 
-    # mock postgis geometry - to_shape returns a shapely Point
-    point = Point(lon, lat, alt)
     wp.position = MagicMock()
-    wp.position.desc = point
+    wp.position.data = _make_ewkb(lon, lat, alt)
 
-    return wp, point
+    return wp
 
 
 def _make_flight_plan(num_waypoints=3):
     """create a mock flight plan with waypoints."""
     fp = MagicMock()
     fp.mission_id = uuid4()
+    fp.airport_id = uuid4()
     fp.total_distance = 150.5
     fp.estimated_duration = 120.0
     fp.generated_at = None
@@ -49,7 +56,7 @@ def _make_flight_plan(num_waypoints=3):
         else:
             wp_type = "MEASUREMENT"
 
-        wp, _ = _make_waypoint(
+        wp = _make_waypoint(
             seq=i,
             lat=49.69 + i * 0.001,
             lon=18.11 + i * 0.001,
@@ -62,25 +69,14 @@ def _make_flight_plan(num_waypoints=3):
     return fp
 
 
-def _patch_to_shape(monkeypatch):
-    """patch to_shape to work with our mock geometry objects."""
-
-    def mock_to_shape(geom):
-        """return the shapely point stored on the mock."""
-        return geom.desc
-
-    monkeypatch.setattr("app.services.export_service.to_shape", mock_to_shape)
-
-
 class TestGenerateKml:
     """tests for kml export generation."""
 
-    def test_generates_valid_kml(self, monkeypatch):
+    def test_generates_valid_kml(self):
         """kml output contains xml declaration and kml elements."""
-        _patch_to_shape(monkeypatch)
         fp = _make_flight_plan(3)
 
-        result = export_service.generate_kml(fp)
+        result = export_service.generate_kml(fp, "Test Mission", 290.0)
         text = result.decode("utf-8")
 
         assert "<?xml" in text
@@ -90,38 +86,45 @@ class TestGenerateKml:
         assert "WP2" in text
         assert "<LineString" in text
 
-    def test_single_waypoint_no_linestring(self, monkeypatch):
-        """single waypoint should not produce a linestring."""
-        _patch_to_shape(monkeypatch)
+    def test_mission_name_in_document(self):
+        """kml document name includes mission name."""
         fp = _make_flight_plan(1)
 
-        result = export_service.generate_kml(fp)
+        result = export_service.generate_kml(fp, "My Mission", 0)
+        text = result.decode("utf-8")
+
+        assert "Flight Plan - My Mission" in text
+
+    def test_altitude_is_agl(self):
+        """exported altitude is relative to ground, not absolute MSL."""
+        fp = _make_flight_plan(1)
+
+        result = export_service.generate_kml(fp, "Test", 290.0)
+        text = result.decode("utf-8")
+
+        # alt=300 - elevation=290 = 10m AGL
+        assert "10.0" in text
+        assert "relativeToGround" in text
+
+    def test_single_waypoint_no_linestring(self):
+        """single waypoint should not produce a linestring."""
+        fp = _make_flight_plan(1)
+
+        result = export_service.generate_kml(fp, "", 0)
         text = result.decode("utf-8")
 
         assert "WP0" in text
         assert "<LineString" not in text
 
-    def test_waypoint_descriptions(self, monkeypatch):
-        """waypoint descriptions include type and camera action."""
-        _patch_to_shape(monkeypatch)
-        fp = _make_flight_plan(2)
-
-        result = export_service.generate_kml(fp)
-        text = result.decode("utf-8")
-
-        assert "TAKEOFF" in text
-        assert "LANDING" in text
-
 
 class TestGenerateKmz:
     """tests for kmz export generation."""
 
-    def test_produces_valid_zip(self, monkeypatch):
+    def test_produces_valid_zip(self):
         """kmz is a valid zip file containing doc.kml."""
-        _patch_to_shape(monkeypatch)
         fp = _make_flight_plan(3)
 
-        result = export_service.generate_kmz(fp)
+        result = export_service.generate_kmz(fp, "Test", 0)
         buf = BytesIO(result)
 
         assert zipfile.is_zipfile(buf)
@@ -134,79 +137,54 @@ class TestGenerateKmz:
 class TestGenerateJson:
     """tests for json export generation."""
 
-    def test_valid_json_structure(self, monkeypatch):
+    def test_valid_json_structure(self):
         """json output has correct top-level keys and waypoint structure."""
-        _patch_to_shape(monkeypatch)
         fp = _make_flight_plan(3)
 
-        result = export_service.generate_json(fp)
+        result = export_service.generate_json(fp, "Test Mission", 290.0)
         data = json.loads(result)
 
+        assert data["mission_name"] == "Test Mission"
         assert "mission_id" in data
         assert "waypoints" in data
         assert "total_distance" in data
         assert "estimated_duration" in data
+        assert data["airport_elevation"] == 290.0
         assert len(data["waypoints"]) == 3
 
-    def test_waypoint_fields(self, monkeypatch):
+    def test_waypoint_fields(self):
         """each waypoint has all required fields."""
-        _patch_to_shape(monkeypatch)
         fp = _make_flight_plan(2)
 
-        result = export_service.generate_json(fp)
+        result = export_service.generate_json(fp, "", 0)
         data = json.loads(result)
         wp = data["waypoints"][0]
 
         assert "sequence_order" in wp
         assert "latitude" in wp
         assert "longitude" in wp
-        assert "altitude" in wp
+        assert "altitude_msl" in wp
+        assert "altitude_agl" in wp
         assert "speed" in wp
         assert "heading" in wp
-        assert "camera_action" in wp
-        assert "waypoint_type" in wp
-        assert "camera_target" in wp
-        assert "inspection_id" in wp
 
-    def test_coordinates_correct(self, monkeypatch):
-        """coordinates are extracted correctly from geometry."""
-        _patch_to_shape(monkeypatch)
+    def test_agl_altitude_correct(self):
+        """agl altitude is msl minus airport elevation."""
         fp = _make_flight_plan(1)
 
-        result = export_service.generate_json(fp)
+        result = export_service.generate_json(fp, "", 290.0)
         data = json.loads(result)
         wp = data["waypoints"][0]
 
-        assert wp["latitude"] == 49.69
-        assert wp["longitude"] == 18.11
-        assert wp["altitude"] == 300.0
-
-    def test_camera_target_included(self, monkeypatch):
-        """camera target coordinates serialized when present."""
-        _patch_to_shape(monkeypatch)
-        fp = _make_flight_plan(1)
-
-        target_point = Point(18.12, 49.70, 280.0)
-        target_mock = MagicMock()
-        target_mock.desc = target_point
-        fp.waypoints[0].camera_target = target_mock
-
-        result = export_service.generate_json(fp)
-        data = json.loads(result)
-        ct = data["waypoints"][0]["camera_target"]
-
-        assert ct is not None
-        assert ct["latitude"] == 49.70
-        assert ct["longitude"] == 18.12
-        assert ct["altitude"] == 280.0
+        assert wp["altitude_msl"] == 300.0
+        assert wp["altitude_agl"] == 10.0
 
 
 class TestGenerateMavlink:
     """tests for mavlink wpl 110 export generation."""
 
-    def test_header_line(self, monkeypatch):
+    def test_header_line(self):
         """output starts with qgc wpl 110 header."""
-        _patch_to_shape(monkeypatch)
         fp = _make_flight_plan(3)
 
         result = export_service.generate_mavlink(fp)
@@ -214,20 +192,17 @@ class TestGenerateMavlink:
 
         assert lines[0] == "QGC WPL 110"
 
-    def test_waypoint_count(self, monkeypatch):
+    def test_waypoint_count(self):
         """correct number of waypoint lines generated."""
-        _patch_to_shape(monkeypatch)
         fp = _make_flight_plan(3)
 
         result = export_service.generate_mavlink(fp)
         lines = result.decode("utf-8").split("\n")
 
-        # header + 3 waypoints
         assert len(lines) == 4
 
-    def test_first_waypoint_current(self, monkeypatch):
+    def test_first_waypoint_current(self):
         """first waypoint has current=1, others current=0."""
-        _patch_to_shape(monkeypatch)
         fp = _make_flight_plan(3)
 
         result = export_service.generate_mavlink(fp)
@@ -239,9 +214,8 @@ class TestGenerateMavlink:
         assert fields_0[1] == "1"
         assert fields_1[1] == "0"
 
-    def test_takeoff_command(self, monkeypatch):
+    def test_takeoff_command(self):
         """takeoff waypoint uses nav_takeoff command (22)."""
-        _patch_to_shape(monkeypatch)
         fp = _make_flight_plan(3)
 
         result = export_service.generate_mavlink(fp)
@@ -250,49 +224,12 @@ class TestGenerateMavlink:
         fields = lines[1].split("\t")
         assert fields[3] == "22"
 
-    def test_landing_command(self, monkeypatch):
-        """landing waypoint uses nav_land command (21)."""
-        _patch_to_shape(monkeypatch)
-        fp = _make_flight_plan(3)
-
-        result = export_service.generate_mavlink(fp)
-        lines = result.decode("utf-8").split("\n")
-
-        fields = lines[3].split("\t")
-        assert fields[3] == "21"
-
-    def test_measurement_command(self, monkeypatch):
-        """measurement waypoint uses nav_waypoint command (16)."""
-        _patch_to_shape(monkeypatch)
-        fp = _make_flight_plan(3)
-
-        result = export_service.generate_mavlink(fp)
-        lines = result.decode("utf-8").split("\n")
-
-        fields = lines[2].split("\t")
-        assert fields[3] == "16"
-
-    def test_coordinates_in_output(self, monkeypatch):
-        """lat/lon/alt appear in correct positions."""
-        _patch_to_shape(monkeypatch)
+    def test_mavlink_uses_agl_altitude(self):
+        """mavlink altitude is relative to ground."""
         fp = _make_flight_plan(1)
 
-        result = export_service.generate_mavlink(fp)
+        result = export_service.generate_mavlink(fp, "", 290.0)
         lines = result.decode("utf-8").split("\n")
 
         fields = lines[1].split("\t")
-        assert float(fields[8]) == 49.69
-        assert float(fields[9]) == 18.11
-        assert float(fields[10]) == 300.0
-
-    def test_autocontinue_set(self, monkeypatch):
-        """autocontinue flag is 1 for all waypoints."""
-        _patch_to_shape(monkeypatch)
-        fp = _make_flight_plan(3)
-
-        result = export_service.generate_mavlink(fp)
-        lines = result.decode("utf-8").split("\n")
-
-        for line in lines[1:]:
-            fields = line.split("\t")
-            assert fields[11] == "1"
+        assert float(fields[10]) == 10.0

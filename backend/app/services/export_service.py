@@ -8,20 +8,22 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import simplekml
-from geoalchemy2.shape import to_shape
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
+from app.models.airport import Airport
 from app.models.flight_plan import FlightPlan
 from app.models.mission import Mission
+from app.schemas.geometry import parse_ewkb
 
 
 def _extract_coords(geom) -> tuple[float, float, float]:
     """extract (lon, lat, alt) from a postgis geometry column."""
     if geom is None:
         raise ValueError("waypoint has no position geometry")
-    shape = to_shape(geom)
-    return (shape.x, shape.y, shape.z)
+    geojson = parse_ewkb(geom.data)
+    coords = geojson.get("coordinates", [0, 0, 0])
+    return (coords[0], coords[1], coords[2] if len(coords) > 2 else 0)
 
 
 def _waypoint_sort_key(wp):
@@ -41,10 +43,14 @@ class _UUIDEncoder(json.JSONEncoder):
         return super().default(o)
 
 
-def generate_kml(flight_plan: FlightPlan) -> bytes:
+def generate_kml(
+    flight_plan: FlightPlan,
+    mission_name: str = "",
+    airport_elevation: float = 0,
+) -> bytes:
     """serialize flight plan waypoints to kml format."""
     kml = simplekml.Kml()
-    kml.document.name = f"Flight Plan - Mission {flight_plan.mission_id}"
+    kml.document.name = f"Flight Plan - {mission_name}" if mission_name else "Flight Plan"
 
     folder = kml.newfolder(name="Waypoints")
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
@@ -52,17 +58,21 @@ def generate_kml(flight_plan: FlightPlan) -> bytes:
     coords_list = []
     for wp in waypoints:
         lon, lat, alt = _extract_coords(wp.position)
-        coords_list.append((lon, lat, alt))
+        # convert absolute MSL altitude to height above ground
+        agl = alt - airport_elevation
+        coords_list.append((lon, lat, agl))
 
         pnt = folder.newpoint(
             name=f"WP{wp.sequence_order}",
-            coords=[(lon, lat, alt)],
+            coords=[(lon, lat, agl)],
         )
         pnt.description = (
             f"Type: {wp.waypoint_type}\n"
             f"Camera: {wp.camera_action or 'NONE'}\n"
             f"Speed: {wp.speed or 0} m/s\n"
-            f"Heading: {wp.heading or 0}°"
+            f"Heading: {wp.heading or 0}°\n"
+            f"Altitude MSL: {alt:.1f}m\n"
+            f"Altitude AGL: {agl:.1f}m"
         )
         pnt.altitudemode = simplekml.AltitudeMode.relativetoground
 
@@ -77,9 +87,13 @@ def generate_kml(flight_plan: FlightPlan) -> bytes:
     return kml.kml().encode("utf-8")
 
 
-def generate_kmz(flight_plan: FlightPlan) -> bytes:
+def generate_kmz(
+    flight_plan: FlightPlan,
+    mission_name: str = "",
+    airport_elevation: float = 0,
+) -> bytes:
     """serialize flight plan waypoints to kmz (zipped kml) format."""
-    kml_bytes = generate_kml(flight_plan)
+    kml_bytes = generate_kml(flight_plan, mission_name, airport_elevation)
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -88,13 +102,18 @@ def generate_kmz(flight_plan: FlightPlan) -> bytes:
     return buf.getvalue()
 
 
-def generate_json(flight_plan: FlightPlan) -> bytes:
+def generate_json(
+    flight_plan: FlightPlan,
+    mission_name: str = "",
+    airport_elevation: float = 0,
+) -> bytes:
     """serialize flight plan to structured json."""
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
 
     wp_list = []
     for wp in waypoints:
         lon, lat, alt = _extract_coords(wp.position)
+        agl = alt - airport_elevation
 
         camera_target = None
         if wp.camera_target:
@@ -102,7 +121,8 @@ def generate_json(flight_plan: FlightPlan) -> bytes:
             camera_target = {
                 "latitude": ct_lat,
                 "longitude": ct_lon,
-                "altitude": ct_alt,
+                "altitude_msl": ct_alt,
+                "altitude_agl": ct_alt - airport_elevation,
             }
 
         wp_list.append(
@@ -110,7 +130,8 @@ def generate_json(flight_plan: FlightPlan) -> bytes:
                 "sequence_order": wp.sequence_order,
                 "latitude": lat,
                 "longitude": lon,
-                "altitude": alt,
+                "altitude_msl": alt,
+                "altitude_agl": agl,
                 "speed": wp.speed,
                 "heading": wp.heading,
                 "camera_action": wp.camera_action,
@@ -121,7 +142,9 @@ def generate_json(flight_plan: FlightPlan) -> bytes:
         )
 
     data = {
+        "mission_name": mission_name,
         "mission_id": flight_plan.mission_id,
+        "airport_elevation": airport_elevation,
         "generated_at": flight_plan.generated_at or datetime.now(timezone.utc),
         "total_distance": flight_plan.total_distance,
         "estimated_duration": flight_plan.estimated_duration,
@@ -145,13 +168,19 @@ _WAYPOINT_TYPE_COMMANDS = {
 }
 
 
-def generate_mavlink(flight_plan: FlightPlan) -> bytes:
+def generate_mavlink(
+    flight_plan: FlightPlan,
+    mission_name: str = "",
+    airport_elevation: float = 0,
+) -> bytes:
     """serialize flight plan to qgc wpl 110 mavlink waypoint format."""
     lines = ["QGC WPL 110"]
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
 
     for i, wp in enumerate(waypoints):
         lon, lat, alt = _extract_coords(wp.position)
+        # mavlink uses relative altitude (AGL)
+        agl = alt - airport_elevation
         command = _WAYPOINT_TYPE_COMMANDS.get(wp.waypoint_type, _MAV_CMD_NAV_WAYPOINT)
 
         # first waypoint is current
@@ -163,7 +192,7 @@ def generate_mavlink(flight_plan: FlightPlan) -> bytes:
         line = (
             f"{i}\t{current}\t{_MAV_FRAME}\t{command}\t"
             f"{p1}\t0\t0\t{wp.heading or 0}\t"
-            f"{lat}\t{lon}\t{alt}\t1"
+            f"{lat}\t{lon}\t{agl}\t1"
         )
         lines.append(line)
 
@@ -225,6 +254,10 @@ def export_mission(
     if not flight_plan:
         raise NotFoundError("no flight plan found for this mission")
 
+    # get airport elevation for AGL conversion
+    airport = db.query(Airport).filter(Airport.id == flight_plan.airport_id).first()
+    airport_elevation = airport.elevation if airport else 0
+
     safe_name = _sanitize_filename(mission.name)
 
     files: dict[str, tuple[bytes, str]] = {}
@@ -232,6 +265,6 @@ def export_mission(
         generator = _EXPORT_GENERATORS[fmt]
         content_type, ext = _EXPORT_CONTENT_TYPES[fmt]
         filename = f"mission_{safe_name}.{ext}"
-        files[filename] = (generator(flight_plan), content_type)
+        files[filename] = (generator(flight_plan, mission.name, airport_elevation), content_type)
 
     return files, safe_name

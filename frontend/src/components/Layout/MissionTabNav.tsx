@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Loader2, Pencil, X, Check } from "lucide-react";
+import { ChevronDown, Loader2, Pencil, X, Check, Upload } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { listMissions, updateMission } from "@/api/missions";
 import type { MissionResponse } from "@/types/mission";
@@ -37,6 +37,7 @@ export interface ComputeContext {
   isComputing: boolean;
   label?: string;
   variant?: "primary" | "secondary";
+  icon?: "upload";
 }
 
 export interface MissionTabOutletContext {
@@ -359,6 +360,9 @@ export default function MissionTabNav() {
             >
               {computeCtx.isComputing && (
                 <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              {!computeCtx.isComputing && computeCtx.icon === "upload" && (
+                <Upload className="h-4 w-4" />
               )}
               {computeCtx.isComputing
                 ? t("mission.config.computing")

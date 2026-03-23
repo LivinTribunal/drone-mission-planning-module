@@ -32,7 +32,7 @@ const VALIDATION_CHECKS = [
   { key: "batteryCheck", keywords: ["battery"], isHard: false },
   { key: "runwayBuffer", keywords: ["runway"], isHard: true },
   { key: "obstacleClearance", keywords: ["obstacle"], isHard: true },
-  { key: "cameraFovCoverage", keywords: ["obstructed", "fov", "coverage"], isHard: false },
+  { key: "cameraObstructionCheck", keywords: ["obstructed"], isHard: true },
   { key: "speedFramerateCompat", keywords: ["framerate"], isHard: false },
 ] as const;
 
@@ -100,11 +100,35 @@ export default function ValidationResultsPanel({
         <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">
           {t("mission.validationExportPage.validationResults")}
         </span>
-        {collapsed ? (
-          <ChevronDown className="h-4 w-4" />
-        ) : (
-          <ChevronUp className="h-4 w-4" />
-        )}
+        <div className="flex items-center gap-2">
+          {hasTrajectory && overallStatus === "failed" && (
+            <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[var(--tv-status-cancelled-bg)] text-[var(--tv-status-cancelled-text)]">
+              {t(`mission.validationExportPage.${overallStatus}`)}
+            </span>
+          )}
+          {hasTrajectory && overallStatus === "passed" && (
+            <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[var(--tv-status-validated-bg)] text-[var(--tv-status-validated-text)]">
+              {t(`mission.validationExportPage.${overallStatus}`)}
+            </span>
+          )}
+          {warningCount > 0 && (
+            <span className="flex items-center gap-1 text-xs text-tv-warning">
+              <AlertTriangle className="h-3 w-3" />
+              {warningCount} {t("common.warning", { count: warningCount })}
+            </span>
+          )}
+          {violationCount > 0 && (
+            <span className="flex items-center gap-1 text-xs text-tv-error">
+              <X className="h-3 w-3" />
+              {violationCount} {t("common.violation", { count: violationCount })}
+            </span>
+          )}
+          {collapsed ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronUp className="h-4 w-4" />
+          )}
+        </div>
       </button>
 
       {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
@@ -117,9 +141,12 @@ export default function ValidationResultsPanel({
             </p>
           ) : (
             <>
-              {/* constraint rows */}
+              {/* hard constraints */}
               <div className="flex flex-col gap-1.5">
-                {VALIDATION_CHECKS.map((check) => {
+                <span className="text-xs font-semibold text-tv-text-secondary">
+                  {t("mission.validationExportPage.hardConstraints")}
+                </span>
+                {VALIDATION_CHECKS.filter((c) => c.isHard).map((check) => {
                   const result = getCheckResult(check, violations);
                   return (
                     <div
@@ -133,64 +160,55 @@ export default function ValidationResultsPanel({
                           {t(`mission.validationExportPage.${check.key}`)}
                         </span>
                       </div>
-                      <span className="text-xs text-tv-text-muted">
-                        {check.isHard
-                          ? t("mission.validationExportPage.hard")
-                          : t("mission.validationExportPage.soft")}
-                      </span>
                     </div>
                   );
                 })}
               </div>
 
-              {/* overall status */}
-              <div className="flex items-center gap-3 pt-2 border-t border-tv-border">
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    overallStatus === "passed"
-                      ? "bg-[var(--tv-status-validated-bg)] text-[var(--tv-status-validated-text)]"
-                      : overallStatus === "failed"
-                        ? "bg-[var(--tv-status-cancelled-bg)] text-[var(--tv-status-cancelled-text)]"
-                        : "bg-tv-bg text-tv-text-muted border border-tv-border"
-                  }`}
-                  data-testid="overall-status-badge"
-                >
-                  {t(`mission.validationExportPage.${overallStatus}`)}
+              {/* soft constraints */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-semibold text-tv-text-secondary">
+                  {t("mission.validationExportPage.softConstraints")}
                 </span>
-                {warningCount > 0 && (
-                  <span className="flex items-center gap-1 text-xs text-tv-warning">
-                    <AlertTriangle className="h-3 w-3" />
-                    {t("mission.validationExportPage.warningCount", {
-                      count: warningCount,
-                    })}
-                  </span>
-                )}
-                {violationCount > 0 && (
-                  <span className="flex items-center gap-1 text-xs text-tv-error">
-                    <X className="h-3 w-3" />
-                    {t("mission.validationExportPage.violationCount", {
-                      count: violationCount,
-                    })}
-                  </span>
-                )}
+                {VALIDATION_CHECKS.filter((c) => !c.isHard).map((check) => {
+                  const result = getCheckResult(check, violations);
+                  return (
+                    <div
+                      key={check.key}
+                      className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-tv-bg"
+                      data-testid={`constraint-${check.key}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <ResultIcon result={result} />
+                        <span className="text-sm text-tv-text-primary">
+                          {t(`mission.validationExportPage.${check.key}`)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
 
           {/* action buttons */}
           <div className="flex flex-col gap-2 pt-2">
-            <Button variant="secondary" onClick={onNavigateConfig}>
+            <button
+              onClick={onNavigateConfig}
+              className="w-full px-4 py-2.5 text-sm font-semibold rounded-full transition-colors border border-tv-accent text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
+            >
               {t("mission.validationExportPage.editConfiguration")}
-            </Button>
+            </button>
             <Button
               variant="primary"
               onClick={onValidate}
               disabled={!canAccept || isValidating}
+              title={isApproved ? t("mission.validationExportPage.alreadyApproved") : undefined}
               data-testid="accept-btn"
             >
               {isValidating
-                ? t("mission.validationExportPage.accepting")
-                : t("mission.validationExportPage.accept")}
+                ? t("mission.validationExportPage.approving")
+                : t("mission.validationExportPage.approve")}
             </Button>
           </div>
         </div>

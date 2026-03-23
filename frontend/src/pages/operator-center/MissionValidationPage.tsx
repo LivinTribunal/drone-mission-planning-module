@@ -15,7 +15,12 @@ import {
 import type { MissionDetailResponse } from "@/types/mission";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
+import type { ValidationViolation } from "@/types/flightPlan";
+import type { DroneProfileResponse } from "@/types/droneProfile";
+import { listDroneProfiles } from "@/api/droneProfiles";
 import ValidationResultsPanel from "@/components/mission/ValidationResultsPanel";
+import WarningsPanel from "@/components/mission/WarningsPanel";
+import StatsPanel from "@/components/mission/StatsPanel";
 import ExportPanel from "@/components/mission/ExportPanel";
 import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
@@ -30,6 +35,8 @@ export default function MissionValidationPage() {
 
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
   const [flightPlan, setFlightPlan] = useState<FlightPlanResponse | null>(null);
+  const [warnings, setWarnings] = useState<ValidationViolation[] | null>(null);
+  const [droneProfiles, setDroneProfiles] = useState<DroneProfileResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
@@ -57,12 +64,15 @@ export default function MissionValidationPage() {
     };
   }, [setSaveContext, mission]);
 
-  // no compute button on this page
+  // upload drone media placeholder button in header
   useEffect(() => {
     setComputeContext({
-      onCompute: null,
+      onCompute: () => {},
       canCompute: false,
       isComputing: false,
+      label: t("mission.validationExportPage.uploadDroneMedia"),
+      variant: "secondary",
+      icon: "upload",
     });
     return () => {
       setComputeContext({
@@ -78,15 +88,22 @@ export default function MissionValidationPage() {
     setLoading(true);
     setError(null);
     try {
-      const missionData = await getMission(id);
+      const [missionData, dpData] = await Promise.all([
+        getMission(id),
+        listDroneProfiles(),
+      ]);
       setMission(missionData);
+      setDroneProfiles(dpData.data);
       refreshMissions();
 
       try {
         const fp = await getFlightPlan(id);
         setFlightPlan(fp);
+        const violations = fp.validation_result?.violations ?? [];
+        setWarnings(violations.length > 0 ? violations : null);
       } catch {
         setFlightPlan(null);
+        setWarnings(null);
       }
     } catch {
       setError("mission.config.loadError");
@@ -257,6 +274,10 @@ export default function MissionValidationPage() {
               isValidating={isValidating}
             />
           </div>
+
+          <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+            <WarningsPanel warnings={warnings} hasTrajectory={flightPlan !== null} />
+          </div>
         </div>
         <div className="w-6 flex-shrink-0" />
       </div>
@@ -313,11 +334,11 @@ export default function MissionValidationPage() {
         )}
       </div>
 
-      {/* right panel - export & lifecycle */}
-      <div className="w-6 flex-shrink-0" />
-      <div className="w-[25%] flex-shrink-0">
+      {/* right panel - export & lifecycle, aligned with airport selector + theme + user */}
+      <div className="w-4 flex-shrink-0" />
+      <div className="w-[540px] flex-shrink-0">
         <div
-          className="overflow-y-auto h-full"
+          className="overflow-y-auto h-full flex flex-col gap-4"
           style={{ scrollbarGutter: "stable" }}
         >
           <ExportPanel
@@ -327,6 +348,16 @@ export default function MissionValidationPage() {
             onCancel={handleCancel}
             onDelete={handleDelete}
             isExporting={isExporting}
+            statsSlot={
+              <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+                <StatsPanel
+                  flightPlan={flightPlan}
+                  hasTrajectory={flightPlan !== null}
+                  inspectionCount={mission.inspections.length}
+                  droneProfile={droneProfiles.find((dp) => dp.id === mission.drone_profile_id) ?? null}
+                />
+              </div>
+            }
           />
         </div>
       </div>
