@@ -35,7 +35,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: 'Read and follow the instructions in scripts/doc-gardening-prompt.md to perform documentation gardening on this repository.'
-          claude_args: '--max-turns 10'
+          claude_args: '--max-turns 20 --allowedTools "Read,Glob,Grep,Edit,Bash"'
 
       - name: Revert non-documentation changes
         id: safety
@@ -83,13 +83,13 @@ jobs:
             ### Changes include:
             - Updated stale references to renamed/deleted source files or functions
             - Fixed broken internal markdown links
-            - Synchronized documented commands with actual `package.json` scripts
+            - Synchronized documented commands with actual project tooling
             - Removed references to deprecated APIs or deleted modules
-            - Updated `CLAUDE.md` / `docs/` if project tooling or structure has changed
+            - Updated `CLAUDE.md` / `docs/` if project structure has changed
 
             ### Files scanned:
             - `README.md`, `CLAUDE.md`
-            - `docs/architecture.md`, `docs/conventions.md`, `docs/layers.md`
+            - `docs/conventions.md`, `docs/specs/SPEC.md`, `docs/specs/DESIGN-SYSTEM.md`
 
             **Risk tier**: Tier 1 (documentation only)
 
