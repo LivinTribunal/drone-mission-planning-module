@@ -96,7 +96,10 @@ def update_inspection(
         raise NotFoundError("inspection not found")
 
     data = schema.model_dump(exclude_unset=True)
-    config_data = data.pop("config", None)
+    data.pop("config", None)
+    config_data = (
+        schema.config.model_dump(mode="json", exclude_unset=True) if schema.config else None
+    )
 
     if config_data:
         if inspection.config:

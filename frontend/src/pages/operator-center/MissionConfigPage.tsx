@@ -486,17 +486,9 @@ export default function MissionConfigPage() {
       const result = await generateTrajectory(id);
       setFlightPlan(result.flight_plan);
 
-      // merge warnings from response + validation violations
-      const allWarnings: ValidationViolation[] = [];
-      if (result.warnings?.length) {
-        for (const w of result.warnings) {
-          allWarnings.push({ message: w, severity: "warning" });
-        }
-      }
-      if (result.flight_plan.validation_result?.violations?.length) {
-        allWarnings.push(...result.flight_plan.validation_result.violations);
-      }
-      setWarnings(allWarnings.length > 0 ? allWarnings : null);
+      // warnings are now persisted as violations in the flight plan
+      const violations = result.flight_plan.validation_result?.violations ?? [];
+      setWarnings(violations.length > 0 ? violations : null);
 
       const fresh = await getMission(id);
       updateMissionState(fresh);
@@ -636,7 +628,7 @@ export default function MissionConfigPage() {
     <div className="flex px-4 h-[calc(100vh-12rem)]" data-testid="mission-config-page">
       {/* left panel - 30%, mirrors NavBar left section */}
       <div className="w-[30%] flex-shrink-0 flex">
-        <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-4" style={{ scrollbarGutter: "stable" }}>
+        <div className="flex-1 overflow-y-auto flex flex-col gap-4" style={{ scrollbarGutter: "stable" }}>
         {/* inspection list */}
         <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
           <InspectionList
@@ -700,7 +692,7 @@ export default function MissionConfigPage() {
           />
         </div>
         </div>
-        <div className="w-2.5 flex-shrink-0" />
+        <div className="w-6 flex-shrink-0" />
       </div>
 
       {/* right panel - map, flex-1 matches NavBar right section */}
@@ -720,6 +712,7 @@ export default function MissionConfigPage() {
               takeoffCoordinate={currentTakeoff}
               landingCoordinate={currentLanding}
               inspectionIndexMap={inspectionIndexMap}
+              visibleInspectionIds={visibleInspectionIds}
             >
               {/* pick-on-map banner */}
               {pickingCoord && (

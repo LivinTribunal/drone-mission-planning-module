@@ -382,10 +382,10 @@ def test_runway_crossing_warnings(client):
     response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     assert response.status_code == 200
 
-    warnings = response.json()["warnings"]
-    # check that runway crossing warnings exist if trajectory crosses the runway
-    # the exact number depends on geometry, but we verify the pipeline runs
-    assert isinstance(warnings, list)
+    # crossing warnings are now persisted as violations in the flight plan
+    violations = response.json()["flight_plan"]["validation_result"]["violations"]
+    assert isinstance(violations, list)
+    assert len(violations) > 0
 
 
 def test_final_validation_produces_soft_warnings(client):

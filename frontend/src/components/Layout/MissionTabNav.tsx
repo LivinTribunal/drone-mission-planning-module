@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Loader2, Pencil, X, Check } from "lucide-react";
@@ -34,6 +35,8 @@ export interface ComputeContext {
   onCompute: (() => void) | null;
   canCompute: boolean;
   isComputing: boolean;
+  label?: string;
+  variant?: "primary" | "secondary";
 }
 
 export interface MissionTabOutletContext {
@@ -89,13 +92,37 @@ export default function MissionTabNav() {
   const currentMission = missions.find((m) => m.id === id);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [missionSearch, setMissionSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const selectorRef = useRef<HTMLDivElement>(null);
+  const portalDropdownRef = useRef<HTMLDivElement>(null);
+  const missionSearchRef = useRef<HTMLInputElement>(null);
+
+  const filteredMissions = useMemo(() => {
+    /** filter missions by search query. */
+    if (!missionSearch.trim()) return missions;
+    const q = missionSearch.toLowerCase();
+    return missions.filter((m) => m.name.toLowerCase().includes(q));
+  }, [missions, missionSearch]);
+
+  // focus search input when dropdown opens
+  useEffect(() => {
+    if (missionDropdownOpen && missionSearchRef.current) {
+      missionSearchRef.current.focus();
+    }
+  }, [missionDropdownOpen]);
 
   // close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      /** close mission dropdown when clicking outside selector and portal. */
+      const target = e.target as Node;
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(target) &&
+        (!portalDropdownRef.current || !portalDropdownRef.current.contains(target))
+      ) {
         setMissionDropdownOpen(false);
+        setMissionSearch("");
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -103,7 +130,9 @@ export default function MissionTabNav() {
   }, []);
 
   function handleMissionSwitch(missionId: string) {
+    /** switch to a different mission. */
     setMissionDropdownOpen(false);
+    setMissionSearch("");
     const path = window.location.pathname;
     const tabMatch = path.match(/\/missions\/[^/]+\/(.+)/);
     const tab = tabMatch?.[1] ?? "configuration";
@@ -138,7 +167,7 @@ export default function MissionTabNav() {
   }
 
   const tabs = [
-    { label: t("mission.overview"), path: "overview" },
+    { label: t("mission.overviewTab"), path: "overview" },
     { label: t("mission.configuration"), path: "configuration" },
     { label: t("mission.map"), path: "map" },
     { label: t("mission.validationExport"), path: "validation-export" },
@@ -152,17 +181,17 @@ export default function MissionTabNav() {
       {/* mission tab bar - mirrors NavBar column widths exactly */}
       <div className="flex items-center px-4 py-2">
         {/* left section - 30%, matches NavBar left */}
-        <div className="w-[30%] flex-shrink-0 flex">
-          <div
-            className="flex-1 pr-4"
-            style={{ scrollbarGutter: "stable" }}
-          >
-            <div className="relative" ref={dropdownRef}>
+        <div className="w-[30%] flex-shrink-0 flex" ref={dropdownRef}>
+          <div className="flex-1 overflow-hidden" style={{ scrollbarGutter: "stable" }}>
               <div
+                ref={selectorRef}
                 onClick={() => { if (!renaming) setMissionDropdownOpen(!missionDropdownOpen); }}
                 className="flex items-center w-full px-4 h-11 rounded-full bg-tv-surface text-tv-text-primary cursor-pointer hover:bg-tv-surface-hover transition-colors"
                 data-testid="mission-selector"
               >
+                <span className="flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-tv-bg border border-tv-border text-tv-text-primary mr-2">
+                  {t("mission.label")}
+                </span>
                 {renaming ? (
                   <input
                     value={renameValue}
@@ -232,31 +261,55 @@ export default function MissionTabNav() {
                 </div>
               </div>
 
-              {/* dropdown */}
-              {missionDropdownOpen && missions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-tv-surface border border-tv-border rounded-2xl p-2 max-h-60 overflow-y-auto">
-                  {missions.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => handleMissionSwitch(m.id)}
-                      className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-sm transition-colors ${
-                        m.id === id
-                          ? "bg-tv-nav-active-bg text-tv-nav-active-text"
-                          : "text-tv-text-primary hover:bg-tv-surface-hover"
-                      }`}
-                    >
-                      <span className="truncate">{m.name}</span>
-                      <Badge
-                        status={m.status as MissionStatus}
-                        className="ml-2 flex-shrink-0"
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
-          <div className="w-2.5 flex-shrink-0" />
+
+            {/* dropdown via portal to avoid overflow-hidden clipping */}
+            {missionDropdownOpen && missions.length > 0 && selectorRef.current && createPortal(
+              <div
+                ref={portalDropdownRef}
+                className="fixed z-50 bg-tv-surface border-2 border-tv-text-muted rounded-2xl p-2"
+                style={{
+                  top: selectorRef.current.getBoundingClientRect().bottom + 4,
+                  left: selectorRef.current.getBoundingClientRect().left,
+                  width: selectorRef.current.getBoundingClientRect().width,
+                }}
+              >
+                <input
+                  ref={missionSearchRef}
+                  value={missionSearch}
+                  onChange={(e) => setMissionSearch(e.target.value)}
+                  placeholder={t("mission.config.searchMissions")}
+                  className="w-full rounded-full px-4 py-2 text-sm bg-tv-bg border border-tv-border text-tv-text-primary placeholder:text-tv-text-muted outline-none focus:border-tv-accent mb-2"
+                />
+                <div className="max-h-48 overflow-y-auto">
+                  {filteredMissions.length === 0 ? (
+                    <div className="px-4 py-2.5 text-sm text-tv-text-muted">
+                      {t("common.noResults")}
+                    </div>
+                  ) : (
+                    filteredMissions.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => handleMissionSwitch(m.id)}
+                        className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-sm transition-colors ${
+                          m.id === id
+                            ? "bg-tv-nav-active-bg text-tv-nav-active-text"
+                            : "text-tv-text-primary hover:bg-tv-surface-hover"
+                        }`}
+                      >
+                        <span className="truncate">{m.name}</span>
+                        <Badge
+                          status={m.status as MissionStatus}
+                          className="ml-2 flex-shrink-0"
+                        />
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>,
+              document.body,
+            )}
+          <div className="w-6 flex-shrink-0" />
         </div>
 
         {/* right section - flex-1, mirrors NavBar right */}
@@ -283,7 +336,7 @@ export default function MissionTabNav() {
             ))}
           </div>
 
-          {/* compute trajectory - matches airport selector width */}
+          {/* compute / action button - matches airport selector width */}
           {showCompute && (
             <button
               onClick={() => computeCtx.onCompute?.()}
@@ -293,12 +346,14 @@ export default function MissionTabNav() {
                   ? t("mission.config.recomputeTooltip")
                   : undefined
               }
-              className={`flex items-center justify-center gap-2 min-w-[280px] h-11 rounded-full text-sm font-semibold transition-colors ${
-                computeCtx.isComputing
-                  ? "bg-tv-accent/50 text-tv-accent-text cursor-not-allowed"
-                  : !computeCtx.canCompute
-                    ? "bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"
-                    : "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
+              className={`flex items-center justify-center gap-2 w-[280px] shrink h-11 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
+                computeCtx.variant === "secondary"
+                  ? "border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover"
+                  : computeCtx.isComputing
+                    ? "bg-tv-accent/50 text-tv-accent-text cursor-not-allowed"
+                    : !computeCtx.canCompute
+                      ? "bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"
+                      : "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
               }`}
               data-testid="compute-trajectory-btn"
             >
@@ -307,7 +362,7 @@ export default function MissionTabNav() {
               )}
               {computeCtx.isComputing
                 ? t("mission.config.computing")
-                : t("mission.config.computeTrajectory")}
+                : computeCtx.label ?? t("mission.config.computeTrajectory")}
             </button>
           )}
 
@@ -316,7 +371,7 @@ export default function MissionTabNav() {
             <button
               onClick={() => saveCtx.onSave?.()}
               disabled={!saveCtx.isDirty || saveCtx.isSaving}
-              className={`rounded-full px-4 h-11 min-w-[81px] text-sm font-semibold transition-colors border ${
+              className={`rounded-full px-4 h-11 min-w-[81px] flex-shrink-0 text-sm font-semibold transition-colors border ${
                 saveCtx.isDirty && !saveCtx.isSaving
                   ? "border-tv-accent bg-tv-surface text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
                   : "border-tv-border bg-tv-surface text-tv-text-muted cursor-not-allowed"

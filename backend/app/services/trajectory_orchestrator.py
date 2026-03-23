@@ -198,6 +198,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         )
 
     warnings: list[str] = []
+    non_aborting_violations: list[str] = []
     if had_constraints:
         warnings.append("constraints were reset - re-attach after generation")
 
@@ -326,7 +327,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 wp_str = ", ".join(str(i) for i in obstructed_wps)
             else:
                 wp_str = f"{min(obstructed_wps)}-{max(obstructed_wps)}"
-            warnings.append(f"{label} (wp {wp_str}): camera view to PAPI obstructed")
+            non_aborting_violations.append(f"{label} (wp {wp_str}): camera view to PAPI obstructed")
 
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
@@ -460,7 +461,29 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             )
         )
 
-    # check for runway/taxiway crossings and add warnings
+    # build waypoint index -> inspection sequence mapping
+    wp_inspection_seq: dict[int, int] = {}
+    idx = 0
+    # skip takeoff/transit waypoints before first inspection
+    if mission.takeoff_coordinate:
+        idx += 2  # takeoff + climb
+    for i, ipass in enumerate(inspection_passes):
+        # transit waypoints before this pass don't belong to an inspection
+        pass_start = None
+        for k in range(idx, len(all_waypoints)):
+            if all_waypoints[k] is ipass.waypoints[0]:
+                pass_start = k
+                break
+        if pass_start is not None:
+            for k in range(pass_start, pass_start + len(ipass.waypoints)):
+                if k < len(all_waypoints):
+                    wp_inspection_seq[k] = i + 1
+            idx = pass_start + len(ipass.waypoints)
+
+    # check for runway/taxiway crossings and add grouped warnings
+    # measurement crossings grouped by (inspection_seq, surface) -> one warning
+    # transit/other crossings kept individually
+    measurement_crossings: dict[tuple[int, str], int] = {}
     for j in range(1, len(all_waypoints)):
         prev_wp = all_waypoints[j - 1]
         cur_wp = all_waypoints[j]
@@ -475,13 +498,22 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             )
             if crossing > 0:
                 wp_type = cur_wp.waypoint_type
-                msg = (
-                    f"wp {j}-{j + 1} ({wp_type}): crosses "
-                    f"{surface.surface_type} {surface.identifier} "
-                    f"({crossing:.0f}m)"
-                )
-                if msg not in warnings:
-                    warnings.append(msg)
+                if wp_type == WaypointType.MEASUREMENT:
+                    seq = wp_inspection_seq.get(j, 0)
+                    key = (seq, f"{surface.surface_type} {surface.identifier}")
+                    measurement_crossings[key] = measurement_crossings.get(key, 0) + 1
+                else:
+                    msg = (
+                        f"wp {j}-{j + 1} ({wp_type}): crosses "
+                        f"{surface.surface_type} {surface.identifier} "
+                        f"({crossing:.0f}m)"
+                    )
+                    if msg not in non_aborting_violations:
+                        non_aborting_violations.append(msg)
+
+    for (seq, surface_label), count in measurement_crossings.items():
+        msg = f"inspection {seq} crosses {surface_label} during measurement ({count} segments)"
+        non_aborting_violations.append(msg)
 
     # final validation of assembled path
     final_violations = validate_inspection_pass(
@@ -526,7 +558,15 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         if all_waypoints[j].hover_duration is not None:
             total_dur += all_waypoints[j].hover_duration
 
-    flight_plan = persist_flight_plan(db, mission, all_waypoints, warnings, total_dist, total_dur)
+    flight_plan = persist_flight_plan(
+        db,
+        mission,
+        all_waypoints,
+        warnings,
+        total_dist,
+        total_dur,
+        violations=non_aborting_violations,
+    )
 
     # no hard violations at this point - mark flight plan as validated
     flight_plan.is_validated = True

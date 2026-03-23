@@ -17,8 +17,10 @@ export interface WaypointResponse {
 }
 
 export interface ValidationViolation {
+  id: string;
+  is_warning: boolean;
   message: string;
-  severity: string;
+  constraint_id: string | null;
 }
 
 export interface ValidationResultResponse {
@@ -42,5 +44,4 @@ export interface FlightPlanResponse {
 
 export interface GenerateTrajectoryResponse {
   flight_plan: FlightPlanResponse;
-  warnings: string[];
 }

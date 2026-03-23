@@ -17,7 +17,14 @@ export interface MapLayerConfig {
   obstacles: boolean;
   safetyZones: boolean;
   aglSystems: boolean;
-  waypoints: boolean;
+  simplifiedTrajectory: boolean;
+  trajectory: boolean;
+  transitWaypoints: boolean;
+  measurementWaypoints: boolean;
+  path: boolean;
+  takeoffLanding: boolean;
+  cameraHeading: boolean;
+  pathHeading: boolean;
 }
 
 export type MapFeatureType =
@@ -61,6 +68,8 @@ export interface MapFeatureWaypoint {
     sequence_order: number;
     position: PointZ;
     stack_count: number;
+    seq_min?: number;
+    seq_max?: number;
     alt_min?: number;
     alt_max?: number;
   };
@@ -84,6 +93,8 @@ export interface AirportMapProps {
   showTerrainToggle?: boolean;
   onFeatureClick?: (feature: MapFeature) => void;
   children?: ReactNode;
+  showWaypointList?: boolean;
+  simplifiedTrajectory?: boolean;
   waypoints?: WaypointResponse[];
   selectedWaypointId?: string | null;
   onWaypointClick?: (id: string | null) => void;
@@ -91,6 +102,7 @@ export interface AirportMapProps {
   onTerrainChange?: (mode: "map" | "satellite") => void;
   missionStatus?: MissionStatus;
   onMapClick?: (lngLat: { lng: number; lat: number }) => void;
+  visibleInspectionIds?: Set<string>;
   takeoffCoordinate?: PointZ | null;
   landingCoordinate?: PointZ | null;
   inspectionIndexMap?: Record<string, number>;
@@ -102,5 +114,12 @@ export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {
   obstacles: true,
   safetyZones: true,
   aglSystems: true,
-  waypoints: true,
+  simplifiedTrajectory: false,
+  trajectory: true,
+  transitWaypoints: true,
+  measurementWaypoints: true,
+  path: true,
+  takeoffLanding: true,
+  cameraHeading: false,
+  pathHeading: true,
 };
