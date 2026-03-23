@@ -1,10 +1,16 @@
+import io
+import zipfile
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from fastapi.responses import Response
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.dependencies import get_db
+from app.models.flight_plan import FlightPlan
+from app.models.mission import Mission
 from app.schemas.common import DeleteResponse, ListMeta
+from app.schemas.export import ExportRequest
 from app.schemas.mission import (
     InspectionCreate,
     InspectionResponse,
@@ -17,7 +23,7 @@ from app.schemas.mission import (
     ReorderRequest,
     ReorderResponse,
 )
-from app.services import inspection_service, mission_service
+from app.services import export_service, inspection_service, mission_service
 
 router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
 
@@ -86,10 +92,82 @@ def validate_mission(mission_id: UUID, db: Session = Depends(get_db)):
     return mission_service.transition_mission(db, mission_id, "VALIDATED")
 
 
-@router.post("/{mission_id}/export", response_model=MissionResponse)
-def export_mission(mission_id: UUID, db: Session = Depends(get_db)):
-    """VALIDATED -> EXPORTED"""
-    return mission_service.transition_mission(db, mission_id, "EXPORTED")
+# content types for export formats
+_EXPORT_CONTENT_TYPES = {
+    "KML": ("application/vnd.google-earth.kml+xml", "kml"),
+    "KMZ": ("application/vnd.google-earth.kmz", "kmz"),
+    "JSON": ("application/json", "json"),
+    "MAVLINK": ("text/plain", "waypoints"),
+}
+
+_EXPORT_GENERATORS = {
+    "KML": export_service.generate_kml,
+    "KMZ": export_service.generate_kmz,
+    "JSON": export_service.generate_json,
+    "MAVLINK": export_service.generate_mavlink,
+}
+
+
+@router.post("/{mission_id}/export")
+def export_mission(mission_id: UUID, body: ExportRequest, db: Session = Depends(get_db)):
+    """generate export files and transition VALIDATED -> EXPORTED."""
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        raise HTTPException(status_code=404, detail="mission not found")
+
+    # allow re-export for already exported missions
+    if mission.status == "VALIDATED":
+        try:
+            mission.transition_to("EXPORTED")
+            db.commit()
+            db.refresh(mission)
+        except ValueError:
+            raise HTTPException(status_code=409, detail="invalid status transition")
+    elif mission.status != "EXPORTED":
+        raise HTTPException(
+            status_code=409,
+            detail=f"mission must be VALIDATED or EXPORTED to export, current: {mission.status}",
+        )
+
+    flight_plan = (
+        db.query(FlightPlan)
+        .options(joinedload(FlightPlan.waypoints))
+        .filter(FlightPlan.mission_id == mission_id)
+        .first()
+    )
+    if not flight_plan:
+        raise HTTPException(status_code=404, detail="no flight plan found for this mission")
+
+    # generate files
+    files = {}
+    for fmt in body.formats:
+        generator = _EXPORT_GENERATORS[fmt]
+        content_type, ext = _EXPORT_CONTENT_TYPES[fmt]
+        filename = f"mission_{mission.name}.{ext}"
+        files[filename] = (generator(flight_plan), content_type)
+
+    # single file - return directly
+    if len(files) == 1:
+        filename, (data, content_type) = next(iter(files.items()))
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    # multiple files - zip them
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for filename, (data, _) in files.items():
+            zf.writestr(filename, data)
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="mission_{mission.name}_export.zip"'
+        },
+    )
 
 
 @router.post("/{mission_id}/complete", response_model=MissionResponse)

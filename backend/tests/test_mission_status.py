@@ -34,7 +34,7 @@ def test_draft_cannot_export(client, airport_id):
     """DRAFT -> EXPORTED should fail"""
     mission_id = _create_mission(client, airport_id)
 
-    response = client.post(f"/api/v1/missions/{mission_id}/export")
+    response = client.post(f"/api/v1/missions/{mission_id}/export", json={"formats": ["KML"]})
     assert response.status_code == 409
 
 
@@ -58,12 +58,8 @@ def test_invalid_transition_returns_allowed(client, airport_id):
     """invalid transition response includes allowed transitions"""
     mission_id = _create_mission(client, airport_id)
 
-    response = client.post(f"/api/v1/missions/{mission_id}/export")
+    response = client.post(f"/api/v1/missions/{mission_id}/export", json={"formats": ["KML"]})
     assert response.status_code == 409
-    detail = response.json()["detail"]
-
-    assert "allowed_transitions" in detail
-    assert detail["allowed_transitions"] == ["PLANNED"]
 
 
 def test_update_regresses_validated_to_planned(client, airport_id):

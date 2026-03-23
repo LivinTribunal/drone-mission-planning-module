@@ -70,6 +70,18 @@ export async function exportMission(id: string): Promise<MissionResponse> {
   return res.data;
 }
 
+export async function exportMissionFiles(
+  id: string,
+  formats: string[],
+): Promise<Blob> {
+  const res = await client.post(
+    `/missions/${id}/export`,
+    { formats },
+    { responseType: "blob" },
+  );
+  return res.data;
+}
+
 export async function completeMission(
   id: string,
 ): Promise<MissionResponse> {

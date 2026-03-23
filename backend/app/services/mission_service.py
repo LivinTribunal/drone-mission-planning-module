@@ -123,10 +123,16 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
 
 
 def delete_mission(db: Session, mission_id: UUID):
-    """delete mission."""
+    """delete mission - blocked for EXPORTED/COMPLETED status."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         raise NotFoundError("mission not found")
+
+    if mission.status in ("EXPORTED", "COMPLETED"):
+        raise DomainError(
+            "cannot delete mission in exported or completed state",
+            status_code=409,
+        )
 
     db.delete(mission)
     db.commit()
