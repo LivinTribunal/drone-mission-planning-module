@@ -242,6 +242,13 @@ def export_mission(
     if not mission:
         raise NotFoundError("mission not found")
 
+    # reject invalid statuses before querying dependent data
+    if mission.status not in ("VALIDATED", "EXPORTED"):
+        raise DomainError(
+            f"mission must be VALIDATED or EXPORTED to export, current: {mission.status}",
+            status_code=409,
+        )
+
     # verify flight plan and airport exist before committing status transition
     flight_plan = (
         db.query(FlightPlan)
@@ -267,11 +274,6 @@ def export_mission(
             db.refresh(mission)
         except ValueError:
             raise DomainError("invalid status transition", status_code=409)
-    elif mission.status != "EXPORTED":
-        raise DomainError(
-            f"mission must be VALIDATED or EXPORTED to export, current: {mission.status}",
-            status_code=409,
-        )
 
     safe_name = _sanitize_filename(mission.name)
 
