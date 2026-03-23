@@ -65,8 +65,15 @@ export async function validateMission(
   return res.data;
 }
 
-export async function exportMission(id: string): Promise<MissionResponse> {
-  const res = await client.post(`/missions/${id}/export`);
+export async function exportMissionFiles(
+  id: string,
+  formats: string[],
+): Promise<Blob> {
+  const res = await client.post(
+    `/missions/${id}/export`,
+    { formats },
+    { responseType: "blob" },
+  );
   return res.data;
 }
 

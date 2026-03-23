@@ -35,6 +35,11 @@ Thumbs.db
 # Build artifacts
 .harness/
 
+# Puppeteer browser downloads
+chrome/
+
 # notebooks
 notebooks/
 *.ipynb
+
+docs/specs/ZEPHYR_Príručka_Meranie LPZ_v2.pdf
