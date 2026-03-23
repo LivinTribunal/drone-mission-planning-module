@@ -1,19 +1,23 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useAirport } from "@/contexts/AirportContext";
 import type { AirportResponse } from "@/types/airport";
 import { listAirports } from "@/api/airports";
 
 export default function AirportSelector() {
+  /** airport selector dropdown with search. */
   const { selectedAirport, selectAirport, clearAirport } = useAirport();
   const { t } = useTranslation();
   const [airports, setAirports] = useState<AirportResponse[]>([]);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const fetchAirports = useCallback(() => {
+    /** fetch all airports. */
     setLoading(true);
     setError(false);
     listAirports()
@@ -28,6 +32,7 @@ export default function AirportSelector() {
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
+      /** close dropdown on outside click. */
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
       }
@@ -35,6 +40,24 @@ export default function AirportSelector() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  useEffect(() => {
+    if (open && searchRef.current) {
+      searchRef.current.focus();
+    }
+    if (!open) setSearch("");
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    /** filter airports by search query. */
+    if (!search.trim()) return airports;
+    const q = search.toLowerCase();
+    return airports.filter(
+      (a) =>
+        a.icao_code.toLowerCase().includes(q) ||
+        a.name.toLowerCase().includes(q),
+    );
+  }, [airports, search]);
 
   return (
     <div ref={ref} className="relative min-w-[280px]">
@@ -46,9 +69,17 @@ export default function AirportSelector() {
       >
         <span className="flex-1 text-left truncate">
           {selectedAirport
-            ? `${selectedAirport.icao_code} - ${selectedAirport.name}`
+            ? `${selectedAirport.icao_code} \u2013 ${selectedAirport.name}`
             : t("nav.chooseAirport")}
         </span>
+        {selectedAirport && (
+          <span
+            className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-tv-accent-text flex-shrink-0"
+            style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
+          >
+            {selectedAirport.icao_code}
+          </span>
+        )}
         {selectedAirport && (
           <button
             onClick={(e) => {
@@ -83,9 +114,18 @@ export default function AirportSelector() {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-full rounded-2xl border
-            border-tv-border bg-tv-surface p-2 z-50"
+          className="absolute right-0 top-full mt-1 w-full rounded-2xl border-2
+            border-tv-text-muted bg-tv-surface p-2 z-50"
         >
+          {/* search bar */}
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("nav.searchAirports")}
+            className="w-full rounded-full px-4 py-2 text-sm bg-tv-bg border border-tv-border text-tv-text-primary placeholder:text-tv-text-muted outline-none focus:border-tv-accent mb-2"
+          />
+
           {loading ? (
             <div className="px-4 py-2.5 text-sm text-tv-text-muted">
               {t("common.loading")}
@@ -100,26 +140,31 @@ export default function AirportSelector() {
                 {t("common.retry")}
               </button>
             </div>
-          ) : airports.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="px-4 py-2.5 text-sm text-tv-text-muted">
-              {t("airportSelection.noAirports")}
+              {search.trim()
+                ? t("common.noResults")
+                : t("airportSelection.noAirports")}
             </div>
           ) : (
             <div className="max-h-[225px] overflow-y-auto">
-              {airports.map((airport) => (
+              {filtered.map((airport) => (
                 <button
                   key={airport.id}
                   onClick={() => {
                     selectAirport(airport);
                     setOpen(false);
                   }}
-                  className={`block w-full text-left rounded-xl px-4 py-2.5 text-sm transition-colors
-                    ${selectedAirport?.id === airport.id ? "bg-tv-surface-hover" : "hover:bg-tv-surface-hover"}`}
+                  className={`flex items-center w-full text-left rounded-xl px-4 py-2.5 text-sm transition-colors ${
+                    selectedAirport?.id === airport.id
+                      ? "bg-tv-nav-active-bg text-tv-nav-active-text"
+                      : "text-tv-text-primary hover:bg-tv-surface-hover"
+                  }`}
                 >
-                  <span className="font-medium text-tv-text-primary">
+                  <span className="font-medium">
                     {airport.icao_code}
                   </span>
-                  <span className="ml-2 text-tv-text-secondary">
+                  <span className="ml-2 truncate">
                     {airport.name}
                   </span>
                 </button>

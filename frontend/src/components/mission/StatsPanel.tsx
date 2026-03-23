@@ -4,7 +4,6 @@ import {
   Route,
   Clock,
   MapPin,
-  ListChecks,
   Battery,
   ChevronDown,
   ChevronUp,
@@ -28,7 +27,6 @@ function formatDuration(seconds: number): string {
 export default function StatsPanel({
   flightPlan,
   hasTrajectory,
-  inspectionCount,
   droneProfile,
 }: StatsPanelProps) {
   const { t } = useTranslation();
@@ -41,15 +39,16 @@ export default function StatsPanel({
           onClick={() => setCollapsed(!collapsed)}
           className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
         >
-          <span>{t("mission.config.estimatedStats")}</span>
+          <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.estimatedStats")}</span>
           {collapsed ? (
             <ChevronDown className="h-4 w-4" />
           ) : (
             <ChevronUp className="h-4 w-4" />
           )}
         </button>
+        {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
         {!collapsed && (
-          <p className="text-sm text-tv-text-muted mt-2">
+          <p className="text-sm text-tv-text-muted mt-3">
             {t("mission.config.computeToSeeStats")}
           </p>
         )}
@@ -95,12 +94,6 @@ export default function StatsPanel({
       colorClass: "bg-tv-warning/20 text-tv-warning",
     },
     {
-      label: t("mission.config.inspectionCount"),
-      value: inspectionCount.toString(),
-      icon: ListChecks,
-      colorClass: "bg-tv-accent/20 text-tv-accent",
-    },
-    {
       label: t("mission.config.batteryConsumption"),
       value: batteryPct,
       icon: Battery,
@@ -114,15 +107,16 @@ export default function StatsPanel({
         onClick={() => setCollapsed(!collapsed)}
         className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
       >
-        <span>{t("mission.config.estimatedStats")}</span>
+        <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.estimatedStats")}</span>
         {collapsed ? (
           <ChevronDown className="h-4 w-4" />
         ) : (
           <ChevronUp className="h-4 w-4" />
         )}
       </button>
+      {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
       {!collapsed && (
-        <div className="grid grid-cols-2 gap-2 mt-2">
+        <div className="grid grid-cols-2 gap-2 mt-3">
           {stats.map((stat) => {
             const Icon = stat.icon;
             return (

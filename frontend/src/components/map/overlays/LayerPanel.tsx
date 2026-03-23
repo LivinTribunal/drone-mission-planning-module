@@ -1,11 +1,33 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ChevronDown } from "lucide-react";
 import type { MapLayerConfig } from "@/types/map";
 
 interface LayerPanelProps {
   layers: MapLayerConfig;
-  onToggle: (key: keyof MapLayerConfig) => void;
+  onToggle: (key: string) => void;
   hasWaypoints?: boolean;
+  hasSimplifiedTrajectory?: boolean;
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  /** custom toggle switch. */
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onChange(); }}
+      className="ml-auto flex-shrink-0 relative inline-block w-[36px] h-[18px] rounded-full transition-colors duration-200"
+      style={{
+        backgroundColor: checked ? "var(--tv-accent)" : "var(--tv-border)",
+      }}
+    >
+      <span
+        className="absolute top-[3px] left-[3px] h-[12px] w-[12px] rounded-full bg-white transition-transform duration-200"
+        style={{
+          transform: checked ? "translateX(18px)" : "translateX(0px)",
+        }}
+      />
+    </button>
+  );
 }
 
 const baseLayerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
@@ -16,18 +38,18 @@ const baseLayerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
   { key: "aglSystems", i18nKey: "dashboard.aglSystems" },
 ];
 
-export default function LayerPanel({ layers, onToggle, hasWaypoints }: LayerPanelProps) {
-  /** layer visibility toggle panel. */
+export default function LayerPanel({ layers, onToggle, hasWaypoints, hasSimplifiedTrajectory }: LayerPanelProps) {
+  /** hierarchical layer visibility toggle panel. */
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
+  const [trajectoryExpanded, setTrajectoryExpanded] = useState(layers.trajectory);
+  const [waypointsExpanded, setWaypointsExpanded] = useState(true);
 
-  const layerKeys = hasWaypoints
-    ? [...baseLayerKeys, { key: "waypoints" as keyof MapLayerConfig, i18nKey: "dashboard.waypoints" }]
-    : baseLayerKeys;
+  const waypointsOn = layers.transitWaypoints && layers.measurementWaypoints;
 
   return (
     <div
-      className="z-10 rounded-2xl border border-tv-border bg-tv-bg"
+      className="z-10 rounded-2xl border border-tv-border bg-tv-bg min-w-[220px] flex-shrink-0"
       data-testid="layer-panel"
     >
       <button
@@ -49,34 +71,90 @@ export default function LayerPanel({ layers, onToggle, hasWaypoints }: LayerPane
       </button>
       {!collapsed && (
         <div className="border-t border-tv-border px-3 pb-2 pt-1">
-          {layerKeys.map(({ key, i18nKey }) => (
-            <label
-              key={key}
-              className="flex cursor-pointer items-center gap-2 py-1 text-xs text-tv-text-secondary hover:text-tv-text-primary"
-            >
-              <input
-                type="checkbox"
-                checked={layers[key]}
-                onChange={() => onToggle(key)}
-                className="sr-only"
-                data-testid={`layer-toggle-${key}`}
-              />
-              {t(i18nKey)}
-              <span
-                className="ml-auto flex-shrink-0 relative inline-block w-10 h-[16px] rounded-full transition-colors duration-200"
-                style={{
-                  backgroundColor: layers[key] ? "var(--tv-accent)" : "var(--tv-border)",
-                }}
-              >
-                <span
-                  className="absolute top-[2px] h-[12px] w-[20px] rounded-full bg-white shadow-sm transition-transform duration-200"
-                  style={{
-                    transform: layers[key] ? "translateX(20px)" : "translateX(2px)",
-                  }}
-                />
-              </span>
-            </label>
+          {/* base infrastructure layers */}
+          {baseLayerKeys.map(({ key, i18nKey }) => (
+            <div key={key} className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
+              <span>{t(i18nKey)}</span>
+              <Toggle checked={layers[key]} onChange={() => onToggle(key)} />
+            </div>
           ))}
+
+          {/* simplified trajectory */}
+          {hasSimplifiedTrajectory && (
+            <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
+              <span>{t("map.simplifiedTrajectory")}</span>
+              <Toggle checked={layers.simplifiedTrajectory} onChange={() => onToggle("simplifiedTrajectory")} />
+            </div>
+          )}
+
+          {/* trajectory parent */}
+          {hasWaypoints && (
+            <>
+              <div className="flex items-center gap-1 py-1 text-xs text-tv-text-secondary">
+                <button
+                  onClick={() => setTrajectoryExpanded(!trajectoryExpanded)}
+                  className="p-0.5 -ml-0.5"
+                >
+                  <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${trajectoryExpanded ? "" : "-rotate-90"}`} />
+                </button>
+                <span>{t("map.trajectory")}</span>
+                <Toggle checked={layers.trajectory} onChange={() => onToggle("trajectory")} />
+              </div>
+
+              {trajectoryExpanded && (
+                <div className="pl-4">
+                  {/* waypoints sub-parent */}
+                  <div className="flex items-center gap-1 py-1 text-xs text-tv-text-secondary">
+                    <button
+                      onClick={() => setWaypointsExpanded(!waypointsExpanded)}
+                      className="p-0.5 -ml-0.5"
+                    >
+                      <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${waypointsExpanded ? "" : "-rotate-90"}`} />
+                    </button>
+                    <span>{t("dashboard.waypoints")}</span>
+                    <Toggle checked={waypointsOn} onChange={() => onToggle("waypoints")} />
+                  </div>
+
+                  {waypointsExpanded && (
+                    <div className="pl-4">
+                      <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
+                        <span>{t("map.transitWaypoints")}</span>
+                        <Toggle checked={layers.transitWaypoints} onChange={() => onToggle("transitWaypoints")} />
+                      </div>
+                      <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
+                        <span>{t("map.measurementWaypoints")}</span>
+                        <Toggle checked={layers.measurementWaypoints} onChange={() => onToggle("measurementWaypoints")} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* path */}
+                  <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
+                    <span>{t("map.path")}</span>
+                    <Toggle checked={layers.path} onChange={() => onToggle("path")} />
+                  </div>
+
+                  {/* takeoff & landing */}
+                  <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
+                    <span>{t("map.takeoffLanding")}</span>
+                    <Toggle checked={layers.takeoffLanding} onChange={() => onToggle("takeoffLanding")} />
+                  </div>
+
+                  {/* camera heading */}
+                  <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
+                    <span>{t("map.cameraHeading")}</span>
+                    <Toggle checked={layers.cameraHeading} onChange={() => onToggle("cameraHeading")} />
+                  </div>
+
+                  {/* path heading */}
+                  <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
+                    <span>{t("map.pathHeading")}</span>
+                    <Toggle checked={layers.pathHeading} onChange={() => onToggle("pathHeading")} />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

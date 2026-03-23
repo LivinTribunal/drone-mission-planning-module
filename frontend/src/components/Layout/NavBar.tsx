@@ -52,7 +52,7 @@ export default function NavBar({ items, role }: NavBarProps) {
     >
       {/* left section - 30% */}
       <div className="w-[30%] flex-shrink-0 flex">
-        <div className="flex-1 overflow-hidden pr-4" style={{ scrollbarGutter: "stable" }}>
+        <div className="flex-1 overflow-hidden" style={{ scrollbarGutter: "stable" }}>
           <NavLink
             to={
               role === "operator"
@@ -73,7 +73,7 @@ export default function NavBar({ items, role }: NavBarProps) {
             </span>
           </NavLink>
         </div>
-        <div className="w-2.5 flex-shrink-0" />
+        <div className="w-6 flex-shrink-0" />
       </div>
 
       {/* right section - 70% */}

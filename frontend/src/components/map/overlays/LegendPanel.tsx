@@ -299,7 +299,7 @@ export default function LegendPanel({
   const showZones = !layers || layers.safetyZones;
   const showObstacles = !layers || layers.obstacles;
   const showFeatures = !layers || layers.aglSystems;
-  const showWaypoints = !layers || layers.waypoints;
+  const showWaypoints = !layers || layers.trajectory;
 
   return (
     <div
