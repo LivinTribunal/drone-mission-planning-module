@@ -74,9 +74,9 @@ export default function WarningsPanel({
                     {t("mission.validationExportPage.violationsLabel")} ({violationItems.length})
                   </span>
                   <div className="space-y-2">
-                    {violationItems.map((w, i) => (
+                    {violationItems.map((w) => (
                       <div
-                        key={`v-${i}`}
+                        key={w.id}
                         className="flex items-start gap-3 px-3 py-2.5 rounded-2xl bg-tv-error/10 border border-tv-error/20"
                       >
                         <div className="flex items-center justify-center h-6 w-6 rounded-full bg-tv-error/20 flex-shrink-0 mt-0.5">
@@ -96,9 +96,9 @@ export default function WarningsPanel({
                     {t("mission.validationExportPage.warningsLabel")} ({warningItems.length})
                   </span>
                   <div className="space-y-2">
-                    {warningItems.map((w, i) => (
+                    {warningItems.map((w) => (
                       <div
-                        key={`w-${i}`}
+                        key={w.id}
                         className="flex items-start gap-3 px-3 py-2.5 rounded-2xl bg-tv-warning/10 border border-tv-warning/20"
                       >
                         <div className="flex items-center justify-center h-6 w-6 rounded-full bg-tv-warning/20 flex-shrink-0 mt-0.5">

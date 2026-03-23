@@ -62,7 +62,7 @@ def test_invalid_transition_returns_allowed(client, airport_id):
     assert response.status_code == 409
 
 
-def test_update_regresses_validated_to_planned(client, airport_id):
+def test_update_trajectory_fields_on_draft(client, airport_id):
     """changing trajectory fields on DRAFT mission should still work"""
     mission_id = _create_mission(client, airport_id)
 

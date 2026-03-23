@@ -233,3 +233,23 @@ class TestGenerateMavlink:
 
         fields = lines[1].split("\t")
         assert float(fields[10]) == 10.0
+
+
+class TestSanitizeFilename:
+    """tests for filename sanitization."""
+
+    def test_strips_path_separators(self):
+        """path separators are removed to prevent zip slip."""
+        assert export_service._sanitize_filename("../../evil") == "evil"
+
+    def test_strips_backslashes(self):
+        """backslashes are removed."""
+        assert export_service._sanitize_filename("..\\..\\evil") == "evil"
+
+    def test_strips_quotes_and_newlines(self):
+        """quotes and newlines are removed."""
+        assert export_service._sanitize_filename('my"mission\r\n') == "mymission"
+
+    def test_normal_name_unchanged(self):
+        """normal mission names pass through unchanged."""
+        assert export_service._sanitize_filename("Test Mission 1") == "Test Mission 1"

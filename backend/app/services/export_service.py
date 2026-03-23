@@ -217,7 +217,11 @@ _EXPORT_GENERATORS = {
 
 def _sanitize_filename(name: str) -> str:
     """remove characters unsafe for content-disposition header filenames."""
-    return re.sub(r'["\r\n]', "", name)
+    sanitized = re.sub(r'["\r\n/\\]', "", name)
+    # prevent path traversal sequences
+    while ".." in sanitized:
+        sanitized = sanitized.replace("..", "")
+    return sanitized
 
 
 def export_mission(
@@ -256,7 +260,9 @@ def export_mission(
 
     # get airport elevation for AGL conversion
     airport = db.query(Airport).filter(Airport.id == flight_plan.airport_id).first()
-    airport_elevation = airport.elevation if airport else 0
+    airport_elevation = 0
+    if airport and airport.elevation is not None:
+        airport_elevation = airport.elevation
 
     safe_name = _sanitize_filename(mission.name)
 
