@@ -2,18 +2,24 @@
 
 import io
 import json
+import re
 import zipfile
 from datetime import datetime, timezone
 from uuid import UUID
 
 import simplekml
 from geoalchemy2.shape import to_shape
+from sqlalchemy.orm import Session, joinedload
 
+from app.core.exceptions import DomainError, NotFoundError
 from app.models.flight_plan import FlightPlan
+from app.models.mission import Mission
 
 
 def _extract_coords(geom) -> tuple[float, float, float]:
     """extract (lon, lat, alt) from a postgis geometry column."""
+    if geom is None:
+        raise ValueError("waypoint has no position geometry")
     shape = to_shape(geom)
     return (shape.x, shape.y, shape.z)
 
@@ -162,3 +168,70 @@ def generate_mavlink(flight_plan: FlightPlan) -> bytes:
         lines.append(line)
 
     return "\n".join(lines).encode("utf-8")
+
+
+# content types for export formats
+_EXPORT_CONTENT_TYPES = {
+    "KML": ("application/vnd.google-earth.kml+xml", "kml"),
+    "KMZ": ("application/vnd.google-earth.kmz", "kmz"),
+    "JSON": ("application/json", "json"),
+    "MAVLINK": ("text/plain", "waypoints"),
+}
+
+_EXPORT_GENERATORS = {
+    "KML": generate_kml,
+    "KMZ": generate_kmz,
+    "JSON": generate_json,
+    "MAVLINK": generate_mavlink,
+}
+
+
+def _sanitize_filename(name: str) -> str:
+    """remove characters unsafe for content-disposition header filenames."""
+    return re.sub(r'["\r\n]', "", name)
+
+
+def export_mission(
+    db: Session, mission_id: UUID, formats: list[str]
+) -> tuple[dict[str, tuple[bytes, str]], str]:
+    """transition mission to EXPORTED and generate requested export files.
+
+    returns (files_dict, sanitized_mission_name) where files_dict maps
+    filename -> (content_bytes, content_type).
+    """
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        raise NotFoundError("mission not found")
+
+    if mission.status == "VALIDATED":
+        try:
+            mission.transition_to("EXPORTED")
+            db.commit()
+            db.refresh(mission)
+        except ValueError:
+            raise DomainError("invalid status transition", status_code=409)
+    elif mission.status != "EXPORTED":
+        raise DomainError(
+            f"mission must be VALIDATED or EXPORTED to export, current: {mission.status}",
+            status_code=409,
+        )
+
+    flight_plan = (
+        db.query(FlightPlan)
+        .options(joinedload(FlightPlan.waypoints))
+        .filter(FlightPlan.mission_id == mission_id)
+        .first()
+    )
+    if not flight_plan:
+        raise NotFoundError("no flight plan found for this mission")
+
+    safe_name = _sanitize_filename(mission.name)
+
+    files: dict[str, tuple[bytes, str]] = {}
+    for fmt in formats:
+        generator = _EXPORT_GENERATORS[fmt]
+        content_type, ext = _EXPORT_CONTENT_TYPES[fmt]
+        filename = f"mission_{safe_name}.{ext}"
+        files[filename] = (generator(flight_plan), content_type)
+
+    return files, safe_name

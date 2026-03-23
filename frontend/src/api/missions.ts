@@ -65,11 +65,6 @@ export async function validateMission(
   return res.data;
 }
 
-export async function exportMission(id: string): Promise<MissionResponse> {
-  const res = await client.post(`/missions/${id}/export`);
-  return res.data;
-}
-
 export async function exportMissionFiles(
   id: string,
   formats: string[],

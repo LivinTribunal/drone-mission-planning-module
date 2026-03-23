@@ -104,12 +104,14 @@ export default function MissionValidationPage() {
     function handleFocus() {
       fetchData();
     }
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", () => {
+    function handleVisibility() {
       if (document.visibilityState === "visible") fetchData();
-    });
+    }
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [fetchData]);
 
