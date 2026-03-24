@@ -49,7 +49,7 @@ export default function LayerPanel({ layers, onToggle, hasWaypoints, hasSimplifi
 
   return (
     <div
-      className="z-10 rounded-2xl border border-tv-border bg-tv-bg min-w-[220px] flex-shrink-0"
+      className="rounded-2xl border border-tv-border bg-tv-bg min-w-[260px] flex-shrink-0"
       data-testid="layer-panel"
     >
       <button

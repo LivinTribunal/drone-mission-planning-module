@@ -95,6 +95,20 @@ class FlightPlanResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class WaypointPositionUpdate(BaseModel):
+    """single waypoint position update in a batch."""
+
+    waypoint_id: UUID
+    position: PointZ
+    camera_target: PointZ | None = None
+
+
+class WaypointBatchUpdateRequest(BaseModel):
+    """batch update request for waypoint positions."""
+
+    updates: list[WaypointPositionUpdate]
+
+
 class GenerateTrajectoryResponse(BaseModel):
     """response from trajectory generation"""
 
