@@ -405,7 +405,7 @@ jobs:
                 `## ❌ Review-Fix Agent — Quality Gates Failed (Cycle ${cycle}/3)`,
                 '',
                 'The review-fix agent made changes but quality gates did not pass.',
-                'Changes were **not pushed**. A human should review and decide next steps.',
+                'Changes were **pushed anyway** — a human should review and fix remaining issues.',
                 '',
                 '| Check | Result |',
                 '|-------|--------|',
@@ -423,7 +423,7 @@ jobs:
             });
 
       - name: Commit and push review-fix
-        if: steps.mode.outputs.mode == 'review-fix' && steps.rf-changes.outputs.has-changes == 'true' && steps.rf-quality.outputs.passed == 'true'
+        if: steps.mode.outputs.mode == 'review-fix' && steps.rf-changes.outputs.has-changes == 'true'
         id: rf-push
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
@@ -867,7 +867,7 @@ jobs:
           echo "Quality gates: lint=${LINT_OK}, typecheck=${TYPECHECK_OK}, test=${TEST_OK}, build=${BUILD_OK}, regressed=${REGRESSED}"
 
       - name: Commit, push, and create PR
-        if: steps.mode.outputs.mode == 'issue' && steps.changes.outputs.has-changes == 'true' && steps.quality.outputs.regressed == 'false'
+        if: steps.mode.outputs.mode == 'issue' && steps.changes.outputs.has-changes == 'true'
         id: pr
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
@@ -897,15 +897,23 @@ jobs:
 
           git push -u origin "${BRANCH}"
 
-          # Ensure agent-pr label exists
+          # Ensure labels exist
           gh label create "agent-pr" --color "BFD4F2" --description "PR created by implementation agent" 2>/dev/null || true
+
+          # Build label list — add agent:needs-judgment if quality regressed
+          LABELS="agent-pr"
+          REGRESSED="${{ steps.quality.outputs.regressed }}"
+          if [[ "$REGRESSED" == "true" ]]; then
+            gh label create "agent:needs-judgment" --color "E4E669" --description "Agent needs human judgment to proceed" 2>/dev/null || true
+            LABELS="agent-pr,agent:needs-judgment"
+          fi
 
           # Create PR
           PR_URL=$(gh pr create \
             --base "${DEFAULT_BRANCH}" \
             --head "${BRANCH}" \
             --title "feat: ${ISSUE_TITLE}" \
-            --label "agent-pr" \
+            --label "${LABELS}" \
             --body "$(cat <<PR_EOF
           ## Summary
 
@@ -917,10 +925,10 @@ jobs:
 
           | Check | Status |
           |-------|--------|
-          | Lint | ${{ steps.quality.outputs.lint == 'true' && '✅' || '⚠️ (baseline was also failing)' }} |
-          | Type Check | ${{ steps.quality.outputs.typecheck == 'true' && '✅' || '⚠️ (baseline was also failing)' }} |
-          | Tests | ${{ steps.quality.outputs.test == 'true' && '✅' || '⚠️ (baseline was also failing)' }} |
-          | Build | ${{ steps.quality.outputs.build == 'true' && '✅' || '⚠️ (baseline was also failing)' }} |
+          | Lint | ${{ steps.quality.outputs.lint == 'true' && '✅' || (steps.baseline.outputs.lint == 'true' && '❌ regression' || '⚠️ (baseline was also failing)') }} |
+          | Type Check | ${{ steps.quality.outputs.typecheck == 'true' && '✅' || (steps.baseline.outputs.typecheck == 'true' && '❌ regression' || '⚠️ (baseline was also failing)') }} |
+          | Tests | ${{ steps.quality.outputs.test == 'true' && '✅' || (steps.baseline.outputs.test == 'true' && '❌ regression' || '⚠️ (baseline was also failing)') }} |
+          | Build | ${{ steps.quality.outputs.build == 'true' && '✅' || (steps.baseline.outputs.build == 'true' && '❌ regression' || '⚠️ (baseline was also failing)') }} |
 
           Closes #${ISSUE_NUMBER}
 
