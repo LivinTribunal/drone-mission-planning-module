@@ -279,6 +279,7 @@ interface LegendPanelProps {
   hasTakeoff?: boolean;
   hasLanding?: boolean;
   layers?: MapLayerConfig;
+  className?: string;
 }
 
 export default function LegendPanel({
@@ -286,6 +287,7 @@ export default function LegendPanel({
   hasTakeoff,
   hasLanding,
   layers,
+  className,
 }: LegendPanelProps) {
   /** map legend panel with aviation-chart symbology sections. */
   const { t } = useTranslation();
@@ -303,8 +305,8 @@ export default function LegendPanel({
 
   return (
     <div
-      className="absolute top-3 right-3 z-10 w-44 rounded-2xl border border-tv-border bg-tv-bg overflow-y-auto"
-      style={{ maxHeight: "calc(100% - 170px)" }}
+      className={className ?? "absolute top-3 right-3 z-10 w-44 rounded-2xl border border-tv-border bg-tv-bg"}
+      style={className ? undefined : { maxHeight: "calc(100% - 170px)" }}
       data-testid="legend-panel"
     >
       <button
@@ -327,7 +329,7 @@ export default function LegendPanel({
         </svg>
       </button>
       {!collapsed && (
-        <div className="border-t border-tv-border px-3 pb-2 pt-1 space-y-2">
+        <div className="border-t border-tv-border px-3 pb-2 pt-1 space-y-2 overflow-y-auto max-h-[40vh]">
           {showSurfaces && (
             <LegendSection
               title={t("dashboard.groundSurfaces")}

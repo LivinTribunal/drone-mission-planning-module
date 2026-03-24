@@ -62,14 +62,14 @@ export default function MapStatsPanel({
 
   return (
     <div
-      className="rounded-2xl border border-tv-border bg-tv-surface w-56 overflow-hidden"
+      className="rounded-2xl border border-tv-border bg-tv-bg w-full overflow-hidden flex-shrink-0"
       data-testid="map-stats-panel"
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-tv-text-primary"
       >
-        <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">
+        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border">
           {t("map.estimatedStats")}
         </span>
         <svg
@@ -86,7 +86,7 @@ export default function MapStatsPanel({
       </button>
 
       {!collapsed && (
-        <div className="border-t border-tv-border px-2 py-2 space-y-1">
+        <div className="border-t border-tv-border px-2 py-2 space-y-1 max-h-48 overflow-y-auto">
           {stats.map((stat) => {
             const Icon = stat.icon;
             return (
@@ -94,8 +94,8 @@ export default function MapStatsPanel({
                 key={stat.label}
                 className="flex items-center gap-2 px-2 py-1 text-xs"
               >
-                <Icon className="h-3 w-3 text-tv-text-muted flex-shrink-0" />
-                <span className="text-tv-text-muted flex-1">{stat.label}</span>
+                <Icon className="h-3 w-3 text-tv-text-secondary flex-shrink-0" />
+                <span className="text-tv-text-secondary flex-1">{stat.label}</span>
                 <span className="text-tv-text-primary font-medium">
                   {stat.value}
                 </span>

@@ -25,13 +25,11 @@ import type {
   WaypointPositionUpdate,
 } from "@/types/flightPlan";
 import type { PointZ } from "@/types/common";
-import type { MapFeature } from "@/types/map";
+import type { MapFeature, MapLayerConfig } from "@/types/map";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
 import AirportMap from "@/components/map/AirportMap";
-import LayerPanel from "@/components/map/overlays/LayerPanel";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
 import WaypointListPanel from "@/components/map/overlays/WaypointListPanel";
-import WaypointInfoPanel from "@/components/map/overlays/WaypointInfoPanel";
 import PoiInfoPanel from "@/components/map/overlays/PoiInfoPanel";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
 import InspectionSelect from "@/components/map/overlays/InspectionSelect";
@@ -41,8 +39,6 @@ import MapStatsPanel from "@/components/map/overlays/MapStatsPanel";
 import useMapTools, { MapTool } from "@/hooks/useMapTools";
 import useUndoRedo from "@/hooks/useUndoRedo";
 import useMeasureDistance from "@/hooks/useMeasureDistance";
-
-const TERMINAL_STATUSES = ["EXPORTED", "COMPLETED", "CANCELLED"];
 
 interface WaypointMoveAction {
   waypointId: string;
@@ -74,7 +70,6 @@ export default function MissionMapPage() {
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
-
   // tools
   const { activeTool, is3D, setTool, resetTool } = useMapTools();
   const undoRedo = useUndoRedo<WaypointMoveAction>(10);
@@ -160,11 +155,6 @@ export default function MissionMapPage() {
     return Object.fromEntries(sorted.map((insp, i) => [insp.id, i + 1]));
   }, [mission]);
 
-  const selectedWaypoint = useMemo(
-    () => effectiveWaypoints.find((wp) => wp.id === selectedWaypointId) ?? null,
-    [effectiveWaypoints, selectedWaypointId],
-  );
-
   const violations = useMemo((): ValidationViolation[] => {
     return flightPlan?.validation_result?.violations ?? [];
   }, [flightPlan]);
@@ -216,14 +206,28 @@ export default function MissionMapPage() {
     };
   }, [setSaveContext, handleSave, isDirty, saving, lastSaved]);
 
-  // no compute button on map page
+  // validate trajectory button in tab nav
+  const validateRef = useRef<() => void>(() => {});
   useEffect(() => {
+    validateRef.current = handleValidate;
+  });
+  useEffect(() => {
+    const canValidate =
+      mission?.status === "PLANNED";
     setComputeContext({
-      onCompute: null,
-      canCompute: false,
+      onCompute: () => validateRef.current(),
+      canCompute: canValidate,
       isComputing: false,
+      label: t("map.validateTrajectory"),
     });
-  }, [setComputeContext]);
+    return () => {
+      setComputeContext({
+        onCompute: null,
+        canCompute: false,
+        isComputing: false,
+      });
+    };
+  }, [setComputeContext, mission?.status, t]);
 
   // handle map click based on active tool
   const handleMapClick = useCallback(
@@ -310,10 +314,40 @@ export default function MissionMapPage() {
     setSelectedFeature(feature);
   }, []);
 
+  // clear waypoint selection when waypoint layers are hidden
+  const handleLayerChange = useCallback((layers: MapLayerConfig) => {
+    if (!layers.trajectory && !layers.transitWaypoints && !layers.measurementWaypoints) {
+      setSelectedWaypointId(null);
+      setSelectedFeature((prev) => prev?.type === "waypoint" ? null : prev);
+    }
+  }, []);
+
+  // handle waypoint click - select waypoint and show as feature info
+  const handleWaypointClick = useCallback(
+    (wpId: string | null) => {
+      setSelectedWaypointId(wpId);
+      if (!wpId) return;
+      const wp = effectiveWaypoints.find((w) => w.id === wpId);
+      if (wp) {
+        const [lon, lat, alt] = wp.position.coordinates;
+        setSelectedFeature({
+          type: "waypoint",
+          data: {
+            id: wp.id,
+            waypoint_type: wp.waypoint_type,
+            sequence_order: wp.sequence_order,
+            position: { type: "Point", coordinates: [lon, lat, alt] },
+            stack_count: 1,
+          },
+        });
+      }
+    },
+    [effectiveWaypoints],
+  );
+
   // handle validate
   async function handleValidate() {
     if (!id || !mission) return;
-    if (mission.status === "DRAFT") return;
     if (mission.status !== "PLANNED") return;
 
     try {
@@ -383,18 +417,6 @@ export default function MissionMapPage() {
 
   const hasFlightPlan = flightPlan !== null;
 
-  // validate button state
-  const validateDisabled =
-    mission.status === "DRAFT" ||
-    mission.status === "VALIDATED" ||
-    TERMINAL_STATUSES.includes(mission.status);
-  const validateTooltip =
-    mission.status === "DRAFT"
-      ? t("map.computeFirst")
-      : mission.status !== "PLANNED"
-        ? t("map.alreadyValidated")
-        : undefined;
-
   // determine if map click handler should be active
   const mapClickActive =
     activeTool === MapTool.ADD_START ||
@@ -413,12 +435,14 @@ export default function MissionMapPage() {
             terrainMode={terrainMode}
             onTerrainChange={setTerrainMode}
             showTerrainToggle={false}
-            showLayerPanel={false}
+            showLayerPanel={true}
             showLegend={false}
             showPoiInfo={false}
+            showWaypointList={false}
+
             waypoints={effectiveWaypoints}
             selectedWaypointId={selectedWaypointId}
-            onWaypointClick={setSelectedWaypointId}
+            onWaypointClick={handleWaypointClick}
             missionStatus={mission.status}
             onMapClick={mapClickActive ? handleMapClick : undefined}
             takeoffCoordinate={mission.takeoff_coordinate}
@@ -426,6 +450,35 @@ export default function MissionMapPage() {
             inspectionIndexMap={inspectionIndexMap}
             visibleInspectionIds={visibleInspectionIds}
             onFeatureClick={handleFeatureClick}
+            onLayerChange={handleLayerChange}
+            leftPanelChildren={
+              <>
+                <InspectionSelect
+                  inspections={mission.inspections}
+                  selectedId={selectedInspectionId}
+                  onSelect={setSelectedInspectionId}
+                />
+                {selectedInspectionId && (
+                  <WaypointListPanel
+                    waypoints={effectiveWaypoints}
+                    selectedId={selectedWaypointId}
+                    onSelect={setSelectedWaypointId}
+                    takeoffCoordinate={mission.takeoff_coordinate}
+                    landingCoordinate={mission.landing_coordinate}
+                    visibleInspectionIds={visibleInspectionIds}
+                  />
+                )}
+                {selectedFeature && (
+                  <PoiInfoPanel
+                    feature={selectedFeature}
+                    onClose={() => {
+                      setSelectedFeature(null);
+                      setSelectedWaypointId(null);
+                    }}
+                  />
+                )}
+              </>
+            }
           >
             {/* map controls toolbar - top center */}
             <MapControlsToolbar
@@ -439,75 +492,22 @@ export default function MissionMapPage() {
               inspectionSelected={selectedInspectionId !== null}
             />
 
-            {/* left side overlays */}
-            <div className="absolute top-3 left-3 z-10 flex flex-col gap-2 max-h-[calc(100%-80px)] overflow-y-auto">
-              {/* layers panel */}
-              <LayerPanel
-                layers={{
-                  runways: true,
-                  taxiways: true,
-                  obstacles: true,
-                  safetyZones: true,
-                  aglSystems: true,
-                  simplifiedTrajectory: false,
-                  trajectory: true,
-                  transitWaypoints: true,
-                  measurementWaypoints: true,
-                  path: true,
-                  takeoffLanding: true,
-                  cameraHeading: false,
-                  pathHeading: true,
-                }}
-                onToggle={() => {}}
-                hasWaypoints={hasFlightPlan}
-                hasSimplifiedTrajectory={false}
+            {/* right side overlays - leave room for maplibre nav control + bottom buttons */}
+            <div
+              className="absolute top-3 right-3 bottom-[200px] z-10 w-56 flex flex-col gap-2 overflow-y-auto"
+              style={{ scrollbarGutter: "stable" }}
+            >
+              <LegendPanel
+                missionStatus={mission.status}
+                hasTakeoff={!!mission.takeoff_coordinate}
+                hasLanding={!!mission.landing_coordinate}
+                className="w-full rounded-2xl border border-tv-border bg-tv-bg flex-shrink-0"
               />
 
-              {/* inspection select */}
-              <InspectionSelect
-                inspections={mission.inspections}
-                selectedId={selectedInspectionId}
-                onSelect={setSelectedInspectionId}
-              />
-
-              {/* waypoint list - only when inspection selected */}
-              {selectedInspectionId && (
-                <WaypointListPanel
-                  waypoints={effectiveWaypoints}
-                  selectedId={selectedWaypointId}
-                  onSelect={setSelectedWaypointId}
-                  takeoffCoordinate={mission.takeoff_coordinate}
-                  landingCoordinate={mission.landing_coordinate}
-                  visibleInspectionIds={visibleInspectionIds}
-                />
-              )}
-
-              {/* waypoint info or feature info - bottom left */}
-              {selectedWaypoint && (
-                <WaypointInfoPanel waypoint={selectedWaypoint} />
-              )}
-              {selectedFeature && !selectedWaypoint && (
-                <PoiInfoPanel
-                  feature={selectedFeature}
-                  onClose={() => setSelectedFeature(null)}
-                />
-              )}
-            </div>
-
-            {/* right side overlays */}
-            <LegendPanel
-              missionStatus={mission.status}
-              hasTakeoff={!!mission.takeoff_coordinate}
-              hasLanding={!!mission.landing_coordinate}
-            />
-
-            <div className="absolute top-14 right-3 z-10 flex flex-col gap-2">
-              {/* warnings panel - only when flight plan exists */}
               {hasFlightPlan && violations.length > 0 && (
                 <MapWarningsPanel violations={violations} />
               )}
 
-              {/* stats panel - only when flight plan exists */}
               {hasFlightPlan && (
                 <MapStatsPanel
                   flightPlan={flightPlan}
@@ -525,16 +525,8 @@ export default function MissionMapPage() {
             )}
           </AirportMap>
 
-          {/* bottom bar */}
-          <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between">
-            {/* left - terrain toggle */}
-            <TerrainToggle
-              mode={terrainMode}
-              onToggle={setTerrainMode}
-              inline
-            />
-
-            {/* center - modify parameters */}
+          {/* bottom-right controls */}
+          <div className="absolute bottom-2 right-2 z-10 flex items-center gap-2">
             <button
               onClick={() =>
                 navigate(`/operator-center/missions/${id}/configuration`)
@@ -544,21 +536,11 @@ export default function MissionMapPage() {
             >
               {t("map.modifyParameters")}
             </button>
-
-            {/* right - validate */}
-            <button
-              onClick={handleValidate}
-              disabled={validateDisabled}
-              title={validateTooltip}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${
-                validateDisabled
-                  ? "bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"
-                  : "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
-              }`}
-              data-testid="validate-btn"
-            >
-              {t("map.validate")}
-            </button>
+            <TerrainToggle
+              mode={terrainMode}
+              onToggle={setTerrainMode}
+              inline
+            />
           </div>
         </div>
       ) : (

@@ -17,12 +17,12 @@ export default function InspectionSelect({
 
   return (
     <div
-      className="rounded-2xl border border-tv-border bg-tv-surface min-w-[220px] flex-shrink-0"
+      className="rounded-2xl border border-tv-border bg-tv-bg min-w-[260px] flex-shrink-0"
       data-testid="inspection-select"
     >
       <div className="relative px-3 py-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-tv-text-primary">
+          <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border text-xs font-semibold text-tv-text-primary">
             {t("map.inspectionSelect")}
           </span>
         </div>
@@ -30,7 +30,7 @@ export default function InspectionSelect({
           <select
             value={selectedId ?? ""}
             onChange={(e) => onSelect(e.target.value || null)}
-            className="w-full appearance-none rounded-xl bg-tv-bg border border-tv-border px-3 py-1.5 pr-8 text-xs text-tv-text-primary outline-none focus:border-tv-accent"
+            className="w-full appearance-none rounded-xl bg-tv-surface border border-tv-border px-3 py-1.5 pr-8 text-xs text-tv-text-primary outline-none focus:border-tv-accent"
           >
             <option value="">{t("map.noInspectionSelected")}</option>
             {inspections.map((insp) => (

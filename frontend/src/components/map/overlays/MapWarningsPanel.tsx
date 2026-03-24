@@ -20,14 +20,14 @@ export default function MapWarningsPanel({
 
   return (
     <div
-      className="rounded-2xl border border-tv-border bg-tv-surface w-56 overflow-hidden"
+      className="rounded-2xl border border-tv-border bg-tv-bg w-full overflow-hidden flex-shrink-0"
       data-testid="map-warnings-panel"
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-tv-text-primary"
       >
-        <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">
+        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border">
           {t("map.warnings")}
         </span>
         <div className="flex items-center gap-1">

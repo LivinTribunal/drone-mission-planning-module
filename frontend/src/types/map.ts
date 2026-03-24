@@ -106,6 +106,8 @@ export interface AirportMapProps {
   takeoffCoordinate?: PointZ | null;
   landingCoordinate?: PointZ | null;
   inspectionIndexMap?: Record<string, number>;
+  onLayerChange?: (layers: MapLayerConfig) => void;
+  leftPanelChildren?: ReactNode;
 }
 
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {
