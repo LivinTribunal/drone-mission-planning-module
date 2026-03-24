@@ -108,6 +108,8 @@ export interface AirportMapProps {
   inspectionIndexMap?: Record<string, number>;
   onLayerChange?: (layers: MapLayerConfig) => void;
   leftPanelChildren?: ReactNode;
+  onPlaceTakeoff?: () => void;
+  onPlaceLanding?: () => void;
 }
 
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {

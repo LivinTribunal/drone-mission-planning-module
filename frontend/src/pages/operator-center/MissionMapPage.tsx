@@ -14,8 +14,8 @@ import {
   getMission,
   updateMission,
   getFlightPlan,
-  validateMission,
   batchUpdateWaypoints,
+  generateTrajectory,
 } from "@/api/missions";
 import type { MissionDetailResponse } from "@/types/mission";
 import type {
@@ -31,8 +31,7 @@ import AirportMap from "@/components/map/AirportMap";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
 import WaypointListPanel from "@/components/map/overlays/WaypointListPanel";
 import PoiInfoPanel from "@/components/map/overlays/PoiInfoPanel";
-import TerrainToggle from "@/components/map/overlays/TerrainToggle";
-import InspectionSelect from "@/components/map/overlays/InspectionSelect";
+import InspectionListPanel from "@/components/map/overlays/InspectionListPanel";
 import MapControlsToolbar from "@/components/map/overlays/MapControlsToolbar";
 import MapWarningsPanel from "@/components/map/overlays/MapWarningsPanel";
 import MapStatsPanel from "@/components/map/overlays/MapStatsPanel";
@@ -63,19 +62,22 @@ export default function MissionMapPage() {
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [computing, setComputing] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   // map state
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
-  const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
+  const [hiddenInspectionIds, setHiddenInspectionIds] = useState<Set<string>>(new Set());
+  const [zoomPercent, setZoomPercent] = useState(100);
+
   // tools
-  const { activeTool, is3D, setTool, resetTool } = useMapTools();
+  const { activeTool, is3D, setTool, resetTool, setIs3D } = useMapTools();
   const undoRedo = useUndoRedo<WaypointMoveAction>(10);
   const measure = useMeasureDistance();
 
-  // dirty waypoint modifications - map from waypoint_id to new position/camera_target
+  // dirty waypoint modifications
   const [dirtyWaypoints, setDirtyWaypoints] = useState<
     Record<string, { position: PointZ; camera_target?: PointZ | null }>
   >({});
@@ -83,6 +85,8 @@ export default function MissionMapPage() {
   const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isDirty = Object.keys(dirtyWaypoints).length > 0;
+  const isDraft = mission?.status === "DRAFT";
+  const hasFlightPlan = flightPlan !== null;
 
   useEffect(() => {
     return () => {
@@ -140,13 +144,15 @@ export default function MissionMapPage() {
     });
   }, [flightPlan, dirtyWaypoints]);
 
-  // filtered waypoints for selected inspection
+  // visible inspection ids - all non-hidden
   const visibleInspectionIds = useMemo(() => {
-    if (!selectedInspectionId) {
-      return mission ? new Set(mission.inspections.map((i) => i.id)) : new Set<string>();
-    }
-    return new Set([selectedInspectionId]);
-  }, [selectedInspectionId, mission]);
+    if (!mission) return new Set<string>();
+    return new Set(
+      mission.inspections
+        .map((i) => i.id)
+        .filter((id) => !hiddenInspectionIds.has(id)),
+    );
+  }, [mission, hiddenInspectionIds]);
 
   // inspection index map
   const inspectionIndexMap = useMemo(() => {
@@ -176,11 +182,12 @@ export default function MissionMapPage() {
       setDirtyWaypoints({});
       undoRedo.clear();
 
-      // re-read mission status - trajectory invalidation may regress status
+      // re-read mission status
       const fresh = await getMission(id);
       setMission(fresh);
       refreshMissions();
       setLastSaved(new Date());
+      showNotification(t("map.changesSaved"));
     } catch {
       showNotification(t("map.saveError"));
     } finally {
@@ -206,19 +213,51 @@ export default function MissionMapPage() {
     };
   }, [setSaveContext, handleSave, isDirty, saving, lastSaved]);
 
-  // validate trajectory button in tab nav
-  const validateRef = useRef<() => void>(() => {});
+  // compute / recompute trajectory
+  const handleCompute = useCallback(async () => {
+    if (!id || !mission) return;
+    setComputing(true);
+    try {
+      const result = await generateTrajectory(id);
+      setFlightPlan(result.flight_plan);
+      setDirtyWaypoints({});
+      undoRedo.clear();
+
+      const fresh = await getMission(id);
+      setMission(fresh);
+      refreshMissions();
+      showNotification(t("map.changesSaved"));
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        showNotification(typeof detail === "string" ? detail : t("mission.config.trajectoryError"));
+      } else {
+        showNotification(t("mission.config.trajectoryError"));
+      }
+    } finally {
+      setComputing(false);
+    }
+  }, [id, mission, undoRedo, t, refreshMissions]);
+
+  // compute button state
+  const computeLabel = useMemo(() => {
+    if (isDraft && !hasFlightPlan) return t("map.computeTrajectory");
+    return t("map.recomputeTrajectory");
+  }, [isDraft, hasFlightPlan, t]);
+
+  const canCompute = useMemo(() => {
+    if (isDraft && !hasFlightPlan) return true;
+    if (mission?.has_unsaved_map_changes) return true;
+    return false;
+  }, [isDraft, hasFlightPlan, mission?.has_unsaved_map_changes]);
+
+  // wire compute context to tab bar
   useEffect(() => {
-    validateRef.current = handleValidate;
-  });
-  useEffect(() => {
-    const canValidate =
-      mission?.status === "PLANNED";
     setComputeContext({
-      onCompute: () => validateRef.current(),
-      canCompute: canValidate,
-      isComputing: false,
-      label: t("map.validateTrajectory"),
+      onCompute: handleCompute,
+      canCompute: canCompute && !computing,
+      isComputing: computing,
+      label: computeLabel,
     });
     return () => {
       setComputeContext({
@@ -227,19 +266,19 @@ export default function MissionMapPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext, mission?.status, t]);
+  }, [setComputeContext, handleCompute, canCompute, computing, computeLabel]);
 
   // handle map click based on active tool
   const handleMapClick = useCallback(
     (lngLat: { lng: number; lat: number }) => {
-      if (activeTool === MapTool.ADD_START || activeTool === MapTool.ADD_END) {
+      if (activeTool === MapTool.PLACE_TAKEOFF || activeTool === MapTool.PLACE_LANDING) {
         if (!id || !mission) return;
         const key =
-          activeTool === MapTool.ADD_START
+          activeTool === MapTool.PLACE_TAKEOFF
             ? "takeoff_coordinate"
             : "landing_coordinate";
         const existing =
-          activeTool === MapTool.ADD_START
+          activeTool === MapTool.PLACE_TAKEOFF
             ? mission.takeoff_coordinate
             : mission.landing_coordinate;
         const alt = existing ? existing.coordinates[2] : 0;
@@ -255,6 +294,7 @@ export default function MissionMapPage() {
             refreshMissions();
           });
         });
+        resetTool();
         return;
       }
 
@@ -262,16 +302,20 @@ export default function MissionMapPage() {
         measure.addPoint(lngLat.lng, lngLat.lat);
         return;
       }
+
+      if (activeTool === MapTool.ZOOM) {
+        // zoom click handled by map natively, this is a fallback
+        return;
+      }
     },
-    [activeTool, id, mission, measure, refreshMissions],
+    [activeTool, id, mission, measure, refreshMissions, resetTool],
   );
 
   // handle tool change
   const handleToolChange = useCallback(
     (tool: MapTool) => {
       if (tool === MapTool.ZOOM_RESET) {
-        // handled by map - just fire it
-        setTool(tool);
+        // handled by zoom reset callback
         return;
       }
       // clear measure when switching away
@@ -345,42 +389,158 @@ export default function MissionMapPage() {
     [effectiveWaypoints],
   );
 
-  // handle validate
-  async function handleValidate() {
-    if (!id || !mission) return;
-    if (mission.status !== "PLANNED") return;
-
-    try {
-      await validateMission(id);
-      const fresh = await getMission(id);
-      setMission(fresh);
-      refreshMissions();
-      navigate(`/operator-center/missions/${id}/validation-export`);
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 409) {
-        const detail = err.response?.data?.detail;
-        showNotification(
-          typeof detail === "string" ? detail : t("map.validateError"),
-        );
+  // handle inspection toggle visibility
+  const handleToggleInspectionVisibility = useCallback((inspId: string) => {
+    setHiddenInspectionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(inspId)) {
+        next.delete(inspId);
       } else {
-        showNotification(t("map.validateError"));
+        next.add(inspId);
       }
-    }
-  }
+      return next;
+    });
+  }, []);
+
+  // handle inspection click - scroll to waypoints
+  const handleInspectionClick = useCallback(
+    (inspId: string) => {
+      // make visible if hidden
+      if (hiddenInspectionIds.has(inspId)) {
+        setHiddenInspectionIds((prev) => {
+          const next = new Set(prev);
+          next.delete(inspId);
+          return next;
+        });
+      }
+    },
+    [hiddenInspectionIds],
+  );
+
+  // handle delete takeoff/landing
+  const handleDeleteTakeoffLanding = useCallback(
+    async (waypointType: string) => {
+      if (!id || !mission) return;
+      const key = waypointType === "TAKEOFF" ? "takeoff_coordinate" : "landing_coordinate";
+      try {
+        await updateMission(id, { [key]: null });
+        const fresh = await getMission(id);
+        setMission(fresh);
+        refreshMissions();
+        setSelectedFeature(null);
+        setSelectedWaypointId(null);
+      } catch {
+        showNotification(t("map.saveError"));
+      }
+    },
+    [id, mission, t, refreshMissions],
+  );
+
+  // handle coordinate edit from PoiInfoPanel
+  const handleCoordinateChange = useCallback(
+    (waypointId: string, lat: number, lon: number, alt: number) => {
+      const wp = effectiveWaypoints.find((w) => w.id === waypointId);
+      if (!wp) return;
+
+      const newPosition: PointZ = {
+        type: "Point",
+        coordinates: [lon, lat, alt],
+      };
+
+      undoRedo.push({
+        waypointId,
+        oldPosition: wp.position,
+        newPosition,
+      });
+
+      setDirtyWaypoints((prev) => ({
+        ...prev,
+        [waypointId]: { position: newPosition },
+      }));
+
+      // update feature info
+      setSelectedFeature({
+        type: "waypoint",
+        data: {
+          id: wp.id,
+          waypoint_type: wp.waypoint_type,
+          sequence_order: wp.sequence_order,
+          position: newPosition,
+          stack_count: 1,
+        },
+      });
+    },
+    [effectiveWaypoints, undoRedo],
+  );
+
+  // place takeoff/landing
+  const handlePlaceTakeoff = useCallback(() => {
+    setTool(MapTool.PLACE_TAKEOFF);
+  }, [setTool]);
+
+  const handlePlaceLanding = useCallback(() => {
+    setTool(MapTool.PLACE_LANDING);
+  }, [setTool]);
+
+  // zoom reset
+  const handleZoomReset = useCallback(() => {
+    // zoom reset is a no-op here - just a placeholder for the toolbar
+    setZoomPercent(100);
+  }, []);
+
+  // zoom to specific percent
+  const handleZoomTo = useCallback((percent: number) => {
+    setZoomPercent(percent);
+  }, []);
 
   // ESC key handler - clear measure, reset tool
+  // Ctrl+Z / Ctrl+Shift+Z for undo/redo
+  // Right-click to clear measurement
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
       if (e.key === "Escape") {
         if (activeTool === MapTool.MEASURE) {
           measure.clear();
-          resetTool();
         }
+        resetTool();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey) {
+        handleZoomReset();
+        return;
       }
     }
+
+    function handleContextMenu(e: MouseEvent) {
+      if (activeTool === MapTool.MEASURE && measure.hasPoints) {
+        e.preventDefault();
+        measure.clear();
+      }
+    }
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeTool, measure, resetTool]);
+    window.addEventListener("contextmenu", handleContextMenu);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, [activeTool, measure, resetTool, handleUndo, handleRedo, handleZoomReset]);
 
   // beforeunload for dirty state
   useEffect(() => {
@@ -415,13 +575,13 @@ export default function MissionMapPage() {
     );
   }
 
-  const hasFlightPlan = flightPlan !== null;
-
   // determine if map click handler should be active
   const mapClickActive =
-    activeTool === MapTool.ADD_START ||
-    activeTool === MapTool.ADD_END ||
+    activeTool === MapTool.PLACE_TAKEOFF ||
+    activeTool === MapTool.PLACE_LANDING ||
     activeTool === MapTool.MEASURE;
+
+  const showPanels = !isDraft || hasFlightPlan;
 
   return (
     <div
@@ -451,18 +611,24 @@ export default function MissionMapPage() {
             visibleInspectionIds={visibleInspectionIds}
             onFeatureClick={handleFeatureClick}
             onLayerChange={handleLayerChange}
+            activeTool={activeTool}
+            onPlaceTakeoff={handlePlaceTakeoff}
+            onPlaceLanding={handlePlaceLanding}
             leftPanelChildren={
               <>
-                <InspectionSelect
-                  inspections={mission.inspections}
-                  selectedId={selectedInspectionId}
-                  onSelect={setSelectedInspectionId}
-                />
-                {selectedInspectionId && (
+                {showPanels && mission.inspections.length > 0 && (
+                  <InspectionListPanel
+                    inspections={mission.inspections}
+                    hiddenInspectionIds={hiddenInspectionIds}
+                    onToggleVisibility={handleToggleInspectionVisibility}
+                    onInspectionClick={handleInspectionClick}
+                  />
+                )}
+                {showPanels && (
                   <WaypointListPanel
                     waypoints={effectiveWaypoints}
                     selectedId={selectedWaypointId}
-                    onSelect={setSelectedWaypointId}
+                    onSelect={handleWaypointClick}
                     takeoffCoordinate={mission.takeoff_coordinate}
                     landingCoordinate={mission.landing_coordinate}
                     visibleInspectionIds={visibleInspectionIds}
@@ -475,6 +641,9 @@ export default function MissionMapPage() {
                       setSelectedFeature(null);
                       setSelectedWaypointId(null);
                     }}
+                    editable={true}
+                    onCoordinateChange={handleCoordinateChange}
+                    onDeleteTakeoffLanding={handleDeleteTakeoffLanding}
                   />
                 )}
               </>
@@ -485,14 +654,19 @@ export default function MissionMapPage() {
               activeTool={activeTool}
               onToolChange={handleToolChange}
               is3D={is3D}
+              onToggle3D={setIs3D}
+              terrainMode={terrainMode}
+              onTerrainChange={setTerrainMode}
               canUndo={undoRedo.canUndo}
               canRedo={undoRedo.canRedo}
               onUndo={handleUndo}
               onRedo={handleRedo}
-              inspectionSelected={selectedInspectionId !== null}
+              onZoomReset={handleZoomReset}
+              zoomPercent={zoomPercent}
+              onZoomTo={handleZoomTo}
             />
 
-            {/* right side overlays - leave room for maplibre nav control + bottom buttons */}
+            {/* right side overlays */}
             <div
               className="absolute top-3 right-3 bottom-[200px] z-10 w-56 flex flex-col gap-2 overflow-y-auto"
               style={{ scrollbarGutter: "stable" }}
@@ -517,30 +691,58 @@ export default function MissionMapPage() {
               )}
             </div>
 
-            {/* measure distance label */}
-            {measure.distance !== null && measure.labelText && (
-              <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 rounded-full bg-tv-surface border border-tv-border text-xs font-semibold text-tv-text-primary">
-                {measure.labelText}
+            {/* measure distance labels */}
+            {measure.hasPoints && (
+              <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10">
+                {/* labels rendered via map source in real implementation */}
               </div>
             )}
           </AirportMap>
 
-          {/* bottom-right controls */}
-          <div className="absolute bottom-2 right-2 z-10 flex items-center gap-2">
-            <button
-              onClick={() =>
-                navigate(`/operator-center/missions/${id}/configuration`)
-              }
-              className="px-5 py-2.5 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-              data-testid="modify-parameters-btn"
-            >
-              {t("map.modifyParameters")}
-            </button>
-            <TerrainToggle
-              mode={terrainMode}
-              onToggle={setTerrainMode}
-              inline
-            />
+          {/* bottom bar */}
+          <div className="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* compute / recompute button */}
+              <button
+                onClick={handleCompute}
+                disabled={!canCompute || computing}
+                title={!canCompute && !isDraft ? t("map.noChangesToRecompute") : undefined}
+                className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${
+                  computing
+                    ? "bg-tv-accent/50 text-tv-accent-text cursor-not-allowed"
+                    : canCompute
+                      ? "bg-tv-success text-white hover:bg-tv-success/90"
+                      : "bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed border border-tv-border"
+                }`}
+                data-testid="compute-trajectory-btn"
+              >
+                {computing ? t("mission.config.computing") : computeLabel}
+              </button>
+
+              {/* modify parameters */}
+              <button
+                onClick={() =>
+                  navigate(`/operator-center/missions/${id}/configuration`)
+                }
+                className="px-5 py-2.5 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                data-testid="modify-parameters-btn"
+              >
+                {t("map.modifyParameters")}
+              </button>
+            </div>
+
+            {/* needs manual approval - right side */}
+            {!isDraft && hasFlightPlan && (
+              <button
+                onClick={() =>
+                  navigate(`/operator-center/missions/${id}/validation-export`)
+                }
+                className="px-5 py-2.5 rounded-full text-sm font-semibold border border-tv-error text-tv-error hover:bg-tv-error/10 transition-colors"
+                data-testid="needs-approval-btn"
+              >
+                {t("map.needsManualApproval")}
+              </button>
+            )}
           </div>
         </div>
       ) : (

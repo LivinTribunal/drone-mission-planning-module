@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { AirportMapProps, MapFeature, MapLayerConfig } from "@/types/map";
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
+import { MapTool } from "@/hooks/useMapTools";
 import { registerAllMapImages } from "./layers/mapImages";
 import {
   addSurfaceLayers,
@@ -53,7 +54,6 @@ import {
 import LayerPanel from "./overlays/LayerPanel";
 import LegendPanel from "./overlays/LegendPanel";
 import PoiInfoPanel from "./overlays/PoiInfoPanel";
-import TerrainToggle from "./overlays/TerrainToggle";
 import MapHelpPanel from "./overlays/MapHelpPanel";
 import WaypointListPanel from "./overlays/WaypointListPanel";
 
@@ -97,7 +97,6 @@ function makeMapStyle(): maplibregl.StyleSpecification {
 }
 
 // map layer id groups keyed by layer config key
-// trajectory is a virtual parent with no own layers
 const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
   simplifiedTrajectory: getSimplifiedTrajectoryLayerIds(),
   runways: [
@@ -143,6 +142,17 @@ const POINTER_LAYERS = [
   WAYPOINT_HOVER_LAYER,
 ];
 
+// cursor styles per active tool
+const TOOL_CURSORS: Record<string, string> = {
+  [MapTool.SELECT]: "",
+  [MapTool.PAN]: "grab",
+  [MapTool.MOVE_WAYPOINT]: "crosshair",
+  [MapTool.MEASURE]: "crosshair",
+  [MapTool.ZOOM]: "zoom-in",
+  [MapTool.PLACE_TAKEOFF]: "crosshair",
+  [MapTool.PLACE_LANDING]: "crosshair",
+};
+
 export default function AirportMap({
   airport,
   layers: layersProp,
@@ -150,7 +160,7 @@ export default function AirportMap({
   showLayerPanel = true,
   showLegend = true,
   showPoiInfo = true,
-  showTerrainToggle = true,
+  showTerrainToggle: _showTerrainToggle = true,
   showWaypointList = true,
   simplifiedTrajectory = false,
   onFeatureClick,
@@ -168,7 +178,10 @@ export default function AirportMap({
   visibleInspectionIds,
   onLayerChange,
   leftPanelChildren,
-}: AirportMapProps) {
+  activeTool,
+  onPlaceTakeoff,
+  onPlaceLanding,
+}: AirportMapProps & { activeTool?: MapTool }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const layersAddedRef = useRef(false);
@@ -204,7 +217,15 @@ export default function AirportMap({
     null,
   );
 
-  // initialize map
+  // apply cursor based on active tool
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const cursor = TOOL_CURSORS[activeTool ?? MapTool.SELECT] ?? "";
+    map.getCanvas().style.cursor = cursor;
+  }, [activeTool]);
+
+  // initialize map - no navigation control (removed old zoom/compass)
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -218,8 +239,6 @@ export default function AirportMap({
       interactive,
       attributionControl: false,
     });
-
-    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "bottom-right");
 
     mapRef.current = map;
 
@@ -377,16 +396,22 @@ export default function AirportMap({
     }
   }, [selectedWaypointId]);
 
-  // cursor and hover effects
+  // cursor and hover effects - only for SELECT tool
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !interactive) return;
 
     function handleMouseEnter() {
-      if (map) map.getCanvas().style.cursor = "pointer";
+      const tool = activeTool ?? MapTool.SELECT;
+      if (tool === MapTool.SELECT && map) {
+        map.getCanvas().style.cursor = "pointer";
+      }
     }
     function handleMouseLeave() {
-      if (map) map.getCanvas().style.cursor = "";
+      const tool = activeTool ?? MapTool.SELECT;
+      if (map) {
+        map.getCanvas().style.cursor = TOOL_CURSORS[tool] ?? "";
+      }
     }
 
     function bindCursor() {
@@ -420,7 +445,7 @@ export default function AirportMap({
       }
       map.off("load", bindCursor);
     };
-  }, [interactive]);
+  }, [interactive, activeTool]);
 
   // click handler
   useEffect(() => {
@@ -435,6 +460,10 @@ export default function AirportMap({
         onMapClick({ lng: e.lngLat.lng, lat: e.lngLat.lat });
         return;
       }
+
+      // only SELECT tool allows feature picking
+      const tool = activeTool ?? MapTool.SELECT;
+      if (tool !== MapTool.SELECT) return;
 
       // query all interactive layers + waypoint layers in one pass
       const waypointQueryLayers = [
@@ -539,7 +568,7 @@ export default function AirportMap({
     return () => {
       map.off("click", handleClick);
     };
-  }, [airport, interactive, onFeatureClick, onWaypointClick, selectedWaypointId, onMapClick]);
+  }, [airport, interactive, onFeatureClick, onWaypointClick, selectedWaypointId, onMapClick, activeTool]);
 
   // sync layer visibility
   useEffect(() => {
@@ -698,10 +727,6 @@ export default function AirportMap({
 
     const PAN_STEP = 80;
     const keyMap: Record<string, [number, number]> = {
-      w: [0, -PAN_STEP],
-      a: [-PAN_STEP, 0],
-      s: [0, PAN_STEP],
-      d: [PAN_STEP, 0],
       ArrowUp: [0, -PAN_STEP],
       ArrowLeft: [-PAN_STEP, 0],
       ArrowDown: [0, PAN_STEP],
@@ -721,6 +746,28 @@ export default function AirportMap({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [interactive]);
+
+  // pan tool: grab/grabbing cursor
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !interactive) return;
+    const tool = activeTool ?? MapTool.SELECT;
+    if (tool !== MapTool.PAN) return;
+
+    function handleMouseDown() {
+      if (map) map.getCanvas().style.cursor = "grabbing";
+    }
+    function handleMouseUp() {
+      if (map) map.getCanvas().style.cursor = "grab";
+    }
+
+    map.getCanvas().addEventListener("mousedown", handleMouseDown);
+    map.getCanvas().addEventListener("mouseup", handleMouseUp);
+    return () => {
+      map.getCanvas().removeEventListener("mousedown", handleMouseDown);
+      map.getCanvas().removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [interactive, activeTool]);
 
   return (
     <div
@@ -742,10 +789,14 @@ export default function AirportMap({
               onToggle={handleLayerToggle}
               hasWaypoints={!!(waypoints?.length || takeoffCoordinate || landingCoordinate)}
               hasSimplifiedTrajectory={!!(waypoints?.length)}
+              hasTakeoff={!!takeoffCoordinate}
+              hasLanding={!!landingCoordinate}
+              onPlaceTakeoff={onPlaceTakeoff}
+              onPlaceLanding={onPlaceLanding}
             />
           )}
           {leftPanelChildren}
-          {showWaypointList && layerConfig.trajectory && (waypoints?.length || takeoffCoordinate || landingCoordinate) ? (
+          {showWaypointList && layerConfig.trajectory && !layerConfig.simplifiedTrajectory && (waypoints?.length || takeoffCoordinate || landingCoordinate) ? (
             <WaypointListPanel
               waypoints={waypoints ?? []}
               selectedId={selectedWaypointId ?? null}
@@ -778,11 +829,6 @@ export default function AirportMap({
       <div className="absolute bottom-3 left-3 z-10">
         <MapHelpPanel />
       </div>
-
-      {/* bottom-right: terrain toggle */}
-      {showTerrainToggle && (
-        <TerrainToggle mode={terrainMode} onToggle={handleTerrainChange} />
-      )}
 
       {children}
     </div>

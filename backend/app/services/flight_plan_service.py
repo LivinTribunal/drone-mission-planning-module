@@ -149,6 +149,7 @@ def batch_update_waypoints(
             wp.camera_target = geojson_to_ewkt({"type": "Point", "coordinates": ct_coords})
 
     mission.invalidate_trajectory()
+    mission.has_unsaved_map_changes = True
     db.commit()
 
     return get_flight_plan(db, mission_id)

@@ -21,26 +21,48 @@ export default function MapHelpPanel() {
     return (
       <button
         onClick={() => setExpanded(true)}
-        className="flex h-8 w-8 items-center justify-center rounded-full border border-tv-border bg-tv-surface text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
-        aria-label={t("dashboard.mapHelpTitle")}
+        className="flex items-center gap-1.5 rounded-full border border-tv-border bg-tv-surface px-3 py-1.5 text-xs text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+        aria-label={t("map.help.title")}
         data-testid="map-help-btn"
       >
-        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-          <path
-            fillRule="evenodd"
-            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-            clipRule="evenodd"
-          />
-        </svg>
+        <span className="font-medium">?</span>
+        <span>{t("map.help.controls")}</span>
       </button>
     );
   }
 
+  const shortcuts = [
+    { key: "S", desc: t("map.help.shortcutSelect") },
+    { key: "P", desc: t("map.help.shortcutPan") },
+    { key: "W", desc: t("map.help.shortcutMove") },
+    { key: "M", desc: t("map.help.shortcutMeasure") },
+    { key: "Z", desc: t("map.help.shortcutZoom") },
+    { key: "R", desc: t("map.help.shortcutReset") },
+    { key: "Ctrl+Z", desc: t("map.tools.undo") },
+    { key: "Ctrl+Shift+Z", desc: t("map.tools.redo") },
+    { key: "Esc", desc: t("map.help.shortcutEscape") },
+    { key: t("map.help.rightClick"), desc: t("map.help.shortcutClearMeasure") },
+    { key: t("map.help.middleMouse"), desc: t("map.help.shortcutTilt") },
+    { key: t("map.help.scroll"), desc: t("map.help.shortcutScroll") },
+  ];
+
+  const tools = [
+    { name: t("map.tools.select"), desc: t("map.help.descSelect") },
+    { name: t("map.tools.pan"), desc: t("map.help.descPan") },
+    { name: t("map.tools.moveWaypoint"), desc: t("map.help.descMove") },
+    { name: t("map.tools.measure"), desc: t("map.help.descMeasure") },
+    { name: t("map.tools.zoom"), desc: t("map.help.descZoom") },
+  ];
+
   return (
-    <div ref={ref} className="w-56 rounded-2xl border border-tv-border bg-tv-surface p-3">
+    <div
+      ref={ref}
+      className="w-72 rounded-2xl border border-tv-border bg-tv-surface p-3"
+      data-testid="map-help-panel"
+    >
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold text-tv-text-primary">
-          {t("dashboard.mapHelpTitle")}
+          {t("map.help.title")}
         </span>
         <button
           onClick={() => setExpanded(false)}
@@ -56,12 +78,38 @@ export default function MapHelpPanel() {
           </svg>
         </button>
       </div>
-      <ul className="space-y-1.5 text-xs text-tv-text-secondary">
-        <li>{t("dashboard.mapHelpDrag")}</li>
-        <li>{t("dashboard.mapHelpRotate")}</li>
-        <li>{t("dashboard.mapHelpClick")}</li>
-        <li>{t("dashboard.mapHelpWasd")}</li>
-      </ul>
+
+      {/* keyboard shortcuts */}
+      <div className="mb-2">
+        <div className="text-xs font-semibold text-tv-text-secondary mb-1">
+          {t("map.help.keyboardShortcuts")}
+        </div>
+        <div className="space-y-0.5">
+          {shortcuts.map(({ key, desc }) => (
+            <div key={key} className="flex items-center gap-2 text-xs">
+              <kbd className="rounded px-1.5 py-0.5 bg-tv-bg border border-tv-border text-tv-text-primary font-mono text-[10px] min-w-[2rem] text-center">
+                {key}
+              </kbd>
+              <span className="text-tv-text-secondary">{desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* tool descriptions */}
+      <div>
+        <div className="text-xs font-semibold text-tv-text-secondary mb-1">
+          {t("map.help.toolDescriptions")}
+        </div>
+        <div className="space-y-1">
+          {tools.map(({ name, desc }) => (
+            <div key={name} className="text-xs">
+              <span className="font-medium text-tv-text-primary">{name}:</span>{" "}
+              <span className="text-tv-text-secondary">{desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

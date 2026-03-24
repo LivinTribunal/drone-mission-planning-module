@@ -15,6 +15,7 @@ export interface MissionResponse {
   default_altitude_offset: number | null;
   takeoff_coordinate: PointZ | null;
   landing_coordinate: PointZ | null;
+  has_unsaved_map_changes: boolean;
 }
 
 export interface MissionDetailResponse extends MissionResponse {

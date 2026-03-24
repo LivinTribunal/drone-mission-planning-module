@@ -33,6 +33,7 @@ function makeMission(
     default_altitude_offset: null,
     takeoff_coordinate: null,
     landing_coordinate: null,
+    has_unsaved_map_changes: false,
     inspections: [],
   };
 }
