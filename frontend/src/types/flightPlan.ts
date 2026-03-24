@@ -46,3 +46,13 @@ export interface FlightPlanResponse {
 export interface GenerateTrajectoryResponse {
   flight_plan: FlightPlanResponse;
 }
+
+export interface WaypointPositionUpdate {
+  waypoint_id: string;
+  position: PointZ;
+  camera_target?: PointZ | null;
+}
+
+export interface WaypointBatchUpdateRequest {
+  updates: WaypointPositionUpdate[];
+}

@@ -2,7 +2,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import DomainError, NotFoundError
 from app.models.flight_plan import (
     FlightPlan,
     ValidationResult,
@@ -10,6 +10,7 @@ from app.models.flight_plan import (
     Waypoint,
 )
 from app.models.mission import Mission
+from app.schemas.flight_plan import WaypointPositionUpdate
 from app.services.geometry_converter import geojson_to_ewkt
 from app.services.trajectory_types import WaypointData
 
@@ -114,3 +115,40 @@ def get_flight_plan(db: Session, mission_id: UUID) -> FlightPlan:
         raise NotFoundError("flight plan not found")
 
     return fp
+
+
+def batch_update_waypoints(
+    db: Session, mission_id: UUID, updates: list[WaypointPositionUpdate]
+) -> FlightPlan:
+    """batch update waypoint positions and camera targets."""
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        raise NotFoundError("mission not found")
+
+    if mission.status not in ("DRAFT", "PLANNED"):
+        raise DomainError("cannot modify waypoints in current status", status_code=409)
+
+    fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission_id).first()
+    if not fp:
+        raise NotFoundError("flight plan not found")
+
+    for upd in updates:
+        wp = (
+            db.query(Waypoint)
+            .filter(Waypoint.id == upd.waypoint_id, Waypoint.flight_plan_id == fp.id)
+            .first()
+        )
+        if not wp:
+            raise NotFoundError(f"waypoint {upd.waypoint_id} not found")
+
+        coords = upd.position.coordinates
+        wp.position = geojson_to_ewkt({"type": "Point", "coordinates": coords})
+
+        if upd.camera_target is not None:
+            ct_coords = upd.camera_target.coordinates
+            wp.camera_target = geojson_to_ewkt({"type": "Point", "coordinates": ct_coords})
+
+    mission.invalidate_trajectory()
+    db.commit()
+
+    return get_flight_plan(db, mission_id)

@@ -166,6 +166,8 @@ export default function AirportMap({
   landingCoordinate,
   inspectionIndexMap,
   visibleInspectionIds,
+  onLayerChange,
+  leftPanelChildren,
 }: AirportMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -185,6 +187,10 @@ export default function AirportMap({
   });
   const layerConfigRef = useRef(layerConfig);
   layerConfigRef.current = layerConfig;
+
+  useEffect(() => {
+    onLayerChange?.(layerConfig);
+  }, [layerConfig, onLayerChange]);
   const visibleInspectionIdsRef = useRef(visibleInspectionIds);
   visibleInspectionIdsRef.current = visibleInspectionIds;
   const [internalTerrainMode, setInternalTerrainMode] = useState<"map" | "satellite">(
@@ -540,35 +546,22 @@ export default function AirportMap({
     const map = mapRef.current;
     if (!map) return;
 
-    function syncVisibility() {
-      if (!map) return;
-      for (const [key, layerIds] of Object.entries(layerGroupMap)) {
-        const visible = layerConfig[key as keyof MapLayerConfig];
-        for (const layerId of layerIds) {
-          try {
-            if (map.getLayer(layerId)) {
-              map.setLayoutProperty(
-                layerId,
-                "visibility",
-                visible ? "visible" : "none",
-              );
-            }
-          } catch {
-            // layer may not exist yet
+    for (const [key, layerIds] of Object.entries(layerGroupMap)) {
+      const visible = layerConfig[key as keyof MapLayerConfig];
+      for (const layerId of layerIds) {
+        try {
+          if (map.getLayer(layerId)) {
+            map.setLayoutProperty(
+              layerId,
+              "visibility",
+              visible ? "visible" : "none",
+            );
           }
+        } catch {
+          // layer may not exist yet
         }
       }
     }
-
-    if (map.isStyleLoaded()) {
-      syncVisibility();
-    } else {
-      map.on("load", syncVisibility);
-    }
-
-    return () => {
-      map.off("load", syncVisibility);
-    };
   }, [layerConfig]);
 
   // sync inspection visibility filters
@@ -738,35 +731,38 @@ export default function AirportMap({
       <div ref={containerRef} className="h-full w-full" />
 
       {/* top-left: layers, waypoints, poi info */}
-      <div
-        className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-[220px] overflow-y-auto"
-        style={{ maxHeight: "calc(100% - 68px)" }}
-      >
-        {showLayerPanel && (
-          <LayerPanel
-            layers={layerConfig}
-            onToggle={handleLayerToggle}
-            hasWaypoints={!!(waypoints?.length || takeoffCoordinate || landingCoordinate)}
-            hasSimplifiedTrajectory={!!(waypoints?.length)}
-          />
-        )}
-        {showWaypointList && layerConfig.trajectory && (waypoints?.length || takeoffCoordinate || landingCoordinate) ? (
-          <WaypointListPanel
-            waypoints={waypoints ?? []}
-            selectedId={selectedWaypointId ?? null}
-            onSelect={onWaypointClick ?? (() => {})}
-            takeoffCoordinate={takeoffCoordinate}
-            landingCoordinate={landingCoordinate}
-            visibleInspectionIds={visibleInspectionIds}
-          />
-        ) : null}
-        {showPoiInfo && (
-          <PoiInfoPanel
-            feature={selectedFeature}
-            onClose={() => setSelectedFeature(null)}
-          />
-        )}
-      </div>
+      {(showLayerPanel || showWaypointList || showPoiInfo || leftPanelChildren) && (
+        <div
+          className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-[260px] overflow-y-auto"
+          style={{ maxHeight: "calc(100% - 68px)" }}
+        >
+          {showLayerPanel && (
+            <LayerPanel
+              layers={layerConfig}
+              onToggle={handleLayerToggle}
+              hasWaypoints={!!(waypoints?.length || takeoffCoordinate || landingCoordinate)}
+              hasSimplifiedTrajectory={!!(waypoints?.length)}
+            />
+          )}
+          {leftPanelChildren}
+          {showWaypointList && layerConfig.trajectory && (waypoints?.length || takeoffCoordinate || landingCoordinate) ? (
+            <WaypointListPanel
+              waypoints={waypoints ?? []}
+              selectedId={selectedWaypointId ?? null}
+              onSelect={onWaypointClick ?? (() => {})}
+              takeoffCoordinate={takeoffCoordinate}
+              landingCoordinate={landingCoordinate}
+              visibleInspectionIds={visibleInspectionIds}
+            />
+          ) : null}
+          {showPoiInfo && (
+            <PoiInfoPanel
+              feature={selectedFeature}
+              onClose={() => setSelectedFeature(null)}
+            />
+          )}
+        </div>
+      )}
 
       {/* top-right: legend */}
       {showLegend && (
