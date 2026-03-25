@@ -288,12 +288,16 @@ export default function MissionMapPage() {
             type: "Point" as const,
             coordinates: [lngLat.lng, lngLat.lat, alt],
           },
-        }).then(() => {
-          getMission(id).then((fresh) => {
-            setMission(fresh);
-            refreshMissions();
+        })
+          .then(() => {
+            getMission(id).then((fresh) => {
+              setMission(fresh);
+              refreshMissions();
+            });
+          })
+          .catch(() => {
+            showNotification(t("map.saveError"));
           });
-        });
         resetTool();
         return;
       }
