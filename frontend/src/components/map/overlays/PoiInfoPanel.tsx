@@ -295,9 +295,9 @@ function EditableCoordRows({
     <div className="text-xs">
       <div className="text-tv-text-muted">{label}:</div>
       <div className="mt-0.5 pl-2 space-y-0.5">
-        {renderField("lat", "Lat", lat, 6)}
-        {renderField("lon", "Lon", lon, 6)}
-        {renderField("alt", "Alt", alt, 1)}
+        {renderField("lat", t("map.coordinates.lat"), lat, 6)}
+        {renderField("lon", t("map.coordinates.lon"), lon, 6)}
+        {renderField("alt", t("map.coordinates.alt"), alt, 1)}
       </div>
     </div>
   );

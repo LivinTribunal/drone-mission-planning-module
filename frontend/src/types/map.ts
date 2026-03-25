@@ -115,6 +115,11 @@ export interface AirportMapProps {
     lines: GeoJSON.FeatureCollection;
     labels: GeoJSON.FeatureCollection;
   };
+  onMeasureClear?: () => void;
+  onMeasureMouseMove?: (lng: number, lat: number) => void;
+  onWaypointDrag?: (waypointId: string, newPosition: [number, number, number]) => void;
+  zoomPercent?: number;
+  onZoomChange?: (percent: number) => void;
 }
 
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {

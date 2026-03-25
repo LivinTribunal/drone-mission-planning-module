@@ -181,6 +181,11 @@ export default function AirportMap({
   onPlaceTakeoff,
   onPlaceLanding,
   measureData,
+  onMeasureClear,
+  onMeasureMouseMove,
+  onWaypointDrag,
+  zoomPercent,
+  onZoomChange,
 }: AirportMapProps & { activeTool?: MapTool }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -224,6 +229,164 @@ export default function AirportMap({
     const cursor = TOOL_CURSORS[activeTool ?? MapTool.SELECT] ?? "";
     map.getCanvas().style.cursor = cursor;
   }, [activeTool]);
+
+  // enable/disable dragPan based on active tool
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !interactive) return;
+    const tool = activeTool ?? MapTool.SELECT;
+    if (tool === MapTool.PAN) {
+      map.dragPan.enable();
+    } else {
+      map.dragPan.disable();
+    }
+    return () => {
+      if (map.dragPan) map.dragPan.enable();
+    };
+  }, [activeTool, interactive]);
+
+  // measure tool: contextmenu to clear, mousemove for cursor line
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const tool = activeTool ?? MapTool.SELECT;
+
+    if (tool !== MapTool.MEASURE) {
+      onMeasureClear?.();
+      return;
+    }
+
+    function handleContextMenu(e: maplibregl.MapMouseEvent) {
+      e.preventDefault();
+      onMeasureClear?.();
+    }
+
+    function handleMouseMove(e: maplibregl.MapMouseEvent) {
+      onMeasureMouseMove?.(e.lngLat.lng, e.lngLat.lat);
+    }
+
+    map.on("contextmenu", handleContextMenu);
+    map.on("mousemove", handleMouseMove);
+    return () => {
+      map.off("contextmenu", handleContextMenu);
+      map.off("mousemove", handleMouseMove);
+    };
+  }, [activeTool, onMeasureClear, onMeasureMouseMove]);
+
+  // move waypoint tool: drag behavior
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !interactive) return;
+    const tool = activeTool ?? MapTool.SELECT;
+    if (tool !== MapTool.MOVE_WAYPOINT) return;
+
+    const dragState = { waypointId: "", originalAlt: 0, dragging: false };
+
+    const waypointQueryLayers = [
+      WAYPOINT_TRANSIT_CIRCLE_LAYER,
+      WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
+      WAYPOINT_TAKEOFF_LAYER,
+      WAYPOINT_LANDING_LAYER,
+      WAYPOINT_HOVER_LAYER,
+    ];
+
+    function handleMouseDown(e: maplibregl.MapMouseEvent) {
+      if (!map) return;
+      const layers = waypointQueryLayers.filter((id) => {
+        try { return map.getLayer(id); } catch { return false; }
+      });
+      if (!layers.length) return;
+      const features = map.queryRenderedFeatures(e.point, { layers });
+      if (!features.length) return;
+      const wpId = String(features[0].properties?.id ?? "");
+      if (!wpId) return;
+      const coords = features[0].geometry && "coordinates" in features[0].geometry
+        ? (features[0].geometry as GeoJSON.Point).coordinates
+        : [0, 0, 0];
+      dragState.waypointId = wpId;
+      dragState.originalAlt = coords[2] ?? 0;
+      dragState.dragging = true;
+      map.getCanvas().style.cursor = "grabbing";
+      e.preventDefault();
+    }
+
+    function handleMouseMove() {
+      // drag continues - visual feedback happens on mouseup
+    }
+
+    function handleMouseUp(e: maplibregl.MapMouseEvent) {
+      if (!dragState.dragging || !map) return;
+      dragState.dragging = false;
+      map.getCanvas().style.cursor = "crosshair";
+      onWaypointDrag?.(
+        dragState.waypointId,
+        [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt],
+      );
+      dragState.waypointId = "";
+    }
+
+    map.on("mousedown", handleMouseDown);
+    map.on("mousemove", handleMouseMove);
+    map.on("mouseup", handleMouseUp);
+    return () => {
+      map.off("mousedown", handleMouseDown);
+      map.off("mousemove", handleMouseMove);
+      map.off("mouseup", handleMouseUp);
+    };
+  }, [activeTool, interactive, onWaypointDrag]);
+
+  // zoom tool: click to zoom in/out, sync zoomPercent
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !interactive) return;
+    const tool = activeTool ?? MapTool.SELECT;
+    if (tool !== MapTool.ZOOM) return;
+
+    function handleZoomClick() {
+      if (!map) return;
+      map.zoomTo(map.getZoom() + 1, { duration: 300 });
+    }
+
+    function handleZoomContext(e: maplibregl.MapMouseEvent) {
+      e.preventDefault();
+      if (!map) return;
+      map.zoomTo(map.getZoom() - 1, { duration: 300 });
+    }
+
+    map.on("click", handleZoomClick);
+    map.on("contextmenu", handleZoomContext);
+    return () => {
+      map.off("click", handleZoomClick);
+      map.off("contextmenu", handleZoomContext);
+    };
+  }, [activeTool, interactive]);
+
+  // sync zoomPercent from parent to map zoom level
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || zoomPercent === undefined) return;
+    // 100% = zoom 14.5 (initial), range ~10-20
+    const targetZoom = 14.5 * (zoomPercent / 100);
+    if (Math.abs(map.getZoom() - targetZoom) > 0.1) {
+      map.zoomTo(targetZoom, { duration: 300 });
+    }
+  }, [zoomPercent]);
+
+  // report map zoom changes back to parent
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !onZoomChange) return;
+
+    function handleZoomEnd() {
+      if (!map) return;
+      const currentZoom = map.getZoom();
+      const percent = Math.round((currentZoom / 14.5) * 100);
+      onZoomChange?.(percent);
+    }
+
+    map.on("zoomend", handleZoomEnd);
+    return () => { map.off("zoomend", handleZoomEnd); };
+  }, [onZoomChange]);
 
   // initialize map - no navigation control (removed old zoom/compass)
   useEffect(() => {
@@ -871,8 +1034,8 @@ export default function AirportMap({
       {/* top-left: layers, waypoints, poi info */}
       {(showLayerPanel || showWaypointList || showPoiInfo || leftPanelChildren) && (
         <div
-          className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-[260px] overflow-y-auto"
-          style={{ maxHeight: "calc(100% - 68px)" }}
+          className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-[260px] overflow-y-auto pr-1"
+          style={{ maxHeight: "calc(100% - 68px)", scrollbarGutter: "stable" }}
         >
           {showLayerPanel && (
             <LayerPanel

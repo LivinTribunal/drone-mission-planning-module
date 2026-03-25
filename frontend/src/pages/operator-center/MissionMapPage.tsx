@@ -74,7 +74,14 @@ export default function MissionMapPage() {
 
   // tools
   const { activeTool, is3D, setTool, resetTool, setIs3D } = useMapTools();
-  const undoRedo = useUndoRedo<WaypointMoveAction>(10);
+  const {
+    push: pushUndo,
+    undo: undoFn,
+    redo: redoFn,
+    clear: clearHistory,
+    canUndo,
+    canRedo,
+  } = useUndoRedo<WaypointMoveAction>(10);
   const measure = useMeasureDistance();
 
   // dirty waypoint modifications
@@ -180,7 +187,7 @@ export default function MissionMapPage() {
       const updatedFp = await batchUpdateWaypoints(id, updates);
       setFlightPlan(updatedFp);
       setDirtyWaypoints({});
-      undoRedo.clear();
+      clearHistory();
 
       // re-read mission status
       const fresh = await getMission(id);
@@ -193,7 +200,7 @@ export default function MissionMapPage() {
     } finally {
       setSaving(false);
     }
-  }, [id, isDirty, dirtyWaypoints, undoRedo, t, refreshMissions]);
+  }, [id, isDirty, dirtyWaypoints, clearHistory, t, refreshMissions]);
 
   // wire save context
   useEffect(() => {
@@ -221,7 +228,7 @@ export default function MissionMapPage() {
       const result = await generateTrajectory(id);
       setFlightPlan(result.flight_plan);
       setDirtyWaypoints({});
-      undoRedo.clear();
+      clearHistory();
 
       const fresh = await getMission(id);
       setMission(fresh);
@@ -237,19 +244,24 @@ export default function MissionMapPage() {
     } finally {
       setComputing(false);
     }
-  }, [id, mission, undoRedo, t, refreshMissions]);
+  }, [id, mission, clearHistory, t, refreshMissions]);
 
   // compute button state
   const computeLabel = useMemo(() => {
-    if (isDraft && !hasFlightPlan) return t("map.computeTrajectory");
+    if (!hasFlightPlan) return t("map.computeTrajectory");
     return t("map.recomputeTrajectory");
-  }, [isDraft, hasFlightPlan, t]);
+  }, [hasFlightPlan, t]);
 
   const canCompute = useMemo(() => {
-    if (isDraft && !hasFlightPlan) return true;
-    if (mission?.has_unsaved_map_changes) return true;
+    if (!hasFlightPlan) return true;
+    if (isDirty || mission?.has_unsaved_map_changes) return true;
     return false;
-  }, [isDraft, hasFlightPlan, mission?.has_unsaved_map_changes]);
+  }, [hasFlightPlan, isDirty, mission?.has_unsaved_map_changes]);
+
+  // show "needs manual approval" when planned, flight plan exists, and nothing dirty
+  const showApprovalButton = useMemo(() => {
+    return !isDraft && hasFlightPlan && !isDirty && !mission?.has_unsaved_map_changes;
+  }, [isDraft, hasFlightPlan, isDirty, mission?.has_unsaved_map_changes]);
 
   // wire compute context to tab bar
   useEffect(() => {
@@ -331,7 +343,7 @@ export default function MissionMapPage() {
 
   // handle undo
   const handleUndo = useCallback(() => {
-    const action = undoRedo.undo();
+    const action = undoFn();
     if (!action) return;
     setDirtyWaypoints((prev) => ({
       ...prev,
@@ -340,11 +352,11 @@ export default function MissionMapPage() {
         camera_target: action.oldCameraTarget,
       },
     }));
-  }, [undoRedo]);
+  }, [undoFn]);
 
   // handle redo
   const handleRedo = useCallback(() => {
-    const action = undoRedo.redo();
+    const action = redoFn();
     if (!action) return;
     setDirtyWaypoints((prev) => ({
       ...prev,
@@ -353,7 +365,7 @@ export default function MissionMapPage() {
         camera_target: action.newCameraTarget,
       },
     }));
-  }, [undoRedo]);
+  }, [redoFn]);
 
   // handle feature click from map
   const handleFeatureClick = useCallback((feature: MapFeature) => {
@@ -449,7 +461,7 @@ export default function MissionMapPage() {
         coordinates: [lon, lat, alt],
       };
 
-      undoRedo.push({
+      pushUndo({
         waypointId,
         oldPosition: wp.position,
         newPosition,
@@ -472,7 +484,7 @@ export default function MissionMapPage() {
         },
       });
     },
-    [effectiveWaypoints, undoRedo],
+    [effectiveWaypoints, pushUndo],
   );
 
   // place takeoff/landing
@@ -495,9 +507,27 @@ export default function MissionMapPage() {
     setZoomPercent(percent);
   }, []);
 
+  // handle waypoint drag from map
+  const handleWaypointDrag = useCallback(
+    (wpId: string, newPos: [number, number, number]) => {
+      const wp = effectiveWaypoints.find((w) => w.id === wpId);
+      if (!wp) return;
+      const newPosition: PointZ = { type: "Point", coordinates: newPos };
+      pushUndo({
+        waypointId: wpId,
+        oldPosition: wp.position,
+        newPosition,
+      });
+      setDirtyWaypoints((prev) => ({
+        ...prev,
+        [wpId]: { position: newPosition },
+      }));
+    },
+    [effectiveWaypoints, pushUndo],
+  );
+
   // ESC key handler - clear measure, reset tool
   // Ctrl+Z / Ctrl+Shift+Z for undo/redo
-  // Right-click to clear measurement
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName;
@@ -529,18 +559,9 @@ export default function MissionMapPage() {
       }
     }
 
-    function handleContextMenu(e: MouseEvent) {
-      if (activeTool === MapTool.MEASURE && measure.hasPoints) {
-        e.preventDefault();
-        measure.clear();
-      }
-    }
-
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("contextmenu", handleContextMenu);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("contextmenu", handleContextMenu);
     };
   }, [activeTool, measure, resetTool, handleUndo, handleRedo, handleZoomReset]);
 
@@ -616,11 +637,16 @@ export default function MissionMapPage() {
             activeTool={activeTool}
             onPlaceTakeoff={handlePlaceTakeoff}
             onPlaceLanding={handlePlaceLanding}
-            measureData={measure.hasPoints ? {
+            measureData={{
               points: measure.pointsGeoJSON,
               lines: measure.linesGeoJSON,
               labels: measure.labelsGeoJSON,
-            } : undefined}
+            }}
+            onMeasureClear={measure.clear}
+            onMeasureMouseMove={measure.setCursor}
+            onWaypointDrag={handleWaypointDrag}
+            zoomPercent={zoomPercent}
+            onZoomChange={setZoomPercent}
             leftPanelChildren={
               <>
                 {showPanels && mission.inspections.length > 0 && (
@@ -664,8 +690,8 @@ export default function MissionMapPage() {
               onToggle3D={setIs3D}
               terrainMode={terrainMode}
               onTerrainChange={setTerrainMode}
-              canUndo={undoRedo.canUndo}
-              canRedo={undoRedo.canRedo}
+              canUndo={canUndo}
+              canRedo={canRedo}
               onUndo={handleUndo}
               onRedo={handleRedo}
               onZoomReset={handleZoomReset}
@@ -675,7 +701,7 @@ export default function MissionMapPage() {
 
             {/* right side overlays */}
             <div
-              className="absolute top-3 right-3 bottom-[200px] z-10 w-56 flex flex-col gap-2 overflow-y-auto"
+              className="absolute top-3 right-3 bottom-[60px] z-10 w-56 flex flex-col gap-2 overflow-y-auto pr-1"
               style={{ scrollbarGutter: "stable" }}
             >
               <LegendPanel
@@ -700,14 +726,35 @@ export default function MissionMapPage() {
 
           </AirportMap>
 
-          {/* bottom bar */}
-          <div className="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {/* compute / recompute button */}
+          {/* bottom bar - all buttons right */}
+          <div className="absolute bottom-2 right-2 z-10 flex items-center gap-2">
+            {/* modify parameters */}
+            <button
+              onClick={() =>
+                navigate(`/operator-center/missions/${id}/configuration`)
+              }
+              className="px-5 py-2.5 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+              data-testid="modify-parameters-btn"
+            >
+              {t("map.modifyParameters")}
+            </button>
+
+            {/* dynamic button: compute/recompute or needs manual approval */}
+            {showApprovalButton ? (
+              <button
+                onClick={() =>
+                  navigate(`/operator-center/missions/${id}/validation-export`)
+                }
+                className="px-5 py-2.5 rounded-full text-sm font-semibold border border-tv-error text-tv-error hover:bg-tv-error/10 transition-colors"
+                data-testid="needs-approval-btn"
+              >
+                {t("map.needsManualApproval")}
+              </button>
+            ) : (
               <button
                 onClick={handleCompute}
                 disabled={!canCompute || computing}
-                title={!canCompute && !isDraft ? t("map.noChangesToRecompute") : undefined}
+                title={!canCompute ? t("map.noChangesToRecompute") : undefined}
                 className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${
                   computing
                     ? "bg-tv-accent/50 text-tv-accent-text cursor-not-allowed"
@@ -718,30 +765,6 @@ export default function MissionMapPage() {
                 data-testid="compute-trajectory-btn"
               >
                 {computing ? t("mission.config.computing") : computeLabel}
-              </button>
-
-              {/* modify parameters */}
-              <button
-                onClick={() =>
-                  navigate(`/operator-center/missions/${id}/configuration`)
-                }
-                className="px-5 py-2.5 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-                data-testid="modify-parameters-btn"
-              >
-                {t("map.modifyParameters")}
-              </button>
-            </div>
-
-            {/* needs manual approval - right side */}
-            {!isDraft && hasFlightPlan && (
-              <button
-                onClick={() =>
-                  navigate(`/operator-center/missions/${id}/validation-export`)
-                }
-                className="px-5 py-2.5 rounded-full text-sm font-semibold border border-tv-error text-tv-error hover:bg-tv-error/10 transition-colors"
-                data-testid="needs-approval-btn"
-              >
-                {t("map.needsManualApproval")}
               </button>
             )}
           </div>
