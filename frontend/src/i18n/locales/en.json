@@ -218,6 +218,15 @@
     "changesSaved": "Changes saved",
     "deleteConfirm": "Delete {{type}} point? The trajectory will be invalidated.",
     "draftMoveRestriction": "Compute trajectory first",
+    "inspectionMethod": {
+      "VERTICAL_PROFILE": "Vertical Profile",
+      "ANGULAR_SWEEP": "Angular Sweep"
+    },
+    "coordinates": {
+      "lat": "Lat",
+      "lon": "Lon",
+      "alt": "Alt"
+    },
     "tools": {
       "select": "Select and inspect map features (S)",
       "pan": "Pan the map (P)",

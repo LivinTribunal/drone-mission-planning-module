@@ -56,7 +56,7 @@ export default function InspectionListPanel({
                 className="flex-1 text-left text-tv-text-primary truncate"
                 data-testid={`inspection-item-${insp.id}`}
               >
-                #{insp.sequence_order} {insp.method.replace(/_/g, " ")}
+                #{insp.sequence_order} {t(`map.inspectionMethod.${insp.method}`)}
               </button>
             </div>
           );

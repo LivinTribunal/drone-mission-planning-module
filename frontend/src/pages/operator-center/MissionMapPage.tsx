@@ -270,7 +270,7 @@ export default function MissionMapPage() {
 
   // handle map click based on active tool
   const handleMapClick = useCallback(
-    (lngLat: { lng: number; lat: number }) => {
+    async (lngLat: { lng: number; lat: number }) => {
       if (activeTool === MapTool.PLACE_TAKEOFF || activeTool === MapTool.PLACE_LANDING) {
         if (!id || !mission) return;
         const key =
@@ -283,22 +283,20 @@ export default function MissionMapPage() {
             : mission.landing_coordinate;
         const alt = existing ? existing.coordinates[2] : 0;
 
-        updateMission(id, {
-          [key]: {
-            type: "Point" as const,
-            coordinates: [lngLat.lng, lngLat.lat, alt],
-          },
-        })
-          .then(() => {
-            getMission(id).then((fresh) => {
-              setMission(fresh);
-              refreshMissions();
-            });
-          })
-          .catch(() => {
-            showNotification(t("map.saveError"));
-          });
         resetTool();
+        try {
+          await updateMission(id, {
+            [key]: {
+              type: "Point" as const,
+              coordinates: [lngLat.lng, lngLat.lat, alt],
+            },
+          });
+          const fresh = await getMission(id);
+          setMission(fresh);
+          refreshMissions();
+        } catch {
+          showNotification(t("map.saveError"));
+        }
         return;
       }
 
@@ -618,6 +616,11 @@ export default function MissionMapPage() {
             activeTool={activeTool}
             onPlaceTakeoff={handlePlaceTakeoff}
             onPlaceLanding={handlePlaceLanding}
+            measureData={measure.hasPoints ? {
+              points: measure.pointsGeoJSON,
+              lines: measure.linesGeoJSON,
+              labels: measure.labelsGeoJSON,
+            } : undefined}
             leftPanelChildren={
               <>
                 {showPanels && mission.inspections.length > 0 && (
@@ -695,12 +698,6 @@ export default function MissionMapPage() {
               )}
             </div>
 
-            {/* measure distance labels */}
-            {measure.hasPoints && (
-              <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10">
-                {/* labels rendered via map source in real implementation */}
-              </div>
-            )}
           </AirportMap>
 
           {/* bottom bar */}

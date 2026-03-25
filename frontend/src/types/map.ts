@@ -110,6 +110,11 @@ export interface AirportMapProps {
   leftPanelChildren?: ReactNode;
   onPlaceTakeoff?: () => void;
   onPlaceLanding?: () => void;
+  measureData?: {
+    points: GeoJSON.FeatureCollection;
+    lines: GeoJSON.FeatureCollection;
+    labels: GeoJSON.FeatureCollection;
+  };
 }
 
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {

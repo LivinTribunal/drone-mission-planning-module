@@ -150,8 +150,8 @@ def batch_update_waypoints(
             wp.camera_target = geojson_to_ewkt({"type": "Point", "coordinates": ct_coords})
 
     # regress to DRAFT without nullifying flight_plan - waypoints were just updated in place
-    if mission.status in (MissionStatus.PLANNED, MissionStatus.VALIDATED):
-        mission.status = MissionStatus.DRAFT
+    if mission.status == MissionStatus.PLANNED:
+        mission.status = MissionStatus.DRAFT  # arch-exempt
 
     mission.has_unsaved_map_changes = True
     db.commit()

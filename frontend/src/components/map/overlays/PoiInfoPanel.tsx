@@ -189,22 +189,23 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 function CoordRows({ position, label }: { position: PointZ; label: string }) {
   /** stacked coordinate display showing lat, lon, alt on separate lines. */
+  const { t } = useTranslation();
   const [lon, lat, alt] = position.coordinates;
   return (
     <div className="text-xs">
       <div className="text-tv-text-muted">{label}:</div>
       <div className="mt-0.5 pl-2 space-y-0.5">
         <div className="flex justify-between">
-          <span className="text-tv-text-muted">Lat</span>
+          <span className="text-tv-text-muted">{t("map.coordinates.lat")}</span>
           <span className="text-tv-text-primary font-medium">{lat.toFixed(6)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-tv-text-muted">Lon</span>
+          <span className="text-tv-text-muted">{t("map.coordinates.lon")}</span>
           <span className="text-tv-text-primary font-medium">{lon.toFixed(6)}</span>
         </div>
         {alt != null && alt !== 0 && (
           <div className="flex justify-between">
-            <span className="text-tv-text-muted">Alt</span>
+            <span className="text-tv-text-muted">{t("map.coordinates.alt")}</span>
             <span className="text-tv-text-primary font-medium">{alt.toFixed(1)}m</span>
           </div>
         )}

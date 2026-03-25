@@ -160,7 +160,6 @@ export default function AirportMap({
   showLayerPanel = true,
   showLegend = true,
   showPoiInfo = true,
-  showTerrainToggle: _showTerrainToggle = true,
   showWaypointList = true,
   simplifiedTrajectory = false,
   onFeatureClick,
@@ -181,6 +180,7 @@ export default function AirportMap({
   activeTool,
   onPlaceTakeoff,
   onPlaceLanding,
+  measureData,
 }: AirportMapProps & { activeTool?: MapTool }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -768,6 +768,97 @@ export default function AirportMap({
       map.getCanvas().removeEventListener("mouseup", handleMouseUp);
     };
   }, [interactive, activeTool]);
+
+  // measure tool layers
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    function addMeasureLayers() {
+      if (!map) return;
+
+      const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+      // points
+      if (!map.getSource("measure-points")) {
+        map.addSource("measure-points", { type: "geojson", data: emptyFC });
+        map.addLayer({
+          id: "measure-points-layer",
+          type: "circle",
+          source: "measure-points",
+          paint: {
+            "circle-radius": 5,
+            "circle-color": "#ff6b00",
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 2,
+          },
+        });
+      }
+
+      // lines
+      if (!map.getSource("measure-lines")) {
+        map.addSource("measure-lines", { type: "geojson", data: emptyFC });
+        map.addLayer({
+          id: "measure-lines-layer",
+          type: "line",
+          source: "measure-lines",
+          paint: {
+            "line-color": "#ff6b00",
+            "line-width": 2,
+            "line-dasharray": [4, 3],
+          },
+        });
+      }
+
+      // labels
+      if (!map.getSource("measure-labels")) {
+        map.addSource("measure-labels", { type: "geojson", data: emptyFC });
+        map.addLayer({
+          id: "measure-labels-layer",
+          type: "symbol",
+          source: "measure-labels",
+          layout: {
+            "text-field": ["get", "label"],
+            "text-size": 12,
+            "text-offset": [0, -1.2],
+            "text-anchor": "bottom",
+            "text-font": ["Open Sans Regular"],
+          },
+          paint: {
+            "text-color": "#ff6b00",
+            "text-halo-color": "#000000",
+            "text-halo-width": 1.5,
+          },
+        });
+      }
+    }
+
+    if (map.isStyleLoaded()) {
+      addMeasureLayers();
+    } else {
+      map.on("load", addMeasureLayers);
+      return () => { map.off("load", addMeasureLayers); };
+    }
+  }, []);
+
+  // sync measure data to sources
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+    const points = measureData?.points ?? emptyFC;
+    const lines = measureData?.lines ?? emptyFC;
+    const labels = measureData?.labels ?? emptyFC;
+
+    const pointsSrc = map.getSource("measure-points") as maplibregl.GeoJSONSource | undefined;
+    const linesSrc = map.getSource("measure-lines") as maplibregl.GeoJSONSource | undefined;
+    const labelsSrc = map.getSource("measure-labels") as maplibregl.GeoJSONSource | undefined;
+
+    if (pointsSrc) pointsSrc.setData(points);
+    if (linesSrc) linesSrc.setData(lines);
+    if (labelsSrc) labelsSrc.setData(labels);
+  }, [measureData]);
 
   return (
     <div

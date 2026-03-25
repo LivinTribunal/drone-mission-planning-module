@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 export enum MapTool {
   SELECT = "SELECT",
@@ -22,17 +22,10 @@ interface MapToolsReturn {
 export default function useMapTools(): MapToolsReturn {
   const [activeTool, setActiveTool] = useState<MapTool>(MapTool.SELECT);
   const [is3D, setIs3D] = useState(false);
-  const previousToolRef = useRef<MapTool>(MapTool.SELECT);
 
   const setTool = useCallback((tool: MapTool) => {
-    if (tool === MapTool.ZOOM_RESET) {
-      // one-shot - revert to previous tool
-      return;
-    }
-    setActiveTool((prev) => {
-      previousToolRef.current = prev;
-      return tool;
-    });
+    if (tool === MapTool.ZOOM_RESET) return;
+    setActiveTool(tool);
   }, []);
 
   const resetTool = useCallback(() => {
