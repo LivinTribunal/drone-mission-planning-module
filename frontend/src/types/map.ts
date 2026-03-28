@@ -91,7 +91,7 @@ export interface AirportMapProps {
   showLegend?: boolean;
   showPoiInfo?: boolean;
   showTerrainToggle?: boolean;
-  onFeatureClick?: (feature: MapFeature) => void;
+  onFeatureClick?: (feature: MapFeature | null) => void;
   children?: ReactNode;
   showWaypointList?: boolean;
   simplifiedTrajectory?: boolean;
@@ -120,6 +120,12 @@ export interface AirportMapProps {
   onWaypointDrag?: (waypointId: string, newPosition: [number, number, number]) => void;
   zoomPercent?: number;
   onZoomChange?: (percent: number) => void;
+  focusFeature?: MapFeature | null;
+  showZoomControls?: boolean;
+  showCompass?: boolean;
+  is3D?: boolean;
+  onToggle3D?: (val: boolean) => void;
+  onBearingChange?: (bearing: number) => void;
 }
 
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {

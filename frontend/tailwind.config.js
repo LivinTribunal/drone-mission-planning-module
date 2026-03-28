@@ -19,6 +19,7 @@ export default {
           error: "var(--tv-error)",
           warning: "var(--tv-warning)",
           info: "var(--tv-info)",
+          success: "var(--tv-success)",
           "nav-active-bg": "var(--tv-nav-active-bg)",
           "nav-active-text": "var(--tv-nav-active-text)",
           "section-label-bg": "var(--tv-section-label-bg)",

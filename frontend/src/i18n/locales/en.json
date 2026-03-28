@@ -224,6 +224,9 @@
       "VERTICAL_PROFILE": "Vertical Profile",
       "ANGULAR_SWEEP": "Angular Sweep"
     },
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "resetNorth": "Reset to north",
     "coordinates": {
       "lat": "Lat",
       "lon": "Lon",
@@ -527,6 +530,30 @@
     "droneProfileEditor": "Drone Profile Editor",
     "inspectionTemplates": "Inspection Templates",
     "inspectionTemplateEditor": "Inspection Template Editor"
+  },
+  "airport": {
+    "title": "Airport",
+    "groundSurfaces": "Ground Surfaces",
+    "obstacles": "Obstacles",
+    "safetyZones": "Safety Zones",
+    "aglSystems": "AGL Systems",
+    "lhaUnits": "LHA Units",
+    "noSurfaces": "No ground surfaces defined",
+    "noObstacles": "No obstacles defined",
+    "noSafetyZones": "No safety zones defined",
+    "noAglSystems": "No AGL systems defined",
+    "units": "units",
+    "active": "Active",
+    "inactive": "Inactive",
+    "runway": "Runway",
+    "taxiway": "Taxiway",
+    "lhaUnit": "LHA {{number}}",
+    "zoneType": {
+      "CTR": "CTR",
+      "RESTRICTED": "Restricted",
+      "PROHIBITED": "Prohibited",
+      "TEMPORARY_NO_FLY": "Temporary No-Fly"
+    }
   },
   "languages": {
     "en": "English"

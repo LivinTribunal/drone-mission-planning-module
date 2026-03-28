@@ -91,6 +91,7 @@ export default function MissionConfigPage() {
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">(
     "satellite",
   );
+  const [is3D, setIs3D] = useState(false);
 
   // coordinate pick-on-map mode
   const [pickingCoord, setPickingCoord] = useState<"takeoff" | "landing" | null>(null);
@@ -704,6 +705,8 @@ export default function MissionConfigPage() {
               terrainMode={terrainMode}
               onTerrainChange={setTerrainMode}
               showTerrainToggle={false}
+              is3D={is3D}
+              onToggle3D={setIs3D}
               waypoints={flightPlan?.waypoints ?? []}
               selectedWaypointId={selectedWaypointId}
               onWaypointClick={setSelectedWaypointId}
@@ -753,6 +756,24 @@ export default function MissionConfigPage() {
               >
                 {t("mission.config.editWaypoints")}
               </button>
+              <div className="flex rounded-full border border-tv-border bg-tv-surface p-1">
+                <button
+                  onClick={() => setIs3D(false)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
+                  }`}
+                >
+                  2D
+                </button>
+                <button
+                  onClick={() => setIs3D(true)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
+                  }`}
+                >
+                  3D
+                </button>
+              </div>
               <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />
             </div>
           </div>

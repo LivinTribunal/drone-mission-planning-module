@@ -349,6 +349,17 @@ function createPathArrowIcon(size: number): ImageData {
   return ctx.getImageData(0, 0, size, size);
 }
 
+/** safely adds an image, removing any existing one first. */
+function safeAddImage(
+  map: MaplibreMap,
+  name: string,
+  data: ImageData,
+  opts?: { pixelRatio?: number },
+): void {
+  try { if (map.hasImage(name)) map.removeImage(name); } catch { /* noop */ }
+  map.addImage(name, data, opts);
+}
+
 /** registers all custom map icons on the map instance. */
 export function registerAllMapImages(map: MaplibreMap): void {
   const iconSize = 32;
@@ -362,43 +373,12 @@ export function registerAllMapImages(map: MaplibreMap): void {
     other: { color: "#6b6b6b", create: createTriangleIcon },
   };
   for (const [type, { color, create }] of Object.entries(obstacleIcons)) {
-    const imgName = `obstacle-${type}`;
-    if (!map.hasImage(imgName)) {
-      map.addImage(imgName, create(iconSize, color), { pixelRatio: 2 });
-    }
+    safeAddImage(map, `obstacle-${type}`, create(iconSize, color), { pixelRatio: 2 });
   }
 
-  if (!map.hasImage("takeoff-square")) {
-    map.addImage(
-      "takeoff-square",
-      createRoundedSquareIcon(iconSize, "#4595e5", "T"),
-      { pixelRatio: 2 },
-    );
-  }
-
-  if (!map.hasImage("landing-square")) {
-    map.addImage(
-      "landing-square",
-      createRoundedSquareIcon(iconSize, "#e54545", "L"),
-      { pixelRatio: 2 },
-    );
-  }
-
-  if (!map.hasImage("hover-icon")) {
-    map.addImage("hover-icon", createHoverIcon(iconSize, "#e5a545"), {
-      pixelRatio: 2,
-    });
-  }
-
-  if (!map.hasImage("agl-square")) {
-    map.addImage("agl-square", createAglSquareIcon(iconSize, "#e91e90"), {
-      pixelRatio: 2,
-    });
-  }
-
-  if (!map.hasImage("path-arrow")) {
-    map.addImage("path-arrow", createPathArrowIcon(iconSize), {
-      pixelRatio: 2,
-    });
-  }
+  safeAddImage(map, "takeoff-square", createRoundedSquareIcon(iconSize, "#4595e5", "T"), { pixelRatio: 2 });
+  safeAddImage(map, "landing-square", createRoundedSquareIcon(iconSize, "#e54545", "L"), { pixelRatio: 2 });
+  safeAddImage(map, "hover-icon", createHoverIcon(iconSize, "#e5a545"), { pixelRatio: 2 });
+  safeAddImage(map, "agl-square", createAglSquareIcon(iconSize, "#e91e90"), { pixelRatio: 2 });
+  safeAddImage(map, "path-arrow", createPathArrowIcon(iconSize), { pixelRatio: 2 });
 }
