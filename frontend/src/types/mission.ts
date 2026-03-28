@@ -16,6 +16,8 @@ export interface MissionResponse {
   takeoff_coordinate: PointZ | null;
   landing_coordinate: PointZ | null;
   has_unsaved_map_changes: boolean;
+  inspection_count: number;
+  estimated_duration: number | null;
 }
 
 export interface MissionDetailResponse extends MissionResponse {

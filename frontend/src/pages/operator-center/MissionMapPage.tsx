@@ -75,6 +75,7 @@ export default function MissionMapPage() {
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [bearing, setBearing] = useState(0);
+  const [bearingResetKey, setBearingResetKey] = useState(0);
 
   // tools
   const { activeTool, is3D, setTool, resetTool, setIs3D } = useMapTools();
@@ -127,7 +128,8 @@ export default function MissionMapPage() {
       try {
         const fp = await getFlightPlan(id);
         setFlightPlan(fp);
-      } catch {
+      } catch (err) {
+        console.error("flight plan fetch failed:", err instanceof Error ? err.message : String(err));
         setFlightPlan(null);
       }
 
@@ -135,7 +137,8 @@ export default function MissionMapPage() {
         try {
           const dp = await getDroneProfile(missionData.drone_profile_id);
           setEnduranceMinutes(dp.endurance_minutes);
-        } catch {
+        } catch (err) {
+          console.error("drone profile fetch failed:", err instanceof Error ? err.message : String(err));
           setEnduranceMinutes(null);
         }
       }
@@ -216,7 +219,8 @@ export default function MissionMapPage() {
       refreshMissions();
       setLastSaved(new Date());
       showNotification(t("map.changesSaved"));
-    } catch {
+    } catch (err) {
+      console.error("map save error:", err instanceof Error ? err.message : String(err));
       showNotification(t("map.saveError"));
     } finally {
       setSaving(false);
@@ -322,7 +326,8 @@ export default function MissionMapPage() {
           const fresh = await getMission(id);
           setMission(fresh);
           refreshMissions();
-        } catch {
+        } catch (err) {
+          console.error("map save error:", err instanceof Error ? err.message : String(err));
           showNotification(t("map.saveError"));
         }
         return;
@@ -400,7 +405,41 @@ export default function MissionMapPage() {
   const handleWaypointClick = useCallback(
     (wpId: string | null) => {
       setSelectedWaypointId(wpId);
-      if (!wpId) return;
+      if (!wpId) {
+        setSelectedFeature(null);
+        return;
+      }
+
+      // standalone takeoff/landing markers
+      if (wpId === "takeoff" && mission?.takeoff_coordinate) {
+        const [lon, lat, alt] = mission.takeoff_coordinate.coordinates;
+        setSelectedFeature({
+          type: "waypoint",
+          data: {
+            id: "takeoff",
+            waypoint_type: "TAKEOFF",
+            sequence_order: 0,
+            position: { type: "Point", coordinates: [lon, lat, alt] },
+            stack_count: 1,
+          },
+        });
+        return;
+      }
+      if (wpId === "landing" && mission?.landing_coordinate) {
+        const [lon, lat, alt] = mission.landing_coordinate.coordinates;
+        setSelectedFeature({
+          type: "waypoint",
+          data: {
+            id: "landing",
+            waypoint_type: "LANDING",
+            sequence_order: 0,
+            position: { type: "Point", coordinates: [lon, lat, alt] },
+            stack_count: 1,
+          },
+        });
+        return;
+      }
+
       const wp = effectiveWaypoints.find((w) => w.id === wpId);
       if (wp) {
         const [lon, lat, alt] = wp.position.coordinates;
@@ -416,7 +455,7 @@ export default function MissionMapPage() {
         });
       }
     },
-    [effectiveWaypoints],
+    [effectiveWaypoints, mission],
   );
 
   // handle inspection toggle visibility
@@ -464,7 +503,8 @@ export default function MissionMapPage() {
         refreshMissions();
         setSelectedFeature(null);
         setSelectedWaypointId(null);
-      } catch {
+      } catch (err) {
+        console.error("map save error:", err instanceof Error ? err.message : String(err));
         showNotification(t("map.saveError"));
       }
     },
@@ -517,11 +557,8 @@ export default function MissionMapPage() {
     setTool(MapTool.PLACE_LANDING);
   }, [setTool]);
 
-  // zoom reset
-  const handleZoomReset = useCallback(() => {
-    // zoom reset is a no-op here - just a placeholder for the toolbar
-    setZoomPercent(100);
-  }, []);
+  // zoom reset - placeholder until wired to map API
+  const handleZoomReset = useCallback(() => {}, []);
 
   // zoom to specific percent
   const handleZoomTo = useCallback((percent: number) => {
@@ -626,7 +663,8 @@ export default function MissionMapPage() {
     activeTool === MapTool.PLACE_LANDING ||
     activeTool === MapTool.MEASURE;
 
-  const showPanels = !isDraft || hasFlightPlan;
+  const hasTakeoffOrLanding = !!(mission?.takeoff_coordinate || mission?.landing_coordinate);
+  const showPanels = !isDraft || hasFlightPlan || hasTakeoffOrLanding;
 
   return (
     <div
@@ -647,6 +685,7 @@ export default function MissionMapPage() {
             showZoomControls={false}
             showCompass={false}
             onBearingChange={setBearing}
+            bearingResetKey={bearingResetKey}
 
             waypoints={effectiveWaypoints}
             selectedWaypointId={selectedWaypointId}
@@ -725,6 +764,7 @@ export default function MissionMapPage() {
               zoomPercent={zoomPercent}
               onZoomTo={handleZoomTo}
               bearing={bearing}
+              onBearingReset={() => setBearingResetKey((k) => k + 1)}
             />
 
             {/* right side overlays */}

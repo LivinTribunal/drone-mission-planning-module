@@ -27,6 +27,7 @@ interface MapControlsToolbarProps {
   zoomPercent: number;
   onZoomTo: (percent: number) => void;
   bearing?: number;
+  onBearingReset?: () => void;
 }
 
 const ZOOM_PRESETS = [50, 75, 100, 150, 200, 300, 500];
@@ -63,6 +64,7 @@ export default function MapControlsToolbar({
   zoomPercent,
   onZoomTo,
   bearing = 0,
+  onBearingReset,
 }: MapControlsToolbarProps) {
   const { t } = useTranslation();
   const [zoomDropdownOpen, setZoomDropdownOpen] = useState(false);
@@ -116,7 +118,7 @@ export default function MapControlsToolbar({
       data-testid="map-controls-toolbar"
     >
       {/* main tools group */}
-      <div className="flex items-center rounded-full border border-tv-border bg-tv-surface px-1 py-1">
+      <div className="flex items-center rounded-full border border-tv-border bg-tv-bg px-1 py-1">
         {mainTools.map(renderToolButton)}
 
         {/* separator */}
@@ -134,16 +136,16 @@ export default function MapControlsToolbar({
         </button>
 
         {/* zoom field */}
-        <div className="relative" ref={zoomRef}>
+        <div className="relative ml-1" ref={zoomRef}>
           <button
             onClick={() => setZoomDropdownOpen(!zoomDropdownOpen)}
-            className="w-16 text-center text-xs rounded-full px-2 py-1.5 border border-tv-border bg-tv-bg text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+            className="w-16 text-center text-xs rounded-full px-2 py-1.5 border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
             data-testid="zoom-field"
           >
             {Math.round(zoomPercent)}%
           </button>
           {zoomDropdownOpen && (
-            <div className="absolute top-full mt-1 left-0 w-24 rounded-2xl border border-tv-border bg-tv-surface p-1 z-20">
+            <div className="absolute top-full mt-1 left-0 w-24 rounded-2xl border border-tv-border bg-tv-bg p-1 z-20">
               {ZOOM_PRESETS.map((p) => (
                 <button
                   key={p}
@@ -167,9 +169,10 @@ export default function MapControlsToolbar({
         </div>
 
         {/* heading compass */}
-        <div
-          className="flex items-center justify-center w-9 h-9 rounded-full border border-tv-border bg-tv-bg"
-          title={`${Math.round(((bearing % 360) + 360) % 360)}°`}
+        <button
+          onClick={onBearingReset}
+          className="ml-1 flex items-center justify-center w-9 h-9 rounded-full border border-tv-border bg-tv-surface hover:bg-tv-surface-hover transition-colors cursor-pointer"
+          title={`${Math.round(((bearing % 360) + 360) % 360)}° — ${t("map.tools.resetBearing")}`}
         >
           <svg
             className="w-7 h-7"
@@ -180,13 +183,13 @@ export default function MapControlsToolbar({
             <polygon points="14,8 12.8,14 15.2,14" fill="#e54545" />
             <polygon points="14,20 12.8,14 15.2,14" fill="var(--tv-text-muted)" />
           </svg>
-        </div>
+        </button>
 
         {/* separator */}
-        <div className="w-px h-5 mx-1" style={{ backgroundColor: "var(--tv-border)" }} />
+        <div className="w-px h-5 mx-0.5" style={{ backgroundColor: "var(--tv-border)" }} />
 
         {/* 2D/3D toggle */}
-        <div className="flex rounded-full bg-tv-bg border border-tv-border p-0.5">
+        <div className="flex rounded-full bg-tv-surface border border-tv-border p-0.5">
           <button
             onClick={() => onToggle3D(false)}
             title={t("map.tools.2d")}
@@ -208,7 +211,7 @@ export default function MapControlsToolbar({
         </div>
 
         {/* map/satellite toggle */}
-        <div className="flex rounded-full bg-tv-bg border border-tv-border p-0.5">
+        <div className="ml-1 flex rounded-full bg-tv-surface border border-tv-border p-0.5">
           <button
             onClick={() => onTerrainChange("map")}
             className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
@@ -229,7 +232,7 @@ export default function MapControlsToolbar({
       </div>
 
       {/* undo / redo pill */}
-      <div className="flex items-center gap-1 rounded-full border border-tv-border bg-tv-surface px-1 py-1">
+      <div className="flex items-center gap-1 rounded-full border border-tv-border bg-tv-bg px-1 py-1">
         <button
           onClick={onUndo}
           disabled={!canUndo}

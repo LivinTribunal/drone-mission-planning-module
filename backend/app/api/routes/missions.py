@@ -2,7 +2,7 @@ import io
 import zipfile
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -35,20 +35,19 @@ def list_missions(
     offset: int = Query(0),
     db: Session = Depends(get_db),
 ):
-    """list missions with filters and pagination"""
-    _VALID_STATUSES = {"DRAFT", "PLANNED", "VALIDATED", "EXPORTED", "COMPLETED", "CANCELLED"}
-    if status is not None and status not in _VALID_STATUSES:
-        raise HTTPException(
-            status_code=400, detail=f"invalid status, must be one of {_VALID_STATUSES}"
-        )
-
+    """list missions with filters and pagination."""
     missions, total = mission_service.list_missions(
         db, airport_id=airport_id, status=status, limit=limit, offset=offset
     )
 
-    return MissionListResponse(
-        data=missions, meta=ListMeta(total=total, limit=limit, offset=offset)
-    )
+    data = []
+    for m in missions:
+        resp = MissionResponse.model_validate(m)
+        resp.inspection_count = len(m.inspections) if m.inspections else 0
+        resp.estimated_duration = m.flight_plan.estimated_duration if m.flight_plan else None
+        data.append(resp)
+
+    return MissionListResponse(data=data, meta=ListMeta(total=total, limit=limit, offset=offset))
 
 
 @router.get("/{mission_id}", response_model=MissionDetailResponse)
@@ -98,10 +97,11 @@ def export_mission(mission_id: UUID, body: ExportRequest, db: Session = Depends(
     # single file - return directly
     if len(files) == 1:
         filename, (data, content_type) = next(iter(files.items()))
+        sanitized = filename.replace('"', "").replace("\r", "").replace("\n", "")
         return Response(
             content=data,
             media_type=content_type,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": f'attachment; filename="{sanitized}"'},
         )
 
     # multiple files - zip them
