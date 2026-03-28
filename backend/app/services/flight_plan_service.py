@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
+from app.models.enums import MissionStatus, WaypointType
 from app.models.flight_plan import (
     FlightPlan,
     ValidationResult,
@@ -125,7 +126,7 @@ def batch_update_waypoints(
     if not mission:
         raise NotFoundError("mission not found")
 
-    if mission.status not in ("DRAFT", "PLANNED"):
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
         raise DomainError("cannot modify waypoints in current status", status_code=409)
 
     fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission_id).first()
@@ -148,7 +149,17 @@ def batch_update_waypoints(
             ct_coords = upd.camera_target.coordinates
             wp.camera_target = geojson_to_ewkt({"type": "Point", "coordinates": ct_coords})
 
-    mission.invalidate_trajectory()
+        # sync mission coordinate when takeoff/landing waypoints move
+        if wp.waypoint_type == WaypointType.TAKEOFF:
+            mission.takeoff_coordinate = geojson_to_ewkt({"type": "Point", "coordinates": coords})
+        elif wp.waypoint_type == WaypointType.LANDING:
+            mission.landing_coordinate = geojson_to_ewkt({"type": "Point", "coordinates": coords})
+
+    # regress to DRAFT without nullifying flight_plan - waypoints were just updated in place
+    if mission.status == MissionStatus.PLANNED:
+        mission.status = MissionStatus.DRAFT  # arch-exempt
+
+    mission.has_unsaved_map_changes = True
     db.commit()
 
     return get_flight_plan(db, mission_id)

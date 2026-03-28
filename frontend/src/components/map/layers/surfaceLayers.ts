@@ -2,11 +2,13 @@ import type { Map as MaplibreMap } from "maplibre-gl";
 import type { SurfaceResponse } from "@/types/airport";
 
 export const RUNWAY_SOURCE = "runways";
+export const RUNWAY_POLYGON_SOURCE = "runways-polygon";
 export const RUNWAY_FILL_LAYER = "runways-fill";
 export const RUNWAY_STROKE_LAYER = "runways-stroke";
 export const RUNWAY_CENTERLINE_LAYER = "runways-centerline";
 export const RUNWAY_LABEL_LAYER = "runways-label";
 export const TAXIWAY_SOURCE = "taxiways";
+export const TAXIWAY_POLYGON_SOURCE = "taxiways-polygon";
 export const TAXIWAY_FILL_LAYER = "taxiways-fill";
 export const TAXIWAY_STROKE_LAYER = "taxiways-stroke";
 export const TAXIWAY_LABEL_LAYER = "taxiways-label";
@@ -15,7 +17,58 @@ export const TAXIWAY_LABEL_LAYER = "taxiways-label";
 export const RUNWAY_LAYER = RUNWAY_FILL_LAYER;
 export const TAXIWAY_LAYER = TAXIWAY_FILL_LAYER;
 
-/** adds runway and taxiway layers with aviation-chart styling. */
+const EARTH_RADIUS = 6371000;
+
+/** buffers a linestring centerline by half-width in meters to produce a polygon. */
+function bufferLineString(
+  coordinates: number[][],
+  widthMeters: number,
+): number[][] {
+  if (coordinates.length < 2) return [];
+
+  const half = widthMeters / 2;
+  const left: [number, number][] = [];
+  const right: [number, number][] = [];
+
+  for (let i = 0; i < coordinates.length; i++) {
+    const [lon, lat] = coordinates[i];
+
+    // compute perpendicular direction from segment heading
+    let dx: number, dy: number;
+    if (i < coordinates.length - 1) {
+      dx = coordinates[i + 1][0] - lon;
+      dy = coordinates[i + 1][1] - lat;
+    } else {
+      dx = lon - coordinates[i - 1][0];
+      dy = lat - coordinates[i - 1][1];
+    }
+
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) continue;
+
+    // perpendicular unit vector (rotated 90 degrees)
+    const perpX = -dy / len;
+    const perpY = dx / len;
+
+    // scale perpendicular to meters (rough conversion at this latitude)
+    const latRad = (lat * Math.PI) / 180;
+    const mPerDegLon = (Math.PI / 180) * EARTH_RADIUS * Math.cos(latRad);
+    const mPerDegLat = (Math.PI / 180) * EARTH_RADIUS;
+
+    const offsetLon = (perpX * half) / mPerDegLon;
+    const offsetLat = (perpY * half) / mPerDegLat;
+
+    left.push([lon + offsetLon, lat + offsetLat]);
+    right.push([lon - offsetLon, lat - offsetLat]);
+  }
+
+  // close the polygon: left side forward, right side reversed
+  right.reverse();
+  const ring = [...left, ...right, left[0]];
+  return ring;
+}
+
+/** adds runway and taxiway layers with geographic polygon fills. */
 export function addSurfaceLayers(
   map: MaplibreMap,
   surfaces: SurfaceResponse[],
@@ -25,7 +78,7 @@ export function addSurfaceLayers(
     (s) => s.surface_type === "TAXIWAY" || s.surface_type === "APRON",
   );
 
-  // runways
+  // centerline source for labels and centerline dashes
   map.addSource(RUNWAY_SOURCE, {
     type: "geojson",
     data: {
@@ -43,47 +96,47 @@ export function addSurfaceLayers(
     },
   });
 
-  // runway stroke (wider, underneath)
-  map.addLayer({
-    id: RUNWAY_STROKE_LAYER,
-    type: "line",
-    source: RUNWAY_SOURCE,
-    paint: {
-      "line-color": "#6a6a6a",
-      "line-width": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        12, 4,
-        15, ["*", ["get", "width"], 0.3],
-        18, ["*", ["get", "width"], 1.2],
-      ],
-      "line-opacity": 0.6,
-    },
-    layout: {
-      "line-cap": "butt",
+  // polygon source for geographic fill
+  map.addSource(RUNWAY_POLYGON_SOURCE, {
+    type: "geojson",
+    data: {
+      type: "FeatureCollection",
+      features: runways
+        .filter((r) => r.geometry.coordinates.length >= 2)
+        .map((r) => ({
+          type: "Feature" as const,
+          properties: {
+            id: r.id,
+            identifier: r.identifier,
+          },
+          geometry: {
+            type: "Polygon" as const,
+            coordinates: [bufferLineString(r.geometry.coordinates, r.width ?? 45)],
+          },
+        })),
     },
   });
 
-  // runway fill
+  // runway stroke - geographic polygon outline
   map.addLayer({
-    id: RUNWAY_FILL_LAYER,
+    id: RUNWAY_STROKE_LAYER,
     type: "line",
-    source: RUNWAY_SOURCE,
+    source: RUNWAY_POLYGON_SOURCE,
     paint: {
-      "line-color": "#4a4a4a",
-      "line-width": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        12, 3,
-        15, ["*", ["get", "width"], 0.25],
-        18, ["*", ["get", "width"], 1],
-      ],
+      "line-color": "#6a6a6a",
+      "line-width": 1.5,
       "line-opacity": 0.6,
     },
-    layout: {
-      "line-cap": "butt",
+  });
+
+  // runway fill - geographic polygon
+  map.addLayer({
+    id: RUNWAY_FILL_LAYER,
+    type: "fill",
+    source: RUNWAY_POLYGON_SOURCE,
+    paint: {
+      "fill-color": "#4a4a4a",
+      "fill-opacity": 0.5,
     },
   });
 
@@ -119,7 +172,7 @@ export function addSurfaceLayers(
     },
   });
 
-  // taxiways
+  // taxiway centerline source for labels
   map.addSource(TAXIWAY_SOURCE, {
     type: "geojson",
     data: {
@@ -137,47 +190,47 @@ export function addSurfaceLayers(
     },
   });
 
-  // taxiway stroke
-  map.addLayer({
-    id: TAXIWAY_STROKE_LAYER,
-    type: "line",
-    source: TAXIWAY_SOURCE,
-    paint: {
-      "line-color": "#5a7a5a",
-      "line-width": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        12, 2,
-        15, ["*", ["get", "width"], 0.2],
-        18, ["*", ["get", "width"], 0.8],
-      ],
-      "line-opacity": 0.4,
-    },
-    layout: {
-      "line-cap": "butt",
+  // taxiway polygon source for geographic fill
+  map.addSource(TAXIWAY_POLYGON_SOURCE, {
+    type: "geojson",
+    data: {
+      type: "FeatureCollection",
+      features: taxiways
+        .filter((t) => t.geometry.coordinates.length >= 2)
+        .map((t) => ({
+          type: "Feature" as const,
+          properties: {
+            id: t.id,
+            identifier: t.identifier,
+          },
+          geometry: {
+            type: "Polygon" as const,
+            coordinates: [bufferLineString(t.geometry.coordinates, t.taxiway_width ?? 20)],
+          },
+        })),
     },
   });
 
-  // taxiway fill
+  // taxiway stroke - geographic polygon outline
   map.addLayer({
-    id: TAXIWAY_FILL_LAYER,
+    id: TAXIWAY_STROKE_LAYER,
     type: "line",
-    source: TAXIWAY_SOURCE,
+    source: TAXIWAY_POLYGON_SOURCE,
     paint: {
-      "line-color": "#3a5a3a",
-      "line-width": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        12, 1.5,
-        15, ["*", ["get", "width"], 0.15],
-        18, ["*", ["get", "width"], 0.6],
-      ],
+      "line-color": "#5a7a5a",
+      "line-width": 1,
       "line-opacity": 0.4,
     },
-    layout: {
-      "line-cap": "butt",
+  });
+
+  // taxiway fill - geographic polygon
+  map.addLayer({
+    id: TAXIWAY_FILL_LAYER,
+    type: "fill",
+    source: TAXIWAY_POLYGON_SOURCE,
+    paint: {
+      "fill-color": "#3a5a3a",
+      "fill-opacity": 0.35,
     },
   });
 

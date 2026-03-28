@@ -130,6 +130,7 @@ class MissionResponse(BaseModel):
     default_altitude_offset: float | None = None
     takeoff_coordinate: PointZ | None = None
     landing_coordinate: PointZ | None = None
+    has_unsaved_map_changes: bool = False
 
     model_config = {"from_attributes": True}
 

@@ -114,6 +114,7 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
             mission.invalidate_trajectory()
         except ValueError as e:
             raise DomainError(str(e), status_code=409)
+        mission.has_unsaved_map_changes = True
 
     apply_schema_update(mission, schema)
     db.commit()

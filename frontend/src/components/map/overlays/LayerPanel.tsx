@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Flag } from "lucide-react";
 import type { MapLayerConfig } from "@/types/map";
 
 interface LayerPanelProps {
@@ -8,6 +8,10 @@ interface LayerPanelProps {
   onToggle: (key: string) => void;
   hasWaypoints?: boolean;
   hasSimplifiedTrajectory?: boolean;
+  hasTakeoff?: boolean;
+  hasLanding?: boolean;
+  onPlaceTakeoff?: () => void;
+  onPlaceLanding?: () => void;
 }
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
@@ -38,7 +42,16 @@ const baseLayerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
   { key: "aglSystems", i18nKey: "dashboard.aglSystems" },
 ];
 
-export default function LayerPanel({ layers, onToggle, hasWaypoints, hasSimplifiedTrajectory }: LayerPanelProps) {
+export default function LayerPanel({
+  layers,
+  onToggle,
+  hasWaypoints,
+  hasSimplifiedTrajectory,
+  hasTakeoff,
+  hasLanding,
+  onPlaceTakeoff,
+  onPlaceLanding,
+}: LayerPanelProps) {
   /** hierarchical layer visibility toggle panel. */
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
@@ -154,6 +167,28 @@ export default function LayerPanel({ layers, onToggle, hasWaypoints, hasSimplifi
                 </div>
               )}
             </>
+          )}
+
+          {/* placement buttons */}
+          {!hasTakeoff && onPlaceTakeoff && (
+            <button
+              onClick={onPlaceTakeoff}
+              className="flex items-center gap-2 w-full mt-2 rounded-full px-3 py-1.5 text-xs font-semibold bg-tv-success/10 border border-tv-success text-tv-success hover:bg-tv-success/20 transition-colors"
+              data-testid="place-takeoff-btn"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              {t("map.placeTakeoff")}
+            </button>
+          )}
+          {!hasLanding && onPlaceLanding && (
+            <button
+              onClick={onPlaceLanding}
+              className="flex items-center gap-2 w-full mt-1.5 rounded-full px-3 py-1.5 text-xs font-semibold bg-tv-error/10 border border-tv-error text-tv-error hover:bg-tv-error/20 transition-colors"
+              data-testid="place-landing-btn"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              {t("map.placeLanding")}
+            </button>
           )}
         </div>
       )}
