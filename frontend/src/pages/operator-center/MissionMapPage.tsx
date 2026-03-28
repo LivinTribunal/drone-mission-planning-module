@@ -217,7 +217,8 @@ export default function MissionMapPage() {
       refreshMissions();
       setLastSaved(new Date());
       showNotification(t("map.changesSaved"));
-    } catch {
+    } catch (err) {
+      console.error("map save error:", err instanceof Error ? err.message : String(err));
       showNotification(t("map.saveError"));
     } finally {
       setSaving(false);
@@ -323,7 +324,8 @@ export default function MissionMapPage() {
           const fresh = await getMission(id);
           setMission(fresh);
           refreshMissions();
-        } catch {
+        } catch (err) {
+          console.error("map save error:", err instanceof Error ? err.message : String(err));
           showNotification(t("map.saveError"));
         }
         return;
@@ -499,7 +501,8 @@ export default function MissionMapPage() {
         refreshMissions();
         setSelectedFeature(null);
         setSelectedWaypointId(null);
-      } catch {
+      } catch (err) {
+        console.error("map save error:", err instanceof Error ? err.message : String(err));
         showNotification(t("map.saveError"));
       }
     },

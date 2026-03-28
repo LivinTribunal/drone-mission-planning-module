@@ -688,7 +688,6 @@ export default function MissionConfigPage() {
           <StatsPanel
             flightPlan={flightPlan}
             hasTrajectory={hasTrajectory}
-            inspectionCount={mission.inspections.length}
             droneProfile={selectedDroneProfile}
           />
         </div>

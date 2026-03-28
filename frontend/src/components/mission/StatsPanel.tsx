@@ -14,7 +14,6 @@ import type { DroneProfileResponse } from "@/types/droneProfile";
 interface StatsPanelProps {
   flightPlan: FlightPlanResponse | null;
   hasTrajectory: boolean;
-  inspectionCount: number;
   droneProfile: DroneProfileResponse | null;
 }
 

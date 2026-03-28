@@ -243,6 +243,13 @@
       "lon": "Lon",
       "alt": "Alt"
     },
+    "waypointTypes": {
+      "TAKEOFF": "Takeoff",
+      "LANDING": "Landing",
+      "TRANSIT": "Transit",
+      "MEASUREMENT": "Measurement",
+      "HOVER": "Hover"
+    },
     "tools": {
       "select": "Select and inspect map features (S)",
       "pan": "Pan the map (P)",

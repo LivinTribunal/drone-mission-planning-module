@@ -153,8 +153,8 @@ def test_delete_inspection(client):
     mission_id = missions[0]["id"]
 
     detail = client.get(f"/api/v1/missions/{mission_id}").json()
-    if detail["inspections"]:
-        insp_id = detail["inspections"][0]["id"]
+    assert len(detail["inspections"]) > 0, "precondition: mission must have inspections"
+    insp_id = detail["inspections"][0]["id"]
 
-        response = client.delete(f"/api/v1/missions/{mission_id}/inspections/{insp_id}")
-        assert response.status_code == 200
+    response = client.delete(f"/api/v1/missions/{mission_id}/inspections/{insp_id}")
+    assert response.status_code == 200

@@ -393,7 +393,6 @@ export default function MissionValidationPage() {
                 <StatsPanel
                   flightPlan={flightPlan}
                   hasTrajectory={flightPlan !== null}
-                  inspectionCount={mission.inspections.length}
                   droneProfile={droneProfiles.find((dp) => dp.id === mission.drone_profile_id) ?? null}
                 />
               </div>

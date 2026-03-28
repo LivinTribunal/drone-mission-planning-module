@@ -140,7 +140,7 @@ export default function WaypointListPanel({
         />
         <span className="font-medium w-6">{wp.sequence_order}</span>
         <span className="flex-1 truncate">
-          {wp.waypoint_type.replace(/_/g, " ")}
+          {t(`map.waypointTypes.${wp.waypoint_type}`, { defaultValue: wp.waypoint_type.replace(/_/g, " ") })}
         </span>
       </button>
     );
@@ -236,7 +236,7 @@ export default function WaypointListPanel({
                     {group.startSeq}-{group.endSeq}
                   </span>
                   <span className="flex-1 truncate">
-                    {group.type.replace(/_/g, " ")} ({group.waypoints.length})
+                    {t(`map.waypointTypes.${group.type}`, { defaultValue: group.type.replace(/_/g, " ") })} ({group.waypoints.length})
                   </span>
                 </button>
                 {isExpanded && (
