@@ -47,10 +47,6 @@ export default function AirportPage() {
     setLayerConfig(layers);
   }, []);
 
-  const handleListItemClick = useCallback((feature: MapFeature) => {
-    /** handle click from list panels - select feature. */
-    setSelectedFeature(feature);
-  }, []);
 
   const surfaces = useMemo(
     () => airportDetail?.surfaces ?? [],
@@ -110,22 +106,22 @@ export default function AirportPage() {
             <GroundSurfacesPanel
               surfaces={surfaces}
               layerConfig={layerConfig}
-              onItemClick={handleListItemClick}
+              onItemClick={handleFeatureClick}
             />
             <ObstaclesPanel
               obstacles={obstacles}
               layerConfig={layerConfig}
-              onItemClick={handleListItemClick}
+              onItemClick={handleFeatureClick}
             />
             <SafetyZonesPanel
               safetyZones={safetyZones}
               layerConfig={layerConfig}
-              onItemClick={handleListItemClick}
+              onItemClick={handleFeatureClick}
             />
             <AGLPanel
               surfaces={surfaces}
               layerConfig={layerConfig}
-              onItemClick={handleListItemClick}
+              onItemClick={handleFeatureClick}
             />
             {selectedFeature && (
               <PoiInfoPanel

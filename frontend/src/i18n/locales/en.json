@@ -541,7 +541,16 @@
     "noAglSystems": "No AGL systems defined",
     "units": "units",
     "active": "Active",
-    "inactive": "Inactive"
+    "inactive": "Inactive",
+    "runway": "Runway",
+    "taxiway": "Taxiway",
+    "lhaUnit": "LHA {{number}}",
+    "zoneType": {
+      "CTR": "CTR",
+      "RESTRICTED": "Restricted",
+      "PROHIBITED": "Prohibited",
+      "TEMPORARY_NO_FLY": "Temporary No-Fly"
+    }
   },
   "languages": {
     "en": "English"

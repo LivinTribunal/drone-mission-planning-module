@@ -259,7 +259,7 @@ describe("AirportPage", () => {
     await screen.findByText("PAPI RWY 24L");
 
     fireEvent.click(screen.getByTestId("agl-item-agl-1"));
-    expect(screen.getByText("LHA 1")).toBeInTheDocument();
+    expect(screen.getByText("airport.lhaUnit")).toBeInTheDocument();
     expect(screen.getByText("2.83°")).toBeInTheDocument();
   });
 });

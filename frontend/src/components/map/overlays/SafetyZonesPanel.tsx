@@ -95,7 +95,7 @@ export default function SafetyZonesPanel({
                         color: ZONE_COLORS[zone.type] ?? "#6b6b6b",
                       }}
                     >
-                      {zone.type.replace(/_/g, " ")}
+                      {t(`airport.zoneType.${zone.type}`)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">

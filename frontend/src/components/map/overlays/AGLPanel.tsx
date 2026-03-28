@@ -100,7 +100,7 @@ export default function AGLPanel({
                     }`}
                     data-testid={`agl-item-${agl.id}`}
                   >
-                    {/* green circle icon */}
+                    {/* magenta circle icon */}
                     <span
                       className="h-3 w-3 rounded-full flex-shrink-0"
                       style={{ backgroundColor: "#e91e90" }}
@@ -156,7 +156,7 @@ export default function AGLPanel({
                           />
                           <div className="flex-1 min-w-0">
                             <span className="text-[10px] font-medium text-tv-text-primary">
-                              LHA {lha.unit_number}
+                              {t("airport.lhaUnit", { number: lha.unit_number })}
                             </span>
                             <span className="text-[10px] text-tv-text-secondary ml-2">
                               {lha.setting_angle}°

@@ -99,7 +99,7 @@ export default function GroundSurfacesPanel({
                         {formatName(surface)}
                       </span>
                       <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-tv-bg border border-tv-border text-tv-text-secondary">
-                        {surface.surface_type === "RUNWAY" ? "Runway" : "Taxiway"}
+                        {surface.surface_type === "RUNWAY" ? t("airport.runway") : t("airport.taxiway")}
                       </span>
                     </div>
                     {surface.length != null && surface.width != null && (
