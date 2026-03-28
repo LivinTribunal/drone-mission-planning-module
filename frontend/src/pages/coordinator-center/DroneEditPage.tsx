@@ -112,6 +112,8 @@ export default function DroneEditPage() {
   const [notification, setNotification] = useState("");
   const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [nameError, setNameError] = useState("");
+
   // create dialog
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -219,6 +221,10 @@ export default function DroneEditPage() {
 
   async function handleSave() {
     if (!id || !drone) return;
+    if (!formData.name?.trim()) {
+      setNameError(t("coordinator.drones.create.nameRequired"));
+      return;
+    }
     try {
       const updated = await updateDroneProfile(id, formToPayload(formData));
       setDrone(updated);
@@ -250,7 +256,7 @@ export default function DroneEditPage() {
       const created = await createDroneProfile(payload);
       navigate(`/coordinator-center/drones/${created.id}`);
     } catch {
-      // ignore
+      showToast(t("coordinator.drones.duplicate.error"));
     }
   }
 
@@ -258,11 +264,11 @@ export default function DroneEditPage() {
     if (!id) return;
     try {
       await deleteDroneProfile(id);
+      setShowDeleteDialog(false);
       navigate("/coordinator-center/drones");
     } catch {
-      // ignore
+      showToast(t("coordinator.drones.delete.deleteError"));
     }
-    setShowDeleteDialog(false);
   }
 
   async function handleCreateNew(e: React.FormEvent) {
@@ -454,21 +460,28 @@ export default function DroneEditPage() {
 
               if (isEditing) {
                 return (
-                  <Input
-                    key={field.key}
-                    id={`edit-${field.key}`}
-                    label={unitLabel ? `${label} (${unitLabel})` : label}
-                    type={field.type}
-                    step={field.type === "number" ? "any" : undefined}
-                    value={formData[field.key] ?? ""}
-                    onChange={(e) =>
-                      setFormData((f) => ({
-                        ...f,
-                        [field.key]: e.target.value,
-                      }))
-                    }
-                    data-testid={`edit-${field.key}`}
-                  />
+                  <div key={field.key}>
+                    <Input
+                      id={`edit-${field.key}`}
+                      label={unitLabel ? `${label} (${unitLabel})` : label}
+                      type={field.type}
+                      step={field.type === "number" ? "any" : undefined}
+                      value={formData[field.key] ?? ""}
+                      onChange={(e) => {
+                        if (field.key === "name") setNameError("");
+                        setFormData((f) => ({
+                          ...f,
+                          [field.key]: e.target.value,
+                        }));
+                      }}
+                      data-testid={`edit-${field.key}`}
+                    />
+                    {field.key === "name" && nameError && (
+                      <p className="mt-1 text-sm text-tv-error" data-testid="name-error">
+                        {nameError}
+                      </p>
+                    )}
+                  </div>
                 );
               }
 

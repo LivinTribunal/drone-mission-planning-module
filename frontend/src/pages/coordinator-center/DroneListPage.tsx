@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
@@ -35,6 +35,10 @@ export default function DroneListPage() {
   });
   const [createError, setCreateError] = useState("");
 
+  // notifications
+  const [notification, setNotification] = useState("");
+  const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // delete dialog
   const [deleteTarget, setDeleteTarget] = useState<DroneProfileResponse | null>(
     null,
@@ -52,6 +56,12 @@ export default function DroneListPage() {
   useEffect(() => {
     fetchDrones();
   }, [fetchDrones]);
+
+  function showToast(msg: string) {
+    if (notificationTimer.current) clearTimeout(notificationTimer.current);
+    setNotification(msg);
+    notificationTimer.current = setTimeout(() => setNotification(""), 3000);
+  }
 
   const manufacturers = useMemo(() => {
     const set = new Set<string>();
@@ -131,7 +141,7 @@ export default function DroneListPage() {
       const created = await createDroneProfile(payload);
       navigate(`/coordinator-center/drones/${created.id}`);
     } catch {
-      // ignore
+      showToast(t("coordinator.drones.duplicate.error"));
     }
   }
 
@@ -139,11 +149,11 @@ export default function DroneListPage() {
     if (!deleteTarget) return;
     try {
       await deleteDroneProfile(deleteTarget.id);
+      setDeleteTarget(null);
       fetchDrones();
     } catch {
-      // ignore
+      showToast(t("coordinator.drones.delete.deleteError"));
     }
-    setDeleteTarget(null);
   }
 
   return (
@@ -419,6 +429,13 @@ export default function DroneListPage() {
           </Button>
         </div>
       </Modal>
+
+      {/* toast notification */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-2xl border border-tv-border bg-tv-surface px-4 py-3 text-sm text-tv-text-primary">
+          {notification}
+        </div>
+      )}
     </div>
   );
 }
