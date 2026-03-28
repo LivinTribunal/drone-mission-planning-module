@@ -552,7 +552,85 @@
     "droneProfiles": "Drone Profiles",
     "droneProfileEditor": "Drone Profile Editor",
     "inspectionTemplates": "Inspection Templates",
-    "inspectionTemplateEditor": "Inspection Template Editor"
+    "inspectionTemplateEditor": "Inspection Template Editor",
+    "drones": {
+      "title": "Drone Profiles",
+      "searchPlaceholder": "Search drones by name...",
+      "addNew": "+ Add New Drone Profile",
+      "filterManufacturer": "Manufacturer",
+      "allManufacturers": "All Manufacturers",
+      "noMatch": "No drones match your filters",
+      "noDrones": "No drone profiles available",
+      "loading": "Loading drone profiles...",
+      "loadError": "Failed to load drone profiles",
+      "columns": {
+        "name": "Name",
+        "manufacturer": "Manufacturer",
+        "model": "Model",
+        "maxSpeed": "Max Speed",
+        "endurance": "Endurance"
+      },
+      "create": {
+        "title": "Add New Drone Profile",
+        "namePlaceholder": "e.g. DJI Matrice 300 RTK",
+        "add": "Add",
+        "nameRequired": "Drone name is required",
+        "createError": "Failed to create drone profile"
+      },
+      "delete": {
+        "title": "Delete Drone Profile",
+        "confirm": "Delete drone profile \"{{name}}\"? Missions using this profile will keep their current configuration.",
+        "deleteError": "Failed to delete drone profile"
+      },
+      "duplicate": {
+        "suffix": "(Copy)",
+        "error": "Failed to duplicate drone profile"
+      },
+      "actions": {
+        "duplicate": "Duplicate",
+        "delete": "Delete"
+      },
+      "detail": {
+        "backToList": "Back to list",
+        "selectDrone": "Select drone",
+        "addNew": "Add New",
+        "edit": "Edit",
+        "duplicate": "Duplicate",
+        "delete": "Delete",
+        "save": "Save Changes",
+        "saved": "Changes saved successfully",
+        "saveError": "Failed to save changes",
+        "unsavedTitle": "Unsaved Changes",
+        "unsavedMessage": "You have unsaved changes. Do you want to discard them?",
+        "keepEditing": "Keep Editing",
+        "discardChanges": "Discard Changes",
+        "readOnly": "Read-only",
+        "editing": "Editing"
+      },
+      "fields": {
+        "name": "Drone Name",
+        "manufacturer": "Manufacturer",
+        "model": "Model",
+        "maxSpeed": "Max Speed",
+        "maxClimbRate": "Max Climb Rate",
+        "maxAltitude": "Max Altitude",
+        "batteryCapacity": "Battery Capacity",
+        "endurance": "Endurance",
+        "cameraResolution": "Camera Resolution",
+        "cameraFrameRate": "Camera Frame Rate",
+        "sensorFov": "Sensor FOV",
+        "weight": "Weight"
+      },
+      "units": {
+        "ms": "m/s",
+        "m": "m",
+        "min": "min",
+        "mah": "mAh",
+        "fps": "fps",
+        "degrees": "°",
+        "kg": "kg"
+      }
+    }
   },
   "airport": {
     "title": "Airport",
