@@ -35,8 +35,9 @@ TRAJECTORY_DRONE_PAYLOAD = {
 }
 
 
-DEFAULT_TAKEOFF = {"type": "Point", "coordinates": [14.24, 50.10, 300]}
-DEFAULT_LANDING = {"type": "Point", "coordinates": [14.28, 50.09, 300]}
+# offset from runway to avoid transit crossing violations
+DEFAULT_TAKEOFF = {"type": "Point", "coordinates": [14.26, 50.105, 300]}
+DEFAULT_LANDING = {"type": "Point", "coordinates": [14.26, 50.105, 300]}
 
 
 def make_lha_payload(i: int) -> dict:
