@@ -145,7 +145,7 @@ describe("StatsPanel", () => {
 
     expect(screen.getByText("1.50 km")).toBeInTheDocument();
     expect(screen.getByText("5:00")).toBeInTheDocument();
-    expect(screen.getByText("9%")).toBeInTheDocument();
+    expect(screen.getByText("91%")).toBeInTheDocument();
   });
 });
 

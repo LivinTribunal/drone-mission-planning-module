@@ -131,6 +131,8 @@ class MissionResponse(BaseModel):
     takeoff_coordinate: PointZ | None = None
     landing_coordinate: PointZ | None = None
     has_unsaved_map_changes: bool = False
+    inspection_count: int = 0
+    estimated_duration: float | None = None
 
     model_config = {"from_attributes": True}
 

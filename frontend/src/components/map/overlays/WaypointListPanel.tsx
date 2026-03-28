@@ -182,16 +182,32 @@ export default function WaypointListPanel({
         <div className="max-h-48 overflow-y-auto border-t border-tv-border px-1 pb-1 pt-1">
           {/* show standalone takeoff/landing when no trajectory waypoints */}
           {waypoints.length === 0 && hasTakeoff && (
-            <div className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-tv-text-primary">
+            <button
+              onClick={() => onSelect(selectedId === "takeoff" ? null : "takeoff")}
+              className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
+                selectedId === "takeoff"
+                  ? "bg-tv-accent/20 text-tv-accent"
+                  : "text-tv-text-primary hover:bg-tv-surface-hover"
+              }`}
+              data-testid="waypoint-item-takeoff"
+            >
               <MapPin className="h-3 w-3 flex-shrink-0 text-tv-info" />
               <span className="font-medium">{t("dashboard.waypointTakeoff")}</span>
-            </div>
+            </button>
           )}
           {waypoints.length === 0 && hasLanding && (
-            <div className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-tv-text-primary">
+            <button
+              onClick={() => onSelect(selectedId === "landing" ? null : "landing")}
+              className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
+                selectedId === "landing"
+                  ? "bg-tv-accent/20 text-tv-accent"
+                  : "text-tv-text-primary hover:bg-tv-surface-hover"
+              }`}
+              data-testid="waypoint-item-landing"
+            >
               <MapPin className="h-3 w-3 flex-shrink-0 text-tv-error" />
               <span className="font-medium">{t("dashboard.waypointLanding")}</span>
-            </div>
+            </button>
           )}
           {groups.map((group) => {
             // single-waypoint group or always-individual types

@@ -68,10 +68,10 @@ export default function StatsPanel({
 
   let batteryPct = "\u2014";
   if (flightPlan?.estimated_duration && droneProfile?.endurance_minutes) {
-    const pct =
+    const consumption =
       (flightPlan.estimated_duration / 60 / droneProfile.endurance_minutes) *
       100;
-    batteryPct = `${Math.round(pct)}%`;
+    batteryPct = `${Math.max(0, Math.round(100 - consumption))}%`;
   }
 
   const stats = [
@@ -94,7 +94,7 @@ export default function StatsPanel({
       colorClass: "bg-tv-warning/20 text-tv-warning",
     },
     {
-      label: t("mission.config.batteryConsumption"),
+      label: t("mission.config.batteryLeft"),
       value: batteryPct,
       icon: Battery,
       colorClass: "bg-tv-error/20 text-tv-error",

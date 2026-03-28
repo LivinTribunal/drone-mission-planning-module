@@ -46,9 +46,14 @@ def list_missions(
         db, airport_id=airport_id, status=status, limit=limit, offset=offset
     )
 
-    return MissionListResponse(
-        data=missions, meta=ListMeta(total=total, limit=limit, offset=offset)
-    )
+    data = []
+    for m in missions:
+        resp = MissionResponse.model_validate(m)
+        resp.inspection_count = len(m.inspections) if m.inspections else 0
+        resp.estimated_duration = m.flight_plan.estimated_duration if m.flight_plan else None
+        data.append(resp)
+
+    return MissionListResponse(data=data, meta=ListMeta(total=total, limit=limit, offset=offset))
 
 
 @router.get("/{mission_id}", response_model=MissionDetailResponse)

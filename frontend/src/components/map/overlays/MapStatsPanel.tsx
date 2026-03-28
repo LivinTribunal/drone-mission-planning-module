@@ -35,9 +35,9 @@ export default function MapStatsPanel({
 
   let batteryPct = "\u2014";
   if (flightPlan.estimated_duration && enduranceMinutes) {
-    const pct =
+    const consumption =
       (flightPlan.estimated_duration / 60 / enduranceMinutes) * 100;
-    batteryPct = `${Math.round(pct)}%`;
+    batteryPct = `${Math.max(0, Math.round(100 - consumption))}%`;
   }
 
   const stats = [
@@ -54,7 +54,7 @@ export default function MapStatsPanel({
       icon: Layers,
     },
     {
-      label: t("map.batteryConsumption"),
+      label: t("map.batteryLeft"),
       value: batteryPct,
       icon: Battery,
     },

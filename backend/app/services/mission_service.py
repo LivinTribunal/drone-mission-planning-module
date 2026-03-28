@@ -45,14 +45,24 @@ def list_missions(
     offset: int = 0,
 ) -> tuple[list[Mission], int]:
     """list missions with optional filters and pagination."""
-    query = db.query(Mission)
+    query = db.query(Mission).options(
+        joinedload(Mission.inspections),
+        joinedload(Mission.flight_plan),
+    )
 
     if airport_id:
         query = query.filter(Mission.airport_id == airport_id)
     if status:
         query = query.filter(Mission.status == status)
 
-    total = query.count()
+    # count on a clean query to avoid joinedload duplicates
+    count_query = db.query(Mission)
+    if airport_id:
+        count_query = count_query.filter(Mission.airport_id == airport_id)
+    if status:
+        count_query = count_query.filter(Mission.status == status)
+    total = count_query.count()
+
     missions = query.order_by(Mission.created_at.desc()).offset(offset).limit(limit).all()
 
     return missions, total

@@ -135,6 +135,18 @@ def test_add_inspection(client):
     assert response.json()["method"] == "ANGULAR_SWEEP"
 
 
+def test_list_missions_includes_inspection_count_and_duration(client):
+    """test list response includes inspection_count and estimated_duration."""
+    response = client.get("/api/v1/missions")
+    assert response.status_code == 200
+    body = response.json()
+
+    for m in body["data"]:
+        assert "inspection_count" in m
+        assert "estimated_duration" in m
+        assert isinstance(m["inspection_count"], int)
+
+
 def test_delete_inspection(client):
     """test delete inspection from mission"""
     missions = client.get("/api/v1/missions").json()["data"]
