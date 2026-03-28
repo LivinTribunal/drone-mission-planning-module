@@ -200,6 +200,7 @@ describe("InspectionConfigForm LHA toggle", () => {
     angular_tolerances: null,
     created_by: null,
     created_at: null,
+    updated_at: null,
     default_config: null,
     target_agl_ids: ["agl-1"],
     methods: ["VERTICAL_PROFILE" as const],
