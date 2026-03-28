@@ -1,16 +1,14 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 export enum MapTool {
+  SELECT = "SELECT",
   PAN = "PAN",
+  MOVE_WAYPOINT = "MOVE_WAYPOINT",
+  MEASURE = "MEASURE",
   ZOOM = "ZOOM",
   ZOOM_RESET = "ZOOM_RESET",
-  SELECT = "SELECT",
-  MEASURE = "MEASURE",
-  ADD_START = "ADD_START",
-  ADD_END = "ADD_END",
-  WAYPOINT = "WAYPOINT",
-  CAMERA = "CAMERA",
-  TOGGLE_3D = "TOGGLE_3D",
+  PLACE_TAKEOFF = "PLACE_TAKEOFF",
+  PLACE_LANDING = "PLACE_LANDING",
 }
 
 interface MapToolsReturn {
@@ -18,29 +16,52 @@ interface MapToolsReturn {
   is3D: boolean;
   setTool: (tool: MapTool) => void;
   resetTool: () => void;
+  setIs3D: (val: boolean) => void;
 }
 
 export default function useMapTools(): MapToolsReturn {
-  const [activeTool, setActiveTool] = useState<MapTool>(MapTool.PAN);
+  const [activeTool, setActiveTool] = useState<MapTool>(MapTool.SELECT);
   const [is3D, setIs3D] = useState(false);
 
   const setTool = useCallback((tool: MapTool) => {
-    if (tool === MapTool.TOGGLE_3D) {
-      setIs3D((prev) => !prev);
-      setActiveTool(MapTool.PAN);
-      return;
-    }
-    if (tool === MapTool.ZOOM_RESET) {
-      // zoom reset is a one-shot action, reset to pan
-      setActiveTool(MapTool.PAN);
-      return;
-    }
+    if (tool === MapTool.ZOOM_RESET) return;
     setActiveTool(tool);
   }, []);
 
   const resetTool = useCallback(() => {
-    setActiveTool(MapTool.PAN);
+    setActiveTool(MapTool.SELECT);
   }, []);
 
-  return { activeTool, is3D, setTool, resetTool };
+  // keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      switch (e.key.toLowerCase()) {
+        case "s":
+          if (!e.ctrlKey && !e.metaKey) setActiveTool(MapTool.SELECT);
+          break;
+        case "p":
+          setActiveTool(MapTool.PAN);
+          break;
+        case "w":
+          setActiveTool(MapTool.MOVE_WAYPOINT);
+          break;
+        case "m":
+          setActiveTool(MapTool.MEASURE);
+          break;
+        case "z":
+          if (!e.ctrlKey && !e.metaKey) setActiveTool(MapTool.ZOOM);
+          break;
+        case "r":
+          // zoom reset is handled by the toolbar/page
+          break;
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  return { activeTool, is3D, setTool, resetTool, setIs3D };
 }

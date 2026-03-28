@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import InspectionSelect from "./InspectionSelect";
 import MapControlsToolbar from "./MapControlsToolbar";
 import MapWarningsPanel from "./MapWarningsPanel";
 import MapStatsPanel from "./MapStatsPanel";
+import InspectionListPanel from "./InspectionListPanel";
 import { MapTool } from "@/hooks/useMapTools";
 import type { InspectionResponse } from "@/types/mission";
 import type { ValidationViolation } from "@/types/flightPlan";
@@ -32,58 +32,63 @@ const mockInspections: InspectionResponse[] = [
   },
 ];
 
-describe("InspectionSelect", () => {
-  it("renders dropdown with inspections", () => {
+describe("InspectionListPanel", () => {
+  it("renders inspection list", () => {
     render(
-      <InspectionSelect
+      <InspectionListPanel
         inspections={mockInspections}
-        selectedId={null}
-        onSelect={vi.fn()}
+        hiddenInspectionIds={new Set()}
+        onToggleVisibility={vi.fn()}
+        onInspectionClick={vi.fn()}
       />,
     );
-    expect(screen.getByTestId("inspection-select")).toBeInTheDocument();
-    expect(screen.getByText("map.inspectionSelect")).toBeInTheDocument();
+    expect(screen.getByTestId("inspection-list-panel")).toBeInTheDocument();
   });
 
-  it("calls onSelect when inspection is chosen", () => {
-    const onSelect = vi.fn();
+  it("calls onInspectionClick when inspection is clicked", () => {
+    const onClick = vi.fn();
     render(
-      <InspectionSelect
+      <InspectionListPanel
         inspections={mockInspections}
-        selectedId={null}
-        onSelect={onSelect}
+        hiddenInspectionIds={new Set()}
+        onToggleVisibility={vi.fn()}
+        onInspectionClick={onClick}
       />,
     );
-    const select = screen.getByRole("combobox");
-    fireEvent.change(select, { target: { value: "insp-1" } });
-    expect(onSelect).toHaveBeenCalledWith("insp-1");
+    fireEvent.click(screen.getByTestId("inspection-item-insp-1"));
+    expect(onClick).toHaveBeenCalledWith("insp-1");
   });
 
-  it("calls onSelect with null when none is selected", () => {
-    const onSelect = vi.fn();
+  it("calls onToggleVisibility when eye icon is clicked", () => {
+    const onToggle = vi.fn();
     render(
-      <InspectionSelect
+      <InspectionListPanel
         inspections={mockInspections}
-        selectedId="insp-1"
-        onSelect={onSelect}
+        hiddenInspectionIds={new Set()}
+        onToggleVisibility={onToggle}
+        onInspectionClick={vi.fn()}
       />,
     );
-    const select = screen.getByRole("combobox");
-    fireEvent.change(select, { target: { value: "" } });
-    expect(onSelect).toHaveBeenCalledWith(null);
+    fireEvent.click(screen.getByTestId("toggle-visibility-insp-1"));
+    expect(onToggle).toHaveBeenCalledWith("insp-1");
   });
 });
 
 describe("MapControlsToolbar", () => {
   const defaultProps = {
-    activeTool: MapTool.PAN,
+    activeTool: MapTool.SELECT,
     onToolChange: vi.fn(),
     is3D: false,
+    onToggle3D: vi.fn(),
+    terrainMode: "satellite" as const,
+    onTerrainChange: vi.fn(),
     canUndo: false,
     canRedo: false,
     onUndo: vi.fn(),
     onRedo: vi.fn(),
-    inspectionSelected: false,
+    onZoomReset: vi.fn(),
+    zoomPercent: 100,
+    onZoomTo: vi.fn(),
   };
 
   it("renders toolbar with tool buttons", () => {
@@ -98,18 +103,6 @@ describe("MapControlsToolbar", () => {
     render(<MapControlsToolbar {...defaultProps} onToolChange={onToolChange} />);
     fireEvent.click(screen.getByTestId("tool-select"));
     expect(onToolChange).toHaveBeenCalledWith(MapTool.SELECT);
-  });
-
-  it("disables waypoint and camera tools when no inspection selected", () => {
-    render(<MapControlsToolbar {...defaultProps} inspectionSelected={false} />);
-    expect(screen.getByTestId("tool-waypoint")).toBeDisabled();
-    expect(screen.getByTestId("tool-camera")).toBeDisabled();
-  });
-
-  it("enables waypoint and camera tools when inspection selected", () => {
-    render(<MapControlsToolbar {...defaultProps} inspectionSelected={true} />);
-    expect(screen.getByTestId("tool-waypoint")).not.toBeDisabled();
-    expect(screen.getByTestId("tool-camera")).not.toBeDisabled();
   });
 
   it("disables undo button when canUndo is false", () => {

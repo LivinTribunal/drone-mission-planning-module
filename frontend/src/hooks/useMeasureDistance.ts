@@ -1,18 +1,27 @@
 import { useState, useCallback, useMemo } from "react";
 
-interface MeasureState {
-  firstPoint: [number, number] | null;
-  secondPoint: [number, number] | null;
+const MAX_POINTS = 25;
+
+export interface MeasureSegment {
+  from: [number, number];
+  to: [number, number];
+  distance: number;
+  cumulative: number;
 }
 
 interface MeasureReturn {
-  firstPoint: [number, number] | null;
-  secondPoint: [number, number] | null;
-  distance: number | null;
-  labelText: string;
-  lineGeoJSON: GeoJSON.Feature | null;
+  points: [number, number][];
+  segments: MeasureSegment[];
+  totalDistance: number;
+  cursorPoint: [number, number] | null;
+  pointsGeoJSON: GeoJSON.FeatureCollection;
+  linesGeoJSON: GeoJSON.FeatureCollection;
+  labelsGeoJSON: GeoJSON.FeatureCollection;
   addPoint: (lng: number, lat: number) => void;
+  setCursor: (lng: number, lat: number) => void;
+  clearCursor: () => void;
   clear: () => void;
+  hasPoints: boolean;
 }
 
 function haversineDistance(
@@ -31,64 +40,147 @@ function haversineDistance(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function formatDistance(meters: number): string {
+  if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`;
+  return `${Math.round(meters)} m`;
+}
+
 export default function useMeasureDistance(): MeasureReturn {
-  const [state, setState] = useState<MeasureState>({
-    firstPoint: null,
-    secondPoint: null,
-  });
+  const [points, setPoints] = useState<[number, number][]>([]);
+  const [cursorPoint, setCursorPoint] = useState<[number, number] | null>(null);
 
   const addPoint = useCallback((lng: number, lat: number) => {
-    setState((prev) => {
-      if (prev.firstPoint === null) {
-        return { firstPoint: [lng, lat], secondPoint: null };
-      }
-      if (prev.secondPoint === null) {
-        return { ...prev, secondPoint: [lng, lat] };
-      }
-      // both set - start new measurement
-      return { firstPoint: [lng, lat], secondPoint: null };
+    setPoints((prev) => {
+      if (prev.length >= MAX_POINTS) return prev;
+      return [...prev, [lng, lat]];
     });
   }, []);
 
-  const clear = useCallback(() => {
-    setState({ firstPoint: null, secondPoint: null });
+  const setCursor = useCallback((lng: number, lat: number) => {
+    setCursorPoint([lng, lat]);
   }, []);
 
-  const distance = useMemo(() => {
-    if (!state.firstPoint || !state.secondPoint) return null;
-    return haversineDistance(
-      state.firstPoint[0],
-      state.firstPoint[1],
-      state.secondPoint[0],
-      state.secondPoint[1],
-    );
-  }, [state.firstPoint, state.secondPoint]);
+  const clearCursor = useCallback(() => {
+    setCursorPoint(null);
+  }, []);
 
-  const labelText = useMemo(() => {
-    if (distance === null) return "";
-    if (distance >= 1000) return `${(distance / 1000).toFixed(2)} km`;
-    return `${Math.round(distance)} m`;
-  }, [distance]);
+  const clear = useCallback(() => {
+    setPoints([]);
+    setCursorPoint(null);
+  }, []);
 
-  const lineGeoJSON = useMemo((): GeoJSON.Feature | null => {
-    if (!state.firstPoint || !state.secondPoint) return null;
-    return {
-      type: "Feature",
-      properties: {},
-      geometry: {
-        type: "LineString",
-        coordinates: [state.firstPoint, state.secondPoint],
-      },
-    };
-  }, [state.firstPoint, state.secondPoint]);
+  const segments = useMemo((): MeasureSegment[] => {
+    const segs: MeasureSegment[] = [];
+    let cumulative = 0;
+    for (let i = 1; i < points.length; i++) {
+      const dist = haversineDistance(
+        points[i - 1][0],
+        points[i - 1][1],
+        points[i][0],
+        points[i][1],
+      );
+      cumulative += dist;
+      segs.push({
+        from: points[i - 1],
+        to: points[i],
+        distance: dist,
+        cumulative,
+      });
+    }
+    return segs;
+  }, [points]);
+
+  const totalDistance = segments.length > 0 ? segments[segments.length - 1].cumulative : 0;
+
+  const pointsGeoJSON = useMemo((): GeoJSON.FeatureCollection => ({
+    type: "FeatureCollection",
+    features: points.map((p, i) => ({
+      type: "Feature" as const,
+      properties: { index: i },
+      geometry: { type: "Point" as const, coordinates: p },
+    })),
+  }), [points]);
+
+  const linesGeoJSON = useMemo((): GeoJSON.FeatureCollection => {
+    const features: GeoJSON.Feature[] = [];
+
+    // locked segments
+    for (const seg of segments) {
+      features.push({
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: [seg.from, seg.to],
+        },
+      });
+    }
+
+    // live cursor line from last point
+    if (points.length > 0 && cursorPoint) {
+      features.push({
+        type: "Feature",
+        properties: { cursor: true },
+        geometry: {
+          type: "LineString",
+          coordinates: [points[points.length - 1], cursorPoint],
+        },
+      });
+    }
+
+    return { type: "FeatureCollection", features };
+  }, [segments, points, cursorPoint]);
+
+  const labelsGeoJSON = useMemo((): GeoJSON.FeatureCollection => {
+    const features: GeoJSON.Feature[] = [];
+
+    for (const seg of segments) {
+      const midLng = (seg.from[0] + seg.to[0]) / 2;
+      const midLat = (seg.from[1] + seg.to[1]) / 2;
+      const label =
+        segments.length === 1
+          ? formatDistance(seg.distance)
+          : `${formatDistance(seg.distance)} (total: ${formatDistance(seg.cumulative)})`;
+      features.push({
+        type: "Feature",
+        properties: { label },
+        geometry: { type: "Point", coordinates: [midLng, midLat] },
+      });
+    }
+
+    // live cursor label
+    if (points.length > 0 && cursorPoint) {
+      const last = points[points.length - 1];
+      const dist = haversineDistance(last[0], last[1], cursorPoint[0], cursorPoint[1]);
+      const cumul = totalDistance + dist;
+      const midLng = (last[0] + cursorPoint[0]) / 2;
+      const midLat = (last[1] + cursorPoint[1]) / 2;
+      const label =
+        points.length === 1
+          ? formatDistance(dist)
+          : `${formatDistance(dist)} (total: ${formatDistance(cumul)})`;
+      features.push({
+        type: "Feature",
+        properties: { label, cursor: true },
+        geometry: { type: "Point", coordinates: [midLng, midLat] },
+      });
+    }
+
+    return { type: "FeatureCollection", features };
+  }, [segments, points, cursorPoint, totalDistance]);
 
   return {
-    firstPoint: state.firstPoint,
-    secondPoint: state.secondPoint,
-    distance,
-    labelText,
-    lineGeoJSON,
+    points,
+    segments,
+    totalDistance,
+    cursorPoint,
+    pointsGeoJSON,
+    linesGeoJSON,
+    labelsGeoJSON,
     addPoint,
+    setCursor,
+    clearCursor,
     clear,
+    hasPoints: points.length > 0,
   };
 }

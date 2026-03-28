@@ -575,6 +575,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     if mission.status == MissionStatus.DRAFT:
         mission.transition_to(MissionStatus.PLANNED)
 
+    mission.has_unsaved_map_changes = False
     db.commit()
 
     return flight_plan, warnings

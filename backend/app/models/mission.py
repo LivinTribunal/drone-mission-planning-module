@@ -2,7 +2,16 @@ from uuid import UUID as PyUUID
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
-from sqlalchemy import CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -77,6 +86,7 @@ class Mission(Base):
     default_altitude_offset = Column(Float)
     takeoff_coordinate = Column(Geometry("POINTZ", srid=4326))
     landing_coordinate = Column(Geometry("POINTZ", srid=4326))
+    has_unsaved_map_changes = Column(Boolean, nullable=False, default=False, server_default="false")
 
     airport = relationship("Airport")
     drone_profile = relationship("DroneProfile")

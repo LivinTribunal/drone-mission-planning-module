@@ -108,6 +108,18 @@ export interface AirportMapProps {
   inspectionIndexMap?: Record<string, number>;
   onLayerChange?: (layers: MapLayerConfig) => void;
   leftPanelChildren?: ReactNode;
+  onPlaceTakeoff?: () => void;
+  onPlaceLanding?: () => void;
+  measureData?: {
+    points: GeoJSON.FeatureCollection;
+    lines: GeoJSON.FeatureCollection;
+    labels: GeoJSON.FeatureCollection;
+  };
+  onMeasureClear?: () => void;
+  onMeasureMouseMove?: (lng: number, lat: number) => void;
+  onWaypointDrag?: (waypointId: string, newPosition: [number, number, number]) => void;
+  zoomPercent?: number;
+  onZoomChange?: (percent: number) => void;
 }
 
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {
