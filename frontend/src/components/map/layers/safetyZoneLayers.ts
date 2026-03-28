@@ -26,9 +26,8 @@ export function addSafetyZoneLayers(
   // register hatch patterns per zone type
   for (const [type, color] of Object.entries(zoneBorderColors)) {
     const imgName = `hatch-${type.toLowerCase()}`;
-    if (!map.hasImage(imgName)) {
-      map.addImage(imgName, createHatchPattern(color));
-    }
+    try { if (map.hasImage(imgName)) map.removeImage(imgName); } catch { /* noop */ }
+    map.addImage(imgName, createHatchPattern(color));
   }
 
   map.addSource(SAFETY_ZONE_SOURCE, {

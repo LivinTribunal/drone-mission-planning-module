@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Minus } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -17,18 +19,22 @@ import {
   RUNWAY_STROKE_LAYER,
   RUNWAY_CENTERLINE_LAYER,
   RUNWAY_LABEL_LAYER,
+  RUNWAY_POLYGON_SOURCE,
   TAXIWAY_FILL_LAYER,
   TAXIWAY_STROKE_LAYER,
   TAXIWAY_LABEL_LAYER,
+  TAXIWAY_POLYGON_SOURCE,
 } from "./layers/surfaceLayers";
 import {
   addObstacleLayers,
+  OBSTACLE_SOURCE,
   OBSTACLE_ICON_LAYER,
   OBSTACLE_RADIUS_LAYER,
   OBSTACLE_LABEL_LAYER,
 } from "./layers/obstacleLayers";
 import {
   addSafetyZoneLayers,
+  SAFETY_ZONE_SOURCE,
   SAFETY_ZONE_FILL_LAYER,
   SAFETY_ZONE_HATCH_LAYER,
   SAFETY_ZONE_BORDER_LAYER,
@@ -36,8 +42,10 @@ import {
 } from "./layers/safetyZoneLayers";
 import {
   addAglLayers,
+  AGL_SOURCE,
   AGL_POINT_LAYER,
   AGL_LABEL_LAYER,
+  LHA_SOURCE,
   LHA_POINT_LAYER,
   LHA_LABEL_LAYER,
 } from "./layers/aglLayers";
@@ -76,6 +84,24 @@ const OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 const GLYPHS_URL =
   "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
+
+/** polls map.isStyleLoaded() until true, then calls callback. returns cancel fn. */
+function waitForStyleLoaded(
+  map: maplibregl.Map,
+  callback: () => void,
+): () => void {
+  let cancelled = false;
+  function check() {
+    if (cancelled) return;
+    if (map.isStyleLoaded()) {
+      callback();
+    } else {
+      requestAnimationFrame(check);
+    }
+  }
+  requestAnimationFrame(check);
+  return () => { cancelled = true; };
+}
 
 function makeSatelliteStyle(): maplibregl.StyleSpecification {
   return {
@@ -199,10 +225,17 @@ export default function AirportMap({
   onWaypointDrag,
   zoomPercent,
   onZoomChange,
+  focusFeature,
+  showZoomControls = true,
+  showCompass = true,
+  is3D: is3DProp,
+  onBearingChange,
 }: AirportMapProps & { activeTool?: MapTool }) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const layersAddedRef = useRef(false);
+  const cancelStylePollRef = useRef<(() => void) | null>(null);
   const suppressZoomEndRef = useRef(false);
   const waypointsRef = useRef(waypoints);
   const takeoffRef = useRef(takeoffCoordinate);
@@ -235,6 +268,62 @@ export default function AirportMap({
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(
     null,
   );
+
+  const [bearing, setBearing] = useState(0);
+  const [internalIs3D] = useState(false);
+  const is3D = is3DProp ?? internalIs3D;
+
+  // track map bearing for compass
+  const onBearingChangeRef = useRef(onBearingChange);
+  onBearingChangeRef.current = onBearingChange;
+
+  // apply 3D pitch toggle
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.easeTo({ pitch: is3D ? 60 : 0, duration: 400 });
+  }, [is3D]);
+
+  // fly to focused feature and highlight it on the map
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // sync highlight even when clearing selection
+    syncHighlight(map, focusFeature ?? null);
+
+    if (!focusFeature) return;
+
+    let lon: number | undefined;
+    let lat: number | undefined;
+
+    let minZoom = 15.5;
+
+    if (focusFeature.type === "obstacle") {
+      [lon, lat] = focusFeature.data.position.coordinates;
+    } else if (focusFeature.type === "agl") {
+      [lon, lat] = focusFeature.data.position.coordinates;
+    } else if (focusFeature.type === "lha") {
+      [lon, lat] = focusFeature.data.position.coordinates;
+      minZoom = 18;
+    } else if (focusFeature.type === "surface") {
+      const coords = focusFeature.data.geometry.coordinates;
+      if (coords.length > 0) {
+        lon = coords.reduce((s, c) => s + c[0], 0) / coords.length;
+        lat = coords.reduce((s, c) => s + c[1], 0) / coords.length;
+      }
+    } else if (focusFeature.type === "safety_zone") {
+      const ring = focusFeature.data.geometry.coordinates[0];
+      if (ring && ring.length > 0) {
+        lon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+        lat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+      }
+    }
+
+    if (lon !== undefined && lat !== undefined) {
+      map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), minZoom), duration: 800 });
+    }
+  }, [focusFeature]);
 
   // apply cursor based on active tool
   useEffect(() => {
@@ -471,7 +560,16 @@ export default function AirportMap({
 
     mapRef.current = map;
 
+    // track bearing for compass
+    function handleRotate() {
+      const b = map.getBearing();
+      setBearing(b);
+      onBearingChangeRef.current?.(b);
+    }
+    map.on("rotate", handleRotate);
+
     return () => {
+      map.off("rotate", handleRotate);
       map.remove();
       mapRef.current = null;
       layersAddedRef.current = false;
@@ -535,6 +633,135 @@ export default function AirportMap({
     }
   }
 
+  // highlight layer ids for selected infrastructure features
+  const HIGHLIGHT_RUNWAY = "highlight-runway";
+  const HIGHLIGHT_TAXIWAY = "highlight-taxiway";
+  const HIGHLIGHT_OBSTACLE = "highlight-obstacle";
+  const HIGHLIGHT_SAFETY_ZONE = "highlight-safety-zone";
+  const HIGHLIGHT_AGL = "highlight-agl";
+  const HIGHLIGHT_LHA = "highlight-lha";
+
+  function addHighlightLayers(map: maplibregl.Map) {
+    /** add selection highlight layers for all infrastructure types. */
+    const emptyFilter: maplibregl.ExpressionSpecification = ["==", ["get", "id"], ""];
+
+    // runway polygon outline
+    if (map.getSource(RUNWAY_POLYGON_SOURCE) && !map.getLayer(HIGHLIGHT_RUNWAY)) {
+      map.addLayer({
+        id: HIGHLIGHT_RUNWAY,
+        type: "line",
+        source: RUNWAY_POLYGON_SOURCE,
+        filter: emptyFilter,
+        paint: { "line-color": "#ffffff", "line-width": 3, "line-opacity": 0.9 },
+      });
+    }
+
+    // taxiway polygon outline
+    if (map.getSource(TAXIWAY_POLYGON_SOURCE) && !map.getLayer(HIGHLIGHT_TAXIWAY)) {
+      map.addLayer({
+        id: HIGHLIGHT_TAXIWAY,
+        type: "line",
+        source: TAXIWAY_POLYGON_SOURCE,
+        filter: emptyFilter,
+        paint: { "line-color": "#ffffff", "line-width": 3, "line-opacity": 0.9 },
+      });
+    }
+
+    // obstacle point ring
+    if (map.getSource(OBSTACLE_SOURCE) && !map.getLayer(HIGHLIGHT_OBSTACLE)) {
+      map.addLayer({
+        id: HIGHLIGHT_OBSTACLE,
+        type: "circle",
+        source: OBSTACLE_SOURCE,
+        filter: emptyFilter,
+        paint: {
+          "circle-radius": 16,
+          "circle-color": "transparent",
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 3,
+          "circle-stroke-opacity": 0.9,
+        },
+      });
+    }
+
+    // safety zone polygon outline
+    if (map.getSource(SAFETY_ZONE_SOURCE) && !map.getLayer(HIGHLIGHT_SAFETY_ZONE)) {
+      map.addLayer({
+        id: HIGHLIGHT_SAFETY_ZONE,
+        type: "line",
+        source: SAFETY_ZONE_SOURCE,
+        filter: emptyFilter,
+        paint: { "line-color": "#ffffff", "line-width": 3, "line-opacity": 0.9 },
+      });
+    }
+
+    // agl point ring
+    if (map.getSource(AGL_SOURCE) && !map.getLayer(HIGHLIGHT_AGL)) {
+      map.addLayer({
+        id: HIGHLIGHT_AGL,
+        type: "circle",
+        source: AGL_SOURCE,
+        filter: emptyFilter,
+        paint: {
+          "circle-radius": 16,
+          "circle-color": "transparent",
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 3,
+          "circle-stroke-opacity": 0.9,
+        },
+      });
+    }
+
+    // lha point ring
+    if (map.getSource(LHA_SOURCE) && !map.getLayer(HIGHLIGHT_LHA)) {
+      map.addLayer({
+        id: HIGHLIGHT_LHA,
+        type: "circle",
+        source: LHA_SOURCE,
+        filter: emptyFilter,
+        paint: {
+          "circle-radius": 12,
+          "circle-color": "transparent",
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 3,
+          "circle-stroke-opacity": 0.9,
+        },
+      });
+    }
+  }
+
+  function syncHighlight(map: maplibregl.Map, feature: MapFeature | null) {
+    /** update highlight layer filters to match selected feature. */
+    const layers = [
+      { id: HIGHLIGHT_RUNWAY, type: "surface", subType: "RUNWAY" },
+      { id: HIGHLIGHT_TAXIWAY, type: "surface", subType: "TAXIWAY" },
+      { id: HIGHLIGHT_OBSTACLE, type: "obstacle" },
+      { id: HIGHLIGHT_SAFETY_ZONE, type: "safety_zone" },
+      { id: HIGHLIGHT_AGL, type: "agl" },
+      { id: HIGHLIGHT_LHA, type: "lha" },
+    ];
+
+    for (const layer of layers) {
+      try {
+        if (!map.getLayer(layer.id)) continue;
+        let matchId = "";
+        if (feature && feature.type === layer.type) {
+          if (layer.subType) {
+            // surface: match only if sub-type matches
+            if (feature.type === "surface" && feature.data.surface_type === layer.subType) {
+              matchId = feature.data.id;
+            }
+          } else {
+            matchId = feature.data.id;
+          }
+        }
+        map.setFilter(layer.id, ["==", ["get", "id"], matchId]);
+      } catch {
+        // layer may not exist
+      }
+    }
+  }
+
   // shared helper to add all infrastructure layers
   const addAllLayers = useCallback(
     (map: maplibregl.Map) => {
@@ -545,6 +772,7 @@ export default function AirportMap({
       addObstacleLayers(map, airport.obstacles);
       addAglLayers(map, airport.surfaces);
       addMeasureLayersToMap(map);
+      addHighlightLayers(map);
       layersAddedRef.current = true;
     },
     [airport],
@@ -773,6 +1001,7 @@ export default function AirportMap({
 
       if (!features.length) {
         setSelectedFeature(null);
+        onFeatureClick?.(null);
         if (onWaypointClick) onWaypointClick(null);
         return;
       }
@@ -901,10 +1130,11 @@ export default function AirportMap({
       const pitch = map.getPitch();
 
       layersAddedRef.current = false;
+      cancelStylePollRef.current?.();
 
       map.setStyle(mode === "satellite" ? makeSatelliteStyle() : makeMapStyle());
 
-      map.once("style.load", () => {
+      cancelStylePollRef.current = waitForStyleLoaded(map, () => {
         if (!mapRef.current) return;
 
         map.setCenter(center);
@@ -1140,6 +1370,69 @@ export default function AirportMap({
       <div className="absolute bottom-3 left-3 z-10">
         <MapHelpPanel />
       </div>
+
+      {/* right side: compass + zoom controls */}
+      {(showCompass || showZoomControls) && (
+        <div className="absolute right-3 z-20 flex flex-col items-center gap-1.5" style={{ bottom: "60px" }}>
+          {showCompass && (
+            <button
+              onClick={() => {
+                const map = mapRef.current;
+                if (map) map.easeTo({ bearing: 0, duration: 400 });
+              }}
+              title={t("map.resetNorth")}
+              className="relative flex items-center justify-center w-11 h-11 rounded-full border border-tv-border bg-tv-surface hover:bg-tv-surface-hover transition-colors"
+              data-testid="compass-btn"
+            >
+              {/* rotating compass dial */}
+              <svg
+                className="w-9 h-9"
+                viewBox="0 0 36 36"
+                style={{ transform: `rotate(${-bearing}deg)` }}
+              >
+                {/* N marker - red */}
+                <text x="18" y="7" textAnchor="middle" dominantBaseline="middle" fill="#e54545" fontSize="7" fontWeight="bold">N</text>
+                {/* S marker */}
+                <text x="18" y="31" textAnchor="middle" dominantBaseline="middle" fill="var(--tv-text-muted)" fontSize="6">S</text>
+                {/* E marker */}
+                <text x="31" y="18.5" textAnchor="middle" dominantBaseline="middle" fill="var(--tv-text-muted)" fontSize="6">E</text>
+                {/* W marker */}
+                <text x="5" y="18.5" textAnchor="middle" dominantBaseline="middle" fill="var(--tv-text-muted)" fontSize="6">W</text>
+                {/* needle - north half red, south half white */}
+                <polygon points="18,10 16.5,18 19.5,18" fill="#e54545" />
+                <polygon points="18,26 16.5,18 19.5,18" fill="var(--tv-text-muted)" />
+              </svg>
+            </button>
+          )}
+          {showZoomControls && (
+            <div className="flex flex-col rounded-full border border-tv-border bg-tv-surface overflow-hidden">
+              <button
+                onClick={() => {
+                  const map = mapRef.current;
+                  if (map) map.zoomTo(map.getZoom() + 1, { duration: 300 });
+                }}
+                title={t("map.zoomIn")}
+                className="flex items-center justify-center w-8 h-8 text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                data-testid="zoom-in-btn"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              <div className="h-px bg-tv-border" />
+              <button
+                onClick={() => {
+                  const map = mapRef.current;
+                  if (map) map.zoomTo(map.getZoom() - 1, { duration: 300 });
+                }}
+                title={t("map.zoomOut")}
+                className="flex items-center justify-center w-8 h-8 text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                data-testid="zoom-out-btn"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {children}
     </div>

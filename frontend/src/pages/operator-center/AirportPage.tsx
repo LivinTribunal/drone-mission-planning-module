@@ -29,6 +29,7 @@ export default function AirportPage() {
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(DEFAULT_LAYER_CONFIG);
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
+  const [is3D, setIs3D] = useState(false);
 
   // redirect to dashboard if no airport selected
   useEffect(() => {
@@ -37,7 +38,7 @@ export default function AirportPage() {
     }
   }, [selectedAirport, navigate]);
 
-  const handleFeatureClick = useCallback((feature: MapFeature) => {
+  const handleFeatureClick = useCallback((feature: MapFeature | null) => {
     /** set selected feature when clicked on map or list panel. */
     setSelectedFeature(feature);
   }, []);
@@ -87,7 +88,7 @@ export default function AirportPage() {
 
   return (
     <div
-      className="relative w-full h-full"
+      className="relative w-full h-full px-4 py-3"
       data-testid="airport-page"
     >
       <AirportMap
@@ -101,6 +102,9 @@ export default function AirportPage() {
         onTerrainChange={setTerrainMode}
         onFeatureClick={handleFeatureClick}
         onLayerChange={handleLayerChange}
+        focusFeature={selectedFeature}
+        is3D={is3D}
+        onToggle3D={setIs3D}
         leftPanelChildren={
           <>
             <GroundSurfacesPanel
@@ -142,8 +146,30 @@ export default function AirportPage() {
             className="w-full rounded-2xl border border-tv-border bg-tv-bg flex-shrink-0"
           />
         </div>
-        {/* bottom-right: terrain toggle */}
-        <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} />
+        {/* bottom-right: 2D/3D + terrain toggle */}
+        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-2">
+          <div className="flex rounded-full border border-tv-border bg-tv-surface p-1">
+            <button
+              onClick={() => setIs3D(false)}
+              title={t("map.toggle2d")}
+              className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary hover:text-tv-text-primary"
+              }`}
+            >
+              2D
+            </button>
+            <button
+              onClick={() => setIs3D(true)}
+              title={t("map.toggle3d")}
+              className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary hover:text-tv-text-primary"
+              }`}
+            >
+              3D
+            </button>
+          </div>
+          <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />
+        </div>
       </AirportMap>
     </div>
   );

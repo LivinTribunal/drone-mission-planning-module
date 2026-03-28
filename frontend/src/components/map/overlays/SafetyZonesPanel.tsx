@@ -37,25 +37,28 @@ export default function SafetyZonesPanel({
 
   return (
     <div
-      className="rounded-2xl border border-tv-border bg-tv-surface"
+      className="rounded-2xl border border-tv-border bg-tv-bg"
       data-testid="safety-zones-panel"
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex w-full items-center justify-between px-3 py-2"
       >
+        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border text-xs font-semibold text-tv-text-primary">
+          {t("airport.safetyZones")}
+        </span>
         <div className="flex items-center gap-2">
+          <span
+            className="flex items-center justify-center min-w-[1.25rem] h-5 rounded-full px-1.5 text-[10px] font-semibold text-tv-accent-text"
+            style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
+          >
+            {count}
+          </span>
           {collapsed ? (
             <ChevronRight className="h-3.5 w-3.5 text-tv-text-muted" />
           ) : (
             <ChevronDown className="h-3.5 w-3.5 text-tv-text-muted" />
           )}
-          <span className="text-xs font-semibold text-tv-text-primary">
-            {t("airport.safetyZones")}
-          </span>
-          <span className="rounded-full bg-tv-bg px-2 py-0.5 text-[10px] font-medium text-tv-text-secondary border border-tv-border">
-            {count}
-          </span>
         </div>
       </button>
 

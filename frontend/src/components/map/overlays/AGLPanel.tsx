@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import type { AGLResponse, LHAResponse, SurfaceResponse } from "@/types/airport";
 import type { MapFeature, MapLayerConfig } from "@/types/map";
 
@@ -52,25 +52,28 @@ export default function AGLPanel({
 
   return (
     <div
-      className="rounded-2xl border border-tv-border bg-tv-surface"
+      className="rounded-2xl border border-tv-border bg-tv-bg"
       data-testid="agl-panel"
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex w-full items-center justify-between px-3 py-2"
       >
+        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border text-xs font-semibold text-tv-text-primary">
+          {t("airport.aglSystems")}
+        </span>
         <div className="flex items-center gap-2">
+          <span
+            className="flex items-center justify-center min-w-[1.25rem] h-5 rounded-full px-1.5 text-[10px] font-semibold text-tv-accent-text"
+            style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
+          >
+            {count}
+          </span>
           {collapsed ? (
             <ChevronRight className="h-3.5 w-3.5 text-tv-text-muted" />
           ) : (
             <ChevronDown className="h-3.5 w-3.5 text-tv-text-muted" />
           )}
-          <span className="text-xs font-semibold text-tv-text-primary">
-            {t("airport.aglSystems")}
-          </span>
-          <span className="rounded-full bg-tv-bg px-2 py-0.5 text-[10px] font-medium text-tv-text-secondary border border-tv-border">
-            {count}
-          </span>
         </div>
       </button>
 
@@ -111,7 +114,10 @@ export default function AGLPanel({
                         <span className="text-xs font-medium text-tv-text-primary truncate">
                           {agl.name}
                         </span>
-                        <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-tv-bg border border-tv-border text-tv-text-secondary">
+                        <span
+                          className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border"
+                          style={{ borderColor: "#e91e90", color: "#e91e90" }}
+                        >
                           {agl.agl_type}
                         </span>
                       </div>
@@ -131,7 +137,7 @@ export default function AGLPanel({
                       expanded ? (
                         <ChevronDown className="h-3 w-3 text-tv-text-muted flex-shrink-0" />
                       ) : (
-                        <ChevronRight className="h-3 w-3 text-tv-text-muted flex-shrink-0" />
+                        <ChevronUp className="h-3 w-3 text-tv-text-muted flex-shrink-0" />
                       )
                     )}
                   </button>
@@ -139,29 +145,29 @@ export default function AGLPanel({
                   {/* lha sub-items */}
                   {expanded && agl.lhas.length > 0 && (
                     <div className="bg-tv-bg">
-                      {agl.lhas.map((lha) => (
+                      {agl.lhas.map((lha, lhaIdx) => (
                         <button
                           key={lha.id}
                           onClick={(e) => handleLhaClick(lha, e)}
-                          className={`flex w-full items-center gap-2 pl-8 pr-3 py-1.5 text-left transition-colors ${
+                          className={`flex w-full items-center gap-2 pl-8 pr-3 py-2 text-left transition-colors ${
                             grayed
                               ? "opacity-50 pointer-events-none"
                               : "hover:bg-tv-surface-hover cursor-pointer"
-                          }`}
+                          } ${lhaIdx < agl.lhas.length - 1 ? "border-b border-tv-border" : ""}`}
                           data-testid={`lha-item-${lha.id}`}
                         >
                           <span
-                            className="h-2 w-2 rounded-full flex-shrink-0"
+                            className="h-2.5 w-2.5 rounded-full flex-shrink-0"
                             style={{ backgroundColor: "#e91e90" }}
                           />
                           <div className="flex-1 min-w-0">
-                            <span className="text-[10px] font-medium text-tv-text-primary">
+                            <span className="text-xs font-medium text-tv-text-primary">
                               {t("airport.lhaUnit", { number: lha.unit_number })}
                             </span>
-                            <span className="text-[10px] text-tv-text-secondary ml-2">
+                            <span className="text-xs text-tv-text-secondary ml-2">
                               {lha.setting_angle}°
                             </span>
-                            <p className="text-[10px] text-tv-text-muted">
+                            <p className="text-[10px] text-tv-text-muted mt-0.5">
                               {lha.position.coordinates[1].toFixed(4)}, {lha.position.coordinates[0].toFixed(4)}
                             </p>
                           </div>

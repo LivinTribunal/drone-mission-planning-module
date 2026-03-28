@@ -45,6 +45,7 @@ export default function MissionValidationPage() {
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">(
     "satellite",
   );
+  const [is3D, setIs3D] = useState(false);
 
   // wire up disabled save button
   useEffect(() => {
@@ -312,6 +313,8 @@ export default function MissionValidationPage() {
               showTerrainToggle={false}
               showWaypointList={false}
               simplifiedTrajectory={true}
+              is3D={is3D}
+              onToggle3D={setIs3D}
               layers={{
                 simplifiedTrajectory: true,
                 trajectory: false,
@@ -339,6 +342,24 @@ export default function MissionValidationPage() {
               >
                 {t("mission.validationExportPage.openMap")}
               </button>
+              <div className="flex rounded-full border border-tv-border bg-tv-surface p-1">
+                <button
+                  onClick={() => setIs3D(false)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
+                  }`}
+                >
+                  2D
+                </button>
+                <button
+                  onClick={() => setIs3D(true)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
+                  }`}
+                >
+                  3D
+                </button>
+              </div>
               <TerrainToggle
                 mode={terrainMode}
                 onToggle={setTerrainMode}

@@ -74,6 +74,7 @@ export default function MissionMapPage() {
   const [hiddenInspectionIds, setHiddenInspectionIds] = useState<Set<string>>(new Set());
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
+  const [bearing, setBearing] = useState(0);
 
   // tools
   const { activeTool, is3D, setTool, resetTool, setIs3D } = useMapTools();
@@ -383,7 +384,7 @@ export default function MissionMapPage() {
   }, [redoFn]);
 
   // handle feature click from map
-  const handleFeatureClick = useCallback((feature: MapFeature) => {
+  const handleFeatureClick = useCallback((feature: MapFeature | null) => {
     setSelectedFeature(feature);
   }, []);
 
@@ -643,6 +644,9 @@ export default function MissionMapPage() {
             showLegend={false}
             showPoiInfo={false}
             showWaypointList={false}
+            showZoomControls={false}
+            showCompass={false}
+            onBearingChange={setBearing}
 
             waypoints={effectiveWaypoints}
             selectedWaypointId={selectedWaypointId}
@@ -720,6 +724,7 @@ export default function MissionMapPage() {
               onZoomReset={handleZoomReset}
               zoomPercent={zoomPercent}
               onZoomTo={handleZoomTo}
+              bearing={bearing}
             />
 
             {/* right side overlays */}
@@ -749,8 +754,8 @@ export default function MissionMapPage() {
 
           </AirportMap>
 
-          {/* bottom bar - all buttons right */}
-          <div className="absolute bottom-2 right-2 z-10 flex items-center gap-2">
+          {/* bottom bar - right-aligned under right panel edge */}
+          <div className="absolute bottom-3 z-10 flex items-center gap-2" style={{ right: "32px" }}>
             {/* modify parameters */}
             <button
               onClick={() =>

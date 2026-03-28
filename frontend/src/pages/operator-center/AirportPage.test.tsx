@@ -238,7 +238,7 @@ describe("AirportPage", () => {
   it("shows obstacle height", async () => {
     renderAirportPage(mockAirport);
     await screen.findByText("Control Tower");
-    expect(screen.getByText("45m")).toBeInTheDocument();
+    expect(screen.getByText("dashboard.poiHeight: 45m")).toBeInTheDocument();
   });
 
   it("shows safety zone altitude range and active status", async () => {

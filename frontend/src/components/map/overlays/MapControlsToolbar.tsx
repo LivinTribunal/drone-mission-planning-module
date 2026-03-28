@@ -26,6 +26,7 @@ interface MapControlsToolbarProps {
   onZoomReset: () => void;
   zoomPercent: number;
   onZoomTo: (percent: number) => void;
+  bearing?: number;
 }
 
 const ZOOM_PRESETS = [50, 75, 100, 150, 200, 300, 500];
@@ -61,6 +62,7 @@ export default function MapControlsToolbar({
   onZoomReset,
   zoomPercent,
   onZoomTo,
+  bearing = 0,
 }: MapControlsToolbarProps) {
   const { t } = useTranslation();
   const [zoomDropdownOpen, setZoomDropdownOpen] = useState(false);
@@ -162,6 +164,22 @@ export default function MapControlsToolbar({
               </div>
             </div>
           )}
+        </div>
+
+        {/* heading compass */}
+        <div
+          className="flex items-center justify-center w-9 h-9 rounded-full border border-tv-border bg-tv-bg"
+          title={`${Math.round(((bearing % 360) + 360) % 360)}°`}
+        >
+          <svg
+            className="w-7 h-7"
+            viewBox="0 0 28 28"
+            style={{ transform: `rotate(${-bearing}deg)` }}
+          >
+            <text x="14" y="5.5" textAnchor="middle" dominantBaseline="middle" fill="#e54545" fontSize="5.5" fontWeight="bold">N</text>
+            <polygon points="14,8 12.8,14 15.2,14" fill="#e54545" />
+            <polygon points="14,20 12.8,14 15.2,14" fill="var(--tv-text-muted)" />
+          </svg>
         </div>
 
         {/* separator */}

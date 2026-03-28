@@ -81,13 +81,18 @@ export default function AirportSelector() {
           </span>
         )}
         {selectedAirport && (
-          <button
+          <span
+            role="button"
+            tabIndex={0}
             onClick={(e) => {
               e.stopPropagation();
               clearAirport();
             }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); clearAirport(); }
+            }}
             className="flex h-5 w-5 items-center justify-center rounded-full
-              bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors"
+              bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors cursor-pointer"
             aria-label="Clear airport"
           >
             <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
@@ -97,7 +102,7 @@ export default function AirportSelector() {
                 clipRule="evenodd"
               />
             </svg>
-          </button>
+          </span>
         )}
         <svg
           className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}

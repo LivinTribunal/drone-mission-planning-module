@@ -42,25 +42,28 @@ export default function GroundSurfacesPanel({
 
   return (
     <div
-      className="rounded-2xl border border-tv-border bg-tv-surface"
+      className="rounded-2xl border border-tv-border bg-tv-bg"
       data-testid="ground-surfaces-panel"
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex w-full items-center justify-between px-3 py-2"
       >
+        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border text-xs font-semibold text-tv-text-primary">
+          {t("airport.groundSurfaces")}
+        </span>
         <div className="flex items-center gap-2">
+          <span
+            className="flex items-center justify-center min-w-[1.25rem] h-5 rounded-full px-1.5 text-[10px] font-semibold text-tv-accent-text"
+            style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
+          >
+            {count}
+          </span>
           {collapsed ? (
             <ChevronRight className="h-3.5 w-3.5 text-tv-text-muted" />
           ) : (
             <ChevronDown className="h-3.5 w-3.5 text-tv-text-muted" />
           )}
-          <span className="text-xs font-semibold text-tv-text-primary">
-            {t("airport.groundSurfaces")}
-          </span>
-          <span className="rounded-full bg-tv-bg px-2 py-0.5 text-[10px] font-medium text-tv-text-secondary border border-tv-border">
-            {count}
-          </span>
         </div>
       </button>
 
@@ -87,7 +90,10 @@ export default function GroundSurfacesPanel({
                   {/* type icon */}
                   <svg className="h-3.5 w-3.5 flex-shrink-0 text-tv-text-muted" viewBox="0 0 10 10">
                     {surface.surface_type === "RUNWAY" ? (
-                      <rect x="1" y="0" width="8" height="10" rx="1" fill="currentColor" />
+                      <>
+                        <rect x="1" y="0" width="8" height="10" rx="1" fill="currentColor" />
+                        <line x1="5" y1="1" x2="5" y2="9" stroke="white" strokeWidth="0.8" strokeDasharray="1.5 1" />
+                      </>
                     ) : (
                       <rect x="0" y="2" width="10" height="6" rx="1" fill="currentColor" />
                     )}
@@ -98,7 +104,13 @@ export default function GroundSurfacesPanel({
                       <span className="text-xs font-medium text-tv-text-primary truncate">
                         {formatName(surface)}
                       </span>
-                      <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-tv-bg border border-tv-border text-tv-text-secondary">
+                      <span
+                        className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border"
+                        style={{
+                          borderColor: surface.surface_type === "RUNWAY" ? "#4a4a4a" : "#3a5a3a",
+                          color: surface.surface_type === "RUNWAY" ? "#4a4a4a" : "#3a5a3a",
+                        }}
+                      >
                         {surface.surface_type === "RUNWAY" ? t("airport.runway") : t("airport.taxiway")}
                       </span>
                     </div>

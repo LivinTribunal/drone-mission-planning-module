@@ -224,6 +224,9 @@
       "VERTICAL_PROFILE": "Vertical Profile",
       "ANGULAR_SWEEP": "Angular Sweep"
     },
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "resetNorth": "Reset to north",
     "coordinates": {
       "lat": "Lat",
       "lon": "Lon",
