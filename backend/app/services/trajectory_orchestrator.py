@@ -178,6 +178,16 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
+    # pre-check: takeoff and landing coordinates are required
+    if not mission.takeoff_coordinate:
+        raise TrajectoryGenerationError(
+            "takeoff coordinates must be set before generating a trajectory"
+        )
+    if not mission.landing_coordinate:
+        raise TrajectoryGenerationError(
+            "landing coordinates must be set before generating a trajectory"
+        )
+
     # delete existing flight plan before invalidation - db concern stays in service.
     # must happen before invalidate_trajectory() per its contract.
     existing_fp = mission.flight_plan
@@ -198,6 +208,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         )
 
     warnings: list[str] = []
+    suggestions: list[str] = []
     non_aborting_violations: list[str] = []
     if had_constraints:
         warnings.append("constraints were reset - re-attach after generation")
@@ -214,6 +225,28 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         # phase 2 - resolve config and pre-checks
         config = resolve_with_defaults(inspection, template)
 
+        # generate suggestions for fields using template defaults
+        label = f"{template.name} #{inspection.sequence_order}"
+        if not inspection.config or inspection.config.speed_override is None:
+            default_spd = (
+                template.default_config.speed_override
+                if template.default_config and template.default_config.speed_override
+                else default_speed
+            )
+            suggestions.append(
+                f"{label}: no speed override - using default ({default_spd:.1f} m/s)"
+            )
+        if not inspection.config or inspection.config.measurement_density is None:
+            default_density = (
+                template.default_config.measurement_density
+                if template.default_config and template.default_config.measurement_density
+                else None
+            )
+            if default_density:
+                suggestions.append(
+                    f"{label}: no density override - using default ({default_density} pts)"
+                )
+
         lha_ids = inspection.lha_ids
         lha_positions = get_lha_positions(template, lha_ids)
         if not lha_positions:
@@ -229,7 +262,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         density, density_warning = resolve_density(inspection.method, setting_angles, config)
         if density_warning:
             config.measurement_density = density
-            warnings.append(f"{template.name} #{inspection.sequence_order}: {density_warning}")
+            suggestions.append(f"{template.name} #{inspection.sequence_order}: {density_warning}")
 
         # compute optimal speed from path geometry and camera frame rate
         start_pos = determine_start_position(
@@ -566,6 +599,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         total_dist,
         total_dur,
         violations=non_aborting_violations,
+        suggestions=suggestions,
     )
 
     # no hard violations at this point - mark flight plan as validated

@@ -126,10 +126,14 @@ describe("MapWarningsPanel", () => {
     const violations: ValidationViolation[] = [
       {
         id: "v-1",
+        category: "warning",
         is_warning: true,
+        severity: "warning",
         message: "speed too fast",
         constraint_id: null,
+        constraint_name: null,
         violation_kind: "speed",
+        waypoint_ref: null,
       },
     ];
     render(<MapWarningsPanel violations={violations} />);

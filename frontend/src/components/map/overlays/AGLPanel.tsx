@@ -135,9 +135,9 @@ export default function AGLPanel({
 
                     {agl.lhas.length > 0 && (
                       expanded ? (
-                        <ChevronDown className="h-3 w-3 text-tv-text-muted flex-shrink-0" />
-                      ) : (
                         <ChevronUp className="h-3 w-3 text-tv-text-muted flex-shrink-0" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3 text-tv-text-muted flex-shrink-0" />
                       )
                     )}
                   </button>

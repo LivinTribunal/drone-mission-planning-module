@@ -545,6 +545,8 @@ def test_full_pipeline(client):
             "airport_id": airport_id,
             "drone_profile_id": drone["id"],
             "default_speed": 5.0,
+            "takeoff_coordinate": {"type": "Point", "coordinates": [14.26, 50.105, 300]},
+            "landing_coordinate": {"type": "Point", "coordinates": [14.26, 50.105, 300]},
         },
     ).json()
     mission_id = mission["id"]

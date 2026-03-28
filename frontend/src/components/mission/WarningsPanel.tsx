@@ -1,26 +1,56 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, XCircle, ChevronDown, ChevronUp } from "lucide-react";
-import type { ValidationViolation } from "@/types/flightPlan";
+import { AlertTriangle, XCircle, Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
+import type { ValidationViolation, ViolationSeverity } from "@/types/flightPlan";
+import { cleanMessage } from "@/utils/violations";
 
 interface WarningsPanelProps {
   warnings: ValidationViolation[] | null;
   hasTrajectory: boolean;
 }
 
+function SeverityIcon({ severity }: { severity: ViolationSeverity }) {
+  /** render icon for violation severity level. */
+  if (severity === "violation") {
+    return (
+      <div className="flex items-center justify-center h-5 w-5 rounded-full bg-tv-error/20 flex-shrink-0">
+        <XCircle className="h-3 w-3 text-tv-error" />
+      </div>
+    );
+  }
+  if (severity === "suggestion") {
+    return (
+      <div className="flex items-center justify-center h-5 w-5 rounded-full bg-tv-text-muted/20 flex-shrink-0">
+        <Lightbulb className="h-3 w-3 text-tv-text-muted" />
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center justify-center h-5 w-5 rounded-full bg-tv-warning/20 flex-shrink-0">
+      <AlertTriangle className="h-3 w-3 text-tv-warning" />
+    </div>
+  );
+}
+
 export default function WarningsPanel({
   warnings,
   hasTrajectory,
 }: WarningsPanelProps) {
-  /** warnings and violations panel with grouped sections. */
+  /** warnings and violations table with severity, constraint, message, and waypoint columns. */
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const { warningItems, violationItems } = useMemo(() => {
-    if (!warnings) return { warningItems: [], violationItems: [] };
+  const sorted = useMemo(() => {
+    if (!warnings) return [];
+    const order: Record<ViolationSeverity, number> = { violation: 0, warning: 1, suggestion: 2 };
+    return [...warnings].sort((a, b) => order[a.severity] - order[b.severity]);
+  }, [warnings]);
+
+  const { violationCount, warningCount } = useMemo(() => {
+    if (!warnings) return { violationCount: 0, warningCount: 0 };
     return {
-      warningItems: warnings.filter((w) => w.is_warning),
-      violationItems: warnings.filter((w) => !w.is_warning),
+      violationCount: warnings.filter((w) => w.severity === "violation").length,
+      warningCount: warnings.filter((w) => w.severity === "warning").length,
     };
   }, [warnings]);
 
@@ -32,14 +62,14 @@ export default function WarningsPanel({
       >
         <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.warningsAndViolations")}</span>
         <div className="flex items-center gap-2">
-          {warningItems.length > 0 && (
+          {warningCount > 0 && (
             <span className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-white bg-tv-warning">
-              {warningItems.length}
+              {warningCount}
             </span>
           )}
-          {violationItems.length > 0 && (
+          {violationCount > 0 && (
             <span className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-white bg-tv-error">
-              {violationItems.length}
+              {violationCount}
             </span>
           )}
           {collapsed ? (
@@ -65,51 +95,42 @@ export default function WarningsPanel({
             </p>
           )}
 
-          {hasTrajectory && warnings && warnings.length > 0 && (
-            <div className="flex flex-col gap-4">
-              {/* violations group */}
-              {violationItems.length > 0 && (
-                <div>
-                  <span className="text-sm font-semibold text-tv-error mb-2 block">
-                    {t("mission.validationExportPage.violationsLabel")} ({violationItems.length})
-                  </span>
-                  <div className="space-y-2">
-                    {violationItems.map((w) => (
-                      <div
-                        key={w.id}
-                        className="flex items-start gap-3 px-3 py-2.5 rounded-2xl bg-tv-error/10 border border-tv-error/20"
-                      >
-                        <div className="flex items-center justify-center h-6 w-6 rounded-full bg-tv-error/20 flex-shrink-0 mt-0.5">
-                          <XCircle className="h-4 w-4 text-tv-error" />
-                        </div>
-                        <p className="flex-1 min-w-0 text-sm text-tv-text-primary leading-relaxed">{w.message}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+          {hasTrajectory && sorted.length > 0 && (
+            <div className="rounded-2xl border border-tv-border bg-tv-bg overflow-hidden">
+              {/* header */}
+              <div className="grid grid-cols-[2rem_5rem_1fr_3rem] gap-2 px-3 py-2 border-b border-tv-border">
+                <span className="text-[10px] font-semibold uppercase text-tv-text-secondary" />
+                <span className="text-[10px] font-semibold uppercase text-tv-text-secondary">
+                  {t("mission.validationExportPage.constraintName")}
+                </span>
+                <span className="text-[10px] font-semibold uppercase text-tv-text-secondary">
+                  {t("mission.config.warningsMessage")}
+                </span>
+                <span className="text-[10px] font-semibold uppercase text-tv-text-secondary">
+                  {t("mission.config.warningsWaypoint")}
+                </span>
+              </div>
 
-              {/* warnings group */}
-              {warningItems.length > 0 && (
-                <div>
-                  <span className="text-sm font-semibold text-tv-warning mb-2 block">
-                    {t("mission.validationExportPage.warningsLabel")} ({warningItems.length})
+              {/* rows */}
+              {sorted.map((w, idx) => (
+                <div
+                  key={w.id}
+                  className={`grid grid-cols-[2rem_5rem_1fr_3rem] gap-2 px-3 py-2 items-start hover:bg-tv-surface-hover transition-colors ${
+                    idx < sorted.length - 1 ? "border-b border-tv-border" : ""
+                  }`}
+                >
+                  <SeverityIcon severity={w.severity} />
+                  <span className="text-xs text-tv-text-secondary truncate mt-0.5">
+                    {w.constraint_name ?? "-"}
                   </span>
-                  <div className="space-y-2">
-                    {warningItems.map((w) => (
-                      <div
-                        key={w.id}
-                        className="flex items-start gap-3 px-3 py-2.5 rounded-2xl bg-tv-warning/10 border border-tv-warning/20"
-                      >
-                        <div className="flex items-center justify-center h-6 w-6 rounded-full bg-tv-warning/20 flex-shrink-0 mt-0.5">
-                          <AlertTriangle className="h-4 w-4 text-tv-warning" />
-                        </div>
-                        <p className="flex-1 min-w-0 text-sm text-tv-text-primary leading-relaxed">{w.message}</p>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-sm text-tv-text-primary leading-relaxed">
+                    {cleanMessage(w.message)}
+                  </p>
+                  <span className="text-xs text-tv-text-secondary mt-0.5">
+                    {w.waypoint_ref ?? ""}
+                  </span>
                 </div>
-              )}
+              ))}
             </div>
           )}
         </div>

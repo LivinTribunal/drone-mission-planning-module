@@ -208,6 +208,7 @@
     "showInspection": "Show inspection waypoints",
     "hideInspection": "Hide inspection waypoints",
     "warnings": "Warnings",
+    "warningsWaypointHeader": "WP",
     "estimatedStats": "Flight Statistics",
     "noFlightPlan": "No flight plan generated",
     "totalDistance": "Total Distance",
@@ -367,7 +368,7 @@
       "customTolerances": "Custom Tolerances",
       "hoverDuration": "Hover Duration (s)",
       "warnings": "Warnings",
-      "warningsAndViolations": "Warnings & Violations",
+      "warningsAndViolations": "Warnings, Violations & Suggestions",
       "estimatedStats": "Estimated Stats",
       "computeTrajectory": "Compute Trajectory",
       "computing": "Computing...",
@@ -428,7 +429,10 @@
       "pickOnMap": "Pick on Map",
       "pickingOnMap": "Click on the map to set {{field}}",
       "staleTrajectory": "Trajectory is outdated - recompute to update",
-      "lhaSaveError": "Failed to save LHA selection - re-select manually"
+      "lhaSaveError": "Failed to save LHA selection - re-select manually",
+      "setCoordinatesFirst": "Set Takeoff & Landing First",
+      "warningsMessage": "Message",
+      "warningsWaypoint": "WP"
     },
     "validationExportPage": {
       "validationResults": "Validation Results",

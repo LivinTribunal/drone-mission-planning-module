@@ -1,22 +1,40 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, XCircle } from "lucide-react";
-import type { ValidationViolation } from "@/types/flightPlan";
+import { AlertTriangle, XCircle, Lightbulb } from "lucide-react";
+import type { ValidationViolation, ViolationSeverity } from "@/types/flightPlan";
+import { cleanMessage } from "@/utils/violations";
 
 interface MapWarningsPanelProps {
   violations: ValidationViolation[];
 }
 
+function SeverityDot({ severity }: { severity: ViolationSeverity }) {
+  /** compact severity indicator for map overlay. */
+  if (severity === "violation") {
+    return <XCircle className="h-3 w-3 text-tv-error flex-shrink-0 mt-0.5" />;
+  }
+  if (severity === "suggestion") {
+    return <Lightbulb className="h-3 w-3 text-tv-text-muted flex-shrink-0 mt-0.5" />;
+  }
+  return <AlertTriangle className="h-3 w-3 text-tv-warning flex-shrink-0 mt-0.5" />;
+}
+
 export default function MapWarningsPanel({
   violations,
 }: MapWarningsPanelProps) {
+  /** compact warnings table for map overlay with scrollable content. */
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
 
+  const sorted = useMemo(() => {
+    const order: Record<ViolationSeverity, number> = { violation: 0, warning: 1, suggestion: 2 };
+    return [...violations].sort((a, b) => order[a.severity] - order[b.severity]);
+  }, [violations]);
+
   if (violations.length === 0) return null;
 
-  const warnings = violations.filter((v) => v.is_warning);
-  const errors = violations.filter((v) => !v.is_warning);
+  const warnings = violations.filter((v) => v.severity === "warning");
+  const errors = violations.filter((v) => v.severity === "violation");
 
   return (
     <div
@@ -56,23 +74,38 @@ export default function MapWarningsPanel({
       </button>
 
       {!collapsed && (
-        <div className="border-t border-tv-border px-2 py-2 max-h-48 overflow-y-auto space-y-1">
-          {errors.map((v) => (
+        <div className="border-t border-tv-border max-h-48 overflow-y-auto">
+          {/* compact header */}
+          <div className="grid grid-cols-[1rem_3.5rem_1fr_2rem] gap-1 px-2 py-1 border-b border-tv-border">
+            <span />
+            <span className="text-[9px] font-semibold uppercase text-tv-text-secondary">
+              {t("mission.validationExportPage.constraintName")}
+            </span>
+            <span className="text-[9px] font-semibold uppercase text-tv-text-secondary">
+              {t("mission.config.warningsMessage")}
+            </span>
+            <span className="text-[9px] font-semibold uppercase text-tv-text-secondary">
+              {t("map.warningsWaypointHeader")}
+            </span>
+          </div>
+
+          {sorted.map((v, idx) => (
             <div
               key={v.id}
-              className="flex items-start gap-1.5 px-2 py-1 rounded-xl text-xs"
+              className={`grid grid-cols-[1rem_3.5rem_1fr_2rem] gap-1 px-2 py-1 items-start hover:bg-tv-surface-hover transition-colors ${
+                idx < sorted.length - 1 ? "border-b border-tv-border" : ""
+              }`}
             >
-              <XCircle className="h-3 w-3 text-tv-error flex-shrink-0 mt-0.5" />
-              <span className="text-tv-text-primary">{v.message}</span>
-            </div>
-          ))}
-          {warnings.map((v) => (
-            <div
-              key={v.id}
-              className="flex items-start gap-1.5 px-2 py-1 rounded-xl text-xs"
-            >
-              <AlertTriangle className="h-3 w-3 text-tv-warning flex-shrink-0 mt-0.5" />
-              <span className="text-tv-text-primary">{v.message}</span>
+              <SeverityDot severity={v.severity} />
+              <span className="text-[10px] text-tv-text-secondary truncate mt-0.5">
+                {v.constraint_name ?? "-"}
+              </span>
+              <span className="text-xs text-tv-text-primary">
+                {cleanMessage(v.message)}
+              </span>
+              <span className="text-[10px] text-tv-text-secondary mt-0.5">
+                {v.waypoint_ref ?? ""}
+              </span>
             </div>
           ))}
         </div>

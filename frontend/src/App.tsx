@@ -36,6 +36,7 @@ function App() {
         {/* operator center */}
         <Route element={<ProtectedRoute requiredRole="OPERATOR" />}>
           <Route path="/operator-center" element={<OperatorLayout />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="missions" element={<MissionListPage />} />
             <Route path="missions/:id" element={<MissionTabNav />}>
