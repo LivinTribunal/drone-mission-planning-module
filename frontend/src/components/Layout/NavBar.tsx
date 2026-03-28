@@ -81,7 +81,7 @@ export default function NavBar({ items, role }: NavBarProps) {
         {/* nav pills */}
         <div className="flex flex-1 items-center justify-center gap-1 rounded-full bg-tv-surface p-1 h-11">
           {items.map((item) => {
-            const disabled = item.disabled || !selectedAirport;
+            const disabled = item.disabled || (role === "operator" && !selectedAirport);
             return (
               <NavLink
                 key={item.to}
