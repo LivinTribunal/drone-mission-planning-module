@@ -178,6 +178,16 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     drone = data.drone
     default_speed = data.default_speed
 
+    # pre-check: takeoff and landing coordinates are required
+    if not mission.takeoff_coordinate:
+        raise TrajectoryGenerationError(
+            "takeoff coordinates must be set before generating a trajectory"
+        )
+    if not mission.landing_coordinate:
+        raise TrajectoryGenerationError(
+            "landing coordinates must be set before generating a trajectory"
+        )
+
     # delete existing flight plan before invalidation - db concern stays in service.
     # must happen before invalidate_trajectory() per its contract.
     existing_fp = mission.flight_plan
@@ -213,6 +223,29 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         # phase 2 - resolve config and pre-checks
         config = resolve_with_defaults(inspection, template)
+
+        # generate suggestions for fields using template defaults
+        label = f"{template.name} #{inspection.sequence_order}"
+        if not inspection.config or inspection.config.speed_override is None:
+            default_spd = (
+                template.default_config.speed_override
+                if template.default_config and template.default_config.speed_override
+                else default_speed
+            )
+            warnings.append(
+                f"[SUGGESTION] {label}: no speed override - using default ({default_spd:.1f} m/s)"
+            )
+        if not inspection.config or inspection.config.measurement_density is None:
+            default_density = (
+                template.default_config.measurement_density
+                if template.default_config and template.default_config.measurement_density
+                else None
+            )
+            if default_density:
+                warnings.append(
+                    f"[SUGGESTION] {label}: no density override"
+                    f" - using default ({default_density} pts)"
+                )
 
         lha_ids = inspection.lha_ids
         lha_positions = get_lha_positions(template, lha_ids)

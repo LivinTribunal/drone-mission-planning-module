@@ -90,6 +90,18 @@ export default function MissionTabNav() {
     refreshMissions();
   }, [refreshMissions]);
 
+  // when airport changes or is cleared, deselect current mission
+  const prevAirportIdRef = useRef(selectedAirport?.id);
+  useEffect(() => {
+    const prevId = prevAirportIdRef.current;
+    const newId = selectedAirport?.id;
+    prevAirportIdRef.current = newId;
+    if (prevId && prevId !== newId && id) {
+      // airport cleared - go to dashboard; airport switched - go to mission list
+      navigate(newId ? "/operator-center/missions" : "/operator-center", { replace: true });
+    }
+  }, [selectedAirport?.id, id, navigate]);
+
   const currentMission = missions.find((m) => m.id === id);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");

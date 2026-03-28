@@ -107,8 +107,8 @@ export default function GroundSurfacesPanel({
                       <span
                         className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border"
                         style={{
-                          borderColor: surface.surface_type === "RUNWAY" ? "#4a4a4a" : "#3a5a3a",
-                          color: surface.surface_type === "RUNWAY" ? "#4a4a4a" : "#3a5a3a",
+                          borderColor: surface.surface_type === "RUNWAY" ? "var(--tv-text-muted)" : "var(--tv-accent)",
+                          color: surface.surface_type === "RUNWAY" ? "var(--tv-text-muted)" : "var(--tv-accent)",
                         }}
                       >
                         {surface.surface_type === "RUNWAY" ? t("airport.runway") : t("airport.taxiway")}

@@ -85,7 +85,7 @@ describe("WarningsPanel", () => {
   it("shows warning messages after trajectory", () => {
     render(
       <WarningsPanel
-        warnings={[{ id: "1", message: "Speed too high", is_warning: true, constraint_id: null, violation_kind: "speed" }, { id: "2", message: "Altitude violation", is_warning: true, constraint_id: null, violation_kind: "altitude" }]}
+        warnings={[{ id: "1", message: "Speed too high", is_warning: true, severity: "warning", constraint_id: null, constraint_name: null, violation_kind: "speed", waypoint_ref: null }, { id: "2", message: "Altitude violation", is_warning: true, severity: "warning", constraint_id: null, constraint_name: null, violation_kind: "altitude", waypoint_ref: null }]}
         hasTrajectory={true}
       />,
     );

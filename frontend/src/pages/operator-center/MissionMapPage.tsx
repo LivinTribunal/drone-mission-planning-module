@@ -273,11 +273,14 @@ export default function MissionMapPage() {
     return t("map.recomputeTrajectory");
   }, [hasFlightPlan, t]);
 
+  const hasCoordinates = !!(mission?.takeoff_coordinate && mission?.landing_coordinate);
+
   const canCompute = useMemo(() => {
+    if (!hasCoordinates) return false;
     if (!hasFlightPlan) return true;
     if (isDirty || mission?.has_unsaved_map_changes) return true;
     return false;
-  }, [hasFlightPlan, isDirty, mission?.has_unsaved_map_changes]);
+  }, [hasFlightPlan, isDirty, mission?.has_unsaved_map_changes, hasCoordinates]);
 
   // wire compute context to tab bar - "Compute / Recompute Trajectory" button
   useEffect(() => {
@@ -309,7 +312,7 @@ export default function MissionMapPage() {
           activeTool === MapTool.PLACE_TAKEOFF
             ? mission.takeoff_coordinate
             : mission.landing_coordinate;
-        const alt = existing ? existing.coordinates[2] : 0;
+        const alt = existing ? existing.coordinates[2] : (airportDetail?.elevation ?? 0);
 
         resetTool();
         try {

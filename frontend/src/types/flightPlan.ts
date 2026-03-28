@@ -16,12 +16,17 @@ export interface WaypointResponse {
   gimbal_pitch: number | null;
 }
 
+export type ViolationSeverity = "violation" | "warning" | "suggestion";
+
 export interface ValidationViolation {
   id: string;
   is_warning: boolean;
   message: string;
   constraint_id: string | null;
   violation_kind: string | null;
+  severity: ViolationSeverity;
+  constraint_name: string | null;
+  waypoint_ref: string | null;
 }
 
 export interface ValidationResultResponse {

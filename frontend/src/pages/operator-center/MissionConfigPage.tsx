@@ -314,11 +314,23 @@ export default function MissionConfigPage() {
     computeRef.current = handleComputeTrajectory;
   });
 
+  // compute coordinate availability from dirty state or mission data
+  const hasCoordinates = useMemo(() => {
+    const takeoff = missionDirty.takeoff_coordinate !== undefined
+      ? missionDirty.takeoff_coordinate
+      : mission?.takeoff_coordinate;
+    const landing = missionDirty.landing_coordinate !== undefined
+      ? missionDirty.landing_coordinate
+      : mission?.landing_coordinate;
+    return !!(takeoff && landing);
+  }, [missionDirty, mission]);
+
   useEffect(() => {
     setComputeContext({
       onCompute: () => computeRef.current(),
-      canCompute: isDraft,
+      canCompute: isDraft && hasCoordinates,
       isComputing: computing,
+      ...(!hasCoordinates && isDraft ? { label: t("mission.config.setCoordinatesFirst") } : {}),
     });
 
     return () => {
@@ -328,7 +340,7 @@ export default function MissionConfigPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext, isDraft, computing]);
+  }, [setComputeContext, isDraft, computing, hasCoordinates, t]);
 
   // unsaved changes on beforeunload
   useEffect(() => {
@@ -494,7 +506,7 @@ export default function MissionConfigPage() {
       const fresh = await getMission(id);
       updateMissionState(fresh);
     } catch (err) {
-      if (isAxiosError(err) && (err.response?.status === 409 || err.response?.status === 422)) {
+      if (isAxiosError(err) && err.response?.status && [400, 409, 422].includes(err.response.status)) {
         const detail = err.response?.data?.detail;
         showNotification(
           typeof detail === "string" ? detail : t("mission.config.trajectoryError"),
@@ -533,14 +545,14 @@ export default function MissionConfigPage() {
           ? "takeoff_coordinate"
           : "landing_coordinate";
 
-      // preserve existing altitude if any
+      // preserve existing altitude, fall back to airport elevation
       const dirty = missionDirtyRef.current;
       const m = missionRef.current;
       const existing =
         target === "takeoff"
           ? dirty.takeoff_coordinate ?? m?.takeoff_coordinate
           : dirty.landing_coordinate ?? m?.landing_coordinate;
-      const alt = existing ? existing.coordinates[2] : 0;
+      const alt = existing ? existing.coordinates[2] : (airportDetail?.elevation ?? 0);
 
       handleMissionChange({
         [key]: {

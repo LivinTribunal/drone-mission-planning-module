@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from uuid import UUID
 
@@ -51,6 +52,29 @@ def _classify_violation(message: str) -> str | None:
     return None
 
 
+# violation kind to human-readable constraint name
+_CONSTRAINT_NAME_MAP: dict[str, str] = {
+    "altitude": "Altitude",
+    "speed": "Speed",
+    "speed_framerate": "Speed / Framerate",
+    "geofence": "Geofence",
+    "battery": "Battery",
+    "runway_buffer": "Runway Buffer",
+    "obstacle": "Obstacle Clearance",
+    "camera_obstruction": "Camera View",
+    "safety_zone": "Safety Zone",
+}
+
+# regex to extract waypoint references like "wp 3", "wp 1-5", "(wp 2, 4)"
+_WP_REF_RE = re.compile(r"\bwp\s+([\d,\s\-]+)", re.IGNORECASE)
+
+
+def _extract_waypoint_ref(message: str) -> str | None:
+    """extract waypoint reference string from a violation message."""
+    m = _WP_REF_RE.search(message)
+    return m.group(1).strip() if m else None
+
+
 class ValidationViolationResponse(BaseModel):
     """validation violation"""
 
@@ -64,6 +88,29 @@ class ValidationViolationResponse(BaseModel):
     def violation_kind(self) -> str | None:
         """structured violation type derived from message content."""
         return _classify_violation(self.message)
+
+    @computed_field
+    @property
+    def severity(self) -> str:
+        """categorize as violation, warning, or suggestion."""
+        if not self.is_warning:
+            return "violation"
+        if self.message.startswith("[SUGGESTION]"):
+            return "suggestion"
+        return "warning"
+
+    @computed_field
+    @property
+    def constraint_name(self) -> str | None:
+        """human-readable constraint name derived from violation kind."""
+        kind = _classify_violation(self.message)
+        return _CONSTRAINT_NAME_MAP.get(kind) if kind else None
+
+    @computed_field
+    @property
+    def waypoint_ref(self) -> str | None:
+        """waypoint reference extracted from message text."""
+        return _extract_waypoint_ref(self.message)
 
     model_config = {"from_attributes": True}
 

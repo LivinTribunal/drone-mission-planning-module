@@ -409,7 +409,10 @@
       "pickOnMap": "Pick on Map",
       "pickingOnMap": "Click on the map to set {{field}}",
       "staleTrajectory": "Trajectory is outdated - recompute to update",
-      "lhaSaveError": "Failed to save LHA selection - re-select manually"
+      "lhaSaveError": "Failed to save LHA selection - re-select manually",
+      "setCoordinatesFirst": "Set Takeoff & Landing First",
+      "warningsMessage": "Message",
+      "warningsWaypoint": "WP"
     },
     "validationExportPage": {
       "validationResults": "Validation Results",
