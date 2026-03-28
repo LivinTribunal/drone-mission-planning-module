@@ -244,7 +244,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             )
             if default_density:
                 suggestions.append(
-                    f"{label}: no density override" f" - using default ({default_density} pts)"
+                    f"{label}: no density override - using default ({default_density} pts)"
                 )
 
         lha_ids = inspection.lha_ids
