@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, computed_field
@@ -38,6 +39,7 @@ _VIOLATION_KIND_RULES: list[tuple[str, list[str], list[str]]] = [
     ("obstacle", ["obstacle"], []),
     ("camera_obstruction", ["obstructed"], []),
     ("safety_zone", ["zone"], []),
+    ("measurement_density", ["density"], []),
 ]
 
 
@@ -63,6 +65,7 @@ _CONSTRAINT_NAME_MAP: dict[str, str] = {
     "obstacle": "Obstacle Clearance",
     "camera_obstruction": "Camera View",
     "safety_zone": "Safety Zone",
+    "measurement_density": "Measurement Density",
 }
 
 # regex to extract waypoint references like "wp 3", "wp 1-5", "(wp 2, 4)"
@@ -79,9 +82,15 @@ class ValidationViolationResponse(BaseModel):
     """validation violation"""
 
     id: UUID
-    is_warning: bool
+    category: Literal["violation", "warning", "suggestion"]
     message: str
     constraint_id: UUID | None = None
+
+    @computed_field
+    @property
+    def is_warning(self) -> bool:
+        """backwards-compat computed property."""
+        return self.category != "violation"
 
     @computed_field
     @property
@@ -92,18 +101,14 @@ class ValidationViolationResponse(BaseModel):
     @computed_field
     @property
     def severity(self) -> str:
-        """categorize as violation, warning, or suggestion."""
-        if not self.is_warning:
-            return "violation"
-        if self.message.startswith("[SUGGESTION]"):
-            return "suggestion"
-        return "warning"
+        """return category as severity - they are now equivalent."""
+        return self.category
 
     @computed_field
     @property
     def constraint_name(self) -> str | None:
         """human-readable constraint name derived from violation kind."""
-        kind = _classify_violation(self.message)
+        kind = self.violation_kind
         return _CONSTRAINT_NAME_MAP.get(kind) if kind else None
 
     @computed_field

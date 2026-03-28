@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, XCircle, Lightbulb } from "lucide-react";
 import type { ValidationViolation, ViolationSeverity } from "@/types/flightPlan";
+import { cleanMessage } from "@/utils/violations";
 
 interface MapWarningsPanelProps {
   violations: ValidationViolation[];
@@ -13,14 +14,9 @@ function SeverityDot({ severity }: { severity: ViolationSeverity }) {
     return <XCircle className="h-3 w-3 text-tv-error flex-shrink-0 mt-0.5" />;
   }
   if (severity === "suggestion") {
-    return <Lightbulb className="h-3 w-3 flex-shrink-0 mt-0.5" style={{ color: "#8a8a8a" }} />;
+    return <Lightbulb className="h-3 w-3 text-tv-text-muted flex-shrink-0 mt-0.5" />;
   }
   return <AlertTriangle className="h-3 w-3 text-tv-warning flex-shrink-0 mt-0.5" />;
-}
-
-function cleanMessage(message: string): string {
-  /** strip [SUGGESTION] prefix from display message. */
-  return message.replace(/^\[SUGGESTION\]\s*/i, "");
 }
 
 export default function MapWarningsPanel({
@@ -89,7 +85,7 @@ export default function MapWarningsPanel({
               {t("mission.config.warningsMessage")}
             </span>
             <span className="text-[9px] font-semibold uppercase text-tv-text-secondary">
-              WP
+              {t("map.warningsWaypointHeader")}
             </span>
           </div>
 

@@ -51,11 +51,13 @@ def persist_flight_plan(
     total_distance: float,
     estimated_duration: float,
     violations: list[str] | None = None,
+    suggestions: list[str] | None = None,
 ) -> FlightPlan:
     """persist flight plan with waypoints and validation result.
 
-    warnings are stored with is_warning=True.
-    violations are stored with is_warning=False but don't abort generation.
+    warnings are stored with category='warning'.
+    violations are stored with category='violation' but don't abort generation.
+    suggestions are stored with category='suggestion'.
     """
     flight_plan = FlightPlan(
         mission_id=mission.id,
@@ -81,7 +83,7 @@ def persist_flight_plan(
         db.add(
             ValidationViolation(
                 validation_result_id=val_result.id,
-                is_warning=True,
+                category="warning",
                 message=w,
             )
         )
@@ -90,8 +92,17 @@ def persist_flight_plan(
         db.add(
             ValidationViolation(
                 validation_result_id=val_result.id,
-                is_warning=False,
+                category="violation",
                 message=v,
+            )
+        )
+
+    for s in dict.fromkeys(suggestions or []):
+        db.add(
+            ValidationViolation(
+                validation_result_id=val_result.id,
+                category="suggestion",
+                message=s,
             )
         )
 

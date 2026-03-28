@@ -127,7 +127,8 @@ export default function MissionMapPage() {
       try {
         const fp = await getFlightPlan(id);
         setFlightPlan(fp);
-      } catch {
+      } catch (err) {
+        if (!isAxiosError(err) || err.response?.status !== 404) throw err;
         setFlightPlan(null);
       }
 

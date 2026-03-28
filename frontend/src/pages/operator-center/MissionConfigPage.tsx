@@ -226,7 +226,8 @@ export default function MissionConfigPage() {
         if (fp.validation_result?.violations?.length) {
           setWarnings(fp.validation_result.violations);
         }
-      } catch {
+      } catch (err) {
+        if (!isAxiosError(err) || err.response?.status !== 404) throw err;
         setFlightPlan(null);
       }
     } catch {

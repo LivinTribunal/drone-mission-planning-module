@@ -57,6 +57,7 @@ function makeFlightPlan(passed: boolean = true): FlightPlanResponse {
         : [
             {
               id: "v1",
+              category: "violation",
               is_warning: false,
               severity: "violation",
               message: "altitude violation detected",
@@ -67,6 +68,7 @@ function makeFlightPlan(passed: boolean = true): FlightPlanResponse {
             },
             {
               id: "v2",
+              category: "warning",
               is_warning: true,
               severity: "warning",
               message: "battery reserve warning",

@@ -122,7 +122,7 @@ class ValidationResult(Base):
 
 
 class ValidationViolation(Base):
-    """individual validation violation or warning."""
+    """individual validation violation, warning, or suggestion."""
 
     __tablename__ = "validation_violation"
 
@@ -131,11 +131,16 @@ class ValidationViolation(Base):
         UUID, ForeignKey("validation_result.id", ondelete="CASCADE"), nullable=False
     )
     constraint_id = Column(UUID, ForeignKey("constraint_rule.id", ondelete="SET NULL"))
-    is_warning = Column(Boolean, nullable=False, default=False)
+    category = Column(String, nullable=False, default="violation")
     message = Column(String, nullable=False)
 
     validation_result = relationship("ValidationResult", back_populates="violations")
     constraint = relationship("ConstraintRule")
+
+    @property
+    def is_warning(self) -> bool:
+        """backwards-compat computed property."""
+        return self.category != "violation"
 
 
 class ExportResult(Base):

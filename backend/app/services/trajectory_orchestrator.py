@@ -208,6 +208,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         )
 
     warnings: list[str] = []
+    suggestions: list[str] = []
     non_aborting_violations: list[str] = []
     if had_constraints:
         warnings.append("constraints were reset - re-attach after generation")
@@ -232,8 +233,8 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 if template.default_config and template.default_config.speed_override
                 else default_speed
             )
-            warnings.append(
-                f"[SUGGESTION] {label}: no speed override - using default ({default_spd:.1f} m/s)"
+            suggestions.append(
+                f"{label}: no speed override - using default ({default_spd:.1f} m/s)"
             )
         if not inspection.config or inspection.config.measurement_density is None:
             default_density = (
@@ -242,9 +243,8 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 else None
             )
             if default_density:
-                warnings.append(
-                    f"[SUGGESTION] {label}: no density override"
-                    f" - using default ({default_density} pts)"
+                suggestions.append(
+                    f"{label}: no density override" f" - using default ({default_density} pts)"
                 )
 
         lha_ids = inspection.lha_ids
@@ -262,7 +262,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         density, density_warning = resolve_density(inspection.method, setting_angles, config)
         if density_warning:
             config.measurement_density = density
-            warnings.append(f"{template.name} #{inspection.sequence_order}: {density_warning}")
+            suggestions.append(f"{template.name} #{inspection.sequence_order}: {density_warning}")
 
         # compute optimal speed from path geometry and camera frame rate
         start_pos = determine_start_position(
@@ -599,6 +599,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         total_dist,
         total_dur,
         violations=non_aborting_violations,
+        suggestions=suggestions,
     )
 
     # no hard violations at this point - mark flight plan as validated

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, XCircle, Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
 import type { ValidationViolation, ViolationSeverity } from "@/types/flightPlan";
+import { cleanMessage } from "@/utils/violations";
 
 interface WarningsPanelProps {
   warnings: ValidationViolation[] | null;
@@ -19,8 +20,8 @@ function SeverityIcon({ severity }: { severity: ViolationSeverity }) {
   }
   if (severity === "suggestion") {
     return (
-      <div className="flex items-center justify-center h-5 w-5 rounded-full flex-shrink-0" style={{ backgroundColor: "rgba(138, 138, 138, 0.2)" }}>
-        <Lightbulb className="h-3 w-3" style={{ color: "#8a8a8a" }} />
+      <div className="flex items-center justify-center h-5 w-5 rounded-full bg-tv-text-muted/20 flex-shrink-0">
+        <Lightbulb className="h-3 w-3 text-tv-text-muted" />
       </div>
     );
   }
@@ -29,11 +30,6 @@ function SeverityIcon({ severity }: { severity: ViolationSeverity }) {
       <AlertTriangle className="h-3 w-3 text-tv-warning" />
     </div>
   );
-}
-
-function cleanMessage(message: string): string {
-  /** strip [SUGGESTION] prefix from display message. */
-  return message.replace(/^\[SUGGESTION\]\s*/i, "");
 }
 
 export default function WarningsPanel({

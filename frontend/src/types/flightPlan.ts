@@ -20,6 +20,7 @@ export type ViolationSeverity = "violation" | "warning" | "suggestion";
 
 export interface ValidationViolation {
   id: string;
+  category: ViolationSeverity;
   is_warning: boolean;
   message: string;
   constraint_id: string | null;
