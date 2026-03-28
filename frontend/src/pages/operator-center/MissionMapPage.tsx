@@ -17,6 +17,7 @@ import {
   batchUpdateWaypoints,
   generateTrajectory,
 } from "@/api/missions";
+import { getDroneProfile } from "@/api/droneProfiles";
 import type { MissionDetailResponse } from "@/types/mission";
 import type {
   FlightPlanResponse,
@@ -64,12 +65,14 @@ export default function MissionMapPage() {
   const [saving, setSaving] = useState(false);
   const [computing, setComputing] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [enduranceMinutes, setEnduranceMinutes] = useState<number | null>(null);
 
   // map state
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
   const [hiddenInspectionIds, setHiddenInspectionIds] = useState<Set<string>>(new Set());
+  const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
 
   // tools
@@ -126,6 +129,15 @@ export default function MissionMapPage() {
       } catch {
         setFlightPlan(null);
       }
+
+      if (missionData.drone_profile_id) {
+        try {
+          const dp = await getDroneProfile(missionData.drone_profile_id);
+          setEnduranceMinutes(dp.endurance_minutes);
+        } catch {
+          setEnduranceMinutes(null);
+        }
+      }
     } catch {
       setError(t("mission.config.loadError"));
     } finally {
@@ -160,6 +172,14 @@ export default function MissionMapPage() {
         .filter((id) => !hiddenInspectionIds.has(id)),
     );
   }, [mission, hiddenInspectionIds]);
+
+  // waypoints filtered by selected inspection
+  const filteredWaypoints = useMemo((): WaypointResponse[] => {
+    if (!selectedInspectionId) return effectiveWaypoints;
+    return effectiveWaypoints.filter(
+      (wp) => wp.inspection_id === selectedInspectionId,
+    );
+  }, [effectiveWaypoints, selectedInspectionId]);
 
   // inspection index map
   const inspectionIndexMap = useMemo(() => {
@@ -258,12 +278,7 @@ export default function MissionMapPage() {
     return false;
   }, [hasFlightPlan, isDirty, mission?.has_unsaved_map_changes]);
 
-  // show "needs manual approval" when planned, flight plan exists, and nothing dirty
-  const showApprovalButton = useMemo(() => {
-    return !isDraft && hasFlightPlan && !isDirty && !mission?.has_unsaved_map_changes;
-  }, [isDraft, hasFlightPlan, isDirty, mission?.has_unsaved_map_changes]);
-
-  // wire compute context to tab bar
+  // wire compute context to tab bar - "Compute / Recompute Trajectory" button
   useEffect(() => {
     setComputeContext({
       onCompute: handleCompute,
@@ -414,6 +429,11 @@ export default function MissionMapPage() {
       }
       return next;
     });
+  }, []);
+
+  // handle inspection selection - click to select, click again to deselect
+  const handleInspectionSelect = useCallback((inspId: string) => {
+    setSelectedInspectionId((prev) => (prev === inspId ? null : inspId));
   }, []);
 
   // handle inspection click - scroll to waypoints
@@ -655,15 +675,17 @@ export default function MissionMapPage() {
                     hiddenInspectionIds={hiddenInspectionIds}
                     onToggleVisibility={handleToggleInspectionVisibility}
                     onInspectionClick={handleInspectionClick}
+                    selectedId={selectedInspectionId}
+                    onSelect={handleInspectionSelect}
                   />
                 )}
                 {showPanels && (
                   <WaypointListPanel
-                    waypoints={effectiveWaypoints}
+                    waypoints={filteredWaypoints}
                     selectedId={selectedWaypointId}
                     onSelect={handleWaypointClick}
-                    takeoffCoordinate={mission.takeoff_coordinate}
-                    landingCoordinate={mission.landing_coordinate}
+                    takeoffCoordinate={selectedInspectionId ? null : mission.takeoff_coordinate}
+                    landingCoordinate={selectedInspectionId ? null : mission.landing_coordinate}
                     visibleInspectionIds={visibleInspectionIds}
                   />
                 )}
@@ -719,7 +741,7 @@ export default function MissionMapPage() {
                 <MapStatsPanel
                   flightPlan={flightPlan}
                   inspectionCount={mission.inspections.length}
-                  enduranceMinutes={null}
+                  enduranceMinutes={enduranceMinutes}
                 />
               )}
             </div>
@@ -739,32 +761,20 @@ export default function MissionMapPage() {
               {t("map.modifyParameters")}
             </button>
 
-            {/* dynamic button: compute/recompute or needs manual approval */}
-            {showApprovalButton ? (
+            {/* TODO: replace navigation with a validate-only API call once the backend endpoint exists */}
+            {hasFlightPlan && (
               <button
-                onClick={() =>
-                  navigate(`/operator-center/missions/${id}/validation-export`)
-                }
-                className="px-5 py-2.5 rounded-full text-sm font-semibold border border-tv-error text-tv-error hover:bg-tv-error/10 transition-colors"
-                data-testid="needs-approval-btn"
-              >
-                {t("map.needsManualApproval")}
-              </button>
-            ) : (
-              <button
-                onClick={handleCompute}
-                disabled={!canCompute || computing}
-                title={!canCompute ? t("map.noChangesToRecompute") : undefined}
-                className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${
-                  computing
-                    ? "bg-tv-accent/50 text-tv-accent-text cursor-not-allowed"
-                    : canCompute
-                      ? "bg-tv-success text-white hover:bg-tv-success/90"
-                      : "bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed border border-tv-border"
+                onClick={() => navigate(`/operator-center/missions/${id}/validation-export`)}
+                disabled={isDirty || !!mission?.has_unsaved_map_changes}
+                title={isDirty || mission?.has_unsaved_map_changes ? t("map.noChangesToRecompute") : undefined}
+                className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border-2 ${
+                  isDirty || mission?.has_unsaved_map_changes
+                    ? "border-tv-border bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"
+                    : "border-tv-success bg-tv-surface text-tv-success hover:bg-tv-success/10"
                 }`}
-                data-testid="compute-trajectory-btn"
+                data-testid="validate-trajectory-btn"
               >
-                {computing ? t("mission.config.computing") : computeLabel}
+                {t("map.validateTrajectory")}
               </button>
             )}
           </div>

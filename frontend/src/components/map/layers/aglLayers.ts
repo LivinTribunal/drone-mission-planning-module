@@ -40,7 +40,7 @@ export function addAglLayers(
     source: AGL_SOURCE,
     layout: {
       "icon-image": "agl-square",
-      "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.8, 16, 1.2],
+      "icon-size": 1.0,
       "icon-allow-overlap": true,
     },
     paint: {

@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
-from app.models.enums import MissionStatus
+from app.models.enums import MissionStatus, WaypointType
 from app.models.flight_plan import (
     FlightPlan,
     ValidationResult,
@@ -148,6 +148,16 @@ def batch_update_waypoints(
         if upd.camera_target is not None:
             ct_coords = upd.camera_target.coordinates
             wp.camera_target = geojson_to_ewkt({"type": "Point", "coordinates": ct_coords})
+
+        # sync mission coordinate when takeoff/landing waypoints move
+        if wp.waypoint_type == WaypointType.TAKEOFF:
+            mission.takeoff_coordinate = geojson_to_ewkt(
+                {"type": "Point", "coordinates": coords}
+            )
+        elif wp.waypoint_type == WaypointType.LANDING:
+            mission.landing_coordinate = geojson_to_ewkt(
+                {"type": "Point", "coordinates": coords}
+            )
 
     # regress to DRAFT without nullifying flight_plan - waypoints were just updated in place
     if mission.status == MissionStatus.PLANNED:

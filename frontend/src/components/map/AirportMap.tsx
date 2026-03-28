@@ -3,8 +3,13 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { AirportMapProps, MapFeature, MapLayerConfig } from "@/types/map";
+import type { WaypointResponse } from "@/types/flightPlan";
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import { MapTool } from "@/hooks/useMapTools";
+import {
+  TOOL_CURSOR_MOVE,
+  TOOL_CURSOR_MEASURE,
+} from "@/utils/cursors";
 import { registerAllMapImages } from "./layers/mapImages";
 import {
   addSurfaceLayers,
@@ -41,6 +46,14 @@ import {
   addSimplifiedTrajectoryLayers,
   updateSelectedFilter,
   getSimplifiedTrajectoryLayerIds,
+  waypointsToGeoJSON,
+  waypointsToLineGeoJSON,
+  waypointsToSimplifiedLineGeoJSON,
+  waypointsToSimplifiedCornersGeoJSON,
+  WAYPOINT_SOURCE,
+  WAYPOINT_LINE_SOURCE,
+  SIMPLIFIED_LINE_SOURCE,
+  SIMPLIFIED_CORNERS_SOURCE,
   WAYPOINT_TRANSIT_CIRCLE_LAYER,
   WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
   WAYPOINT_TAKEOFF_LAYER,
@@ -106,7 +119,7 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
     RUNWAY_LABEL_LAYER,
   ],
   taxiways: [TAXIWAY_FILL_LAYER, TAXIWAY_STROKE_LAYER, TAXIWAY_LABEL_LAYER],
-  obstacles: [OBSTACLE_ICON_LAYER, OBSTACLE_RADIUS_LAYER, OBSTACLE_LABEL_LAYER],
+  obstacles: [OBSTACLE_ICON_LAYER, OBSTACLE_RADIUS_LAYER, "obstacles-radius-outline", OBSTACLE_LABEL_LAYER],
   safetyZones: [
     SAFETY_ZONE_FILL_LAYER,
     SAFETY_ZONE_HATCH_LAYER,
@@ -144,10 +157,10 @@ const POINTER_LAYERS = [
 
 // cursor styles per active tool
 const TOOL_CURSORS: Record<string, string> = {
-  [MapTool.SELECT]: "",
+  [MapTool.SELECT]: "default",
   [MapTool.PAN]: "grab",
-  [MapTool.MOVE_WAYPOINT]: "crosshair",
-  [MapTool.MEASURE]: "crosshair",
+  [MapTool.MOVE_WAYPOINT]: TOOL_CURSOR_MOVE,
+  [MapTool.MEASURE]: TOOL_CURSOR_MEASURE,
   [MapTool.ZOOM]: "zoom-in",
   [MapTool.PLACE_TAKEOFF]: "crosshair",
   [MapTool.PLACE_LANDING]: "crosshair",
@@ -190,6 +203,7 @@ export default function AirportMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const layersAddedRef = useRef(false);
+  const suppressZoomEndRef = useRef(false);
   const waypointsRef = useRef(waypoints);
   const takeoffRef = useRef(takeoffCoordinate);
   takeoffRef.current = takeoffCoordinate;
@@ -273,7 +287,7 @@ export default function AirportMap({
     };
   }, [activeTool, onMeasureClear, onMeasureMouseMove]);
 
-  // move waypoint tool: drag behavior
+  // move waypoint tool: drag behavior with live preview
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !interactive) return;
@@ -281,6 +295,7 @@ export default function AirportMap({
     if (tool !== MapTool.MOVE_WAYPOINT) return;
 
     const dragState = { waypointId: "", originalAlt: 0, dragging: false };
+    let rafId = 0;
 
     const waypointQueryLayers = [
       WAYPOINT_TRANSIT_CIRCLE_LAYER,
@@ -307,17 +322,60 @@ export default function AirportMap({
       dragState.originalAlt = coords[2] ?? 0;
       dragState.dragging = true;
       map.getCanvas().style.cursor = "grabbing";
+      map.dragPan.disable();
       e.preventDefault();
     }
 
-    function handleMouseMove() {
-      // drag continues - visual feedback happens on mouseup
+    function handleMouseMove(e: maplibregl.MapMouseEvent) {
+      if (!dragState.dragging || !map) return;
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (!map) return;
+        const wps = waypointsRef.current ?? [];
+        const newCoords: [number, number, number] = [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt];
+        const updated: WaypointResponse[] = wps.map((wp) => {
+          if (wp.id !== dragState.waypointId) return wp;
+          return {
+            ...wp,
+            position: {
+              ...wp.position,
+              coordinates: newCoords,
+            },
+          };
+        });
+
+        // update point source
+        const pointSrc = map.getSource(WAYPOINT_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        if (pointSrc) {
+          pointSrc.setData(
+            waypointsToGeoJSON(updated, takeoffRef.current, landingRef.current, indexMapRef.current),
+          );
+        }
+
+        // update line source
+        const lineSrc = map.getSource(WAYPOINT_LINE_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        if (lineSrc) {
+          lineSrc.setData(waypointsToLineGeoJSON(updated));
+        }
+
+        // update simplified trajectory sources
+        const simpLineSrc = map.getSource(SIMPLIFIED_LINE_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        if (simpLineSrc) {
+          simpLineSrc.setData(waypointsToSimplifiedLineGeoJSON(updated));
+        }
+        const simpCornerSrc = map.getSource(SIMPLIFIED_CORNERS_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        if (simpCornerSrc) {
+          simpCornerSrc.setData(waypointsToSimplifiedCornersGeoJSON(updated));
+        }
+      });
     }
 
     function handleMouseUp(e: maplibregl.MapMouseEvent) {
       if (!dragState.dragging || !map) return;
+      cancelAnimationFrame(rafId);
       dragState.dragging = false;
-      map.getCanvas().style.cursor = "crosshair";
+      map.getCanvas().style.cursor = TOOL_CURSORS[MapTool.MOVE_WAYPOINT] || "crosshair";
+      map.dragPan.enable();
       onWaypointDrag?.(
         dragState.waypointId,
         [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt],
@@ -329,6 +387,7 @@ export default function AirportMap({
     map.on("mousemove", handleMouseMove);
     map.on("mouseup", handleMouseUp);
     return () => {
+      cancelAnimationFrame(rafId);
       map.off("mousedown", handleMouseDown);
       map.off("mousemove", handleMouseMove);
       map.off("mouseup", handleMouseUp);
@@ -365,28 +424,35 @@ export default function AirportMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || zoomPercent === undefined) return;
-    // 100% = zoom 14.5 (initial), range ~10-20
     const targetZoom = 14.5 * (zoomPercent / 100);
     if (Math.abs(map.getZoom() - targetZoom) > 0.1) {
+      suppressZoomEndRef.current = true;
       map.zoomTo(targetZoom, { duration: 300 });
     }
   }, [zoomPercent]);
 
   // report map zoom changes back to parent
+  const onZoomChangeRef = useRef(onZoomChange);
+  onZoomChangeRef.current = onZoomChange;
+
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !onZoomChange) return;
+    if (!map) return;
 
     function handleZoomEnd() {
       if (!map) return;
+      if (suppressZoomEndRef.current) {
+        suppressZoomEndRef.current = false;
+        return;
+      }
       const currentZoom = map.getZoom();
       const percent = Math.round((currentZoom / 14.5) * 100);
-      onZoomChange?.(percent);
+      onZoomChangeRef.current?.(percent);
     }
 
     map.on("zoomend", handleZoomEnd);
     return () => { map.off("zoomend", handleZoomEnd); };
-  }, [onZoomChange]);
+  }, []);
 
   // initialize map - no navigation control (removed old zoom/compass)
   useEffect(() => {
@@ -412,6 +478,63 @@ export default function AirportMap({
     };
   }, [airport.id, interactive]);
 
+  // add measure tool sources and layers to the map
+  function addMeasureLayersToMap(map: maplibregl.Map) {
+    const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+    if (!map.getSource("measure-points")) {
+      map.addSource("measure-points", { type: "geojson", data: emptyFC });
+      map.addLayer({
+        id: "measure-points-layer",
+        type: "circle",
+        source: "measure-points",
+        paint: {
+          "circle-radius": 5,
+          "circle-color": "#ff6b00",
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2,
+        },
+      });
+    }
+
+    if (!map.getSource("measure-lines")) {
+      map.addSource("measure-lines", { type: "geojson", data: emptyFC });
+      map.addLayer({
+        id: "measure-lines-layer",
+        type: "line",
+        source: "measure-lines",
+        paint: {
+          "line-color": "#ff6b00",
+          "line-width": 2,
+          "line-dasharray": [4, 3],
+        },
+      });
+    }
+
+    if (!map.getSource("measure-labels")) {
+      map.addSource("measure-labels", { type: "geojson", data: emptyFC });
+      map.addLayer({
+        id: "measure-labels-layer",
+        type: "symbol",
+        source: "measure-labels",
+        layout: {
+          "text-field": ["get", "label"],
+          "text-size": 13,
+          "text-offset": [0, -1.2],
+          "text-anchor": "bottom",
+          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
+        paint: {
+          "text-color": "#ff6b00",
+          "text-halo-color": "#000000",
+          "text-halo-width": 1.5,
+        },
+      });
+    }
+  }
+
   // shared helper to add all infrastructure layers
   const addAllLayers = useCallback(
     (map: maplibregl.Map) => {
@@ -421,6 +544,7 @@ export default function AirportMap({
       addSurfaceLayers(map, airport.surfaces);
       addObstacleLayers(map, airport.obstacles);
       addAglLayers(map, airport.surfaces);
+      addMeasureLayersToMap(map);
       layersAddedRef.current = true;
     },
     [airport],
@@ -505,8 +629,8 @@ export default function AirportMap({
   }, []);
 
   // add or update waypoint layers
-  const addWaypointLayers = useCallback((map: maplibregl.Map) => {
-    const wps = waypointsRef.current;
+  const addWaypointLayers = useCallback((map: maplibregl.Map, wpsOverride?: WaypointResponse[]) => {
+    const wps = wpsOverride ?? waypointsRef.current;
     const takeoff = takeoffRef.current;
     const landing = landingRef.current;
     const idxMap = indexMapRef.current;
@@ -527,9 +651,9 @@ export default function AirportMap({
     if (!map) return;
 
     if (map.isStyleLoaded()) {
-      addWaypointLayers(map);
+      addWaypointLayers(map, waypoints ?? undefined);
     } else {
-      const handler = () => addWaypointLayers(map);
+      const handler = () => addWaypointLayers(map, waypoints ?? undefined);
       map.on("load", handler);
       return () => { map.off("load", handler); };
     }
@@ -932,82 +1056,15 @@ export default function AirportMap({
     };
   }, [interactive, activeTool]);
 
-  // measure tool layers
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
+  // measure tool layers — defined as standalone function, called from addAllLayers
 
-    function addMeasureLayers() {
-      if (!map) return;
-
-      const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
-
-      // points
-      if (!map.getSource("measure-points")) {
-        map.addSource("measure-points", { type: "geojson", data: emptyFC });
-        map.addLayer({
-          id: "measure-points-layer",
-          type: "circle",
-          source: "measure-points",
-          paint: {
-            "circle-radius": 5,
-            "circle-color": "#ff6b00",
-            "circle-stroke-color": "#ffffff",
-            "circle-stroke-width": 2,
-          },
-        });
-      }
-
-      // lines
-      if (!map.getSource("measure-lines")) {
-        map.addSource("measure-lines", { type: "geojson", data: emptyFC });
-        map.addLayer({
-          id: "measure-lines-layer",
-          type: "line",
-          source: "measure-lines",
-          paint: {
-            "line-color": "#ff6b00",
-            "line-width": 2,
-            "line-dasharray": [4, 3],
-          },
-        });
-      }
-
-      // labels
-      if (!map.getSource("measure-labels")) {
-        map.addSource("measure-labels", { type: "geojson", data: emptyFC });
-        map.addLayer({
-          id: "measure-labels-layer",
-          type: "symbol",
-          source: "measure-labels",
-          layout: {
-            "text-field": ["get", "label"],
-            "text-size": 12,
-            "text-offset": [0, -1.2],
-            "text-anchor": "bottom",
-            "text-font": ["Open Sans Regular"],
-          },
-          paint: {
-            "text-color": "#ff6b00",
-            "text-halo-color": "#000000",
-            "text-halo-width": 1.5,
-          },
-        });
-      }
-    }
-
-    if (map.isStyleLoaded()) {
-      addMeasureLayers();
-    } else {
-      map.on("load", addMeasureLayers);
-      return () => { map.off("load", addMeasureLayers); };
-    }
-  }, []);
-
-  // sync measure data to sources
+  // sync measure data to sources - ensure layers exist first
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
+
+    // ensure measure layers exist (may have been lost after style change)
+    addMeasureLayersToMap(map);
 
     const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
     const points = measureData?.points ?? emptyFC;
@@ -1034,7 +1091,7 @@ export default function AirportMap({
       {/* top-left: layers, waypoints, poi info */}
       {(showLayerPanel || showWaypointList || showPoiInfo || leftPanelChildren) && (
         <div
-          className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-[260px] overflow-y-auto pr-1"
+          className="absolute top-3 left-3 z-10 flex flex-col gap-2 w-[280px] overflow-y-auto pr-1"
           style={{ maxHeight: "calc(100% - 68px)", scrollbarGutter: "stable" }}
         >
           {showLayerPanel && (

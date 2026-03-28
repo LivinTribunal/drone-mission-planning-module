@@ -213,6 +213,7 @@
     "placeLanding": "Place Landing",
     "computeTrajectory": "Compute Trajectory",
     "recomputeTrajectory": "Recompute Trajectory",
+    "validateTrajectory": "Validate Trajectory",
     "noChangesToRecompute": "No changes to recompute",
     "needsManualApproval": "Needs Manual Approval",
     "changesSaved": "Changes saved",
