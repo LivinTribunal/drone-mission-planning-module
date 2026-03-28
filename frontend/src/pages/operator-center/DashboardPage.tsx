@@ -8,10 +8,14 @@ import {
   CheckCircle,
   TrendingUp,
   Battery,
+  Map,
+  Download,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { listAirportSummaries } from "@/api/airports";
-import { listMissions } from "@/api/missions";
+import { listMissions, updateMission, deleteMission } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { AirportSummaryResponse } from "@/types/airport";
 import type { MissionResponse } from "@/types/mission";
@@ -91,7 +95,10 @@ function AirportSelectionView() {
     setError(false);
     listAirportSummaries()
       .then((res) => setAirports(res.data))
-      .catch(() => setError(true))
+      .catch((err) => {
+        console.error("airport list fetch failed:", err instanceof Error ? err.message : String(err));
+        setError(true);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -315,28 +322,62 @@ function Spinner() {
   );
 }
 
+function formatDuration(seconds: number): string {
+  const min = Math.floor(seconds / 60);
+  const sec = Math.round(seconds % 60);
+  return `${min}:${sec.toString().padStart(2, "0")}`;
+}
+
 function MissionListSection({
   missions,
   loading,
   error,
   onRetry,
+  onRefresh,
   droneProfiles,
 }: {
   missions: MissionResponse[];
   loading: boolean;
   error: boolean;
   onRetry: () => void;
+  onRefresh: () => void;
   droneProfiles: DroneProfileResponse[];
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (!search) return missions;
     const q = search.toLowerCase();
     return missions.filter((m) => m.name.toLowerCase().includes(q));
   }, [missions, search]);
+
+  async function handleRename(missionId: string) {
+    if (!renameValue.trim()) return;
+    try {
+      await updateMission(missionId, { name: renameValue.trim() });
+      setRenamingId(null);
+      onRefresh();
+    } catch {
+      // keep dialog open on error
+    }
+  }
+
+  async function handleDelete(missionId: string) {
+    try {
+      await deleteMission(missionId);
+      setDeletingId(null);
+      onRefresh();
+    } catch {
+      // keep dialog open on error
+    }
+  }
+
+  const isTerminal = (status: string) => status === "COMPLETED" || status === "CANCELLED";
 
   return (
     <CollapsibleSection title={t("dashboard.missions")} count={missions.length}>
@@ -381,35 +422,120 @@ function MissionListSection({
             const drone = droneProfiles.find(
               (dp) => dp.id === mission.drone_profile_id,
             );
+            const terminal = isTerminal(mission.status);
             return (
-              <button
-                key={mission.id}
-                onClick={() => navigate(`/operator-center/missions/${mission.id}/overview`)}
-                className="w-full text-left rounded-xl border border-tv-border bg-tv-bg p-3
-                  hover:bg-tv-surface-hover transition-colors"
-                data-testid={`mission-row-${mission.id}`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-semibold text-tv-text-primary truncate mr-2">
-                    {mission.name}
-                  </span>
-                  <Badge status={mission.status} />
-                </div>
-                <div className="flex items-center gap-3 text-xs text-tv-text-secondary">
-                  <span>{drone ? drone.name : t("dashboard.noDrone")}</span>
-                  <span className="flex items-center gap-1">
-                    <Layers className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
-                    {"\u2014"}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
-                    {"\u2014"}
-                  </span>
-                  <span className="ml-auto">
-                    {new Date(mission.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-              </button>
+              <div key={mission.id}>
+                <button
+                  onClick={() => navigate(`/operator-center/missions/${mission.id}/overview`)}
+                  className="w-full text-left rounded-xl border border-tv-border bg-tv-bg p-3
+                    hover:bg-tv-surface-hover transition-colors"
+                  data-testid={`mission-row-${mission.id}`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-semibold text-tv-text-primary truncate mr-2">
+                      {mission.name}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5 mr-1">
+                        <button
+                          title={t("dashboard.mapAction")}
+                          onClick={(e) => { e.stopPropagation(); navigate(`/operator-center/missions/${mission.id}/map`); }}
+                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-tv-accent/15 transition-colors"
+                        >
+                          <Map className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
+                        </button>
+                        <button
+                          title={t("dashboard.exportAction")}
+                          onClick={(e) => { e.stopPropagation(); if (!terminal) navigate(`/operator-center/missions/${mission.id}/validation-export`); }}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${terminal ? "opacity-40 cursor-not-allowed" : "hover:bg-tv-accent/15"}`}
+                          disabled={terminal}
+                        >
+                          <Download className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
+                        </button>
+                        <button
+                          title={t("dashboard.renameAction")}
+                          onClick={(e) => { e.stopPropagation(); setRenamingId(mission.id); setRenameValue(mission.name); }}
+                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-tv-accent/15 transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
+                        </button>
+                        <button
+                          title={t("dashboard.deleteAction")}
+                          onClick={(e) => { e.stopPropagation(); if (!terminal) setDeletingId(mission.id); }}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${terminal ? "opacity-40 cursor-not-allowed" : "hover:bg-tv-error/15"}`}
+                          disabled={terminal}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-tv-text-muted hover:text-tv-error" style={{ color: terminal ? "var(--tv-text-muted)" : undefined }} />
+                        </button>
+                      </div>
+                      <Badge status={mission.status} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-tv-text-secondary">
+                    <span>{drone ? drone.name : t("dashboard.noDrone")}</span>
+                    <span className="flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
+                      {mission.inspection_count}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
+                      {mission.estimated_duration != null ? formatDuration(mission.estimated_duration) : "\u2014"}
+                    </span>
+                    <span className="ml-auto flex items-center gap-1">
+                      <span className="text-xs" style={{ color: "var(--tv-text-muted)" }}>{t("dashboard.lastSaved")}</span>
+                      <span className="text-xs" style={{ color: "var(--tv-text-secondary)" }}>{new Date(mission.updated_at).toLocaleDateString()}</span>
+                    </span>
+                  </div>
+                </button>
+
+                {/* rename dialog */}
+                {renamingId === mission.id && (
+                  <div className="mt-1 p-2 rounded-xl border border-tv-border bg-tv-surface flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleRename(mission.id); if (e.key === "Escape") setRenamingId(null); }}
+                      className="flex-1 rounded-full border border-tv-border bg-tv-bg px-3 py-1 text-xs text-tv-text-primary focus:outline-none focus:border-tv-accent"
+                      placeholder={t("dashboard.renamePlaceholder")}
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleRename(mission.id)}
+                      className="rounded-full px-3 py-1 text-xs font-medium bg-tv-accent text-tv-accent-text"
+                    >
+                      {t("common.save")}
+                    </button>
+                    <button
+                      onClick={() => setRenamingId(null)}
+                      className="rounded-full px-3 py-1 text-xs font-medium text-tv-text-secondary hover:text-tv-text-primary"
+                    >
+                      {t("common.cancel")}
+                    </button>
+                  </div>
+                )}
+
+                {/* delete confirmation */}
+                {deletingId === mission.id && (
+                  <div className="mt-1 p-2 rounded-xl border border-tv-error/30 bg-tv-surface flex items-center gap-2">
+                    <span className="flex-1 text-xs text-tv-text-primary">
+                      {t("dashboard.deleteConfirm", { name: mission.name })}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(mission.id)}
+                      className="rounded-full px-3 py-1 text-xs font-medium bg-tv-error text-white"
+                    >
+                      {t("common.delete")}
+                    </button>
+                    <button
+                      onClick={() => setDeletingId(null)}
+                      className="rounded-full px-3 py-1 text-xs font-medium text-tv-text-secondary hover:text-tv-text-primary"
+                    >
+                      {t("common.cancel")}
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -429,11 +555,29 @@ const STAT_CARDS = [
 function StatisticsSection({ missions }: { missions: MissionResponse[] }) {
   const { t } = useTranslation();
 
+  const avgDuration = useMemo(() => {
+    const withDuration = missions.filter((m) => m.estimated_duration != null);
+    if (withDuration.length === 0) return "\u2014";
+    const avg = withDuration.reduce((sum, m) => sum + m.estimated_duration!, 0) / withDuration.length;
+    return formatDuration(avg);
+  }, [missions]);
+
+  const inspectionsDone = useMemo(() => {
+    return String(missions.filter((m) => m.status === "COMPLETED").reduce((sum, m) => sum + m.inspection_count, 0));
+  }, [missions]);
+
+  const successRate = useMemo(() => {
+    const nonDraft = missions.filter((m) => m.status !== "DRAFT");
+    if (nonDraft.length === 0) return "\u2014";
+    const completed = nonDraft.filter((m) => m.status === "COMPLETED").length;
+    return `${Math.round((completed / nonDraft.length) * 100)}%`;
+  }, [missions]);
+
   const stats = [
     { ...STAT_CARDS[0], value: String(missions.length), label: t("dashboard.totalMissions") },
-    { ...STAT_CARDS[1], value: "\u2014", label: t("dashboard.avgDuration") },
-    { ...STAT_CARDS[2], value: "\u2014", label: t("dashboard.inspectionsDone") },
-    { ...STAT_CARDS[3], value: "\u2014", label: t("dashboard.successRate") },
+    { ...STAT_CARDS[1], value: avgDuration, label: t("dashboard.avgDuration") },
+    { ...STAT_CARDS[2], value: inspectionsDone, label: t("dashboard.inspectionsDone") },
+    { ...STAT_CARDS[3], value: successRate, label: t("dashboard.successRate") },
   ];
 
   return (
@@ -653,6 +797,7 @@ function DashboardView() {
             loading={missionsLoading}
             error={missionsError}
             onRetry={fetchMissions}
+            onRefresh={fetchMissions}
             droneProfiles={droneProfiles}
           />
 

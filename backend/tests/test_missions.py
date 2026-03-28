@@ -93,9 +93,11 @@ def test_update_mission(client):
 
 
 def test_duplicate_mission(client):
-    """test duplicate mission"""
+    """test duplicate mission clones inspections"""
     missions = client.get("/api/v1/missions").json()["data"]
     mission_id = missions[0]["id"]
+
+    original = client.get(f"/api/v1/missions/{mission_id}").json()
 
     response = client.post(f"/api/v1/missions/{mission_id}/duplicate")
     assert response.status_code == 201
@@ -103,6 +105,9 @@ def test_duplicate_mission(client):
 
     assert data["status"] == "DRAFT"
     assert "(copy)" in data["name"]
+
+    duplicate_detail = client.get(f"/api/v1/missions/{data['id']}").json()
+    assert len(duplicate_detail["inspections"]) == len(original["inspections"])
 
 
 def test_delete_mission(client, airport_id):
@@ -135,14 +140,26 @@ def test_add_inspection(client):
     assert response.json()["method"] == "ANGULAR_SWEEP"
 
 
+def test_list_missions_includes_inspection_count_and_duration(client):
+    """test list response includes inspection_count and estimated_duration."""
+    response = client.get("/api/v1/missions")
+    assert response.status_code == 200
+    body = response.json()
+
+    for m in body["data"]:
+        assert "inspection_count" in m
+        assert "estimated_duration" in m
+        assert isinstance(m["inspection_count"], int)
+
+
 def test_delete_inspection(client):
     """test delete inspection from mission"""
     missions = client.get("/api/v1/missions").json()["data"]
     mission_id = missions[0]["id"]
 
     detail = client.get(f"/api/v1/missions/{mission_id}").json()
-    if detail["inspections"]:
-        insp_id = detail["inspections"][0]["id"]
+    assert len(detail["inspections"]) > 0, "precondition: mission must have inspections"
+    insp_id = detail["inspections"][0]["id"]
 
-        response = client.delete(f"/api/v1/missions/{mission_id}/inspections/{insp_id}")
-        assert response.status_code == 200
+    response = client.delete(f"/api/v1/missions/{mission_id}/inspections/{insp_id}")
+    assert response.status_code == 200

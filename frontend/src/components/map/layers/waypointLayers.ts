@@ -135,7 +135,7 @@ export function waypointsToGeoJSON(
       features.push({
         type: "Feature",
         properties: {
-          id: "takeoff-marker",
+          id: "takeoff",
           sequence_order: 0,
           waypoint_type: "TAKEOFF",
           color: "#4595e5",
@@ -148,7 +148,7 @@ export function waypointsToGeoJSON(
       features.push({
         type: "Feature",
         properties: {
-          id: "landing-marker",
+          id: "landing",
           sequence_order: 1,
           waypoint_type: "LANDING",
           color: "#e54545",

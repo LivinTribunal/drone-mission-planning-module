@@ -100,7 +100,7 @@ describe("StatsPanel", () => {
       <StatsPanel
         flightPlan={null}
         hasTrajectory={false}
-        inspectionCount={0}
+
         droneProfile={null}
       />,
     );
@@ -124,7 +124,7 @@ describe("StatsPanel", () => {
           validation_result: null,
         }}
         hasTrajectory={true}
-        inspectionCount={3}
+
         droneProfile={{
           id: "dp-1",
           name: "DJI",
@@ -145,7 +145,7 @@ describe("StatsPanel", () => {
 
     expect(screen.getByText("1.50 km")).toBeInTheDocument();
     expect(screen.getByText("5:00")).toBeInTheDocument();
-    expect(screen.getByText("9%")).toBeInTheDocument();
+    expect(screen.getByText("91%")).toBeInTheDocument();
   });
 });
 
