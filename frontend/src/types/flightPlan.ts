@@ -25,6 +25,7 @@ export interface ValidationViolation {
   message: string;
   constraint_id: string | null;
   violation_kind: string | null;
+  // severity is identical to category - kept for backward compat
   severity: ViolationSeverity;
   constraint_name: string | null;
   waypoint_ref: string | null;

@@ -38,7 +38,7 @@ _VIOLATION_KIND_RULES: list[tuple[str, list[str], list[str]]] = [
     ("runway_buffer", ["runway"], []),
     ("obstacle", ["obstacle"], []),
     ("camera_obstruction", ["obstructed"], []),
-    ("safety_zone", ["zone"], []),
+    ("safety_zone", ["safety zone"], []),
     ("measurement_density", ["density"], []),
 ]
 

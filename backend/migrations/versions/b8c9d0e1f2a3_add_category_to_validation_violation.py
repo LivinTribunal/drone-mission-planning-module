@@ -41,9 +41,16 @@ def upgrade() -> None:
 
     op.drop_column("validation_violation", "is_warning")
 
+    op.create_check_constraint(
+        "ck_validation_violation_category",
+        "validation_violation",
+        "category IN ('violation', 'warning', 'suggestion')",
+    )
+
 
 def downgrade() -> None:
     """re-add is_warning, backfill from category, drop category."""
+    op.drop_constraint("ck_validation_violation_category", "validation_violation")
     op.add_column(
         "validation_violation",
         sa.Column("is_warning", sa.Boolean(), server_default=sa.text("false"), nullable=False),

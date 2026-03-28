@@ -10,6 +10,8 @@ from app.utils.geo import (
     point_at_distance,
 )
 from tests.data.trajectory import (
+    DEFAULT_LANDING,
+    DEFAULT_TAKEOFF,
     TRAJECTORY_AGL_PAYLOAD,
     TRAJECTORY_AIRPORT_PAYLOAD,
     TRAJECTORY_DRONE_PAYLOAD,
@@ -545,6 +547,8 @@ def test_full_pipeline(client):
             "airport_id": airport_id,
             "drone_profile_id": drone["id"],
             "default_speed": 5.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
         },
     ).json()
     mission_id = mission["id"]

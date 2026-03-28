@@ -53,8 +53,12 @@ class TestClassifyViolation:
         assert _classify_violation("camera view obstructed by tower") == "camera_obstruction"
 
     def test_safety_zone(self):
-        """match zone keyword."""
-        assert _classify_violation("entered restricted zone") == "safety_zone"
+        """match safety zone keyword."""
+        assert _classify_violation("entered safety zone perimeter") == "safety_zone"
+
+    def test_safety_zone_no_false_positive(self):
+        """'zone' alone does not match - avoids 'landing zone' etc."""
+        assert _classify_violation("outside landing zone") is None
 
     def test_measurement_density(self):
         """match density keyword."""

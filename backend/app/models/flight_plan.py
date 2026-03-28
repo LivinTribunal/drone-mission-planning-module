@@ -137,6 +137,13 @@ class ValidationViolation(Base):
     validation_result = relationship("ValidationResult", back_populates="violations")
     constraint = relationship("ConstraintRule")
 
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('violation', 'warning', 'suggestion')",
+            name="ck_validation_violation_category",
+        ),
+    )
+
     @property
     def is_warning(self) -> bool:
         """backwards-compat computed property."""

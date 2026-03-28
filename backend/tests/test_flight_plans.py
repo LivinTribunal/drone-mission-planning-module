@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 
 from tests.data.missions import MISSION_AIRPORT_PAYLOAD
@@ -97,3 +99,83 @@ def test_batch_update_invalid_waypoint(client, fp_mission_id):
         },
     )
     assert r.status_code == 404
+
+
+# persist_flight_plan integration tests
+
+
+def test_persist_creates_all_category_types(db_session, fp_airport_id):
+    """persist_flight_plan stores warnings, violations, and suggestions with correct categories."""
+    from app.models.flight_plan import ValidationViolation
+    from app.models.mission import Mission
+    from app.services.flight_plan_service import persist_flight_plan
+
+    mission = Mission(
+        id=uuid4(),
+        name="persist category test",
+        airport_id=fp_airport_id,
+        status="DRAFT",
+    )
+    db_session.add(mission)
+    db_session.flush()
+
+    fp = persist_flight_plan(
+        db_session,
+        mission,
+        all_waypoints=[],
+        warnings=["speed too high"],
+        total_distance=100.0,
+        estimated_duration=60.0,
+        violations=["altitude exceeded"],
+        suggestions=["no density override"],
+    )
+
+    violations = (
+        db_session.query(ValidationViolation)
+        .filter(ValidationViolation.validation_result_id == fp.validation_result.id)
+        .all()
+    )
+
+    cats = {v.category for v in violations}
+    assert cats == {"warning", "violation", "suggestion"}
+
+    warning = next(v for v in violations if v.category == "warning")
+    assert warning.message == "speed too high"
+
+    violation = next(v for v in violations if v.category == "violation")
+    assert violation.message == "altitude exceeded"
+
+    suggestion = next(v for v in violations if v.category == "suggestion")
+    assert suggestion.message == "no density override"
+
+    assert fp.validation_result.passed is False
+
+    db_session.rollback()
+
+
+def test_persist_passed_true_without_violations(db_session, fp_airport_id):
+    """persist_flight_plan sets passed=True when no violations are provided."""
+    from app.models.mission import Mission
+    from app.services.flight_plan_service import persist_flight_plan
+
+    mission = Mission(
+        id=uuid4(),
+        name="persist no violations test",
+        airport_id=fp_airport_id,
+        status="DRAFT",
+    )
+    db_session.add(mission)
+    db_session.flush()
+
+    fp = persist_flight_plan(
+        db_session,
+        mission,
+        all_waypoints=[],
+        warnings=["minor warning"],
+        total_distance=50.0,
+        estimated_duration=30.0,
+    )
+
+    assert fp.validation_result.passed is True
+
+    db_session.rollback()

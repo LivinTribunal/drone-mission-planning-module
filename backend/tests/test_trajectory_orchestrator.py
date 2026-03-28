@@ -6,6 +6,8 @@ import pytest
 
 from app.core.exceptions import NotFoundError, TrajectoryGenerationError
 from tests.data.trajectory import (
+    DEFAULT_LANDING,
+    DEFAULT_TAKEOFF,
     TRAJECTORY_AGL_PAYLOAD,
     TRAJECTORY_AIRPORT_PAYLOAD,
     TRAJECTORY_DRONE_PAYLOAD,
@@ -172,6 +174,8 @@ def test_validation_result_always_created(client):
             "airport_id": airport_id,
             "drone_profile_id": drone["id"],
             "default_speed": 5.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
         },
     ).json()
     mission_id = mission["id"]
@@ -234,6 +238,8 @@ def test_regeneration_replaces_flight_plan(client):
             "airport_id": airport_id,
             "drone_profile_id": drone["id"],
             "default_speed": 5.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
         },
     ).json()
     mission_id = mission["id"]
@@ -301,6 +307,8 @@ def _create_mission_with_inspection(client, icao_code, **mission_extras):
         "airport_id": airport_id,
         "drone_profile_id": drone["id"],
         "default_speed": 5.0,
+        "takeoff_coordinate": DEFAULT_TAKEOFF,
+        "landing_coordinate": DEFAULT_LANDING,
         **mission_extras,
     }
 
@@ -465,6 +473,8 @@ def test_vertical_profile_generates_hover_waypoints(client):
             "airport_id": airport_id,
             "drone_profile_id": drone["id"],
             "default_speed": 3.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
         },
     ).json()
     mission_id = mission["id"]
