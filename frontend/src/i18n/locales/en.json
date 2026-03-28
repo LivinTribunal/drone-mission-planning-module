@@ -253,7 +253,8 @@
       "2d": "Flat map view",
       "3d": "Perspective view - middle mouse to tilt",
       "undo": "Undo last waypoint change (Ctrl+Z)",
-      "redo": "Redo (Ctrl+Shift+Z)"
+      "redo": "Redo (Ctrl+Shift+Z)",
+      "resetBearing": "Click to reset north"
     },
     "help": {
       "title": "Controls Help",

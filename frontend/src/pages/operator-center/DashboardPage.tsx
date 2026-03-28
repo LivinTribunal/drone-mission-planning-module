@@ -433,19 +433,18 @@ function MissionListSection({
                       {mission.name}
                     </span>
                     <div className="flex items-center gap-1">
-                      <Badge status={mission.status} />
-                      <div className="flex items-center gap-1 ml-1">
+                      <div className="flex items-center gap-0.5 mr-1">
                         <button
                           title={t("dashboard.mapAction")}
                           onClick={(e) => { e.stopPropagation(); navigate(`/operator-center/missions/${mission.id}/map`); }}
-                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-tv-surface-hover transition-colors"
+                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-tv-accent/15 transition-colors"
                         >
                           <Map className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
                         </button>
                         <button
                           title={t("dashboard.exportAction")}
                           onClick={(e) => { e.stopPropagation(); if (!terminal) navigate(`/operator-center/missions/${mission.id}/validation-export`); }}
-                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${terminal ? "opacity-40 cursor-not-allowed" : "hover:bg-tv-surface-hover"}`}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${terminal ? "opacity-40 cursor-not-allowed" : "hover:bg-tv-accent/15"}`}
                           disabled={terminal}
                         >
                           <Download className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
@@ -453,19 +452,20 @@ function MissionListSection({
                         <button
                           title={t("dashboard.renameAction")}
                           onClick={(e) => { e.stopPropagation(); setRenamingId(mission.id); setRenameValue(mission.name); }}
-                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-tv-surface-hover transition-colors"
+                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-tv-accent/15 transition-colors"
                         >
                           <Pencil className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
                         </button>
                         <button
                           title={t("dashboard.deleteAction")}
                           onClick={(e) => { e.stopPropagation(); if (!terminal) setDeletingId(mission.id); }}
-                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${terminal ? "opacity-40 cursor-not-allowed" : "hover:bg-tv-surface-hover"}`}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${terminal ? "opacity-40 cursor-not-allowed" : "hover:bg-tv-error/15"}`}
                           disabled={terminal}
                         >
                           <Trash2 className="w-3.5 h-3.5 text-tv-text-muted hover:text-tv-error" style={{ color: terminal ? "var(--tv-text-muted)" : undefined }} />
                         </button>
                       </div>
+                      <Badge status={mission.status} />
                     </div>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-tv-text-secondary">
