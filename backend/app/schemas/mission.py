@@ -13,7 +13,7 @@ class InspectionConfigOverride(BaseModel):
     altitude_offset: float | None = None
     speed_override: float | None = None
     measurement_density: int | None = Field(default=None, ge=1)
-    custom_tolerances: dict | None = None
+    custom_tolerances: dict[str, float] | None = None
     density: float | None = None
     hover_duration: float | None = None
     horizontal_distance: float | None = None
@@ -51,7 +51,7 @@ class InspectionConfigResponse(BaseModel):
     altitude_offset: float | None = None
     speed_override: float | None = None
     measurement_density: int | None = None
-    custom_tolerances: dict | None = None
+    custom_tolerances: dict[str, float] | None = None
     density: float | None = None
     hover_duration: float | None = None
     horizontal_distance: float | None = None

@@ -66,7 +66,7 @@ export default function StatsPanel({
   const waypointCount = flightPlan?.waypoints.length ?? 0;
 
   let batteryPct = "\u2014";
-  if (flightPlan?.estimated_duration && droneProfile?.endurance_minutes) {
+  if (flightPlan?.estimated_duration != null && droneProfile?.endurance_minutes != null) {
     const consumption =
       (flightPlan.estimated_duration / 60 / droneProfile.endurance_minutes) *
       100;

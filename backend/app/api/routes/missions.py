@@ -104,10 +104,11 @@ def export_mission(mission_id: UUID, body: ExportRequest, db: Session = Depends(
     # single file - return directly
     if len(files) == 1:
         filename, (data, content_type) = next(iter(files.items()))
+        sanitized = filename.replace('"', "").replace("\r", "").replace("\n", "")
         return Response(
             content=data,
             media_type=content_type,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": f'attachment; filename="{sanitized}"'},
         )
 
     # multiple files - zip them

@@ -34,7 +34,7 @@ export default function MapStatsPanel({
   const waypointCount = flightPlan.waypoints.length;
 
   let batteryPct = "\u2014";
-  if (flightPlan.estimated_duration && enduranceMinutes) {
+  if (flightPlan.estimated_duration != null && enduranceMinutes != null) {
     const consumption =
       (flightPlan.estimated_duration / 60 / enduranceMinutes) * 100;
     batteryPct = `${Math.max(0, Math.round(100 - consumption))}%`;
