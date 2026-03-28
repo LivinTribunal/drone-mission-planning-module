@@ -45,6 +45,11 @@ def list_missions(
     offset: int = 0,
 ) -> tuple[list[Mission], int]:
     """list missions with optional filters and pagination."""
+    if status is not None:
+        valid = {s.value for s in MissionStatus}
+        if status not in valid:
+            raise DomainError(f"invalid status, must be one of {valid}")
+
     query = db.query(Mission).options(
         joinedload(Mission.inspections),
         joinedload(Mission.flight_plan),

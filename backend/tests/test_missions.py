@@ -93,9 +93,11 @@ def test_update_mission(client):
 
 
 def test_duplicate_mission(client):
-    """test duplicate mission"""
+    """test duplicate mission clones inspections"""
     missions = client.get("/api/v1/missions").json()["data"]
     mission_id = missions[0]["id"]
+
+    original = client.get(f"/api/v1/missions/{mission_id}").json()
 
     response = client.post(f"/api/v1/missions/{mission_id}/duplicate")
     assert response.status_code == 201
@@ -103,6 +105,9 @@ def test_duplicate_mission(client):
 
     assert data["status"] == "DRAFT"
     assert "(copy)" in data["name"]
+
+    duplicate_detail = client.get(f"/api/v1/missions/{data['id']}").json()
+    assert len(duplicate_detail["inspections"]) == len(original["inspections"])
 
 
 def test_delete_mission(client, airport_id):

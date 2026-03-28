@@ -2,12 +2,11 @@ import io
 import zipfile
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
-from app.models.enums import MissionStatus
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.export import ExportRequest
 from app.schemas.mission import (
@@ -36,13 +35,7 @@ def list_missions(
     offset: int = Query(0),
     db: Session = Depends(get_db),
 ):
-    """list missions with filters and pagination"""
-    _VALID_STATUSES = {s.value for s in MissionStatus}
-    if status is not None and status not in _VALID_STATUSES:
-        raise HTTPException(
-            status_code=400, detail=f"invalid status, must be one of {_VALID_STATUSES}"
-        )
-
+    """list missions with filters and pagination."""
     missions, total = mission_service.list_missions(
         db, airport_id=airport_id, status=status, limit=limit, offset=offset
     )

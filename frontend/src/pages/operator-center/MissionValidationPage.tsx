@@ -184,9 +184,11 @@ export default function MissionValidationPage() {
               : formats[0] === "JSON"
                 ? "json"
                 : "waypoints";
-        a.download = `mission_${mission.name}.${ext}`;
+        const safeName = mission.name.replace(/[/\\:*?"<>|]/g, "_");
+        a.download = `mission_${safeName}.${ext}`;
       } else {
-        a.download = `mission_${mission.name}_export.zip`;
+        const safeName = mission.name.replace(/[/\\:*?"<>|]/g, "_");
+        a.download = `mission_${safeName}_export.zip`;
       }
 
       document.body.appendChild(a);

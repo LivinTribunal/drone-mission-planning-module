@@ -226,7 +226,8 @@ export default function MissionConfigPage() {
         if (fp.validation_result?.violations?.length) {
           setWarnings(fp.validation_result.violations);
         }
-      } catch {
+      } catch (err) {
+        console.error("flight plan fetch failed:", err instanceof Error ? err.message : String(err));
         setFlightPlan(null);
       }
     } catch {
@@ -266,6 +267,9 @@ export default function MissionConfigPage() {
 
       if (Object.keys(failedInspections).length > 0) {
         showNotification(t("mission.config.savePartialError"));
+        // re-fetch so mission-level state is not stale after partial save
+        const fresh = await getMission(id);
+        updateMissionState(fresh, previousStatus);
         return;
       }
 

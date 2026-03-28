@@ -128,7 +128,8 @@ export default function MissionMapPage() {
       try {
         const fp = await getFlightPlan(id);
         setFlightPlan(fp);
-      } catch {
+      } catch (err) {
+        console.error("flight plan fetch failed:", err instanceof Error ? err.message : String(err));
         setFlightPlan(null);
       }
 
@@ -136,7 +137,8 @@ export default function MissionMapPage() {
         try {
           const dp = await getDroneProfile(missionData.drone_profile_id);
           setEnduranceMinutes(dp.endurance_minutes);
-        } catch {
+        } catch (err) {
+          console.error("drone profile fetch failed:", err instanceof Error ? err.message : String(err));
           setEnduranceMinutes(null);
         }
       }
@@ -555,11 +557,8 @@ export default function MissionMapPage() {
     setTool(MapTool.PLACE_LANDING);
   }, [setTool]);
 
-  // zoom reset
-  const handleZoomReset = useCallback(() => {
-    // zoom reset is a no-op here - just a placeholder for the toolbar
-    setZoomPercent(100);
-  }, []);
+  // zoom reset - placeholder until wired to map API
+  const handleZoomReset = useCallback(() => {}, []);
 
   // zoom to specific percent
   const handleZoomTo = useCallback((percent: number) => {

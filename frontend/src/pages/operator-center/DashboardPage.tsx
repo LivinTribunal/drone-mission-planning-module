@@ -95,7 +95,10 @@ function AirportSelectionView() {
     setError(false);
     listAirportSummaries()
       .then((res) => setAirports(res.data))
-      .catch(() => setError(true))
+      .catch((err) => {
+        console.error("airport list fetch failed:", err instanceof Error ? err.message : String(err));
+        setError(true);
+      })
       .finally(() => setLoading(false));
   }, []);
 
