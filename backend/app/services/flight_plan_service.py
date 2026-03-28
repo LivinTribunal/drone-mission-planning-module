@@ -126,7 +126,7 @@ def batch_update_waypoints(
     if not mission:
         raise NotFoundError("mission not found")
 
-    if mission.status not in ("DRAFT", "PLANNED"):
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
         raise DomainError("cannot modify waypoints in current status", status_code=409)
 
     fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission_id).first()
@@ -151,13 +151,9 @@ def batch_update_waypoints(
 
         # sync mission coordinate when takeoff/landing waypoints move
         if wp.waypoint_type == WaypointType.TAKEOFF:
-            mission.takeoff_coordinate = geojson_to_ewkt(
-                {"type": "Point", "coordinates": coords}
-            )
+            mission.takeoff_coordinate = geojson_to_ewkt({"type": "Point", "coordinates": coords})
         elif wp.waypoint_type == WaypointType.LANDING:
-            mission.landing_coordinate = geojson_to_ewkt(
-                {"type": "Point", "coordinates": coords}
-            )
+            mission.landing_coordinate = geojson_to_ewkt({"type": "Point", "coordinates": coords})
 
     # regress to DRAFT without nullifying flight_plan - waypoints were just updated in place
     if mission.status == MissionStatus.PLANNED:

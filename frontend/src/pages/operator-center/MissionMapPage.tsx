@@ -337,7 +337,7 @@ export default function MissionMapPage() {
         return;
       }
     },
-    [activeTool, id, mission, measure, refreshMissions, resetTool],
+    [activeTool, id, mission, measure, refreshMissions, resetTool, t],
   );
 
   // handle tool change
@@ -590,6 +590,7 @@ export default function MissionMapPage() {
     if (!isDirty) return;
     function handleBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
+      e.returnValue = "";
     }
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
@@ -766,7 +767,7 @@ export default function MissionMapPage() {
               <button
                 onClick={() => navigate(`/operator-center/missions/${id}/validation-export`)}
                 disabled={isDirty || !!mission?.has_unsaved_map_changes}
-                title={isDirty || mission?.has_unsaved_map_changes ? t("map.noChangesToRecompute") : undefined}
+                title={isDirty || mission?.has_unsaved_map_changes ? t("map.recomputeBeforeValidating") : undefined}
                 className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border-2 ${
                   isDirty || mission?.has_unsaved_map_changes
                     ? "border-tv-border bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"

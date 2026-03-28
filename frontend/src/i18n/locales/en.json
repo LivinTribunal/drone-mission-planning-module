@@ -215,6 +215,7 @@
     "recomputeTrajectory": "Recompute Trajectory",
     "validateTrajectory": "Validate Trajectory",
     "noChangesToRecompute": "No changes to recompute",
+    "recomputeBeforeValidating": "Recompute trajectory before validating",
     "needsManualApproval": "Needs Manual Approval",
     "changesSaved": "Changes saved",
     "deleteConfirm": "Delete {{type}} point? The trajectory will be invalidated.",

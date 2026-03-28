@@ -560,3 +560,89 @@ def test_validated_mission_auto_regresses_on_regeneration(client):
 
     mission = client.get(f"/api/v1/missions/{mission_id}").json()
     assert mission["status"] == "PLANNED"
+
+
+def test_has_unsaved_map_changes_set_on_batch_update(client):
+    """batch_update_waypoints sets has_unsaved_map_changes to True."""
+    takeoff = {"type": "Point", "coordinates": [14.24, 50.10, 300]}
+    landing = {"type": "Point", "coordinates": [14.28, 50.09, 300]}
+
+    mission_id, _ = _create_mission_with_inspection(
+        client,
+        "BUMC",
+        takeoff_coordinate=takeoff,
+        landing_coordinate=landing,
+    )
+
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert gen.status_code == 200
+
+    fp = gen.json()["flight_plan"]
+    first_wp = fp["waypoints"][0]
+
+    # move the first waypoint slightly
+    coords = first_wp["position"]["coordinates"]
+    r = client.put(
+        f"/api/v1/missions/{mission_id}/flight-plan/waypoints",
+        json={
+            "updates": [
+                {
+                    "waypoint_id": first_wp["id"],
+                    "position": {
+                        "type": "Point",
+                        "coordinates": [coords[0] + 0.001, coords[1], coords[2]],
+                    },
+                }
+            ]
+        },
+    )
+    assert r.status_code == 200
+
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["has_unsaved_map_changes"] is True
+
+
+def test_has_unsaved_map_changes_cleared_after_generate(client):
+    """generate_trajectory clears has_unsaved_map_changes."""
+    takeoff = {"type": "Point", "coordinates": [14.24, 50.10, 300]}
+    landing = {"type": "Point", "coordinates": [14.28, 50.09, 300]}
+
+    mission_id, _ = _create_mission_with_inspection(
+        client,
+        "GUMC",
+        takeoff_coordinate=takeoff,
+        landing_coordinate=landing,
+    )
+
+    # generate, batch update to set the flag, then regenerate
+    gen1 = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert gen1.status_code == 200
+
+    fp = gen1.json()["flight_plan"]
+    first_wp = fp["waypoints"][0]
+    coords = first_wp["position"]["coordinates"]
+
+    client.put(
+        f"/api/v1/missions/{mission_id}/flight-plan/waypoints",
+        json={
+            "updates": [
+                {
+                    "waypoint_id": first_wp["id"],
+                    "position": {
+                        "type": "Point",
+                        "coordinates": [coords[0] + 0.001, coords[1], coords[2]],
+                    },
+                }
+            ]
+        },
+    )
+
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["has_unsaved_map_changes"] is True
+
+    # regenerate should clear the flag
+    gen2 = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert gen2.status_code == 200
+
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["has_unsaved_map_changes"] is False
