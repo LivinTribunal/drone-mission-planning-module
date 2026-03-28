@@ -20,6 +20,7 @@ import CollapsibleSection from "@/components/common/CollapsibleSection";
 import Badge from "@/components/common/Badge";
 import Button from "@/components/common/Button";
 import AirportMap from "@/components/map/AirportMap";
+import TerrainToggle from "@/components/map/overlays/TerrainToggle";
 import CreateMissionDialog from "@/components/mission/CreateMissionDialog";
 
 type SortKey =
@@ -614,6 +615,8 @@ function DashboardView() {
   const [droneProfiles, setDroneProfiles] = useState<DroneProfileResponse[]>([]);
   const [droneProfilesLoading, setDroneProfilesLoading] = useState(true);
   const [droneProfilesError, setDroneProfilesError] = useState(false);
+  const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
+  const [is3D, setIs3D] = useState(false);
 
   const fetchMissions = useCallback(() => {
     if (!selectedAirport) return;
@@ -688,7 +691,36 @@ function DashboardView() {
             </Button>
           </div>
         ) : airportDetail ? (
-          <AirportMap airport={airportDetail} />
+          <div className="relative h-full">
+            <AirportMap
+              airport={airportDetail}
+              terrainMode={terrainMode}
+              onTerrainChange={setTerrainMode}
+              is3D={is3D}
+              onToggle3D={setIs3D}
+            />
+            <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">
+              <div className="flex rounded-full border border-tv-border bg-tv-surface p-1">
+                <button
+                  onClick={() => setIs3D(false)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
+                  }`}
+                >
+                  2D
+                </button>
+                <button
+                  onClick={() => setIs3D(true)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
+                  }`}
+                >
+                  3D
+                </button>
+              </div>
+              <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />
+            </div>
+          </div>
         ) : (
           <div
             className="h-full rounded-2xl flex items-center justify-center"
