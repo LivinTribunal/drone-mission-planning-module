@@ -126,6 +126,7 @@ export interface AirportMapProps {
   is3D?: boolean;
   onToggle3D?: (val: boolean) => void;
   onBearingChange?: (bearing: number) => void;
+  bearingResetKey?: number;
 }
 
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {

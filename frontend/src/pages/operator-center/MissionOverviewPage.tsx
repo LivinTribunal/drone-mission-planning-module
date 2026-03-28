@@ -81,10 +81,12 @@ export default function MissionOverviewPage() {
         if (fp.validation_result?.violations?.length) {
           setWarnings(fp.validation_result.violations);
         }
-      } catch {
+      } catch (err) {
+        console.error("flight plan fetch failed:", err instanceof Error ? err.message : String(err));
         setFlightPlan(null);
       }
-    } catch {
+    } catch (err) {
+      console.error("mission fetch failed:", err instanceof Error ? err.message : String(err));
       setError("mission.config.loadError");
     } finally {
       setLoading(false);
@@ -154,7 +156,6 @@ export default function MissionOverviewPage() {
             <StatsPanel
               flightPlan={flightPlan}
               hasTrajectory={hasTrajectory}
-              inspectionCount={mission.inspections.length}
               droneProfile={selectedDroneProfile}
             />
           </div>

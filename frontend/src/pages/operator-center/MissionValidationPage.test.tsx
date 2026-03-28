@@ -34,6 +34,8 @@ function makeMission(
     takeoff_coordinate: null,
     landing_coordinate: null,
     has_unsaved_map_changes: false,
+    inspection_count: 0,
+    estimated_duration: null,
     inspections: [],
   };
 }

@@ -162,7 +162,18 @@
     "hover": "Hover",
     "transitPath": "Transit Path",
     "lhaUnits": "LHA Units",
-    "simplifiedTrajectory": "Simplified Trajectory"
+    "simplifiedTrajectory": "Simplified Trajectory",
+    "lastSaved": "Last saved:",
+    "deleteConfirm": "Delete \"{{name}}\"? This cannot be undone.",
+    "renameTitle": "Rename Mission",
+    "renamePlaceholder": "Enter new name",
+    "renameAction": "Rename",
+    "deleteAction": "Delete",
+    "mapAction": "Open Map",
+    "exportAction": "Export",
+    "deleteSuccess": "Mission deleted",
+    "renameError": "Failed to rename mission",
+    "deleteError": "Failed to delete mission"
   },
   "map": {
     "simplifiedTrajectory": "Simplified Trajectory",
@@ -204,7 +215,7 @@
     "duration": "Duration",
     "waypointCount": "Waypoints",
     "inspectionCount": "Inspections",
-    "batteryConsumption": "Battery",
+    "batteryLeft": "Battery Left",
     "transitDistance": "Transit Distance",
     "measurementDistance": "Measurement Distance",
     "saveError": "Failed to save waypoint changes",
@@ -233,6 +244,13 @@
       "lon": "Lon",
       "alt": "Alt"
     },
+    "waypointTypes": {
+      "TAKEOFF": "Takeoff",
+      "LANDING": "Landing",
+      "TRANSIT": "Transit",
+      "MEASUREMENT": "Measurement",
+      "HOVER": "Hover"
+    },
     "tools": {
       "select": "Select and inspect map features (S)",
       "pan": "Pan the map (P)",
@@ -243,7 +261,8 @@
       "2d": "Flat map view",
       "3d": "Perspective view - middle mouse to tilt",
       "undo": "Undo last waypoint change (Ctrl+Z)",
-      "redo": "Redo (Ctrl+Shift+Z)"
+      "redo": "Redo (Ctrl+Shift+Z)",
+      "resetBearing": "Click to reset north"
     },
     "help": {
       "title": "Controls Help",
@@ -361,7 +380,7 @@
       "estimatedDuration": "Duration",
       "waypointCount": "Waypoints",
       "inspectionCount": "Inspections",
-      "batteryConsumption": "Battery Consumption",
+      "batteryLeft": "Battery Left",
       "speedFramerateWarning": "Speed exceeds camera frame rate capability for the selected drone",
       "unsavedChanges": "You have unsaved changes. Discard?",
       "discardChanges": "Discard Changes",

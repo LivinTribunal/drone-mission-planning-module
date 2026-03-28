@@ -267,6 +267,9 @@ export default function MissionConfigPage() {
 
       if (Object.keys(failedInspections).length > 0) {
         showNotification(t("mission.config.savePartialError"));
+        // re-fetch so mission-level state is not stale after partial save
+        const fresh = await getMission(id);
+        updateMissionState(fresh, previousStatus);
         return;
       }
 
@@ -701,7 +704,6 @@ export default function MissionConfigPage() {
           <StatsPanel
             flightPlan={flightPlan}
             hasTrajectory={hasTrajectory}
-            inspectionCount={mission.inspections.length}
             droneProfile={selectedDroneProfile}
           />
         </div>

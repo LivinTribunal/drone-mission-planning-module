@@ -184,9 +184,11 @@ export default function MissionValidationPage() {
               : formats[0] === "JSON"
                 ? "json"
                 : "waypoints";
-        a.download = `mission_${mission.name}.${ext}`;
+        const safeName = mission.name.replace(/[/\\:*?"<>|]/g, "_");
+        a.download = `mission_${safeName}.${ext}`;
       } else {
-        a.download = `mission_${mission.name}_export.zip`;
+        const safeName = mission.name.replace(/[/\\:*?"<>|]/g, "_");
+        a.download = `mission_${safeName}_export.zip`;
       }
 
       document.body.appendChild(a);
@@ -393,7 +395,6 @@ export default function MissionValidationPage() {
                 <StatsPanel
                   flightPlan={flightPlan}
                   hasTrajectory={flightPlan !== null}
-                  inspectionCount={mission.inspections.length}
                   droneProfile={droneProfiles.find((dp) => dp.id === mission.drone_profile_id) ?? null}
                 />
               </div>

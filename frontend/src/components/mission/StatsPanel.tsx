@@ -14,7 +14,6 @@ import type { DroneProfileResponse } from "@/types/droneProfile";
 interface StatsPanelProps {
   flightPlan: FlightPlanResponse | null;
   hasTrajectory: boolean;
-  inspectionCount: number;
   droneProfile: DroneProfileResponse | null;
 }
 
@@ -67,11 +66,11 @@ export default function StatsPanel({
   const waypointCount = flightPlan?.waypoints.length ?? 0;
 
   let batteryPct = "\u2014";
-  if (flightPlan?.estimated_duration && droneProfile?.endurance_minutes) {
-    const pct =
+  if (flightPlan?.estimated_duration != null && droneProfile?.endurance_minutes != null) {
+    const consumption =
       (flightPlan.estimated_duration / 60 / droneProfile.endurance_minutes) *
       100;
-    batteryPct = `${Math.round(pct)}%`;
+    batteryPct = `${Math.max(0, Math.round(100 - consumption))}%`;
   }
 
   const stats = [
@@ -94,7 +93,7 @@ export default function StatsPanel({
       colorClass: "bg-tv-warning/20 text-tv-warning",
     },
     {
-      label: t("mission.config.batteryConsumption"),
+      label: t("mission.config.batteryLeft"),
       value: batteryPct,
       icon: Battery,
       colorClass: "bg-tv-error/20 text-tv-error",

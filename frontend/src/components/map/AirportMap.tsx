@@ -230,6 +230,7 @@ export default function AirportMap({
   showCompass = true,
   is3D: is3DProp,
   onBearingChange,
+  bearingResetKey,
 }: AirportMapProps & { activeTool?: MapTool }) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -276,6 +277,63 @@ export default function AirportMap({
   // track map bearing for compass
   const onBearingChangeRef = useRef(onBearingChange);
   onBearingChangeRef.current = onBearingChange;
+
+  // handle waypoint selection from the internal WaypointListPanel
+  const handleWaypointListSelect = useCallback(
+    (wpId: string | null) => {
+      onWaypointClick?.(wpId);
+      if (!wpId) {
+        setSelectedFeature(null);
+        return;
+      }
+
+      // standalone takeoff/landing
+      if (wpId === "takeoff" && takeoffCoordinate) {
+        const [lon, lat, alt] = takeoffCoordinate.coordinates;
+        setSelectedFeature({
+          type: "waypoint",
+          data: {
+            id: "takeoff",
+            waypoint_type: "TAKEOFF",
+            sequence_order: 0,
+            position: { type: "Point", coordinates: [lon, lat, alt] },
+            stack_count: 1,
+          },
+        });
+        return;
+      }
+      if (wpId === "landing" && landingCoordinate) {
+        const [lon, lat, alt] = landingCoordinate.coordinates;
+        setSelectedFeature({
+          type: "waypoint",
+          data: {
+            id: "landing",
+            waypoint_type: "LANDING",
+            sequence_order: 0,
+            position: { type: "Point", coordinates: [lon, lat, alt] },
+            stack_count: 1,
+          },
+        });
+        return;
+      }
+
+      const wp = waypoints?.find((w) => w.id === wpId);
+      if (wp) {
+        const [lon, lat, alt] = wp.position.coordinates;
+        setSelectedFeature({
+          type: "waypoint",
+          data: {
+            id: wp.id,
+            waypoint_type: wp.waypoint_type,
+            sequence_order: wp.sequence_order,
+            position: { type: "Point", coordinates: [lon, lat, alt] },
+            stack_count: 1,
+          },
+        });
+      }
+    },
+    [onWaypointClick, waypoints, takeoffCoordinate, landingCoordinate],
+  );
 
   // apply 3D pitch toggle
   useEffect(() => {
@@ -524,25 +582,6 @@ export default function AirportMap({
   const onZoomChangeRef = useRef(onZoomChange);
   onZoomChangeRef.current = onZoomChange;
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    function handleZoomEnd() {
-      if (!map) return;
-      if (suppressZoomEndRef.current) {
-        suppressZoomEndRef.current = false;
-        return;
-      }
-      const currentZoom = map.getZoom();
-      const percent = Math.round((currentZoom / 14.5) * 100);
-      onZoomChangeRef.current?.(percent);
-    }
-
-    map.on("zoomend", handleZoomEnd);
-    return () => { map.off("zoomend", handleZoomEnd); };
-  }, []);
-
   // initialize map - no navigation control (removed old zoom/compass)
   useEffect(() => {
     if (!containerRef.current) return;
@@ -568,13 +607,35 @@ export default function AirportMap({
     }
     map.on("rotate", handleRotate);
 
+    // report zoom changes back to parent
+    function handleZoom() {
+      if (suppressZoomEndRef.current) return;
+      const currentZoom = map.getZoom();
+      const percent = Math.round((currentZoom / 14.5) * 100);
+      onZoomChangeRef.current?.(percent);
+    }
+    function handleZoomEnd() {
+      suppressZoomEndRef.current = false;
+    }
+    map.on("zoom", handleZoom);
+    map.on("zoomend", handleZoomEnd);
+
     return () => {
       map.off("rotate", handleRotate);
+      map.off("zoom", handleZoom);
+      map.off("zoomend", handleZoomEnd);
       map.remove();
       mapRef.current = null;
       layersAddedRef.current = false;
     };
   }, [airport.id, interactive]);
+
+  // reset bearing when bearingResetKey changes
+  useEffect(() => {
+    if (bearingResetKey === undefined || bearingResetKey === 0) return;
+    const map = mapRef.current;
+    if (map) map.easeTo({ bearing: 0, duration: 400 });
+  }, [bearingResetKey]);
 
   // add measure tool sources and layers to the map
   function addMeasureLayersToMap(map: maplibregl.Map) {
@@ -1341,7 +1402,7 @@ export default function AirportMap({
             <WaypointListPanel
               waypoints={waypoints ?? []}
               selectedId={selectedWaypointId ?? null}
-              onSelect={onWaypointClick ?? (() => {})}
+              onSelect={handleWaypointListSelect}
               takeoffCoordinate={takeoffCoordinate}
               landingCoordinate={landingCoordinate}
               visibleInspectionIds={visibleInspectionIds}
