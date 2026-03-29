@@ -2,7 +2,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.schemas.inspection_template import InspectionTemplateCreate, InspectionTemplateUpdate
 from app.services.inspection_template_service import (
     create_template,
@@ -182,3 +182,79 @@ def test_delete_template_not_found(db_session):
     """delete non-existent template raises not found"""
     with pytest.raises(NotFoundError):
         delete_template(db_session, uuid4())
+
+
+def test_delete_template_with_linked_inspection(db_session):
+    """delete template used by an inspection raises conflict"""
+    from app.models.airport import Airport
+    from app.models.inspection import Inspection
+    from app.models.mission import Mission
+
+    created = create_template(
+        db_session,
+        InspectionTemplateCreate(name="Linked Template", methods=["ANGULAR_SWEEP"]),
+    )
+
+    airport = Airport(
+        icao_code="LZTM",
+        name="Test Airport",
+        elevation=100.0,
+        location="SRID=4326;POINTZ(17.0 48.0 100)",
+    )
+    db_session.add(airport)
+    db_session.flush()
+
+    mission = Mission(name="Test Mission", airport_id=airport.id)
+    db_session.add(mission)
+    db_session.flush()
+
+    inspection = Inspection(
+        mission_id=mission.id,
+        template_id=created.id,
+        method="ANGULAR_SWEEP",
+        sequence_order=1,
+    )
+    db_session.add(inspection)
+    db_session.flush()
+
+    with pytest.raises(ConflictError):
+        delete_template(db_session, created.id)
+
+
+def test_mission_count_enrichment(db_session):
+    """mission count reflects linked inspections"""
+    from app.models.airport import Airport
+    from app.models.inspection import Inspection
+    from app.models.mission import Mission
+
+    created = create_template(
+        db_session,
+        InspectionTemplateCreate(name="Count Template", methods=["ANGULAR_SWEEP"]),
+    )
+
+    assert created.mission_count == 0
+
+    airport = Airport(
+        icao_code="LZCN",
+        name="Count Airport",
+        elevation=100.0,
+        location="SRID=4326;POINTZ(17.0 48.0 100)",
+    )
+    db_session.add(airport)
+    db_session.flush()
+
+    mission = Mission(name="Count Mission", airport_id=airport.id)
+    db_session.add(mission)
+    db_session.flush()
+
+    inspection = Inspection(
+        mission_id=mission.id,
+        template_id=created.id,
+        method="ANGULAR_SWEEP",
+        sequence_order=1,
+    )
+    db_session.add(inspection)
+    db_session.flush()
+
+    result = get_template(db_session, created.id)
+    assert result.mission_count == 1

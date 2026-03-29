@@ -95,6 +95,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
     },
     target_agl_ids: ["agl-1"],
     methods: ["ANGULAR_SWEEP"],
+    mission_count: 0,
   }),
   listInspectionTemplates: vi.fn().mockResolvedValue({
     data: [
@@ -109,6 +110,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
         default_config: null,
         target_agl_ids: ["agl-1"],
         methods: ["ANGULAR_SWEEP"],
+        mission_count: 0,
       },
     ],
     meta: { total: 1 },
@@ -124,6 +126,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
     default_config: null,
     target_agl_ids: ["agl-1"],
     methods: ["ANGULAR_SWEEP"],
+    mission_count: 0,
   }),
   deleteInspectionTemplate: vi.fn().mockResolvedValue({ deleted: true }),
   createInspectionTemplate: vi.fn().mockResolvedValue({
@@ -131,6 +134,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
     name: "PAPI RWY 22 - Angular Sweep (Copy)",
     methods: ["ANGULAR_SWEEP"],
     target_agl_ids: ["agl-1"],
+    mission_count: 0,
   }),
 }));
 
@@ -162,7 +166,8 @@ describe("InspectionEditPage", () => {
     /** verify template data appears. */
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
+      expect(matches.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -178,23 +183,28 @@ describe("InspectionEditPage", () => {
     expect(screen.getByText("common.retry")).toBeInTheDocument();
   });
 
-  it("save button is disabled when not editing", async () => {
-    /** verify save requires edit mode. */
+  it("save button is disabled when no changes made", async () => {
+    /** verify save requires dirty state. */
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
+      expect(matches.length).toBeGreaterThanOrEqual(1);
     });
     const saveBtn = screen.getByText("coordinator.inspections.save");
     expect(saveBtn).toBeDisabled();
   });
 
-  it("save button becomes enabled after clicking edit", async () => {
-    /** verify toggling edit mode enables save. */
+  it("save button becomes enabled after changing a config field", async () => {
+    /** verify changing config enables save. */
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
+      expect(matches.length).toBeGreaterThanOrEqual(1);
     });
-    fireEvent.click(screen.getByText("coordinator.inspections.editTemplate"));
+
+    const altitudeInput = screen.getByDisplayValue("5");
+    fireEvent.change(altitudeInput, { target: { value: "10" } });
+
     const saveBtn = screen.getByText("coordinator.inspections.save");
     expect(saveBtn).not.toBeDisabled();
   });
@@ -204,9 +214,13 @@ describe("InspectionEditPage", () => {
     const { updateInspectionTemplate } = await import("@/api/inspectionTemplates");
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
+      expect(matches.length).toBeGreaterThanOrEqual(1);
     });
-    fireEvent.click(screen.getByText("coordinator.inspections.editTemplate"));
+
+    const altitudeInput = screen.getByDisplayValue("5");
+    fireEvent.change(altitudeInput, { target: { value: "10" } });
+
     fireEvent.click(screen.getByText("coordinator.inspections.save"));
     await waitFor(() => {
       expect(updateInspectionTemplate).toHaveBeenCalledWith("tpl-1", expect.any(Object));
@@ -218,7 +232,8 @@ describe("InspectionEditPage", () => {
     const { deleteInspectionTemplate } = await import("@/api/inspectionTemplates");
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
+      expect(matches.length).toBeGreaterThanOrEqual(1);
     });
     fireEvent.click(screen.getByText("coordinator.inspections.deleteTemplate"));
     await waitFor(() => {
@@ -236,7 +251,8 @@ describe("InspectionEditPage", () => {
     const { createInspectionTemplate } = await import("@/api/inspectionTemplates");
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
+      expect(matches.length).toBeGreaterThanOrEqual(1);
     });
     fireEvent.click(screen.getByText("coordinator.inspections.duplicateTemplate"));
     await waitFor(() => {

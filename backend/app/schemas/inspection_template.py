@@ -73,6 +73,7 @@ class InspectionTemplateResponse(BaseModel):
     default_config: InspectionConfigResponse | None = None
     target_agl_ids: list[UUID] = []
     methods: list[str] = []
+    mission_count: int = 0
 
     model_config = {"from_attributes": True}
 

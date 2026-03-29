@@ -1,42 +1,134 @@
 import { useTranslation } from "react-i18next";
 import Input from "@/components/common/Input";
 import type { InspectionConfigResponse } from "@/types/inspectionTemplate";
+import type { InspectionMethod } from "@/types/enums";
+import type { AGLResponse } from "@/types/airport";
 
 interface TemplateConfigSectionProps {
   config: Omit<InspectionConfigResponse, "id"> | null;
   method: string;
-  isEditing: boolean;
   onChange: (field: string, value: number | null) => void;
+  onMethodChange: (method: InspectionMethod) => void;
+  allAgls: AGLResponse[];
+  selectedAglId: string;
+  onAglChange: (aglId: string) => void;
+  selectedLhaIds: Set<string>;
+  onToggleLha: (lhaId: string) => void;
+  onSelectAllLhas: () => void;
+  onDeselectAllLhas: () => void;
 }
 
 export default function TemplateConfigSection({
   config,
   method,
-  isEditing,
   onChange,
+  onMethodChange,
+  allAgls,
+  selectedAglId,
+  onAglChange,
+  selectedLhaIds,
+  onToggleLha,
+  onSelectAllLhas,
+  onDeselectAllLhas,
 }: TemplateConfigSectionProps) {
   const { t } = useTranslation();
-
-  function formatMethod(m: string) {
-    if (m === "ANGULAR_SWEEP") return t("coordinator.inspections.angularSweep");
-    if (m === "VERTICAL_PROFILE") return t("coordinator.inspections.verticalProfile");
-    return m;
-  }
 
   function handleNumber(field: string, raw: string) {
     const val = raw === "" ? null : parseFloat(raw);
     onChange(field, val);
   }
 
+  const selectedAgl = allAgls.find((a) => a.id === selectedAglId);
+  const allLhasSelected = selectedAgl
+    ? selectedAgl.lhas.length > 0 && selectedAgl.lhas.every((lha) => selectedLhaIds.has(lha.id))
+    : false;
+
   return (
     <div className="flex flex-col gap-3">
+      {/* method dropdown */}
       <div>
         <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
           {t("coordinator.inspections.method")}
         </label>
-        <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[var(--tv-status-draft-bg)] text-[var(--tv-status-draft-text)]">
-          {formatMethod(method)}
-        </span>
+        <select
+          value={method}
+          onChange={(e) => onMethodChange(e.target.value as InspectionMethod)}
+          className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
+        >
+          <option value="ANGULAR_SWEEP">{t("coordinator.inspections.angularSweep")}</option>
+          <option value="VERTICAL_PROFILE">{t("coordinator.inspections.verticalProfile")}</option>
+        </select>
+      </div>
+
+      {/* agl system dropdown */}
+      <div>
+        <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+          {t("coordinator.inspections.selectAglSystem")}
+        </label>
+        <select
+          value={selectedAglId}
+          onChange={(e) => onAglChange(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
+        >
+          <option value="">{t("coordinator.inspections.selectAgl")}</option>
+          {allAgls.map((agl) => (
+            <option key={agl.id} value={agl.id}>
+              {agl.name} - {agl.agl_type}{agl.side ? ` - ${agl.side}` : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* lha units */}
+      <div>
+        <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+          {t("coordinator.inspections.lhaUnits")}
+        </label>
+        {!selectedAglId ? (
+          <p className="text-sm text-tv-text-muted">
+            {t("coordinator.inspections.selectAglFirst")}
+          </p>
+        ) : selectedAgl && selectedAgl.lhas.length > 0 ? (
+          <div className="ml-1">
+            {selectedAgl.lhas.length > 1 && (
+              <div className="flex gap-2 mb-2">
+                <button
+                  onClick={allLhasSelected ? onDeselectAllLhas : onSelectAllLhas}
+                  className="text-xs text-tv-accent hover:underline"
+                >
+                  {allLhasSelected
+                    ? t("coordinator.inspections.deselectAll")
+                    : t("coordinator.inspections.selectAll")}
+                </button>
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              {selectedAgl.lhas.map((lha) => (
+                <label
+                  key={lha.id}
+                  className="flex items-center gap-2 text-sm cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedLhaIds.has(lha.id)}
+                    onChange={() => onToggleLha(lha.id)}
+                    className="rounded accent-tv-accent"
+                  />
+                  <span className="text-tv-text-primary">
+                    {t("coordinator.inspections.lhaUnit", { number: lha.unit_number })}
+                  </span>
+                  <span className="text-tv-text-muted text-xs">
+                    {lha.setting_angle?.toFixed(2) ?? "-"}&deg;
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-tv-text-muted">
+            {t("coordinator.inspections.noAglSystems")}
+          </p>
+        )}
       </div>
 
       <Input
@@ -44,7 +136,6 @@ export default function TemplateConfigSection({
         type="number"
         value={config?.altitude_offset ?? ""}
         onChange={(e) => handleNumber("altitude_offset", e.target.value)}
-        disabled={!isEditing}
         step="0.1"
       />
 
@@ -53,7 +144,6 @@ export default function TemplateConfigSection({
         type="number"
         value={config?.speed_override ?? ""}
         onChange={(e) => handleNumber("speed_override", e.target.value)}
-        disabled={!isEditing}
         step="0.1"
       />
 
@@ -62,7 +152,6 @@ export default function TemplateConfigSection({
         type="number"
         value={config?.measurement_density ?? ""}
         onChange={(e) => handleNumber("measurement_density", e.target.value)}
-        disabled={!isEditing}
         step="1"
       />
 
@@ -74,7 +163,6 @@ export default function TemplateConfigSection({
           const val = e.target.value === "" ? null : parseFloat(e.target.value);
           onChange("custom_tolerances", val);
         }}
-        disabled={!isEditing}
         step="0.01"
       />
 
@@ -84,7 +172,6 @@ export default function TemplateConfigSection({
           type="number"
           value={config?.hover_duration ?? ""}
           onChange={(e) => handleNumber("hover_duration", e.target.value)}
-          disabled={!isEditing}
           step="0.5"
         />
       )}

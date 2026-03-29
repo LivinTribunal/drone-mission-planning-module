@@ -1,14 +1,19 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2, Search } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
-import { listInspectionTemplates, createInspectionTemplate } from "@/api/inspectionTemplates";
+import {
+  listInspectionTemplates,
+  createInspectionTemplate,
+  deleteInspectionTemplate,
+} from "@/api/inspectionTemplates";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { AGLResponse } from "@/types/airport";
 import type { InspectionMethod } from "@/types/enums";
 import InspectionTemplateTable from "@/components/mission/InspectionTemplateTable";
 import CreateTemplateDialog from "@/components/mission/CreateTemplateDialog";
+import Modal from "@/components/common/Modal";
 import Button from "@/components/common/Button";
 
 export default function InspectionListPage() {
@@ -26,6 +31,29 @@ export default function InspectionListPage() {
   const [aglFilter, setAglFilter] = useState("");
 
   const [showCreate, setShowCreate] = useState(false);
+
+  // pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<InspectionTemplateResponse | null>(null);
+
+  // notification toast
+  const [notification, setNotification] = useState<string | null>(null);
+  const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showNotif(msg: string) {
+    setNotification(msg);
+    if (notificationTimer.current) clearTimeout(notificationTimer.current);
+    notificationTimer.current = setTimeout(() => setNotification(null), 4000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimer.current) clearTimeout(notificationTimer.current);
+    };
+  }, []);
 
   // all agls from airport
   const allAgls = useMemo(() => {
@@ -54,8 +82,8 @@ export default function InspectionListPage() {
   }, [airportDetail, t]);
 
   useEffect(() => {
-    fetchTemplates();
-  }, [fetchTemplates]);
+    if (airportDetail) fetchTemplates();
+  }, [fetchTemplates, airportDetail]);
 
   // filtered templates
   const filtered = useMemo(() => {
@@ -79,6 +107,9 @@ export default function InspectionListPage() {
     return list;
   }, [templates, search, methodFilter, aglFilter]);
 
+  // reset page when filters change
+  useEffect(() => { setPage(1); }, [search, methodFilter, aglFilter]);
+
   function toggleMethod(method: InspectionMethod) {
     setMethodFilter((prev) => {
       const next = new Set(prev);
@@ -89,13 +120,60 @@ export default function InspectionListPage() {
   }
 
   async function handleCreate(data: { name: string; aglId: string; method: InspectionMethod }) {
-    const result = await createInspectionTemplate({
-      name: data.name,
-      target_agl_ids: [data.aglId],
-      methods: [data.method],
-    });
-    setShowCreate(false);
-    navigate(`/coordinator-center/inspections/${result.id}`);
+    try {
+      const result = await createInspectionTemplate({
+        name: data.name,
+        target_agl_ids: [data.aglId],
+        methods: [data.method],
+      });
+      setShowCreate(false);
+      navigate(`/coordinator-center/inspections/${result.id}`);
+    } catch (err) {
+      showNotif(err instanceof Error ? err.message : t("coordinator.inspections.createError"));
+    }
+  }
+
+  async function handleDuplicate(id: string) {
+    const tpl = templates.find((t) => t.id === id);
+    if (!tpl) return;
+    try {
+      const result = await createInspectionTemplate({
+        name: `${tpl.name} (Copy)`,
+        target_agl_ids: tpl.target_agl_ids,
+        methods: tpl.methods,
+      });
+      navigate(`/coordinator-center/inspections/${result.id}`);
+    } catch (err) {
+      showNotif(err instanceof Error ? err.message : t("coordinator.inspections.duplicateError"));
+    }
+  }
+
+  function handleDeleteClick(id: string) {
+    const tpl = templates.find((t) => t.id === id);
+    if (tpl) setDeleteTarget(tpl);
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+    try {
+      await deleteInspectionTemplate(deleteTarget.id);
+      setDeleteTarget(null);
+      fetchTemplates();
+    } catch (err) {
+      setDeleteTarget(null);
+      showNotif(err instanceof Error ? err.message : t("coordinator.inspections.deleteError"));
+    }
+  }
+
+  // airport guard
+  if (!airportDetail) {
+    return (
+      <div className="flex items-center justify-center py-12" data-testid="inspection-list-page">
+        <p className="text-sm text-tv-text-muted">
+          {t("coordinator.inspections.selectAirportFirst")}
+        </p>
+      </div>
+    );
   }
 
   if (loading) {
@@ -177,11 +255,21 @@ export default function InspectionListPage() {
           <p className="text-sm text-tv-text-muted py-8 text-center">
             {t("coordinator.inspections.noTemplates")}
           </p>
+        ) : filtered.length === 0 ? (
+          <p className="text-sm text-tv-text-muted py-8 text-center">
+            {t("coordinator.inspections.noMatch")}
+          </p>
         ) : (
           <InspectionTemplateTable
             templates={filtered}
             aglMap={aglMap}
             onRowClick={(id) => navigate(`/coordinator-center/inspections/${id}`)}
+            onDuplicate={handleDuplicate}
+            onDelete={handleDeleteClick}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
           />
         )}
       </div>
@@ -192,6 +280,32 @@ export default function InspectionListPage() {
         agls={allAgls}
         onSubmit={handleCreate}
       />
+
+      {/* delete confirmation */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title={t("coordinator.inspections.deleteTemplate")}
+      >
+        <p className="text-sm text-tv-text-secondary mb-4">
+          {t("coordinator.inspections.deleteConfirm", { name: deleteTarget?.name ?? "" })}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+            {t("common.cancel")}
+          </Button>
+          <Button variant="danger" onClick={handleDeleteConfirm}>
+            {t("common.delete")}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* notification toast */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-tv-surface border border-tv-border text-sm text-tv-text-primary">
+          {notification}
+        </div>
+      )}
     </div>
   );
 }

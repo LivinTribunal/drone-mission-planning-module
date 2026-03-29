@@ -24,6 +24,7 @@ export interface InspectionTemplateResponse {
   default_config: InspectionConfigResponse | null;
   target_agl_ids: string[];
   methods: InspectionMethod[];
+  mission_count: number;
 }
 
 export interface InspectionTemplateCreate {

@@ -3,9 +3,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.agl import AGL
 from app.models.inspection import (
+    Inspection,
     InspectionConfiguration,
     InspectionTemplate,
     insp_template_methods,
@@ -24,6 +25,10 @@ def _enrich(template: InspectionTemplate, db: Session) -> InspectionTemplate:
 
     template.methods = [row[0] for row in methods_rows]
     template.target_agl_ids = [agl.id for agl in template.targets]
+
+    template.mission_count = (
+        db.query(Inspection).filter(Inspection.template_id == template.id).count()
+    )
 
     return template
 
@@ -157,6 +162,10 @@ def delete_template(db: Session, template_id: UUID):
     )
     if not template:
         raise NotFoundError("template not found")
+
+    linked = db.query(Inspection).filter(Inspection.template_id == template_id).count()
+    if linked > 0:
+        raise ConflictError(f"cannot delete template used by {linked} inspection(s)")
 
     config = template.default_config
     db.delete(template)

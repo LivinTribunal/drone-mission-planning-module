@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Loader2, X, Pencil, Copy, Trash2 } from "lucide-react";
+import { Loader2, X, Pencil, Copy, Trash2, Plus } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import {
   getInspectionTemplate,
@@ -17,7 +17,6 @@ import Button from "@/components/common/Button";
 import Modal from "@/components/common/Modal";
 import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
-import TemplateAglSection from "@/components/mission/TemplateAglSection";
 import TemplateConfigSection from "@/components/mission/TemplateConfigSection";
 import TemplateSelectorDropdown from "@/components/mission/TemplateSelectorDropdown";
 import CreateTemplateDialog from "@/components/mission/CreateTemplateDialog";
@@ -33,11 +32,15 @@ export default function InspectionEditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // edit state
-  const [isEditing, setIsEditing] = useState(false);
+  // config edit state
   const [editConfig, setEditConfig] = useState<Omit<InspectionConfigResponse, "id"> | null>(null);
+  const [editMethod, setEditMethod] = useState<InspectionMethod>("ANGULAR_SWEEP");
+  const [selectedAglId, setSelectedAglId] = useState<string>("");
   const [selectedLhaIds, setSelectedLhaIds] = useState<Set<string>>(new Set());
+  const [editName, setEditName] = useState("");
+  const [isRenamingName, setIsRenamingName] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -53,12 +56,6 @@ export default function InspectionEditPage() {
     if (!airportDetail) return [];
     return airportDetail.surfaces.flatMap((s) => s.agls);
   }, [airportDetail]);
-
-  // target agl for this template
-  const targetAgl = useMemo(() => {
-    if (!template) return null;
-    return allAgls.find((a) => a.id === template.target_agl_ids[0]) ?? null;
-  }, [template, allAgls]);
 
   function showNotif(msg: string) {
     setNotification(msg);
@@ -85,8 +82,6 @@ export default function InspectionEditPage() {
       ]);
       setTemplate(tpl);
       setAllTemplates(allTpl.data);
-
-      // initialize config from template defaults
       initializeFromTemplate(tpl);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
@@ -123,24 +118,34 @@ export default function InspectionEditPage() {
           },
     );
 
+    setEditMethod((tpl.methods[0] ?? "ANGULAR_SWEEP") as InspectionMethod);
+    setEditName(tpl.name);
+
+    const aglId = tpl.target_agl_ids[0] ?? "";
+    setSelectedAglId(aglId);
+
     // initialize lha selection from config or all lhas
-    const agl = allAgls.find((a) => a.id === tpl.target_agl_ids[0]);
     if (cfg?.lha_ids && cfg.lha_ids.length > 0) {
       setSelectedLhaIds(new Set(cfg.lha_ids.map(String)));
-    } else if (agl) {
-      setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
+    } else if (aglId) {
+      const agl = allAgls.find((a) => a.id === aglId);
+      if (agl) setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
     }
+
+    setIsDirty(false);
   }
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // re-init lha selection when allAgls or template change (airport detail loaded later)
+  // re-init lha selection when allAgls load after template
   useEffect(() => {
-    if (isEditing) return;
     if (!template || allAgls.length === 0) return;
-    const agl = allAgls.find((a) => a.id === template.target_agl_ids[0]);
+    const aglId = template.target_agl_ids[0] ?? "";
+    if (!aglId) return;
+
+    const agl = allAgls.find((a) => a.id === aglId);
     if (!agl) return;
 
     const cfg = template.default_config;
@@ -149,9 +154,14 @@ export default function InspectionEditPage() {
     } else {
       setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
     }
-  }, [allAgls, template, isEditing]);
+  }, [allAgls, template]);
+
+  function markDirty() {
+    setIsDirty(true);
+  }
 
   function handleConfigChange(field: string, value: number | null) {
+    markDirty();
     setEditConfig((prev) => {
       if (!prev) return prev;
       if (field === "custom_tolerances") {
@@ -172,13 +182,41 @@ export default function InspectionEditPage() {
     });
   }
 
+  function handleMethodChange(method: InspectionMethod) {
+    markDirty();
+    setEditMethod(method);
+  }
+
+  function handleAglChange(aglId: string) {
+    markDirty();
+    setSelectedAglId(aglId);
+    if (aglId) {
+      const agl = allAgls.find((a) => a.id === aglId);
+      if (agl) setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
+    } else {
+      setSelectedLhaIds(new Set());
+    }
+  }
+
   function handleToggleLha(lhaId: string) {
+    markDirty();
     setSelectedLhaIds((prev) => {
       const next = new Set(prev);
       if (next.has(lhaId)) next.delete(lhaId);
       else next.add(lhaId);
       return next;
     });
+  }
+
+  function handleSelectAllLhas() {
+    markDirty();
+    const agl = allAgls.find((a) => a.id === selectedAglId);
+    if (agl) setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
+  }
+
+  function handleDeselectAllLhas() {
+    markDirty();
+    setSelectedLhaIds(new Set());
   }
 
   async function handleSave() {
@@ -190,10 +228,14 @@ export default function InspectionEditPage() {
         : undefined;
 
       const result = await updateInspectionTemplate(id, {
+        name: editName !== template.name ? editName : undefined,
+        methods: [editMethod],
+        target_agl_ids: selectedAglId ? [selectedAglId] : undefined,
         default_config: configPayload,
       });
       setTemplate(result);
-      setIsEditing(false);
+      setIsDirty(false);
+      setIsRenamingName(false);
       showNotif(t("coordinator.inspections.saved"));
     } catch (err) {
       showNotif(err instanceof Error ? err.message : t("coordinator.inspections.saveError"));
@@ -230,17 +272,21 @@ export default function InspectionEditPage() {
   }
 
   async function handleCreate(data: { name: string; aglId: string; method: InspectionMethod }) {
-    const result = await createInspectionTemplate({
-      name: data.name,
-      target_agl_ids: [data.aglId],
-      methods: [data.method],
-    });
-    setShowCreate(false);
-    navigate(`/coordinator-center/inspections/${result.id}`);
+    try {
+      const result = await createInspectionTemplate({
+        name: data.name,
+        target_agl_ids: [data.aglId],
+        methods: [data.method],
+      });
+      setShowCreate(false);
+      navigate(`/coordinator-center/inspections/${result.id}`);
+    } catch (err) {
+      showNotif(err instanceof Error ? err.message : t("coordinator.inspections.createError"));
+    }
   }
 
-  function formatTimestamp(dateStr: string | null) {
-    if (!dateStr) return "";
+  function formatTimestamp(dateStr: string | null): string {
+    if (!dateStr) return "-";
     return new Date(dateStr).toLocaleString();
   }
 
@@ -261,96 +307,118 @@ export default function InspectionEditPage() {
     );
   }
 
-  const method = template.methods[0] ?? "";
-
   return (
     <div className="flex px-4 h-[calc(100vh-12rem)]" data-testid="inspection-edit-page">
       {/* left panel - 30% */}
       <div className="w-[30%] flex-shrink-0 flex">
         <div className="flex-1 overflow-y-auto flex flex-col gap-4" style={{ scrollbarGutter: "stable" }}>
-          {/* template header */}
+          {/* selected inspection container */}
           <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="flex-1 text-base font-semibold text-tv-text-primary truncate">
-                {template.name}
-              </h2>
-              <button
-                onClick={() => navigate("/coordinator-center/inspections")}
-                className="rounded-full p-1 text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
-                aria-label={t("common.close")}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+            <CollapsibleSection title={t("coordinator.inspections.title")}>
+              <div className="mb-2">
+                <TemplateSelectorDropdown
+                  templates={allTemplates}
+                  currentId={template.id}
+                  onSelect={(tid) => navigate(`/coordinator-center/inspections/${tid}`)}
+                />
+              </div>
+            </CollapsibleSection>
 
-            <div className="flex items-center gap-2 mb-2">
-              <TemplateSelectorDropdown
-                templates={allTemplates}
-                currentId={template.id}
-                onSelect={(tid) => navigate(`/coordinator-center/inspections/${tid}`)}
-              />
-            </div>
+            {/* selected template info */}
+            <div className="mt-3 border-t border-tv-border pt-3">
+              <div className="flex items-center gap-2 mb-1">
+                {isRenamingName ? (
+                  <input
+                    value={editName}
+                    onChange={(e) => { setEditName(e.target.value); markDirty(); }}
+                    onBlur={() => setIsRenamingName(false)}
+                    onKeyDown={(e) => { if (e.key === "Enter") setIsRenamingName(false); }}
+                    className="flex-1 text-sm font-semibold text-tv-text-primary bg-transparent border-b border-tv-accent focus:outline-none"
+                    autoFocus
+                  />
+                ) : (
+                  <h2 className="flex-1 text-sm font-semibold text-tv-text-primary truncate">
+                    {editName || template.name}
+                  </h2>
+                )}
+                <button
+                  onClick={() => setIsRenamingName(true)}
+                  className="rounded-full p-1 text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+                  aria-label="Rename"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => navigate("/coordinator-center/inspections")}
+                  className="rounded-full p-1 text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+                  aria-label={t("common.close")}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
-            <p className="text-xs text-tv-text-muted">
-              {t("coordinator.inspections.lastUpdated")}: {formatTimestamp(template.updated_at ?? template.created_at)}
-            </p>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[var(--tv-status-draft-bg)] text-[var(--tv-status-draft-text)]">
+                  {editMethod === "ANGULAR_SWEEP"
+                    ? t("coordinator.inspections.angularSweep")
+                    : t("coordinator.inspections.verticalProfile")}
+                </span>
+                <span className="text-xs text-tv-text-secondary">
+                  {t("coordinator.inspections.usedInMissions", { count: template.mission_count ?? 0 })}
+                </span>
+              </div>
 
-            <div className="mt-3">
-              <Button onClick={() => setShowCreate(true)} className="text-xs">
-                {t("coordinator.inspections.addNew")}
-              </Button>
+              <p className="text-xs text-tv-text-muted">
+                {t("coordinator.inspections.lastUpdated")}: {formatTimestamp(template.updated_at ?? template.created_at)}
+              </p>
+
+              {/* action buttons */}
+              <div className="flex gap-2 mt-3">
+                <Button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 text-xs">
+                  <Plus className="h-3.5 w-3.5" />
+                  {t("coordinator.inspections.addNew")}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleDuplicate}
+                  className="flex items-center gap-1.5 text-xs"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  {t("coordinator.inspections.duplicateTemplate")}
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => setShowDelete(true)}
+                  className="flex items-center gap-1.5 text-xs"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {t("coordinator.inspections.deleteTemplate")}
+                </Button>
+              </div>
             </div>
           </div>
 
-          {/* agl section */}
-          <CollapsibleSection title={t("coordinator.inspections.aglSection")} count={targetAgl?.lhas.length}>
-            <TemplateAglSection
-              agl={targetAgl}
-              selectedLhaIds={selectedLhaIds}
-              onToggleLha={handleToggleLha}
-              onSelectAll={() => {
-                if (targetAgl) setSelectedLhaIds(new Set(targetAgl.lhas.map((l) => l.id)));
-              }}
-              onDeselectAll={() => setSelectedLhaIds(new Set())}
-              isEditing={isEditing}
-            />
-          </CollapsibleSection>
-
-          {/* config section */}
+          {/* configuration form - always editable */}
           <CollapsibleSection title={t("coordinator.inspections.configuration")}>
             <TemplateConfigSection
               config={editConfig}
-              method={method}
-              isEditing={isEditing}
+              method={editMethod}
               onChange={handleConfigChange}
+              onMethodChange={handleMethodChange}
+              allAgls={allAgls}
+              selectedAglId={selectedAglId}
+              onAglChange={handleAglChange}
+              selectedLhaIds={selectedLhaIds}
+              onToggleLha={handleToggleLha}
+              onSelectAllLhas={handleSelectAllLhas}
+              onDeselectAllLhas={handleDeselectAllLhas}
             />
           </CollapsibleSection>
 
-          {/* action buttons */}
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              variant={isEditing ? "primary" : "secondary"}
-              onClick={() => setIsEditing(!isEditing)}
-              className="flex items-center gap-1.5"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              {t("coordinator.inspections.editTemplate")}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={handleDuplicate}
-              className="flex items-center gap-1.5"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              {t("coordinator.inspections.duplicateTemplate")}
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => setShowDelete(true)}
-              className="flex items-center gap-1.5"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              {t("coordinator.inspections.deleteTemplate")}
+          {/* save button */}
+          <div className="px-1">
+            <Button onClick={handleSave} disabled={saving || !isDirty} className="w-full">
+              {t("coordinator.inspections.save")}
             </Button>
           </div>
         </div>
@@ -377,9 +445,6 @@ export default function InspectionEditPage() {
               >
                 {t("coordinator.inspections.openMap")}
               </button>
-              <Button onClick={handleSave} disabled={saving || !isEditing}>
-                {t("coordinator.inspections.save")}
-              </Button>
             </div>
           </div>
         ) : (

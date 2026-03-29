@@ -204,6 +204,7 @@ describe("InspectionConfigForm LHA toggle", () => {
     default_config: null,
     target_agl_ids: ["agl-1"],
     methods: ["VERTICAL_PROFILE" as const],
+    mission_count: 0,
   };
 
   it("toggles LHA checkbox and calls onToggleLha with correct id", () => {

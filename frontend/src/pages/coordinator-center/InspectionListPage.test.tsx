@@ -76,6 +76,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
         default_config: null,
         target_agl_ids: ["agl-1"],
         methods: ["ANGULAR_SWEEP"],
+        mission_count: 0,
       },
       {
         id: "tpl-2",
@@ -88,6 +89,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
         default_config: null,
         target_agl_ids: ["agl-1"],
         methods: ["VERTICAL_PROFILE"],
+        mission_count: 0,
       },
     ],
     meta: { total: 2 },
@@ -97,7 +99,9 @@ vi.mock("@/api/inspectionTemplates", () => ({
     name: "New Template",
     methods: ["ANGULAR_SWEEP"],
     target_agl_ids: ["agl-1"],
+    mission_count: 0,
   }),
+  deleteInspectionTemplate: vi.fn().mockResolvedValue({ deleted: true }),
 }));
 
 const mockNavigate = vi.fn();
