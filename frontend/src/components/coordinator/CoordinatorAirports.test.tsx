@@ -148,11 +148,13 @@ describe("MapDrawingToolbar", () => {
     render(<MapDrawingToolbar {...defaultProps} />);
     expect(screen.getByTestId("drawing-toolbar")).toBeInTheDocument();
     expect(screen.getByTestId("tool-pan")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-zoom")).toBeInTheDocument();
     expect(screen.getByTestId("tool-select")).toBeInTheDocument();
-    expect(screen.getByTestId("tool-drawPolygon")).toBeInTheDocument();
-    expect(screen.getByTestId("tool-editVertices")).toBeInTheDocument();
-    expect(screen.getByTestId("tool-moveFeature")).toBeInTheDocument();
     expect(screen.getByTestId("tool-measurement")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-drawPolygon")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-drawCircle")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-drawRectangle")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-placePoint")).toBeInTheDocument();
   });
 
   it("calls onToolChange when tool is clicked", () => {
