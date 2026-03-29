@@ -37,6 +37,14 @@ describe("useDirtyState", () => {
     expect(result.current.getPendingChanges()).toHaveLength(2);
   });
 
+  it("merges field changes for same entity", () => {
+    const { result } = renderHook(() => useDirtyState());
+    act(() => result.current.markDirty("surface", "s1", "update", { name: "RWY 09" }));
+    act(() => result.current.markDirty("surface", "s1", "update", { length: 3000 }));
+    expect(result.current.getPendingChanges()).toHaveLength(1);
+    expect(result.current.getPendingChanges()[0].data).toEqual({ name: "RWY 09", length: 3000 });
+  });
+
   it("clearAll resets to clean state", () => {
     const { result } = renderHook(() => useDirtyState());
     act(() => result.current.markDirty("surface", "s1", "update", { name: "A" }));

@@ -587,6 +587,7 @@
       "location": "Location",
       "pickOnMap": "Pick on Map",
       "add": "Add",
+      "adding": "Adding...",
       "icaoRequired": "ICAO code is required (4 uppercase letters)",
       "nameRequired": "Airport name is required",
       "latRequired": "Valid latitude required (-90 to 90)",

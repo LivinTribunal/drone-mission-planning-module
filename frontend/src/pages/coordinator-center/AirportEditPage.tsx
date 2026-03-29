@@ -45,6 +45,7 @@ export default function AirportEditPage() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   const drawing = useMapDrawing();
   const dirty = useDirtyState();
@@ -112,7 +113,7 @@ export default function AirportEditPage() {
       if (!id) return;
       try {
         await deleteSurface(id, surfaceId);
-        fetchAirport();
+        await fetchAirport();
       } catch {
         // silently fail - could add error toast
       }
@@ -126,7 +127,7 @@ export default function AirportEditPage() {
       if (!id) return;
       try {
         await deleteObstacle(id, obstacleId);
-        fetchAirport();
+        await fetchAirport();
       } catch {
         // silently fail
       }
@@ -140,7 +141,7 @@ export default function AirportEditPage() {
       if (!id) return;
       try {
         await deleteSafetyZone(id, zoneId);
-        fetchAirport();
+        await fetchAirport();
       } catch {
         // silently fail
       }
@@ -158,7 +159,7 @@ export default function AirportEditPage() {
       if (!surface) return;
       try {
         await deleteAGL(id, surface.id, aglId);
-        fetchAirport();
+        await fetchAirport();
       } catch {
         // silently fail
       }
@@ -394,39 +395,48 @@ export default function AirportEditPage() {
             </div>
 
             {/* right: save button */}
+            <div className="flex items-center gap-2">
+              {saveError && (
+                <p className="text-xs text-tv-error">{t("coordinator.detail.saveError")}</p>
+              )}
             <Button
               disabled={!dirty.isDirty || saving}
               onClick={async () => {
                 if (!id || !airport) return;
                 setSaving(true);
+                setSaveError(false);
                 try {
                   const pending = dirty.getPendingChanges();
                   await Promise.all(
-                    pending.map((change) => {
-                      if (change.action !== "update" || !change.data) return;
-                      switch (change.entityType) {
-                        case "surface":
-                          return updateSurface(id, change.entityId, change.data);
-                        case "obstacle":
-                          return updateObstacle(id, change.entityId, change.data);
-                        case "safety_zone":
-                          return updateSafetyZone(id, change.entityId, change.data);
-                        case "agl": {
-                          const surface = airport.surfaces.find((s) =>
-                            s.agls.some((a) => a.id === change.entityId),
-                          );
-                          if (surface) {
-                            return updateAGL(id, surface.id, change.entityId, change.data);
+                    pending
+                      .map((change) => {
+                        if (change.action !== "update" || !change.data) return undefined;
+                        switch (change.entityType) {
+                          case "surface":
+                            return updateSurface(id, change.entityId, change.data);
+                          case "obstacle":
+                            return updateObstacle(id, change.entityId, change.data);
+                          case "safety_zone":
+                            return updateSafetyZone(id, change.entityId, change.data);
+                          case "agl": {
+                            const surface = airport.surfaces.find((s) =>
+                              s.agls.some((a) => a.id === change.entityId),
+                            );
+                            if (surface) {
+                              return updateAGL(id, surface.id, change.entityId, change.data);
+                            }
+                            return undefined;
                           }
-                          return;
+                          default:
+                            return undefined;
                         }
-                      }
-                    }),
+                      })
+                      .filter(Boolean),
                   );
                   dirty.clearAll();
-                  fetchAirport();
+                  await fetchAirport();
                 } catch {
-                  setError(true);
+                  setSaveError(true);
                 } finally {
                   setSaving(false);
                 }
@@ -435,6 +445,7 @@ export default function AirportEditPage() {
             >
               {saving ? t("coordinator.detail.saving") : t("coordinator.detail.save")}
             </Button>
+            </div>
           </div>
         </AirportMap>
       </div>

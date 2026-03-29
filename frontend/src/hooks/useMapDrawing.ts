@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import useUndoRedo from "./useUndoRedo";
 import type { DrawingTool } from "@/components/coordinator/MapDrawingToolbar";
 
@@ -33,89 +33,89 @@ export default function useMapDrawing(): MapDrawingReturn {
   /** manage drawing tools state and undo/redo for map editor. */
   const [activeTool, setActiveTool] = useState<DrawingTool>("select");
   const [drawnFeatures, setDrawnFeatures] = useState<DrawnFeature[]>([]);
+  const featuresRef = useRef<DrawnFeature[]>([]);
   const undoRedo = useUndoRedo<UndoAction>(10);
+
+  const updateFeatures = useCallback((updater: (prev: DrawnFeature[]) => DrawnFeature[]) => {
+    /** update drawn features state and keep ref in sync. */
+    setDrawnFeatures((prev) => {
+      const next = updater(prev);
+      featuresRef.current = next;
+      return next;
+    });
+  }, []);
 
   const addFeature = useCallback(
     (feature: DrawnFeature) => {
       /** add a new drawn feature and record undo action. */
-      setDrawnFeatures((prev) => [...prev, feature]);
+      updateFeatures((prev) => [...prev, feature]);
       undoRedo.push({ type: "add", featureId: feature.id, after: feature });
     },
-    [undoRedo],
+    [undoRedo, updateFeatures],
   );
 
   const removeFeature = useCallback(
     (id: string) => {
       /** remove a drawn feature and record undo action. */
-      let removed: DrawnFeature | undefined;
-      setDrawnFeatures((prev) => {
-        removed = prev.find((f) => f.id === id);
-        return prev.filter((f) => f.id !== id);
-      });
+      const removed = featuresRef.current.find((f) => f.id === id);
+      updateFeatures((prev) => prev.filter((f) => f.id !== id));
       if (removed) {
         undoRedo.push({ type: "remove", featureId: id, before: removed });
       }
     },
-    [undoRedo],
+    [undoRedo, updateFeatures],
   );
 
   const updateFeature = useCallback(
     (id: string, geometry: GeoJSON.Geometry) => {
       /** update feature geometry and record undo action. */
-      let before: DrawnFeature | undefined;
-      let after: DrawnFeature | undefined;
-      setDrawnFeatures((prev) =>
-        prev.map((f) => {
-          if (f.id === id) {
-            before = f;
-            after = { ...f, geometry };
-            return after;
-          }
-          return f;
-        }),
+      const before = featuresRef.current.find((f) => f.id === id);
+      const after = before ? { ...before, geometry } : undefined;
+      updateFeatures((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, geometry } : f)),
       );
       if (before && after) {
         undoRedo.push({ type: "modify", featureId: id, before, after });
       }
     },
-    [undoRedo],
+    [undoRedo, updateFeatures],
   );
 
   const clearFeatures = useCallback(() => {
     /** clear all drawn features. */
-    setDrawnFeatures([]);
+    updateFeatures(() => []);
     undoRedo.clear();
-  }, [undoRedo]);
+  }, [undoRedo, updateFeatures]);
 
   const undo = useCallback(() => {
     /** undo last drawing action. */
     const action = undoRedo.undo();
     if (!action) return;
     if (action.type === "add") {
-      setDrawnFeatures((prev) => prev.filter((f) => f.id !== action.featureId));
+      updateFeatures((prev) => prev.filter((f) => f.id !== action.featureId));
     } else if (action.type === "remove" && action.before) {
-      setDrawnFeatures((prev) => [...prev, action.before!]);
+      updateFeatures((prev) => [...prev, action.before!]);
     } else if (action.type === "modify" && action.before) {
-      setDrawnFeatures((prev) =>
+      updateFeatures((prev) =>
         prev.map((f) => (f.id === action.featureId ? action.before! : f)),
       );
     }
-  }, [undoRedo]);
+  }, [undoRedo, updateFeatures]);
 
   const redo = useCallback(() => {
     /** redo last undone action. */
     const action = undoRedo.redo();
     if (!action) return;
     if (action.type === "add" && action.after) {
-      setDrawnFeatures((prev) => [...prev, action.after!]);
+      updateFeatures((prev) => [...prev, action.after!]);
     } else if (action.type === "remove") {
-      setDrawnFeatures((prev) => prev.filter((f) => f.id !== action.featureId));
+      updateFeatures((prev) => prev.filter((f) => f.id !== action.featureId));
     } else if (action.type === "modify" && action.after) {
-      setDrawnFeatures((prev) =>
+      updateFeatures((prev) =>
         prev.map((f) => (f.id === action.featureId ? action.after! : f)),
       );
     }
-  }, [undoRedo]);
+  }, [undoRedo, updateFeatures]);
 
   return {
     activeTool,

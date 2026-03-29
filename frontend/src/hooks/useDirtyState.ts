@@ -24,7 +24,8 @@ export default function useDirtyState(): DirtyStateReturn {
       const key = `${entityType}:${entityId}`;
       setChanges((prev) => {
         const next = new Map(prev);
-        next.set(key, { entityType, entityId, action, data });
+        const existing = prev.get(key);
+        next.set(key, { entityType, entityId, action, data: { ...existing?.data, ...data } });
         return next;
       });
     },

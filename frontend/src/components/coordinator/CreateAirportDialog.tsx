@@ -206,7 +206,7 @@ export default function CreateAirportDialog({
               {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "..." : t("coordinator.createAirport.add")}
+              {submitting ? t("coordinator.createAirport.adding") : t("coordinator.createAirport.add")}
             </Button>
           </div>
         </form>
