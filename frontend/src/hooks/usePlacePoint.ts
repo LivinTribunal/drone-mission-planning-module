@@ -49,7 +49,11 @@ export default function usePlacePoint(
   useEffect(() => {
     if (!map || !active) return;
 
-    if (map.isStyleLoaded()) ensureSources(map);
+    if (map.isStyleLoaded()) {
+      ensureSources(map);
+    } else {
+      map.once("style.load", () => ensureSources(map));
+    }
 
     map.getCanvas().style.cursor = "crosshair";
     map.dragPan.disable();

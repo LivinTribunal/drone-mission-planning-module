@@ -89,15 +89,40 @@ function removeSources(map: maplibregl.Map) {
   }
 }
 
-function rectRing(c1: [number, number], c2: [number, number]): [number, number][] {
-  /** compute axis-aligned rectangle ring from two opposite corners. */
+function rotatePoint(
+  origin: [number, number],
+  point: [number, number],
+  angleDeg: number,
+): [number, number] {
+  /** rotate a point around an origin by angle in degrees. */
+  const rad = (angleDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = point[0] - origin[0];
+  const dy = point[1] - origin[1];
   return [
+    origin[0] + dx * cos - dy * sin,
+    origin[1] + dx * sin + dy * cos,
+  ];
+}
+
+function rectRing(
+  c1: [number, number],
+  c2: [number, number],
+  bearing = 0,
+): [number, number][] {
+  /** compute rectangle ring from two opposite corners, rotated by bearing. */
+  const corners: [number, number][] = [
     c1,
     [c2[0], c1[1]],
     c2,
     [c1[0], c2[1]],
-    c1,
   ];
+
+  if (bearing === 0) return [...corners, corners[0]];
+
+  const rotated = corners.map((pt) => rotatePoint(c1, pt, bearing));
+  return [...rotated, rotated[0]];
 }
 
 interface UseDrawRectangleReturn {
@@ -109,10 +134,13 @@ export default function useDrawRectangle(
   map: maplibregl.Map | null,
   active: boolean,
   onComplete: (polygon: GeoJSON.Polygon) => void,
+  bearing = 0,
 ): UseDrawRectangleReturn {
-  /** rectangle drawing tool - click two opposite corners. */
+  /** rectangle drawing tool - click two opposite corners, aligned to map bearing. */
   const corner1Ref = useRef<[number, number] | null>(null);
   const cursorRef = useRef<[number, number] | null>(null);
+  const bearingRef = useRef(bearing);
+  bearingRef.current = bearing;
   const [isDrawing, setIsDrawing] = useState(false);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
@@ -128,7 +156,7 @@ export default function useDrawRectangle(
       return;
     }
 
-    const ring = rectRing(c1, cursor);
+    const ring = rectRing(c1, cursor, bearingRef.current);
     const { width, height } = rectangleDimensions(c1, cursor);
 
     const fillSrc = map.getSource(SRC_FILL) as maplibregl.GeoJSONSource | undefined;
@@ -195,7 +223,11 @@ export default function useDrawRectangle(
       return;
     }
 
-    if (map.isStyleLoaded()) ensureSources(map);
+    if (map.isStyleLoaded()) {
+      ensureSources(map);
+    } else {
+      map.once("style.load", () => ensureSources(map));
+    }
 
     map.getCanvas().style.cursor = "crosshair";
     map.dragPan.disable();
@@ -209,7 +241,7 @@ export default function useDrawRectangle(
         setIsDrawing(true);
         updatePreview();
       } else {
-        const ring = rectRing(corner1Ref.current, lngLat);
+        const ring = rectRing(corner1Ref.current, lngLat, bearingRef.current);
         const polygon: GeoJSON.Polygon = { type: "Polygon", coordinates: [ring] };
         reset();
         onCompleteRef.current(polygon);

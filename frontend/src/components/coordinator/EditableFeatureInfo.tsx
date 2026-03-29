@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, RotateCcw, Plus } from "lucide-react";
 import Input from "@/components/common/Input";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import type { MapFeature } from "@/types/map";
@@ -13,6 +13,7 @@ interface EditableFeatureInfoProps {
   surfaces?: SurfaceResponse[];
   onDelete?: (featureType: string, id: string) => void;
   deleteWarnings?: string[];
+  onAddLha?: (aglId: string) => void;
 }
 
 export default function EditableFeatureInfo({
@@ -22,6 +23,7 @@ export default function EditableFeatureInfo({
   surfaces,
   onDelete,
   deleteWarnings,
+  onAddLha,
 }: EditableFeatureInfoProps) {
   /** editable feature info panel for selected map features. */
   const { t } = useTranslation();
@@ -95,6 +97,36 @@ export default function EditableFeatureInfo({
               value={val("heading")}
               onChange={(e) => handleChange("heading", e.target.value === "" ? null : parseFloat(e.target.value))}
             />
+            {val("heading") && (
+              <div className="flex items-center gap-2">
+                <svg className="h-6 w-6 flex-shrink-0" viewBox="0 0 24 24">
+                  <line
+                    x1="12" y1="20" x2="12" y2="4"
+                    stroke="#3bbb3b" strokeWidth="2" strokeLinecap="round"
+                    transform={`rotate(${parseFloat(val("heading"))}, 12, 12)`}
+                  />
+                  <polygon
+                    points="12,2 9,8 15,8"
+                    fill="#3bbb3b"
+                    transform={`rotate(${parseFloat(val("heading"))}, 12, 12)`}
+                  />
+                </svg>
+                <span className="text-[10px] text-tv-text-muted">
+                  {Math.round(parseFloat(val("heading")))}°
+                </span>
+                <button
+                  onClick={() => {
+                    const current = parseFloat(val("heading"));
+                    if (!isNaN(current)) handleChange("heading", (current + 180) % 360);
+                  }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+                  title={t("coordinator.detail.oppositeHeading")}
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  {t("coordinator.detail.opposite")}
+                </button>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-1.5">
               <Input
                 id="feat-length"
@@ -263,6 +295,16 @@ export default function EditableFeatureInfo({
               value={val("glide_slope_angle")}
               onChange={(e) => handleChange("glide_slope_angle", e.target.value === "" ? null : parseFloat(e.target.value))}
             />
+            {onAddLha && (
+              <button
+                onClick={() => onAddLha(String(formData.id))}
+                className="flex items-center justify-center gap-1.5 w-full mt-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-tv-accent text-tv-accent hover:bg-tv-surface-hover transition-colors"
+                data-testid="add-lha-button"
+              >
+                <Plus className="h-3 w-3" />
+                {t("coordinator.detail.addLha")}
+              </button>
+            )}
           </>
         )}
 

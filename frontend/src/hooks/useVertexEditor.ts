@@ -65,8 +65,8 @@ function removeSources(map: maplibregl.Map) {
 }
 
 function extractPolygonVertices(feature: MapFeature): [number, number][] | null {
-  /** extract editable vertices from a polygon feature. */
-  if (feature.type === "safety_zone") {
+  /** extract editable vertices from a polygon feature (safety zones and obstacles). */
+  if (feature.type === "safety_zone" || feature.type === "obstacle") {
     const ring = feature.data.geometry.coordinates[0];
     if (!ring || ring.length < 4) return null;
     // exclude closing vertex
@@ -144,7 +144,7 @@ export default function useVertexEditor(
     const verts = verticesRef.current;
     if (verts.length < 3) return;
 
-    if (feat.type === "safety_zone") {
+    if (feat.type === "safety_zone" || feat.type === "obstacle") {
       const elevation = feat.data.geometry.coordinates[0]?.[0]?.[2] ?? 0;
       const ring = [...verts.map(([lng, lat]) => [lng, lat, elevation]), [verts[0][0], verts[0][1], elevation]];
       onUpdateRef.current(feat.type, feat.data.id, {
@@ -170,7 +170,11 @@ export default function useVertexEditor(
       return;
     }
 
-    if (map.isStyleLoaded()) ensureSources(map);
+    if (map.isStyleLoaded()) {
+      ensureSources(map);
+    } else {
+      map.once("style.load", () => { ensureSources(map); updateOverlay(); });
+    }
 
     verticesRef.current = verts;
     setIsEditing(true);
@@ -213,7 +217,7 @@ export default function useVertexEditor(
       }
 
       // shift+click on polygon fill to move entire polygon
-      if (e.originalEvent.shiftKey && featureRef.current?.type === "safety_zone") {
+      if (e.originalEvent.shiftKey && (featureRef.current?.type === "safety_zone" || featureRef.current?.type === "obstacle")) {
         shiftDragRef.current = true;
         shiftDragStartRef.current = [e.lngLat.lng, e.lngLat.lat];
         map.dragPan.disable();

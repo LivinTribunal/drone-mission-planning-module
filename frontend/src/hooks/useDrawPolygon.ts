@@ -23,7 +23,7 @@ function ensureSources(map: maplibregl.Map) {
       id: LYR_FILL,
       type: "fill",
       source: SRC_FILL,
-      paint: { "fill-color": "var(--tv-accent, #3bbb3b)", "fill-opacity": 0.1 },
+      paint: { "fill-color": "#3bbb3b", "fill-opacity": 0.1 },
     });
   }
   if (!map.getSource(SRC_STROKE)) {
@@ -236,6 +236,8 @@ export default function useDrawPolygon(
     // ensure layers exist
     if (map.isStyleLoaded()) {
       ensureSources(map);
+    } else {
+      map.once("style.load", () => ensureSources(map));
     }
 
     map.getCanvas().style.cursor = "crosshair";

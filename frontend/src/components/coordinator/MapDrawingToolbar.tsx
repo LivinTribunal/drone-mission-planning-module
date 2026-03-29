@@ -10,6 +10,7 @@ import {
   Square,
   MapPin,
   Ruler,
+  Navigation,
   Code2,
   Undo2,
   Redo2,
@@ -22,6 +23,7 @@ export type DrawingTool =
   | "zoomReset"
   | "select"
   | "measurement"
+  | "heading"
   | "drawPolygon"
   | "drawCircle"
   | "drawRectangle"
@@ -38,6 +40,7 @@ interface MapDrawingToolbarProps {
   onGeoJsonEditor: () => void;
   zoomPercent: number;
   onZoomTo: (percent: number) => void;
+  onZoomReset: () => void;
   isDirty: boolean;
   saving: boolean;
   onSave: () => void;
@@ -54,13 +57,19 @@ interface ToolDef {
 
 const ZOOM_PRESETS = [50, 75, 100, 150, 200, 300];
 
+// group 1 - interact
 const interactTools: ToolDef[] = [
-  { key: "pan", icon: Hand, tooltipKey: "coordinator.airports.tools.pan" },
-  { key: "zoom", icon: ZoomIn, tooltipKey: "coordinator.airports.tools.zoom" },
   { key: "select", icon: MousePointer2, tooltipKey: "coordinator.airports.tools.select" },
-  { key: "measurement", icon: Ruler, tooltipKey: "coordinator.airports.tools.measurement" },
+  { key: "pan", icon: Hand, tooltipKey: "coordinator.airports.tools.pan" },
 ];
 
+// group 2 - measure
+const measureTools: ToolDef[] = [
+  { key: "measurement", icon: Ruler, tooltipKey: "coordinator.airports.tools.measurement" },
+  { key: "heading", icon: Navigation, tooltipKey: "coordinator.airports.tools.heading" },
+];
+
+// group 3 - draw
 const drawTools: ToolDef[] = [
   { key: "drawPolygon", icon: Pentagon, tooltipKey: "coordinator.airports.tools.drawPolygon" },
   { key: "drawCircle", icon: Circle, tooltipKey: "coordinator.airports.tools.drawCircle" },
@@ -78,6 +87,7 @@ export default function MapDrawingToolbar({
   onGeoJsonEditor,
   zoomPercent,
   onZoomTo,
+  onZoomReset,
   isDirty,
   saving,
   onSave,
@@ -117,6 +127,8 @@ export default function MapDrawingToolbar({
     /** handle tool button click. */
     if (tool === "geoJsonEditor") {
       onGeoJsonEditor();
+    } else if (tool === "zoomReset") {
+      onZoomReset();
     } else {
       onToolChange(tool);
     }
@@ -155,8 +167,42 @@ export default function MapDrawingToolbar({
     >
       {/* main tools pill */}
       <div className="flex items-center rounded-full border border-tv-border bg-tv-bg px-1 py-1">
-        {/* group 1 - interact (pan, zoom, zoom reset, select) */}
+        {/* group 1 - interact (select, pan) */}
         {interactTools.map(renderToolButton)}
+
+        {renderSeparator()}
+
+        {/* group 2 - measure (measurement, heading) */}
+        {measureTools.map(renderToolButton)}
+
+        {renderSeparator()}
+
+        {/* group 3 - drawing + geojson editor */}
+        {drawTools.map(renderToolButton)}
+        <button
+          onClick={() => handleClick("geoJsonEditor")}
+          title={t("coordinator.airports.tools.geoJsonEditor")}
+          className="flex items-center justify-center rounded-full w-9 h-9 text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+          data-testid="tool-geoJsonEditor"
+        >
+          <Code2 className="h-4 w-4" />
+        </button>
+
+        {renderSeparator()}
+
+        {/* group 4 - zoom (zoom tool, zoom reset, zoom field) */}
+        <button
+          onClick={() => handleClick("zoom")}
+          title={t("coordinator.airports.tools.zoom")}
+          className={`flex items-center justify-center rounded-full w-9 h-9 transition-colors ${
+            activeTool === "zoom"
+              ? "bg-tv-accent text-tv-accent-text"
+              : "text-tv-text-primary hover:bg-tv-surface-hover"
+          }`}
+          data-testid="tool-zoom"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </button>
         <button
           onClick={() => handleClick("zoomReset")}
           title={t("coordinator.airports.tools.zoomReset")}
@@ -165,15 +211,6 @@ export default function MapDrawingToolbar({
         >
           <Maximize2 className="h-4 w-4" />
         </button>
-
-        {renderSeparator()}
-
-        {/* group 2 - drawing */}
-        {drawTools.map(renderToolButton)}
-
-        {renderSeparator()}
-
-        {/* group 3 - zoom field + geojson editor + compass */}
         <div className="relative" ref={zoomRef}>
           <button
             onClick={() => setZoomDropdownOpen(!zoomDropdownOpen)}
@@ -206,34 +243,6 @@ export default function MapDrawingToolbar({
             </div>
           )}
         </div>
-
-        {/* geojson editor */}
-        <button
-          onClick={() => handleClick("geoJsonEditor")}
-          title={t("coordinator.airports.tools.geoJsonEditor")}
-          className="flex items-center justify-center rounded-full w-9 h-9 text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-          data-testid="tool-geoJsonEditor"
-        >
-          <Code2 className="h-4 w-4" />
-        </button>
-
-        {/* heading compass */}
-        <button
-          onClick={onBearingReset}
-          className="ml-1 flex items-center justify-center w-9 h-9 rounded-full border border-tv-border bg-tv-surface hover:bg-tv-surface-hover transition-colors cursor-pointer"
-          title={`${Math.round(((bearing % 360) + 360) % 360)}° — ${t("map.tools.resetBearing")}`}
-          data-testid="compass-btn"
-        >
-          <svg
-            className="w-7 h-7"
-            viewBox="0 0 28 28"
-            style={{ transform: `rotate(${-bearing}deg)` }}
-          >
-            <text x="14" y="5.5" textAnchor="middle" dominantBaseline="middle" fill="#e54545" fontSize="5.5" fontWeight="bold">N</text>
-            <polygon points="14,8 12.8,14 15.2,14" fill="#e54545" />
-            <polygon points="14,20 12.8,14 15.2,14" fill="var(--tv-text-muted)" />
-          </svg>
-        </button>
       </div>
 
       {/* undo/redo pill */}
@@ -265,6 +274,26 @@ export default function MapDrawingToolbar({
           <Redo2 className="h-4 w-4" />
         </button>
       </div>
+
+      {/* view toggles pill - 2D/3D and map/satellite moved to bottom-right of page */}
+
+      {/* heading compass */}
+      <button
+        onClick={onBearingReset}
+        className="flex items-center justify-center w-9 h-9 rounded-full border border-tv-border bg-tv-bg hover:bg-tv-surface-hover transition-colors cursor-pointer"
+        title={`${Math.round(((bearing % 360) + 360) % 360)}° — ${t("map.tools.resetBearing")}`}
+        data-testid="compass-btn"
+      >
+        <svg
+          className="w-7 h-7"
+          viewBox="0 0 28 28"
+          style={{ transform: `rotate(${-bearing}deg)` }}
+        >
+          <text x="14" y="5.5" textAnchor="middle" dominantBaseline="middle" fill="#e54545" fontSize="5.5" fontWeight="bold">N</text>
+          <polygon points="14,8 12.8,14 15.2,14" fill="#e54545" />
+          <polygon points="14,20 12.8,14 15.2,14" fill="var(--tv-text-muted)" />
+        </svg>
+      </button>
 
       {/* save pill */}
       <button

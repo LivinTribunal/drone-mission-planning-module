@@ -136,6 +136,7 @@ describe("MapDrawingToolbar", () => {
     onGeoJsonEditor: vi.fn(),
     zoomPercent: 100,
     onZoomTo: vi.fn(),
+    onZoomReset: vi.fn(),
     isDirty: false,
     saving: false,
     onSave: vi.fn(),
@@ -151,6 +152,7 @@ describe("MapDrawingToolbar", () => {
     expect(screen.getByTestId("tool-zoom")).toBeInTheDocument();
     expect(screen.getByTestId("tool-select")).toBeInTheDocument();
     expect(screen.getByTestId("tool-measurement")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-heading")).toBeInTheDocument();
     expect(screen.getByTestId("tool-drawPolygon")).toBeInTheDocument();
     expect(screen.getByTestId("tool-drawCircle")).toBeInTheDocument();
     expect(screen.getByTestId("tool-drawRectangle")).toBeInTheDocument();

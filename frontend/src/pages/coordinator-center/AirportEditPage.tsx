@@ -59,6 +59,7 @@ import {
   createObstacle,
   createSafetyZone,
   createAGL,
+  createLHA,
 } from "@/api/airports";
 import useVertexEditor from "@/hooks/useVertexEditor";
 import { extractCenterline, circleToPolygon } from "@/utils/geo";
@@ -69,6 +70,7 @@ const DRAWING_TOOL_TO_MAP_TOOL: Record<DrawingTool, MapTool> = {
   select: MapTool.SELECT,
   pan: MapTool.PAN,
   measurement: MapTool.MEASURE,
+  heading: MapTool.MEASURE,
   zoom: MapTool.ZOOM,
   zoomReset: MapTool.ZOOM_RESET,
   drawPolygon: MapTool.SELECT,
@@ -77,6 +79,10 @@ const DRAWING_TOOL_TO_MAP_TOOL: Record<DrawingTool, MapTool> = {
   placePoint: MapTool.SELECT,
   geoJsonEditor: MapTool.SELECT,
 };
+
+const DRAWING_TOOLS: DrawingTool[] = [
+  "drawPolygon", "drawCircle", "drawRectangle", "placePoint", "heading", "measurement",
+];
 
 export default function AirportEditPage() {
   /** full airport detail editor with map, drawing tools, and infrastructure crud. */
@@ -106,7 +112,9 @@ export default function AirportEditPage() {
   const { isDirty, markDirty, clearAll, getPendingChanges } = useDirtyState();
   const { activeTool, setActiveTool, canUndo, canRedo, undo, redo } = useMapDrawing();
   const mapTool = DRAWING_TOOL_TO_MAP_TOOL[activeTool] ?? MapTool.SELECT;
+  const isDrawingActive = DRAWING_TOOLS.includes(activeTool);
   const [pendingNav, setPendingNav] = useState<string | null>(null);
+  const [pendingLhaParentAglId, setPendingLhaParentAglId] = useState<string | null>(null);
 
   // fetch airport data - declared early so drawing hooks can reference it
   const fetchAirport = useCallback(async () => {
@@ -169,18 +177,25 @@ export default function AirportEditPage() {
   const handlePointComplete = useCallback((point: [number, number]) => {
     /** handle completed point from place point tool. */
     setPendingGeometry(null);
-    setPendingGeometryType("point");
     setPendingCircleRadius(undefined);
     setPendingCircleCenter(undefined);
     setPendingPointPosition(point);
+
+    if (pendingLhaParentAglId) {
+      // lha creation workflow - keep point type and pre-select lha category
+      setPendingGeometryType("point");
+    } else {
+      setPendingGeometryType("point");
+    }
+
     setActiveTool("select");
-  }, [setActiveTool]);
+  }, [setActiveTool, pendingLhaParentAglId]);
 
   // wire drawing hooks
   const map = getMap();
   useDrawPolygon(map, activeTool === "drawPolygon", handlePolygonComplete);
   useDrawCircle(map, activeTool === "drawCircle", handleCircleComplete);
-  useDrawRectangle(map, activeTool === "drawRectangle", handleRectangleComplete);
+  useDrawRectangle(map, activeTool === "drawRectangle", handleRectangleComplete, bearing);
   usePlacePoint(map, activeTool === "placePoint", handlePointComplete);
 
   // vertex editor for selected features
@@ -200,7 +215,15 @@ export default function AirportEditPage() {
     setPendingPointPosition(undefined);
     setPendingCircleCenter(undefined);
     setPendingCircleRadius(undefined);
+    setPendingLhaParentAglId(null);
   }, []);
+
+  const handleAddLha = useCallback((aglId: string) => {
+    /** start lha creation workflow - switch to place point tool with parent agl context. */
+    setPendingLhaParentAglId(aglId);
+    setSelectedFeature(null);
+    setActiveTool("placePoint");
+  }, [setActiveTool]);
 
   const handleCreate = useCallback(
     async (entityType: string, data: Record<string, unknown>) => {
@@ -265,13 +288,29 @@ export default function AirportEditPage() {
           glide_slope_angle: data.glide_slope_angle as number | undefined,
           distance_from_threshold: data.distance_from_threshold as number | undefined,
         });
+      } else if (entityType === "lha") {
+        const pos = (data.center as [number, number]) ?? pendingPointPosition;
+        if (!pos) return;
+        const aglId = (data.agl_id as string) || pendingLhaParentAglId;
+        if (!aglId) return;
+        // find the surface that owns this agl
+        const parentSurface = airport.surfaces.find((s) =>
+          s.agls.some((a) => a.id === aglId),
+        );
+        if (!parentSurface) return;
+        await createLHA(id, parentSurface.id, aglId, {
+          unit_number: (data.unit_number as number) ?? 1,
+          setting_angle: (data.setting_angle as number) ?? 3.0,
+          lamp_type: (data.lamp_type as "HALOGEN" | "LED") ?? "HALOGEN",
+          position: { type: "Point", coordinates: [pos[0], pos[1], elevation] },
+        });
       }
 
       // refresh and cleanup
       handleCreationCancel();
       await fetchAirport();
     },
-    [id, airport, pendingGeometry, pendingCircleCenter, pendingPointPosition, handleCreationCancel, fetchAirport],
+    [id, airport, pendingGeometry, pendingCircleCenter, pendingPointPosition, pendingLhaParentAglId, handleCreationCancel, fetchAirport],
   );
 
   // warn on browser refresh / tab close
@@ -327,6 +366,7 @@ export default function AirportEditPage() {
         s: () => setActiveTool("select"),
         p: () => setActiveTool("pan"),
         m: () => setActiveTool("measurement"),
+        h: () => setActiveTool("heading"),
         g: () => setActiveTool("drawPolygon"),
         c: () => setActiveTool("drawCircle"),
         e: () => setActiveTool("drawRectangle"),
@@ -353,9 +393,10 @@ export default function AirportEditPage() {
   }, [setActiveTool, undo, redo, selectedFeature, activeTool, handleCreationCancel]);
 
   const handleFeatureClick = useCallback((feature: MapFeature | null) => {
-    /** set selected feature when clicked on map or list panel. */
+    /** set selected feature when clicked on map or list panel - skip during drawing. */
+    if (isDrawingActive) return;
     setSelectedFeature(feature);
-  }, []);
+  }, [isDrawingActive]);
 
   const handleLayerChange = useCallback((layers: MapLayerConfig) => {
     /** sync layer config from map component. */
@@ -497,10 +538,20 @@ export default function AirportEditPage() {
   );
 
   const handleSave = useCallback(async () => {
-    /** persist all pending changes to the backend. */
+    /** persist all pending changes to the backend, preserving map viewport. */
     if (!id || !airport) return;
     setSaving(true);
     setSaveError(false);
+
+    // capture viewport before save
+    const mapInst = mapHandleRef.current?.getMap();
+    const viewport = mapInst ? {
+      center: mapInst.getCenter(),
+      zoom: mapInst.getZoom(),
+      bearing: mapInst.getBearing(),
+      pitch: mapInst.getPitch(),
+    } : null;
+
     try {
       const pending = getPendingChanges();
       await Promise.all(
@@ -533,6 +584,13 @@ export default function AirportEditPage() {
       );
       clearAll();
       await fetchAirport();
+
+      // restore viewport after re-render
+      if (viewport && mapInst) {
+        requestAnimationFrame(() => {
+          mapInst.jumpTo(viewport);
+        });
+      }
     } catch {
       setSaveError(true);
     } finally {
@@ -752,6 +810,7 @@ export default function AirportEditPage() {
               onGeoJsonEditor={() => setShowGeoJsonEditor(true)}
               zoomPercent={zoomPercent}
               onZoomTo={handleZoomTo}
+              onZoomReset={() => setActiveTool("zoomReset")}
               isDirty={isDirty}
               saving={saving}
               onSave={handleSave}
@@ -798,6 +857,7 @@ export default function AirportEditPage() {
                         ?.map((a) => t("coordinator.detail.surfaceHasAgl", { name: a.name }))
                     : undefined
                 }
+                onAddLha={selectedFeature.type === "agl" ? handleAddLha : undefined}
               />
             ) : null}
           </div>

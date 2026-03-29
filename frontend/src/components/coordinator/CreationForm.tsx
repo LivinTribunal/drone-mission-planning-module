@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Loader2 } from "lucide-react";
 import Input from "@/components/common/Input";
-import type { SurfaceResponse } from "@/types/airport";
+import type { SurfaceResponse, AGLResponse } from "@/types/airport";
 
 export type PendingGeometryType = "polygon" | "circle" | "point";
+
+type CategoryPolygon = "surface" | "safety_zone" | "obstacle";
+type CategoryPoint = "agl" | "lha";
+type Category = CategoryPolygon | CategoryPoint;
 
 type EntityType =
   | "runway"
@@ -14,7 +18,8 @@ type EntityType =
   | "safety_zone_prohibited"
   | "safety_zone_no_fly"
   | "obstacle"
-  | "agl";
+  | "agl"
+  | "lha";
 
 interface CreationFormProps {
   geometryType: PendingGeometryType;
@@ -26,26 +31,40 @@ interface CreationFormProps {
   onCreate: (entityType: EntityType, data: Record<string, unknown>) => Promise<void>;
 }
 
-const POLYGON_TYPES: { value: EntityType; labelKey: string }[] = [
+const POLYGON_CATEGORIES: { value: CategoryPolygon; labelKey: string }[] = [
+  { value: "surface", labelKey: "coordinator.creation.categorySurface" },
+  { value: "safety_zone", labelKey: "coordinator.creation.categorySafetyZone" },
+  { value: "obstacle", labelKey: "coordinator.creation.categoryObstacle" },
+];
+
+const CIRCLE_CATEGORIES: { value: CategoryPolygon; labelKey: string }[] = [
+  { value: "safety_zone", labelKey: "coordinator.creation.categorySafetyZone" },
+  { value: "obstacle", labelKey: "coordinator.creation.categoryObstacle" },
+];
+
+const POINT_CATEGORIES: { value: CategoryPoint; labelKey: string }[] = [
+  { value: "agl", labelKey: "coordinator.creation.categoryAgl" },
+  { value: "lha", labelKey: "coordinator.creation.categoryLha" },
+];
+
+const SURFACE_SUBTYPES: { value: EntityType; labelKey: string }[] = [
   { value: "runway", labelKey: "coordinator.creation.typeRunway" },
   { value: "taxiway", labelKey: "coordinator.creation.typeTaxiway" },
+];
+
+const SAFETY_ZONE_SUBTYPES: { value: EntityType; labelKey: string }[] = [
   { value: "safety_zone_ctr", labelKey: "coordinator.creation.typeSafetyZoneCtr" },
   { value: "safety_zone_restricted", labelKey: "coordinator.creation.typeSafetyZoneRestricted" },
   { value: "safety_zone_prohibited", labelKey: "coordinator.creation.typeSafetyZoneProhibited" },
   { value: "safety_zone_no_fly", labelKey: "coordinator.creation.typeSafetyZoneNoFly" },
 ];
 
-const CIRCLE_TYPES: { value: EntityType; labelKey: string }[] = [
-  { value: "obstacle", labelKey: "coordinator.creation.typeObstacle" },
-  { value: "safety_zone_ctr", labelKey: "coordinator.creation.typeSafetyZoneCtr" },
-  { value: "safety_zone_restricted", labelKey: "coordinator.creation.typeSafetyZoneRestricted" },
-  { value: "safety_zone_prohibited", labelKey: "coordinator.creation.typeSafetyZoneProhibited" },
-  { value: "safety_zone_no_fly", labelKey: "coordinator.creation.typeSafetyZoneNoFly" },
-];
-
-const POINT_TYPES: { value: EntityType; labelKey: string }[] = [
-  { value: "obstacle", labelKey: "coordinator.creation.typeObstacle" },
-  { value: "agl", labelKey: "coordinator.creation.typeAgl" },
+const OBSTACLE_SUBTYPES: { value: string; labelKey: string }[] = [
+  { value: "BUILDING", labelKey: "coordinator.detail.obstacleTypes.building" },
+  { value: "ANTENNA", labelKey: "coordinator.detail.obstacleTypes.antenna" },
+  { value: "VEGETATION", labelKey: "coordinator.detail.obstacleTypes.vegetation" },
+  { value: "TOWER", labelKey: "coordinator.detail.obstacleTypes.tower" },
+  { value: "OTHER", labelKey: "coordinator.detail.obstacleTypes.other" },
 ];
 
 export default function CreationForm({
@@ -57,8 +76,9 @@ export default function CreationForm({
   onCancel,
   onCreate,
 }: CreationFormProps) {
-  /** creation form shown after drawing a geometry - select type, fill fields, create entity. */
+  /** creation form shown after drawing a geometry - two-tier type selection, fill fields, create entity. */
   const { t } = useTranslation();
+  const [category, setCategory] = useState<Category | "">("");
   const [entityType, setEntityType] = useState<EntityType | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,54 +100,99 @@ export default function CreationForm({
   const [distFromThreshold, setDistFromThreshold] = useState("");
   const [surfaceId, setSurfaceId] = useState(surfaces.length > 0 ? surfaces[0].id : "");
 
-  const typeOptions = geometryType === "circle" ? CIRCLE_TYPES
-    : geometryType === "point" ? POINT_TYPES
-    : POLYGON_TYPES;
+  // lha fields
+  const [lhaAglId, setLhaAglId] = useState("");
+  const [lhaSettingAngle, setLhaSettingAngle] = useState("3.0");
+  const [lhaLampType, setLhaLampType] = useState("HALOGEN");
+
+  // collect all agls from surfaces
+  const allAgls = useMemo(() => {
+    const agls: (AGLResponse & { surfaceId: string })[] = [];
+    for (const s of surfaces) {
+      for (const a of s.agls) {
+        agls.push({ ...a, surfaceId: s.id });
+      }
+    }
+    return agls;
+  }, [surfaces]);
+
+  // auto-increment lha unit number based on selected agl
+  const nextUnitNumber = useMemo(() => {
+    if (!lhaAglId) return 1;
+    const agl = allAgls.find((a) => a.id === lhaAglId);
+    if (!agl) return 1;
+    return agl.lhas.length + 1;
+  }, [lhaAglId, allAgls]);
+
+  const categoryOptions = geometryType === "circle"
+    ? CIRCLE_CATEGORIES
+    : geometryType === "point"
+      ? POINT_CATEGORIES
+      : POLYGON_CATEGORIES;
+
+  function handleCategoryChange(val: string) {
+    /** update category and reset entity type. */
+    setCategory(val as Category);
+    setEntityType("");
+  }
+
+  // determine effective entity type - some categories map directly
+  const effectiveEntityType: EntityType | "" = (() => {
+    if (category === "obstacle") return "obstacle";
+    if (category === "agl") return "agl";
+    if (category === "lha") return "lha";
+    return entityType;
+  })();
+
+  // whether a subtype dropdown is needed
+  const needsSubtype = category === "surface" || category === "safety_zone";
 
   async function handleSubmit() {
     /** validate and submit the creation form. */
-    if (!entityType || !name.trim()) return;
+    if (!effectiveEntityType || !name.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
       const data: Record<string, unknown> = { name: name.trim() };
 
-      if (entityType === "runway" || entityType === "taxiway") {
+      if (effectiveEntityType === "runway" || effectiveEntityType === "taxiway") {
         if (heading) data.heading = parseFloat(heading);
         if (length) data.length = parseFloat(length);
         if (width) data.width = parseFloat(width);
       }
 
-      if (entityType.startsWith("safety_zone_")) {
+      if (effectiveEntityType.startsWith("safety_zone_")) {
         data.altitude_floor = altFloor ? parseFloat(altFloor) : 0;
         if (altCeiling) data.altitude_ceiling = parseFloat(altCeiling);
         data.is_active = isActive;
       }
 
-      if (entityType === "obstacle") {
+      if (effectiveEntityType === "obstacle") {
         data.type = obstacleType;
         if (obstacleHeight) data.height = parseFloat(obstacleHeight);
         data.radius = bufferRadius ? parseFloat(bufferRadius) : 0;
-        if (circleCenter) {
-          data.center = circleCenter;
-        }
-        if (pointPosition) {
-          data.center = pointPosition;
-        }
+        if (circleCenter) data.center = circleCenter;
+        if (pointPosition) data.center = pointPosition;
       }
 
-      if (entityType === "agl") {
+      if (effectiveEntityType === "agl") {
         data.agl_type = aglType;
         data.side = aglSide;
         if (glideSlopeAngle) data.glide_slope_angle = parseFloat(glideSlopeAngle);
         if (distFromThreshold) data.distance_from_threshold = parseFloat(distFromThreshold);
         data.surface_id = surfaceId;
-        if (pointPosition) {
-          data.center = pointPosition;
-        }
+        if (pointPosition) data.center = pointPosition;
       }
 
-      await onCreate(entityType, data);
+      if (effectiveEntityType === "lha") {
+        data.agl_id = lhaAglId;
+        data.unit_number = nextUnitNumber;
+        data.setting_angle = lhaSettingAngle ? parseFloat(lhaSettingAngle) : 3.0;
+        data.lamp_type = lhaLampType;
+        if (pointPosition) data.center = pointPosition;
+      }
+
+      await onCreate(effectiveEntityType, data);
     } catch {
       setError(t("coordinator.creation.createError"));
     } finally {
@@ -135,21 +200,26 @@ export default function CreationForm({
     }
   }
 
-  const isSafetyZone = entityType.startsWith("safety_zone_");
+  const isSafetyZone = effectiveEntityType.startsWith("safety_zone_");
 
   function namePlaceholder(): string {
     /** get the right placeholder for the name field. */
-    if (entityType === "runway") return t("coordinator.creation.namePlaceholderRunway");
-    if (entityType === "taxiway") return t("coordinator.creation.namePlaceholderTaxiway");
+    if (effectiveEntityType === "runway") return t("coordinator.creation.namePlaceholderRunway");
+    if (effectiveEntityType === "taxiway") return t("coordinator.creation.namePlaceholderTaxiway");
     if (isSafetyZone) return t("coordinator.creation.namePlaceholderZone");
-    if (entityType === "obstacle") return t("coordinator.creation.namePlaceholderObstacle");
-    if (entityType === "agl") return t("coordinator.creation.namePlaceholderAgl");
+    if (effectiveEntityType === "obstacle") return t("coordinator.creation.namePlaceholderObstacle");
+    if (effectiveEntityType === "agl") return t("coordinator.creation.namePlaceholderAgl");
+    if (effectiveEntityType === "lha") return t("coordinator.creation.namePlaceholderLha");
     return "";
   }
 
   const safetyZoneTypeLabel = isSafetyZone
-    ? entityType.replace("safety_zone_", "").toUpperCase().replace("NO_FLY", "TEMPORARY_NO_FLY")
+    ? effectiveEntityType.replace("safety_zone_", "").toUpperCase().replace("NO_FLY", "TEMPORARY_NO_FLY")
     : "";
+
+  const canSubmit = effectiveEntityType && name.trim() && (
+    effectiveEntityType !== "lha" || lhaAglId
+  );
 
   return (
     <div
@@ -169,19 +239,19 @@ export default function CreationForm({
       </div>
 
       <div className="flex flex-col gap-1.5 [&_input]:!px-3 [&_input]:!py-1.5 [&_input]:!text-xs">
-        {/* type selection */}
+        {/* tier 1 - category selection */}
         <div>
           <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-            {t("coordinator.creation.selectType")}
+            {t("coordinator.creation.selectCategory")}
           </label>
           <select
-            value={entityType}
-            onChange={(e) => setEntityType(e.target.value as EntityType | "")}
+            value={category}
+            onChange={(e) => handleCategoryChange(e.target.value)}
             className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
-            data-testid="creation-type-select"
+            data-testid="creation-category-select"
           >
-            <option value="">{t("coordinator.creation.selectType")}</option>
-            {typeOptions.map((opt) => (
+            <option value="">{t("coordinator.creation.selectCategory")}</option>
+            {categoryOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {t(opt.labelKey)}
               </option>
@@ -189,7 +259,49 @@ export default function CreationForm({
           </select>
         </div>
 
-        {entityType && (
+        {/* tier 2 - subtype selection (for surface and safety_zone) */}
+        {needsSubtype && category && (
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("coordinator.creation.selectType")}
+            </label>
+            <select
+              value={entityType}
+              onChange={(e) => setEntityType(e.target.value as EntityType | "")}
+              className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="creation-type-select"
+            >
+              <option value="">{t("coordinator.creation.selectType")}</option>
+              {(category === "surface" ? SURFACE_SUBTYPES : SAFETY_ZONE_SUBTYPES).map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {t(opt.labelKey)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* obstacle subtype - shown inline since category directly maps to entity */}
+        {category === "obstacle" && (
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("coordinator.creation.obstacleType")}
+            </label>
+            <select
+              value={obstacleType}
+              onChange={(e) => setObstacleType(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+            >
+              {OBSTACLE_SUBTYPES.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {t(opt.labelKey)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {effectiveEntityType && (
           <>
             {/* name - always required */}
             <Input
@@ -201,7 +313,7 @@ export default function CreationForm({
             />
 
             {/* runway / taxiway fields */}
-            {(entityType === "runway" || entityType === "taxiway") && (
+            {(effectiveEntityType === "runway" || effectiveEntityType === "taxiway") && (
               <>
                 <Input
                   id="create-heading"
@@ -273,24 +385,8 @@ export default function CreationForm({
             )}
 
             {/* obstacle fields */}
-            {entityType === "obstacle" && (
+            {effectiveEntityType === "obstacle" && (
               <>
-                <div>
-                  <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-                    {t("coordinator.creation.obstacleType")}
-                  </label>
-                  <select
-                    value={obstacleType}
-                    onChange={(e) => setObstacleType(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
-                  >
-                    <option value="BUILDING">{t("coordinator.detail.obstacleTypes.building")}</option>
-                    <option value="ANTENNA">{t("coordinator.detail.obstacleTypes.antenna")}</option>
-                    <option value="VEGETATION">{t("coordinator.detail.obstacleTypes.vegetation")}</option>
-                    <option value="TOWER">{t("coordinator.detail.obstacleTypes.tower")}</option>
-                    <option value="OTHER">{t("coordinator.detail.obstacleTypes.other")}</option>
-                  </select>
-                </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   <Input
                     id="create-height"
@@ -318,7 +414,7 @@ export default function CreationForm({
             )}
 
             {/* agl fields */}
-            {entityType === "agl" && (
+            {effectiveEntityType === "agl" && (
               <>
                 <div>
                   <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
@@ -388,6 +484,61 @@ export default function CreationForm({
               </>
             )}
 
+            {/* lha fields */}
+            {effectiveEntityType === "lha" && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                    {t("coordinator.creation.parentAgl")}
+                  </label>
+                  <select
+                    value={lhaAglId}
+                    onChange={(e) => setLhaAglId(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                  >
+                    <option value="">{t("coordinator.creation.selectAgl")}</option>
+                    {allAgls.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {lhaAglId && (
+                  <p className="text-[10px] text-tv-text-muted">
+                    {t("coordinator.creation.unitNumber")}: {nextUnitNumber}
+                  </p>
+                )}
+                <Input
+                  id="create-lha-angle"
+                  label={t("coordinator.detail.lhaSettingAngle")}
+                  type="number"
+                  step="0.1"
+                  value={lhaSettingAngle}
+                  onChange={(e) => setLhaSettingAngle(e.target.value)}
+                />
+                <div>
+                  <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                    {t("coordinator.detail.lhaLampType")}
+                  </label>
+                  <select
+                    value={lhaLampType}
+                    onChange={(e) => setLhaLampType(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                  >
+                    <option value="HALOGEN">{t("coordinator.detail.lampTypes.halogen")}</option>
+                    <option value="LED">{t("coordinator.detail.lampTypes.led")}</option>
+                  </select>
+                </div>
+                {pointPosition && (
+                  <p className="text-[10px] text-tv-text-muted">
+                    {t("coordinator.creation.position")}:{" "}
+                    {pointPosition[1].toFixed(6)}, {pointPosition[0].toFixed(6)}
+                  </p>
+                )}
+              </>
+            )}
+
             {error && (
               <p className="text-xs text-tv-error">{error}</p>
             )}
@@ -396,9 +547,9 @@ export default function CreationForm({
             <div className="flex gap-1.5 mt-1">
               <button
                 onClick={handleSubmit}
-                disabled={submitting || !name.trim()}
+                disabled={submitting || !canSubmit}
                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                  submitting || !name.trim()
+                  submitting || !canSubmit
                     ? "bg-tv-surface text-tv-text-muted cursor-not-allowed"
                     : "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
                 }`}
