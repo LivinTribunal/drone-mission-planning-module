@@ -604,12 +604,16 @@
       "duplicateError": "Failed to duplicate inspection template",
       "saveError": "Failed to save inspection template",
       "saved": "Inspection template saved",
-      "openMap": "Open Map",
+      "saving": "Saving...",
+      "savedJustNow": "Saved just now",
+      "savedMinutesAgo": "Saved {{count}} min ago",
+      "savedAt": "Saved at {{time}}",
       "switchTemplate": "Switch Template",
-      "save": "Save",
       "usedInMissions": "Used in {{count}} missions",
       "selectAirportFirst": "Select an airport to manage inspection templates",
-      "noAglSystems": "No AGL systems at this airport"
+      "noAglSystems": "No AGL systems at this airport",
+      "showing": "Showing {{from}}-{{to}} of {{total}}"
+    },
     "drones": {
       "title": "Drone Profiles",
       "searchPlaceholder": "Search drones by name...",

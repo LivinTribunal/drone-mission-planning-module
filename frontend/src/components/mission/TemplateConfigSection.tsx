@@ -45,30 +45,15 @@ export default function TemplateConfigSection({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* method dropdown */}
-      <div>
-        <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-          {t("coordinator.inspections.method")}
-        </label>
-        <select
-          value={method}
-          onChange={(e) => onMethodChange(e.target.value as InspectionMethod)}
-          className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
-        >
-          <option value="ANGULAR_SWEEP">{t("coordinator.inspections.angularSweep")}</option>
-          <option value="VERTICAL_PROFILE">{t("coordinator.inspections.verticalProfile")}</option>
-        </select>
-      </div>
-
       {/* agl system dropdown */}
-      <div>
+      <div className="relative">
         <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
           {t("coordinator.inspections.selectAglSystem")}
         </label>
         <select
           value={selectedAglId}
           onChange={(e) => onAglChange(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
+          className="w-full px-4 py-2.5 pr-10 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
         >
           <option value="">{t("coordinator.inspections.selectAgl")}</option>
           {allAgls.map((agl) => (
@@ -77,6 +62,27 @@ export default function TemplateConfigSection({
             </option>
           ))}
         </select>
+        <svg className="pointer-events-none absolute right-3 top-[2.1rem] h-4 w-4 text-tv-text-secondary" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+        </svg>
+      </div>
+
+      {/* method dropdown */}
+      <div className="relative">
+        <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+          {t("coordinator.inspections.method")}
+        </label>
+        <select
+          value={method}
+          onChange={(e) => onMethodChange(e.target.value as InspectionMethod)}
+          className="w-full px-4 py-2.5 pr-10 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
+        >
+          <option value="ANGULAR_SWEEP">{t("coordinator.inspections.angularSweep")}</option>
+          <option value="VERTICAL_PROFILE">{t("coordinator.inspections.verticalProfile")}</option>
+        </select>
+        <svg className="pointer-events-none absolute right-3 top-[2.1rem] h-4 w-4 text-tv-text-secondary" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+        </svg>
       </div>
 
       {/* lha units */}

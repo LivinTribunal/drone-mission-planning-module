@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Loader2, Search } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import {
   listInspectionTemplates,
@@ -16,7 +16,21 @@ import CreateTemplateDialog from "@/components/mission/CreateTemplateDialog";
 import Modal from "@/components/common/Modal";
 import Button from "@/components/common/Button";
 
+/** build page indices with ellipsis when there are many pages. */
+function paginationRange(total: number, current: number): (number | "...")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  const pages: (number | "...")[] = [0];
+  const start = Math.max(1, current - 1);
+  const end = Math.min(total - 2, current + 1);
+  if (start > 1) pages.push("...");
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (end < total - 2) pages.push("...");
+  pages.push(total - 1);
+  return pages;
+}
+
 export default function InspectionListPage() {
+  /**inspection template list page, styled like the missions list page.*/
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
@@ -44,6 +58,7 @@ export default function InspectionListPage() {
   const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showNotif(msg: string) {
+    /**show a temporary notification toast.*/
     setNotification(msg);
     if (notificationTimer.current) clearTimeout(notificationTimer.current);
     notificationTimer.current = setTimeout(() => setNotification(null), 4000);
@@ -67,6 +82,7 @@ export default function InspectionListPage() {
   );
 
   const fetchTemplates = useCallback(async () => {
+    /**fetch templates for the selected airport.*/
     setLoading(true);
     setError(null);
     try {
@@ -111,6 +127,7 @@ export default function InspectionListPage() {
   useEffect(() => { setPage(1); }, [search, methodFilter, aglFilter]);
 
   function toggleMethod(method: InspectionMethod) {
+    /**toggle a method filter pill.*/
     setMethodFilter((prev) => {
       const next = new Set(prev);
       if (next.has(method)) next.delete(method);
@@ -120,6 +137,7 @@ export default function InspectionListPage() {
   }
 
   async function handleCreate(data: { name: string; aglId: string; method: InspectionMethod }) {
+    /**create a new template and navigate to it.*/
     try {
       const result = await createInspectionTemplate({
         name: data.name,
@@ -134,6 +152,7 @@ export default function InspectionListPage() {
   }
 
   async function handleDuplicate(id: string) {
+    /**duplicate a template and navigate to the copy.*/
     const tpl = templates.find((t) => t.id === id);
     if (!tpl) return;
     try {
@@ -149,11 +168,13 @@ export default function InspectionListPage() {
   }
 
   function handleDeleteClick(id: string) {
+    /**open delete confirmation for a template.*/
     const tpl = templates.find((t) => t.id === id);
     if (tpl) setDeleteTarget(tpl);
   }
 
   async function handleDeleteConfirm() {
+    /**confirm and execute template deletion.*/
     if (!deleteTarget) return;
     try {
       await deleteInspectionTemplate(deleteTarget.id);
@@ -168,7 +189,7 @@ export default function InspectionListPage() {
   // airport guard
   if (!airportDetail) {
     return (
-      <div className="flex items-center justify-center py-12" data-testid="inspection-list-page">
+      <div className="flex items-center justify-center h-full bg-tv-bg" data-testid="inspection-list-page">
         <p className="text-sm text-tv-text-muted">
           {t("coordinator.inspections.selectAirportFirst")}
         </p>
@@ -176,89 +197,98 @@ export default function InspectionListPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-tv-accent" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 gap-3">
-        <p className="text-sm text-tv-error">{error}</p>
-        <Button onClick={fetchTemplates}>{t("common.retry")}</Button>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-4" data-testid="inspection-list-page">
-      {/* top row - search, filters, add button */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-tv-text-muted" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("coordinator.inspections.searchPlaceholder")}
-            className="w-full pl-9 pr-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
-            data-testid="template-search"
-          />
+    <div className="flex flex-col items-center px-4 py-12" data-testid="inspection-list-page">
+      {/* search bar */}
+      <div className="flex items-center gap-3 w-full max-w-5xl mb-4">
+        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-tv-accent flex-shrink-0">
+          <svg className="h-5 w-5 text-tv-accent-text" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+              clipRule="evenodd"
+            />
+          </svg>
         </div>
-
-        {/* method pill toggles */}
-        <div className="flex gap-1.5">
-          {(["ANGULAR_SWEEP", "VERTICAL_PROFILE"] as InspectionMethod[]).map(
-            (method) => (
-              <button
-                key={method}
-                onClick={() => toggleMethod(method)}
-                className={`rounded-full px-3 py-2 text-xs font-semibold border transition-colors ${
-                  methodFilter.has(method)
-                    ? "bg-tv-accent text-tv-accent-text border-tv-accent"
-                    : "bg-tv-surface text-tv-text-secondary border-tv-border hover:bg-tv-surface-hover"
-                }`}
-              >
-                {method === "ANGULAR_SWEEP"
-                  ? t("coordinator.inspections.angularSweep")
-                  : t("coordinator.inspections.verticalProfile")}
-              </button>
-            ),
-          )}
-        </div>
-
-        {/* agl system filter */}
-        <select
-          value={aglFilter}
-          onChange={(e) => setAglFilter(e.target.value)}
-          className="rounded-full px-4 py-2.5 text-sm border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
-          data-testid="agl-filter"
-        >
-          <option value="">{t("coordinator.inspections.allAglSystems")}</option>
-          {allAgls.map((agl) => (
-            <option key={agl.id} value={agl.id}>
-              {agl.name}
-            </option>
-          ))}
-        </select>
-
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t("coordinator.inspections.searchPlaceholder")}
+          className="flex-1 rounded-full border border-tv-border bg-tv-surface px-5 py-2.5
+            text-sm text-tv-text-primary placeholder:text-tv-text-muted
+            focus:outline-none focus:border-tv-accent"
+          data-testid="template-search"
+        />
         <Button onClick={() => setShowCreate(true)} data-testid="add-template-btn">
           {t("coordinator.inspections.addNew")}
         </Button>
       </div>
 
+      {/* filter row */}
+      <div className="flex items-center w-full max-w-5xl mb-4 rounded-full border border-tv-border bg-tv-surface px-3 py-2">
+        {/* method pills */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => toggleMethod("ANGULAR_SWEEP")}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors bg-[var(--tv-method-angular-sweep-bg)] text-[var(--tv-method-angular-sweep-text)] ${
+              !methodFilter.has("ANGULAR_SWEEP") ? "opacity-40" : ""
+            }`}
+          >
+            {t("coordinator.inspections.angularSweep")}
+          </button>
+          <button
+            onClick={() => toggleMethod("VERTICAL_PROFILE")}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors bg-[var(--tv-method-vertical-profile-bg)] text-[var(--tv-method-vertical-profile-text)] ${
+              !methodFilter.has("VERTICAL_PROFILE") ? "opacity-40" : ""
+            }`}
+          >
+            {t("coordinator.inspections.verticalProfile")}
+          </button>
+        </div>
+
+        <div className="w-px h-6 bg-tv-border mx-3" />
+
+        {/* agl system filter */}
+        <div className="ml-auto">
+          <select
+            value={aglFilter}
+            onChange={(e) => setAglFilter(e.target.value)}
+            className="rounded-full border border-tv-border bg-tv-bg px-3 py-1 text-xs
+              text-tv-text-primary focus:outline-none focus:border-tv-accent"
+            data-testid="agl-filter"
+          >
+            <option value="">{t("coordinator.inspections.allAglSystems")}</option>
+            {allAgls.map((agl) => (
+              <option key={agl.id} value={agl.id}>
+                {agl.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* template table */}
-      <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-        {templates.length === 0 ? (
-          <p className="text-sm text-tv-text-muted py-8 text-center">
+      <div className="w-full max-w-5xl rounded-2xl border border-tv-border bg-tv-surface overflow-hidden p-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-tv-text-muted" />
+          </div>
+        ) : error ? (
+          <div className="px-6 py-16 text-center text-sm text-tv-error">
+            {error}
+            <button onClick={fetchTemplates} className="ml-2 underline hover:no-underline">
+              {t("common.retry")}
+            </button>
+          </div>
+        ) : templates.length === 0 ? (
+          <div className="px-6 py-16 text-center text-sm text-tv-text-muted">
             {t("coordinator.inspections.noTemplates")}
-          </p>
+          </div>
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-tv-text-muted py-8 text-center">
+          <div className="px-6 py-16 text-center text-sm text-tv-text-muted">
             {t("coordinator.inspections.noMatch")}
-          </p>
+          </div>
         ) : (
           <InspectionTemplateTable
             templates={filtered}
@@ -268,11 +298,61 @@ export default function InspectionListPage() {
             onDelete={handleDeleteClick}
             page={page}
             pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
           />
         )}
       </div>
+
+      {/* pagination - outside the table container */}
+      {!loading && !error && filtered.length > 0 && (
+        <div className="relative flex items-center justify-between w-full max-w-5xl pt-3">
+          <span className="absolute left-1/2 -translate-x-1/2 text-xs text-tv-text-secondary">
+            {t("coordinator.inspections.showing", {
+              from: filtered.length === 0 ? 0 : (page - 1) * pageSize + 1,
+              to: Math.min(page * pageSize, filtered.length),
+              total: filtered.length,
+            })}
+          </span>
+          <div className="flex items-center gap-1">
+            {([10, 20, 50, 200] as const).map((size) => (
+              <button
+                key={size}
+                onClick={() => { setPageSize(size); setPage(1); }}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  pageSize === size
+                    ? "bg-tv-accent text-tv-accent-text"
+                    : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
+                }`}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            {paginationRange(
+              Math.max(1, Math.ceil(filtered.length / pageSize)),
+              page - 1,
+            ).map((item, idx) =>
+              item === "..." ? (
+                <span key={`ellipsis-${idx}`} className="px-1 text-xs text-tv-text-muted">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  onClick={() => setPage((item as number) + 1)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    page - 1 === item
+                      ? "bg-tv-accent text-tv-accent-text"
+                      : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
+                  }`}
+                >
+                  {(item as number) + 1}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+      )}
 
       <CreateTemplateDialog
         isOpen={showCreate}

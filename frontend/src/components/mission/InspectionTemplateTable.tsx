@@ -15,11 +15,7 @@ interface InspectionTemplateTableProps {
   onDelete: (id: string) => void;
   page: number;
   pageSize: number;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (size: number) => void;
 }
-
-const PAGE_SIZES = [10, 20, 50, 200];
 
 export default function InspectionTemplateTable({
   templates,
@@ -29,8 +25,6 @@ export default function InspectionTemplateTable({
   onDelete,
   page,
   pageSize,
-  onPageChange,
-  onPageSizeChange,
 }: InspectionTemplateTableProps) {
   const { t } = useTranslation();
   const [sortField, setSortField] = useState<SortField>("name");
@@ -77,7 +71,6 @@ export default function InspectionTemplateTable({
     return list;
   }, [templates, sortField, sortDir, aglMap]);
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const paginated = sorted.slice((page - 1) * pageSize, page * pageSize);
 
   function SortIcon({ field }: { field: SortField }) {
@@ -90,9 +83,27 @@ export default function InspectionTemplateTable({
   }
 
   function formatMethod(method: string) {
+    /**format method name for display.*/
     if (method === "ANGULAR_SWEEP") return t("coordinator.inspections.angularSweep");
     if (method === "VERTICAL_PROFILE") return t("coordinator.inspections.verticalProfile");
     return method;
+  }
+
+  function methodBadgeStyle(method: string): React.CSSProperties {
+    /**get inline styles for an inspection method badge.*/
+    if (method === "ANGULAR_SWEEP") {
+      return {
+        backgroundColor: "var(--tv-method-angular-sweep-bg)",
+        color: "var(--tv-method-angular-sweep-text)",
+      };
+    }
+    if (method === "VERTICAL_PROFILE") {
+      return {
+        backgroundColor: "var(--tv-method-vertical-profile-bg)",
+        color: "var(--tv-method-vertical-profile-text)",
+      };
+    }
+    return {};
   }
 
   function formatDate(dateStr: string | null) {
@@ -153,7 +164,10 @@ export default function InspectionTemplateTable({
                     {agl ? `${agl.name} - ${agl.agl_type}${agl.side ? ` - ${agl.side}` : ""}` : "-"}
                   </td>
                   <td className="py-3 px-3">
-                    <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[var(--tv-status-draft-bg)] text-[var(--tv-status-draft-text)]">
+                    <span
+                      className="inline-block rounded-full px-2.5 py-0.5 text-xs"
+                      style={methodBadgeStyle(tpl.methods[0] ?? "")}
+                    >
                       {formatMethod(tpl.methods[0] ?? "")}
                     </span>
                   </td>
@@ -189,43 +203,6 @@ export default function InspectionTemplateTable({
             })}
           </tbody>
         </table>
-      </div>
-
-      {/* pagination */}
-      <div className="flex items-center justify-between mt-3 px-1">
-        <div className="flex items-center gap-2">
-          <select
-            value={pageSize}
-            onChange={(e) => { onPageSizeChange(Number(e.target.value)); onPageChange(1); }}
-            className="rounded-full px-3 py-1.5 text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
-          >
-            {PAGE_SIZES.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <span className="text-xs text-tv-text-muted">
-            {sorted.length} {sorted.length === 1 ? "item" : "items"}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            disabled={page <= 1}
-            onClick={() => onPageChange(page - 1)}
-            className="px-2.5 py-1.5 text-xs rounded-full border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            &lsaquo;
-          </button>
-          <span className="text-xs text-tv-text-secondary px-2">
-            {page} / {totalPages}
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => onPageChange(page + 1)}
-            className="px-2.5 py-1.5 text-xs rounded-full border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            &rsaquo;
-          </button>
-        </div>
       </div>
     </div>
   );

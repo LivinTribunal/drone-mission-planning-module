@@ -126,6 +126,10 @@ def update_template(
     apply_dict_update(template, data)
 
     if config_data is not None:
+        # convert uuid objects to strings for jsonb storage
+        if "lha_ids" in config_data and config_data["lha_ids"] is not None:
+            config_data["lha_ids"] = [str(uid) for uid in config_data["lha_ids"]]
+
         if template.default_config:
             apply_dict_update(template.default_config, config_data)
         else:

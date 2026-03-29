@@ -160,6 +160,11 @@ describe("InspectionEditPage", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
     vi.clearAllMocks();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("renders template name after load", async () => {
@@ -183,34 +188,8 @@ describe("InspectionEditPage", () => {
     expect(screen.getByText("common.retry")).toBeInTheDocument();
   });
 
-  it("save button is disabled when no changes made", async () => {
-    /** verify save requires dirty state. */
-    renderPage();
-    await waitFor(() => {
-      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
-      expect(matches.length).toBeGreaterThanOrEqual(1);
-    });
-    const saveBtn = screen.getByText("coordinator.inspections.save");
-    expect(saveBtn).toBeDisabled();
-  });
-
-  it("save button becomes enabled after changing a config field", async () => {
-    /** verify changing config enables save. */
-    renderPage();
-    await waitFor(() => {
-      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
-      expect(matches.length).toBeGreaterThanOrEqual(1);
-    });
-
-    const altitudeInput = screen.getByDisplayValue("5");
-    fireEvent.change(altitudeInput, { target: { value: "10" } });
-
-    const saveBtn = screen.getByText("coordinator.inspections.save");
-    expect(saveBtn).not.toBeDisabled();
-  });
-
-  it("save calls updateInspectionTemplate", async () => {
-    /** verify save triggers api call. */
+  it("autosaves after changing a config field", async () => {
+    /** verify changing config triggers autosave. */
     const { updateInspectionTemplate } = await import("@/api/inspectionTemplates");
     renderPage();
     await waitFor(() => {
@@ -221,7 +200,9 @@ describe("InspectionEditPage", () => {
     const altitudeInput = screen.getByDisplayValue("5");
     fireEvent.change(altitudeInput, { target: { value: "10" } });
 
-    fireEvent.click(screen.getByText("coordinator.inspections.save"));
+    // advance past the autosave debounce delay
+    vi.advanceTimersByTime(1500);
+
     await waitFor(() => {
       expect(updateInspectionTemplate).toHaveBeenCalledWith("tpl-1", expect.any(Object));
     });
@@ -235,7 +216,11 @@ describe("InspectionEditPage", () => {
       const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
-    fireEvent.click(screen.getByText("coordinator.inspections.deleteTemplate"));
+
+    // action buttons are now icon buttons with title attributes
+    const deleteBtn = screen.getByTitle("coordinator.inspections.deleteTemplate");
+    fireEvent.click(deleteBtn);
+
     await waitFor(() => {
       expect(screen.getByText("common.delete")).toBeInTheDocument();
     });
@@ -254,7 +239,10 @@ describe("InspectionEditPage", () => {
       const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
-    fireEvent.click(screen.getByText("coordinator.inspections.duplicateTemplate"));
+
+    const dupBtn = screen.getByTitle("coordinator.inspections.duplicateTemplate");
+    fireEvent.click(dupBtn);
+
     await waitFor(() => {
       expect(createInspectionTemplate).toHaveBeenCalled();
     });
