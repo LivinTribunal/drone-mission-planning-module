@@ -20,8 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """add updated_at column to inspection_template table."""
-    # note: onupdate=func.now() is orm-only - raw sql updates won't auto-set this column
+    """add updated_at column with auto-update trigger to inspection_template table."""
     op.add_column(
         "inspection_template",
         sa.Column(
@@ -34,7 +33,30 @@ def upgrade() -> None:
 
     op.execute("UPDATE inspection_template SET updated_at = created_at")
 
+    # postgres trigger so raw sql updates also set updated_at
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION set_inspection_template_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = now();
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_inspection_template_updated_at
+        BEFORE UPDATE ON inspection_template
+        FOR EACH ROW
+        EXECUTE FUNCTION set_inspection_template_updated_at();
+        """
+    )
+
 
 def downgrade() -> None:
-    """remove updated_at column from inspection_template table."""
+    """remove updated_at column and trigger from inspection_template table."""
+    op.execute("DROP TRIGGER IF EXISTS trg_inspection_template_updated_at ON inspection_template")
+    op.execute("DROP FUNCTION IF EXISTS set_inspection_template_updated_at()")
     op.drop_column("inspection_template", "updated_at")

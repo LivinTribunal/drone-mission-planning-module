@@ -103,7 +103,10 @@ def update_template(
     """update inspection template"""
     template = (
         db.query(InspectionTemplate)
-        .options(joinedload(InspectionTemplate.targets))
+        .options(
+            joinedload(InspectionTemplate.default_config),
+            joinedload(InspectionTemplate.targets),
+        )
         .filter(InspectionTemplate.id == template_id)
         .first()
     )

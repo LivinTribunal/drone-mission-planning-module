@@ -88,7 +88,7 @@ export default function TemplateAglSection({
                   {t("coordinator.inspections.lhaUnit", { number: lha.unit_number })}
                 </span>
                 <span className="text-tv-text-muted text-xs">
-                  {lha.setting_angle.toFixed(2)}&deg;
+                  {lha.setting_angle?.toFixed(2) ?? "—"}&deg;
                 </span>
               </label>
             ))}

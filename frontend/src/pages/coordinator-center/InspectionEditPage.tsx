@@ -138,6 +138,7 @@ export default function InspectionEditPage() {
 
   // re-init lha selection when allAgls or template change (airport detail loaded later)
   useEffect(() => {
+    if (isEditing) return;
     if (!template || allAgls.length === 0) return;
     const agl = allAgls.find((a) => a.id === template.target_agl_ids[0]);
     if (!agl) return;
@@ -148,15 +149,22 @@ export default function InspectionEditPage() {
     } else {
       setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
     }
-  }, [allAgls, template]);
+  }, [allAgls, template, isEditing]);
 
   function handleConfigChange(field: string, value: number | null) {
     setEditConfig((prev) => {
       if (!prev) return prev;
       if (field === "custom_tolerances") {
+        if (value === null) {
+          const { default: _, ...rest } = prev.custom_tolerances ?? {};
+          return {
+            ...prev,
+            custom_tolerances: Object.keys(rest).length > 0 ? rest : null,
+          };
+        }
         return {
           ...prev,
-          custom_tolerances: value !== null ? { ...(prev.custom_tolerances ?? {}), default: value } : null,
+          custom_tolerances: { ...(prev.custom_tolerances ?? {}), default: value },
         };
       }
       return { ...prev, [field]: value };
@@ -212,11 +220,12 @@ export default function InspectionEditPage() {
     if (!id) return;
     try {
       await deleteInspectionTemplate(id);
+      setShowDelete(false);
       navigate("/coordinator-center/inspections");
     } catch (err) {
+      setShowDelete(false);
       showNotif(err instanceof Error ? err.message : t("coordinator.inspections.deleteError"));
     }
-    setShowDelete(false);
   }
 
   async function handleCreate(data: { name: string; aglId: string; method: InspectionMethod }) {
