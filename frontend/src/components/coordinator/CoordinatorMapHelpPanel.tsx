@@ -34,16 +34,16 @@ export default function CoordinatorMapHelpPanel() {
   }
 
   const shortcuts = [
-    { key: "P", desc: t("coordinator.airports.help.shortcutPan") },
-    { key: "Z", desc: t("coordinator.airports.help.shortcutZoom") },
-    { key: "R", desc: t("coordinator.airports.help.shortcutReset") },
     { key: "S", desc: t("coordinator.airports.help.shortcutSelect") },
+    { key: "P", desc: t("coordinator.airports.help.shortcutPan") },
+    { key: "W", desc: t("coordinator.airports.help.shortcutMoveFeature") },
+    { key: "M", desc: t("coordinator.airports.help.shortcutMeasurement") },
     { key: "G", desc: t("coordinator.airports.help.shortcutDrawPolygon") },
     { key: "C", desc: t("coordinator.airports.help.shortcutDrawCircle") },
     { key: "E", desc: t("coordinator.airports.help.shortcutDrawRectangle") },
-    { key: "T", desc: t("coordinator.airports.help.shortcutPlacePoint") },
     { key: "V", desc: t("coordinator.airports.help.shortcutEditVertices") },
-    { key: "M", desc: t("coordinator.airports.help.shortcutMoveFeature") },
+    { key: "Z", desc: t("coordinator.airports.help.shortcutZoom") },
+    { key: "R", desc: t("coordinator.airports.help.shortcutReset") },
     { key: "Ctrl+Z", desc: t("coordinator.airports.help.shortcutUndo") },
     { key: "Ctrl+Shift+Z", desc: t("coordinator.airports.help.shortcutRedo") },
     { key: "Esc", desc: t("coordinator.airports.help.shortcutEscape") },

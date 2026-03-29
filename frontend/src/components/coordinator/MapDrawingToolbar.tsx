@@ -8,12 +8,13 @@ import {
   Pentagon,
   Circle,
   Square,
-  MapPin,
   Diamond,
   Move,
+  Ruler,
   Code2,
   Undo2,
   Redo2,
+  Loader2,
 } from "lucide-react";
 
 export type DrawingTool =
@@ -21,10 +22,10 @@ export type DrawingTool =
   | "zoom"
   | "zoomReset"
   | "select"
+  | "measurement"
   | "drawPolygon"
   | "drawCircle"
   | "drawRectangle"
-  | "placePoint"
   | "editVertices"
   | "moveFeature"
   | "geoJsonEditor";
@@ -39,10 +40,12 @@ interface MapDrawingToolbarProps {
   onGeoJsonEditor: () => void;
   zoomPercent: number;
   onZoomTo: (percent: number) => void;
-  is3D: boolean;
-  onToggle3D: (val: boolean) => void;
-  terrainMode: "map" | "satellite";
-  onTerrainChange: (mode: "map" | "satellite") => void;
+  isDirty: boolean;
+  saving: boolean;
+  onSave: () => void;
+  saveLabel: string;
+  bearing?: number;
+  onBearingReset?: () => void;
 }
 
 interface ToolDef {
@@ -53,23 +56,21 @@ interface ToolDef {
 
 const ZOOM_PRESETS = [50, 75, 100, 150, 200, 300];
 
-const navTools: ToolDef[] = [
-  { key: "pan", icon: Hand, tooltipKey: "coordinator.airports.tools.pan" },
-  { key: "zoom", icon: ZoomIn, tooltipKey: "coordinator.airports.tools.zoom" },
-  { key: "zoomReset", icon: Maximize2, tooltipKey: "coordinator.airports.tools.zoomReset" },
+const interactTools: ToolDef[] = [
   { key: "select", icon: MousePointer2, tooltipKey: "coordinator.airports.tools.select" },
+  { key: "pan", icon: Hand, tooltipKey: "coordinator.airports.tools.pan" },
+  { key: "moveFeature", icon: Move, tooltipKey: "coordinator.airports.tools.moveFeature" },
+  { key: "measurement", icon: Ruler, tooltipKey: "coordinator.airports.tools.measurement" },
 ];
 
 const drawTools: ToolDef[] = [
   { key: "drawPolygon", icon: Pentagon, tooltipKey: "coordinator.airports.tools.drawPolygon" },
   { key: "drawCircle", icon: Circle, tooltipKey: "coordinator.airports.tools.drawCircle" },
   { key: "drawRectangle", icon: Square, tooltipKey: "coordinator.airports.tools.drawRectangle" },
-  { key: "placePoint", icon: MapPin, tooltipKey: "coordinator.airports.tools.placePoint" },
 ];
 
 const editTools: ToolDef[] = [
   { key: "editVertices", icon: Diamond, tooltipKey: "coordinator.airports.tools.editVertices" },
-  { key: "moveFeature", icon: Move, tooltipKey: "coordinator.airports.tools.moveFeature" },
   { key: "geoJsonEditor", icon: Code2, tooltipKey: "coordinator.airports.tools.geoJsonEditor" },
 ];
 
@@ -83,10 +84,12 @@ export default function MapDrawingToolbar({
   onGeoJsonEditor,
   zoomPercent,
   onZoomTo,
-  is3D,
-  onToggle3D,
-  terrainMode,
-  onTerrainChange,
+  isDirty,
+  saving,
+  onSave,
+  saveLabel,
+  bearing = 0,
+  onBearingReset,
 }: MapDrawingToolbarProps) {
   /** top-center pill-shaped drawing tools toolbar with grouped sections. */
   const { t } = useTranslation();
@@ -158,8 +161,8 @@ export default function MapDrawingToolbar({
     >
       {/* main tools pill */}
       <div className="flex items-center rounded-full border border-tv-border bg-tv-bg px-1 py-1">
-        {/* group 1 - navigation */}
-        {navTools.map(renderToolButton)}
+        {/* group 1 - interact */}
+        {interactTools.map(renderToolButton)}
 
         {renderSeparator()}
 
@@ -173,7 +176,27 @@ export default function MapDrawingToolbar({
 
         {renderSeparator()}
 
-        {/* group 4 - zoom field */}
+        {/* group 4 - zoom + heading */}
+        <button
+          onClick={() => handleClick("zoom")}
+          title={t("coordinator.airports.tools.zoom")}
+          className={`flex items-center justify-center rounded-full w-9 h-9 transition-colors ${
+            activeTool === "zoom"
+              ? "bg-tv-accent text-tv-accent-text"
+              : "text-tv-text-primary hover:bg-tv-surface-hover"
+          }`}
+          data-testid="tool-zoom"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => handleClick("zoomReset")}
+          title={t("coordinator.airports.tools.zoomReset")}
+          className="flex items-center justify-center rounded-full w-9 h-9 text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+          data-testid="tool-zoomReset"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
         <div className="relative" ref={zoomRef}>
           <button
             onClick={() => setZoomDropdownOpen(!zoomDropdownOpen)}
@@ -206,6 +229,24 @@ export default function MapDrawingToolbar({
             </div>
           )}
         </div>
+
+        {/* heading compass */}
+        <button
+          onClick={onBearingReset}
+          className="ml-1 flex items-center justify-center w-9 h-9 rounded-full border border-tv-border bg-tv-surface hover:bg-tv-surface-hover transition-colors cursor-pointer"
+          title={`${Math.round(((bearing % 360) + 360) % 360)}° — ${t("map.tools.resetBearing")}`}
+          data-testid="compass-btn"
+        >
+          <svg
+            className="w-7 h-7"
+            viewBox="0 0 28 28"
+            style={{ transform: `rotate(${-bearing}deg)` }}
+          >
+            <text x="14" y="5.5" textAnchor="middle" dominantBaseline="middle" fill="#e54545" fontSize="5.5" fontWeight="bold">N</text>
+            <polygon points="14,8 12.8,14 15.2,14" fill="#e54545" />
+            <polygon points="14,20 12.8,14 15.2,14" fill="var(--tv-text-muted)" />
+          </svg>
+        </button>
       </div>
 
       {/* undo/redo pill */}
@@ -238,51 +279,21 @@ export default function MapDrawingToolbar({
         </button>
       </div>
 
-      {/* 2D/3D toggle pill */}
-      <div className="flex rounded-full bg-tv-surface border border-tv-border p-0.5">
-        <button
-          onClick={() => onToggle3D(false)}
-          title={t("map.tools.2d")}
-          className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-            !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
-          }`}
-          data-testid="toggle-2d"
-        >
-          2D
-        </button>
-        <button
-          onClick={() => onToggle3D(true)}
-          title={t("map.tools.3d")}
-          className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-            is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
-          }`}
-          data-testid="toggle-3d"
-        >
-          3D
-        </button>
-      </div>
-
-      {/* map/satellite toggle pill */}
-      <div className="flex rounded-full bg-tv-surface border border-tv-border p-0.5">
-        <button
-          onClick={() => onTerrainChange("map")}
-          className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-            terrainMode === "map" ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
-          }`}
-          data-testid="toggle-map"
-        >
-          {t("dashboard.mapView")}
-        </button>
-        <button
-          onClick={() => onTerrainChange("satellite")}
-          className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-            terrainMode === "satellite" ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
-          }`}
-          data-testid="toggle-satellite"
-        >
-          {t("dashboard.satelliteView")}
-        </button>
-      </div>
+      {/* save pill */}
+      <button
+        onClick={onSave}
+        disabled={!isDirty || saving}
+        title={saveLabel}
+        className={`flex items-center justify-center gap-1.5 rounded-full border h-[42px] px-4 text-xs font-medium transition-colors ${
+          isDirty && !saving
+            ? "border-tv-accent bg-tv-accent text-tv-accent-text hover:opacity-90"
+            : "border-tv-border bg-tv-bg text-tv-text-muted opacity-40 cursor-not-allowed"
+        }`}
+        data-testid="save-button"
+      >
+        {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        {saveLabel}
+      </button>
     </div>
   );
 }

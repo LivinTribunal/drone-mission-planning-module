@@ -44,9 +44,24 @@ import UnsavedChangesDialog from "@/components/coordinator/UnsavedChangesDialog"
 import MapDrawingToolbar from "@/components/coordinator/MapDrawingToolbar";
 import CoordinatorMapHelpPanel from "@/components/coordinator/CoordinatorMapHelpPanel";
 import GeoJsonEditorModal from "@/components/coordinator/GeoJsonEditorModal";
-import Button from "@/components/common/Button";
 import useDirtyState from "@/hooks/useDirtyState";
 import useMapDrawing from "@/hooks/useMapDrawing";
+import type { DrawingTool } from "@/components/coordinator/MapDrawingToolbar";
+import { MapTool } from "@/hooks/useMapTools";
+
+const DRAWING_TOOL_TO_MAP_TOOL: Record<DrawingTool, MapTool> = {
+  select: MapTool.SELECT,
+  pan: MapTool.PAN,
+  measurement: MapTool.MEASURE,
+  zoom: MapTool.ZOOM,
+  zoomReset: MapTool.ZOOM_RESET,
+  drawPolygon: MapTool.SELECT,
+  drawCircle: MapTool.SELECT,
+  drawRectangle: MapTool.SELECT,
+  editVertices: MapTool.SELECT,
+  moveFeature: MapTool.SELECT,
+  geoJsonEditor: MapTool.SELECT,
+};
 
 export default function AirportEditPage() {
   /** full airport detail editor with map, drawing tools, and infrastructure crud. */
@@ -70,9 +85,12 @@ export default function AirportEditPage() {
   const [deleteError, setDeleteError] = useState(false);
   const [showGeoJsonEditor, setShowGeoJsonEditor] = useState(false);
   const [zoomPercent, setZoomPercent] = useState(100);
+  const [bearing, setBearing] = useState(0);
+  const [bearingResetKey, setBearingResetKey] = useState(0);
 
   const { isDirty, markDirty, clearAll, getPendingChanges } = useDirtyState();
   const { activeTool, setActiveTool, canUndo, canRedo, undo, redo } = useMapDrawing();
+  const mapTool = DRAWING_TOOL_TO_MAP_TOOL[activeTool] ?? MapTool.SELECT;
   const [pendingNav, setPendingNav] = useState<string | null>(null);
 
   // warn on browser refresh / tab close
@@ -139,16 +157,16 @@ export default function AirportEditPage() {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const keyMap: Record<string, () => void> = {
-        p: () => setActiveTool("pan"),
-        z: () => setActiveTool("zoom"),
-        r: () => setActiveTool("zoomReset"),
         s: () => setActiveTool("select"),
+        p: () => setActiveTool("pan"),
+        w: () => setActiveTool("moveFeature"),
+        m: () => setActiveTool("measurement"),
         g: () => setActiveTool("drawPolygon"),
         c: () => setActiveTool("drawCircle"),
         e: () => setActiveTool("drawRectangle"),
-        t: () => setActiveTool("placePoint"),
         v: () => setActiveTool("editVertices"),
-        m: () => setActiveTool("moveFeature"),
+        z: () => setActiveTool("zoom"),
+        r: () => setActiveTool("zoomReset"),
       };
 
       const action = keyMap[e.key.toLowerCase()];
@@ -312,6 +330,50 @@ export default function AirportEditPage() {
     [selectedFeature, markDirty],
   );
 
+  const handleSave = useCallback(async () => {
+    /** persist all pending changes to the backend. */
+    if (!id || !airport) return;
+    setSaving(true);
+    setSaveError(false);
+    try {
+      const pending = getPendingChanges();
+      await Promise.all(
+        pending
+          .map((change) => {
+            if (change.action !== "update" || !change.data) return undefined;
+            switch (change.entityType) {
+              case "surface":
+                return updateSurface(id, change.entityId, change.data);
+              case "obstacle":
+                return updateObstacle(id, change.entityId, change.data);
+              case "safety_zone":
+                return updateSafetyZone(id, change.entityId, change.data);
+              case "agl": {
+                const surface = airport.surfaces.find((s) =>
+                  s.agls.some((a) => a.id === change.entityId),
+                );
+                if (surface) {
+                  return updateAGL(id, surface.id, change.entityId, change.data);
+                }
+                return undefined;
+              }
+              case "airport":
+                return updateAirport(id, change.data);
+              default:
+                return undefined;
+            }
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== undefined),
+      );
+      clearAll();
+      await fetchAirport();
+    } catch {
+      setSaveError(true);
+    } finally {
+      setSaving(false);
+    }
+  }, [id, airport, getPendingChanges, clearAll, fetchAirport]);
+
   const surfaces = useMemo(() => airport?.surfaces ?? [], [airport]);
   const obstacles = useMemo(() => airport?.obstacles ?? [], [airport]);
   const safetyZones = useMemo(() => airport?.safety_zones ?? [], [airport]);
@@ -350,6 +412,8 @@ export default function AirportEditPage() {
           showPoiInfo={false}
           showWaypointList={false}
           showHelpPanel={false}
+          showZoomControls={false}
+          showCompass={false}
           terrainMode={terrainMode}
           onTerrainChange={setTerrainMode}
           onFeatureClick={handleFeatureClick}
@@ -357,8 +421,11 @@ export default function AirportEditPage() {
           focusFeature={selectedFeature}
           is3D={is3D}
           onToggle3D={setIs3D}
+          activeTool={mapTool}
           zoomPercent={zoomPercent}
           onZoomChange={setZoomPercent}
+          onBearingChange={setBearing}
+          bearingResetKey={bearingResetKey}
           leftPanelChildren={
             <div className="flex flex-col gap-2">
               {/* infrastructure crud panels */}
@@ -422,7 +489,7 @@ export default function AirportEditPage() {
                 onEdit={(o) => handleFeatureClick({ type: "obstacle", data: o })}
                 onDelete={handleDeleteObstacle}
                 addLabel={t("coordinator.detail.addObstacle")}
-                onAdd={() => setActiveTool("placePoint")}
+                onAdd={() => setActiveTool("drawCircle")}
                 renderItem={(o) => {
                   const color = OBSTACLE_COLORS[o.type] ?? "#6b6b6b";
                   return (
@@ -518,10 +585,12 @@ export default function AirportEditPage() {
               onGeoJsonEditor={() => setShowGeoJsonEditor(true)}
               zoomPercent={zoomPercent}
               onZoomTo={handleZoomTo}
-              is3D={is3D}
-              onToggle3D={setIs3D}
-              terrainMode={terrainMode}
-              onTerrainChange={setTerrainMode}
+              isDirty={isDirty}
+              saving={saving}
+              onSave={handleSave}
+              saveLabel={saving ? t("coordinator.detail.saving") : t("coordinator.detail.save")}
+              bearing={bearing}
+              onBearingReset={() => setBearingResetKey((k) => k + 1)}
             />
           </div>
 
@@ -560,62 +629,58 @@ export default function AirportEditPage() {
             <CoordinatorMapHelpPanel />
           </div>
 
-          {/* bottom bar */}
-          <div className="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-end">
-            <div className="flex items-center gap-2">
-              {(saveError || deleteError) && (
-                <p className="text-xs text-tv-error">
-                  {saveError ? t("coordinator.detail.saveError") : t("coordinator.detail.deleteError")}
-                </p>
-              )}
-              <Button
-                disabled={!isDirty || saving}
-                onClick={async () => {
-                  if (!id || !airport) return;
-                  setSaving(true);
-                  setSaveError(false);
-                  try {
-                    const pending = getPendingChanges();
-                    await Promise.all(
-                      pending
-                        .map((change) => {
-                          if (change.action !== "update" || !change.data) return undefined;
-                          switch (change.entityType) {
-                            case "surface":
-                              return updateSurface(id, change.entityId, change.data);
-                            case "obstacle":
-                              return updateObstacle(id, change.entityId, change.data);
-                            case "safety_zone":
-                              return updateSafetyZone(id, change.entityId, change.data);
-                            case "agl": {
-                              const surface = airport.surfaces.find((s) =>
-                                s.agls.some((a) => a.id === change.entityId),
-                              );
-                              if (surface) {
-                                return updateAGL(id, surface.id, change.entityId, change.data);
-                              }
-                              return undefined;
-                            }
-                            case "airport":
-                              return updateAirport(id, change.data);
-                            default:
-                              return undefined;
-                          }
-                        })
-                        .filter((p): p is NonNullable<typeof p> => p !== undefined),
-                    );
-                    clearAll();
-                    await fetchAirport();
-                  } catch {
-                    setSaveError(true);
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-                data-testid="save-button"
+          {/* bottom-right: view toggles + error messages */}
+          <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">
+            {(saveError || deleteError) && (
+              <p className="text-xs text-tv-error">
+                {saveError ? t("coordinator.detail.saveError") : t("coordinator.detail.deleteError")}
+              </p>
+            )}
+
+            {/* 2D/3D toggle */}
+            <div className="flex items-center rounded-full border border-tv-border bg-tv-bg px-1 py-1">
+              <button
+                onClick={() => setIs3D(false)}
+                title={t("map.tools.2d")}
+                className={`flex items-center justify-center rounded-full h-9 px-3 text-xs font-medium transition-colors ${
+                  !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary hover:bg-tv-surface-hover"
+                }`}
+                data-testid="toggle-2d"
               >
-                {saving ? t("coordinator.detail.saving") : t("coordinator.detail.save")}
-              </Button>
+                2D
+              </button>
+              <button
+                onClick={() => setIs3D(true)}
+                title={t("map.tools.3d")}
+                className={`flex items-center justify-center rounded-full h-9 px-3 text-xs font-medium transition-colors ${
+                  is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary hover:bg-tv-surface-hover"
+                }`}
+                data-testid="toggle-3d"
+              >
+                3D
+              </button>
+            </div>
+
+            {/* map/satellite toggle */}
+            <div className="flex items-center rounded-full border border-tv-border bg-tv-bg px-1 py-1">
+              <button
+                onClick={() => setTerrainMode("map")}
+                className={`flex items-center justify-center rounded-full h-9 px-3 text-xs font-medium transition-colors ${
+                  terrainMode === "map" ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary hover:bg-tv-surface-hover"
+                }`}
+                data-testid="toggle-map"
+              >
+                {t("dashboard.mapView")}
+              </button>
+              <button
+                onClick={() => setTerrainMode("satellite")}
+                className={`flex items-center justify-center rounded-full h-9 px-3 text-xs font-medium transition-colors ${
+                  terrainMode === "satellite" ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary hover:bg-tv-surface-hover"
+                }`}
+                data-testid="toggle-satellite"
+              >
+                {t("dashboard.satelliteView")}
+              </button>
             </div>
           </div>
         </AirportMap>

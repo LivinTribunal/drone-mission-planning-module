@@ -136,10 +136,12 @@ describe("MapDrawingToolbar", () => {
     onGeoJsonEditor: vi.fn(),
     zoomPercent: 100,
     onZoomTo: vi.fn(),
-    is3D: false,
-    onToggle3D: vi.fn(),
-    terrainMode: "satellite" as const,
-    onTerrainChange: vi.fn(),
+    isDirty: false,
+    saving: false,
+    onSave: vi.fn(),
+    saveLabel: "Save",
+    bearing: 0,
+    onBearingReset: vi.fn(),
   };
 
   it("renders toolbar with tool buttons", () => {
@@ -150,6 +152,7 @@ describe("MapDrawingToolbar", () => {
     expect(screen.getByTestId("tool-drawPolygon")).toBeInTheDocument();
     expect(screen.getByTestId("tool-editVertices")).toBeInTheDocument();
     expect(screen.getByTestId("tool-moveFeature")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-measurement")).toBeInTheDocument();
   });
 
   it("calls onToolChange when tool is clicked", () => {
@@ -179,27 +182,35 @@ describe("MapDrawingToolbar", () => {
     expect(screen.getByTestId("zoom-field")).toHaveTextContent("150%");
   });
 
-  it("renders 2D/3D toggle", () => {
+  it("renders save button", () => {
     render(<MapDrawingToolbar {...defaultProps} />);
-    expect(screen.getByTestId("toggle-2d")).toBeInTheDocument();
-    expect(screen.getByTestId("toggle-3d")).toBeInTheDocument();
+    expect(screen.getByTestId("save-button")).toBeInTheDocument();
   });
 
-  it("renders map/satellite toggle", () => {
+  it("disables save button when not dirty", () => {
     render(<MapDrawingToolbar {...defaultProps} />);
-    expect(screen.getByTestId("toggle-map")).toBeInTheDocument();
-    expect(screen.getByTestId("toggle-satellite")).toBeInTheDocument();
+    expect(screen.getByTestId("save-button")).toBeDisabled();
   });
 
-  it("calls onToggle3D when 3D button clicked", () => {
-    render(<MapDrawingToolbar {...defaultProps} />);
-    fireEvent.click(screen.getByTestId("toggle-3d"));
-    expect(defaultProps.onToggle3D).toHaveBeenCalledWith(true);
+  it("enables save button when dirty", () => {
+    render(<MapDrawingToolbar {...defaultProps} isDirty={true} />);
+    expect(screen.getByTestId("save-button")).not.toBeDisabled();
   });
 
-  it("calls onTerrainChange when map button clicked", () => {
+  it("calls onSave when save button clicked", () => {
+    render(<MapDrawingToolbar {...defaultProps} isDirty={true} />);
+    fireEvent.click(screen.getByTestId("save-button"));
+    expect(defaultProps.onSave).toHaveBeenCalled();
+  });
+
+  it("renders compass button", () => {
     render(<MapDrawingToolbar {...defaultProps} />);
-    fireEvent.click(screen.getByTestId("toggle-map"));
-    expect(defaultProps.onTerrainChange).toHaveBeenCalledWith("map");
+    expect(screen.getByTestId("compass-btn")).toBeInTheDocument();
+  });
+
+  it("calls onBearingReset when compass clicked", () => {
+    render(<MapDrawingToolbar {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("compass-btn"));
+    expect(defaultProps.onBearingReset).toHaveBeenCalled();
   });
 });
