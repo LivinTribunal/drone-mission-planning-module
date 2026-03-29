@@ -113,8 +113,18 @@ def update_template(
     data = schema.model_dump(exclude_unset=True)
     target_ids = data.pop("target_agl_ids", None)
     methods = data.pop("methods", None)
+    config_data = data.pop("default_config", None)
 
     apply_dict_update(template, data)
+
+    if config_data is not None:
+        if template.default_config:
+            apply_dict_update(template.default_config, config_data)
+        else:
+            config = InspectionConfiguration(**config_data)
+            db.add(config)
+            db.flush()
+            template.default_config_id = config.id
 
     if target_ids is not None:
         agls = db.query(AGL).filter(AGL.id.in_(target_ids)).all()

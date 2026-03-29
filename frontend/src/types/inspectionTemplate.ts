@@ -10,6 +10,7 @@ export interface InspectionConfigResponse {
   hover_duration: number | null;
   horizontal_distance: number | null;
   sweep_angle: number | null;
+  lha_ids: string[] | null;
 }
 
 export interface InspectionTemplateResponse {
@@ -19,6 +20,7 @@ export interface InspectionTemplateResponse {
   angular_tolerances: Record<string, number> | null;
   created_by: string | null;
   created_at: string | null;
+  updated_at: string | null;
   default_config: InspectionConfigResponse | null;
   target_agl_ids: string[];
   methods: InspectionMethod[];
