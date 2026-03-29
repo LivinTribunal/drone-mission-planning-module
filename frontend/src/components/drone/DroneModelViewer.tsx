@@ -164,6 +164,19 @@ export default function DroneModelViewer({
         model.position.sub(center.multiplyScalar(scale));
 
         scene.add(model);
+
+        // auto-fit camera to model bounds
+        const fitBox = new THREE.Box3().setFromObject(model);
+        const fitSize = fitBox.getSize(new THREE.Vector3());
+        const fitMax = Math.max(fitSize.x, fitSize.y, fitSize.z);
+        const fov = camera.fov * (Math.PI / 180);
+        const dist = fitMax / (2 * Math.tan(fov / 2)) * 1.4;
+        const fitCenter = fitBox.getCenter(new THREE.Vector3());
+        camera.position.set(fitCenter.x + dist * 0.5, fitCenter.y + dist * 0.4, fitCenter.z + dist);
+        controls.target.copy(fitCenter);
+        controls.update();
+        defaultCameraPos.current.copy(camera.position);
+
         setLoading(false);
         onSceneLoaded?.(gltf);
       },
@@ -255,11 +268,17 @@ export default function DroneModelViewer({
   );
 }
 
+// thumbnail cache - keyed by model url
+const thumbnailCache = new Map<string, string>();
+
 /** render a model to a png data url for thumbnail generation. */
 export async function renderToImage(
   modelUrl: string,
   size = 256,
 ): Promise<string> {
+  const cached = thumbnailCache.get(modelUrl);
+  if (cached) return cached;
+
   const renderer = new THREE.WebGLRenderer({
     alpha: true,
     antialias: true,
@@ -268,13 +287,14 @@ export async function renderToImage(
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
-  camera.position.set(0, 1.5, 3);
-  camera.lookAt(0, 0, 0);
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.6));
   const light = new THREE.DirectionalLight(0xfff5e0, 1.2);
   light.position.set(3, 4, 2);
   scene.add(light);
+  const fill = new THREE.DirectionalLight(0xc0e0ff, 0.4);
+  fill.position.set(-2, 1, -2);
+  scene.add(fill);
 
   const loader = new GLTFLoader();
 
@@ -292,8 +312,19 @@ export async function renderToImage(
         model.position.sub(center.multiplyScalar(scale));
         scene.add(model);
 
+        // auto-fit camera
+        const fitBox = new THREE.Box3().setFromObject(model);
+        const fitSize = fitBox.getSize(new THREE.Vector3());
+        const fitMax = Math.max(fitSize.x, fitSize.y, fitSize.z);
+        const fov = camera.fov * (Math.PI / 180);
+        const dist = fitMax / (2 * Math.tan(fov / 2)) * 1.4;
+        const fitCenter = fitBox.getCenter(new THREE.Vector3());
+        camera.position.set(fitCenter.x + dist * 0.5, fitCenter.y + dist * 0.4, fitCenter.z + dist);
+        camera.lookAt(fitCenter);
+
         renderer.render(scene, camera);
         const dataUrl = renderer.domElement.toDataURL("image/png");
+        thumbnailCache.set(modelUrl, dataUrl);
 
         scene.traverse((obj) => {
           if (obj instanceof THREE.Mesh) {
@@ -316,4 +347,44 @@ export async function renderToImage(
       },
     );
   });
+}
+
+interface DroneModelThumbnailProps {
+  modelUrl: string | null;
+  size?: number;
+  className?: string;
+}
+
+/** renders a cached thumbnail from a 3d model url. */
+export function DroneModelThumbnail({
+  modelUrl,
+  size = 128,
+  className = "",
+}: DroneModelThumbnailProps) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!modelUrl) return;
+    let cancelled = false;
+    renderToImage(modelUrl, size).then((dataUrl) => {
+      if (!cancelled) setSrc(dataUrl);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [modelUrl, size]);
+
+  if (!modelUrl || !src) {
+    return (
+      <div className={`flex items-center justify-center ${className}`}>
+        <DronePlaceholderIcon />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className={`object-contain ${className}`}
+    />
+  );
 }

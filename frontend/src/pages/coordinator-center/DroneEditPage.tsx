@@ -15,15 +15,14 @@ import type {
   DroneProfileUpdate,
 } from "@/types/droneProfile";
 import type { MissionResponse } from "@/types/mission";
-import { Layers, Clock, Pencil } from "lucide-react";
+import { Layers, Clock, Pencil, Plus } from "lucide-react";
 import Badge from "@/components/common/Badge";
 import Button from "@/components/common/Button";
 import Card from "@/components/common/Card";
 import Modal from "@/components/common/Modal";
 import Input from "@/components/common/Input";
 import DroneModelViewer from "@/components/drone/DroneModelViewer";
-import DroneModelSelector from "@/components/drone/DroneModelSelector";
-import { getBundledModel } from "@/config/droneModels";
+import { BUNDLED_DRONE_MODELS, getBundledModel } from "@/config/droneModels";
 import type { MissionStatus } from "@/types/enums";
 
 interface FieldDef {
@@ -156,6 +155,153 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
         clipRule="evenodd"
       />
     </svg>
+  );
+}
+
+interface ModelSelectorOverlayProps {
+  selectedModelId: string | null;
+  onSelectModel: (modelId: string) => void;
+  onRemoveModel: () => void;
+  onUploadCustom?: (file: File) => void;
+  onInvalidFile?: (message: string) => void;
+}
+
+/** compact model selector dropdown overlaid on the 3d viewer. */
+function ModelSelectorOverlay({
+  selectedModelId,
+  onSelectModel,
+  onRemoveModel,
+  onUploadCustom,
+  onInvalidFile,
+}: ModelSelectorOverlayProps) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const selectedModel = selectedModelId
+    ? getBundledModel(selectedModelId)
+    : null;
+  const displayLabel = selectedModel?.name ?? (selectedModelId ? t("drone.customModel") : t("drone.noModelAssigned"));
+
+  /** handle custom file upload. */
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const ext = file.name.toLowerCase().split(".").pop();
+    if (ext !== "glb" && ext !== "gltf") {
+      onInvalidFile?.(t("drone.invalidFileType"));
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    onUploadCustom?.(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setOpen(false);
+  }
+
+  return (
+    <div ref={ref} className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+      {/* model dropdown */}
+      <div className="relative">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium
+            bg-[var(--tv-surface)]/90 backdrop-blur-sm border border-[var(--tv-border)]
+            text-[var(--tv-text-primary)] hover:bg-[var(--tv-surface-hover)] transition-colors"
+          data-testid="model-dropdown-trigger"
+        >
+          <span className="max-w-[140px] truncate">{displayLabel}</span>
+          <svg
+            className={`h-3 w-3 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
+
+        {open && (
+          <div className="absolute right-0 top-full mt-1 min-w-[200px] rounded-2xl border border-[var(--tv-border)] bg-[var(--tv-surface)] p-1.5 z-50 shadow-lg">
+            {BUNDLED_DRONE_MODELS.map((model) => {
+              const isSelected = selectedModelId === model.id;
+              return (
+                <button
+                  key={model.id}
+                  onClick={() => {
+                    onSelectModel(model.id);
+                    setOpen(false);
+                  }}
+                  className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-xs transition-colors ${
+                    isSelected
+                      ? "bg-[var(--tv-nav-active-bg)] text-[var(--tv-nav-active-text)]"
+                      : "text-[var(--tv-text-primary)] hover:bg-[var(--tv-surface-hover)]"
+                  }`}
+                  data-testid={`model-option-${model.id}`}
+                >
+                  <img
+                    src={model.thumbnail}
+                    alt={model.name}
+                    className="h-7 w-7 rounded-md object-cover flex-shrink-0"
+                  />
+                  <span className="truncate">{model.name}</span>
+                </button>
+              );
+            })}
+
+            {selectedModelId && (
+              <>
+                <div className="mx-2 my-1 border-t border-[var(--tv-border)]" />
+                <button
+                  onClick={() => {
+                    onRemoveModel();
+                    setOpen(false);
+                  }}
+                  className="w-full text-left rounded-xl px-3 py-2 text-xs text-[var(--tv-text-muted)] hover:bg-[var(--tv-surface-hover)] transition-colors"
+                  data-testid="remove-model-option"
+                >
+                  {t("drone.removeModel")}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* add model (upload) button */}
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium
+          bg-[var(--tv-accent)] text-[var(--tv-accent-text)] hover:bg-[var(--tv-accent-hover)] transition-colors"
+        title={t("drone.addModel")}
+        data-testid="add-model-button"
+      >
+        <Plus className="h-3 w-3" />
+        <span>{t("drone.addModel")}</span>
+      </button>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".glb,.gltf"
+        onChange={handleFileChange}
+        className="hidden"
+        data-testid="model-file-input"
+      />
+    </div>
   );
 }
 
@@ -776,134 +922,123 @@ export default function DroneEditPage() {
         <div className="w-6 flex-shrink-0" />
       </div>
 
-      {/* right panel - mirrors navbar right section flex structure */}
-      <div className="flex-1 flex items-start gap-4 min-w-0">
-        <div className="flex-1 overflow-y-auto min-w-0 flex flex-col gap-4">
-          {/* 3d model viewer section */}
-          <div
-            className="rounded-2xl border border-[var(--tv-border)] bg-[var(--tv-surface)] overflow-hidden"
-            data-testid="model-viewer-section"
-          >
-            <div className="h-[300px]">
-              <DroneModelViewer modelUrl={resolveModelUrl(drone.model_identifier)} />
-            </div>
-            <div className="px-4 py-3 border-t border-[var(--tv-border)]">
-              <p className="text-xs font-medium text-[var(--tv-text-secondary)] uppercase tracking-wider mb-2">
-                {t("drone.selectModel")}
-              </p>
-              <DroneModelSelector
-                selectedModelId={drone.model_identifier}
-                onSelectModel={handleSelectModel}
-                onRemoveModel={handleRemoveModel}
-                onUploadCustom={handleUploadCustomModel}
-                onInvalidFile={(msg) => showToast(msg)}
-              />
-            </div>
+      {/* right section - mirrors navbar right flex structure */}
+      <div className="flex-1 min-w-0 overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
+        <div className="flex gap-4">
+
+      {/* center panel - drone details (mirrors nav pills flex-1) */}
+      <div className="flex-1 min-w-0">
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-base font-semibold text-tv-text-primary">
+              {drone.name}
+            </h2>
+
+            {/* saved status indicator */}
+            <span className="text-xs text-tv-text-muted flex items-center gap-1.5">
+              {saving && (
+                <>
+                  <svg
+                    className="h-3 w-3 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                  {t("coordinator.drones.detail.saving")}
+                </>
+              )}
+              {!saving && saveError && (
+                <span className="text-tv-error">
+                  {t("coordinator.drones.detail.saveError")}
+                </span>
+              )}
+              {!saving && !saveError && lastSaved && (
+                <>
+                  <svg
+                    className="h-3 w-3 text-tv-success"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {formatTimestamp(lastSaved, t)}
+                </>
+              )}
+            </span>
           </div>
 
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-base font-semibold text-tv-text-primary">
-                {drone.name}
-              </h2>
+          <div className="grid grid-cols-2 gap-4">
+            {FIELDS.map((field) => {
+              const label = t(`coordinator.drones.fields.${field.labelKey}`);
+              const unitLabel = field.unitKey
+                ? t(`coordinator.drones.units.${field.unitKey}`)
+                : "";
 
-              {/* saved status indicator */}
-              <span className="text-xs text-tv-text-muted flex items-center gap-1.5">
-                {saving && (
-                  <>
-                    <svg
-                      className="h-3 w-3 animate-spin"
-                      viewBox="0 0 24 24"
-                      fill="none"
+              return (
+                <div key={field.key}>
+                  <Input
+                    id={`edit-${field.key}`}
+                    label={unitLabel ? `${label} (${unitLabel})` : label}
+                    type={field.type}
+                    step={field.type === "number" ? "any" : undefined}
+                    value={formData[field.key] ?? ""}
+                    onChange={(e) =>
+                      handleFieldChange(field.key, e.target.value)
+                    }
+                    data-testid={`edit-${field.key}`}
+                  />
+                  {field.key === "name" && nameError && (
+                    <p
+                      className="mt-1 text-sm text-tv-error"
+                      data-testid="name-error"
                     >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      />
-                    </svg>
-                    {t("coordinator.drones.detail.saving")}
-                  </>
-                )}
-                {!saving && saveError && (
-                  <span className="text-tv-error">
-                    {t("coordinator.drones.detail.saveError")}
-                  </span>
-                )}
-                {!saving && !saveError && lastSaved && (
-                  <>
-                    <svg
-                      className="h-3 w-3 text-tv-success"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    {formatTimestamp(lastSaved, t)}
-                  </>
-                )}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {FIELDS.map((field) => {
-                const label = t(`coordinator.drones.fields.${field.labelKey}`);
-                const unitLabel = field.unitKey
-                  ? t(`coordinator.drones.units.${field.unitKey}`)
-                  : "";
-
-                return (
-                  <div key={field.key}>
-                    <Input
-                      id={`edit-${field.key}`}
-                      label={unitLabel ? `${label} (${unitLabel})` : label}
-                      type={field.type}
-                      step={field.type === "number" ? "any" : undefined}
-                      value={formData[field.key] ?? ""}
-                      onChange={(e) =>
-                        handleFieldChange(field.key, e.target.value)
-                      }
-                      data-testid={`edit-${field.key}`}
-                    />
-                    {field.key === "name" && nameError && (
-                      <p
-                        className="mt-1 text-sm text-tv-error"
-                        data-testid="name-error"
-                      >
-                        {nameError}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        </div>
-
-        {/* invisible spacers - same classes as navbar airport selector, theme toggle, user dropdown */}
-        <div className="relative min-w-[280px] flex-shrink-0">
-          <div className="flex w-full items-center gap-2 rounded-full px-4 h-11 text-sm" />
-        </div>
-        <div className="flex items-center gap-1 rounded-full p-1 h-11">
-          <div className="rounded-full p-2"><div className="h-4 w-4" /></div>
-          <div className="rounded-full p-2"><div className="h-4 w-4" /></div>
-        </div>
-        <div className="relative w-[140px] flex-shrink-0">
-          <div className="flex items-center gap-2 rounded-full px-4 h-11 text-sm" />
-        </div>
+                      {nameError}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       </div>
+
+      {/* right panel - 3d model viewer, width = airport selector + theme toggle + user dropdown + gaps */}
+      <div
+        className="relative flex-shrink-0 rounded-2xl border border-[var(--tv-border)] bg-[var(--tv-surface)] overflow-hidden"
+        style={{ width: "calc(280px + 16px + 76px + 16px + 140px)" }}
+        data-testid="model-viewer-section"
+      >
+        <DroneModelViewer modelUrl={resolveModelUrl(drone.model_identifier)} />
+
+        {/* model selector overlay - top right */}
+        <ModelSelectorOverlay
+          selectedModelId={drone.model_identifier}
+          onSelectModel={handleSelectModel}
+          onRemoveModel={handleRemoveModel}
+          onUploadCustom={handleUploadCustomModel}
+          onInvalidFile={(msg) => showToast(msg)}
+        />
+      </div>
+
+        </div> {/* end inner flex */}
+      </div> {/* end right section */}
 
       {/* toast notification */}
       {notification && (

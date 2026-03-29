@@ -587,6 +587,7 @@
         "suffix": "(Copy)",
         "error": "Failed to duplicate drone profile"
       },
+      "showing": "Showing {{from}}-{{to}} of {{total}}",
       "actions": {
         "duplicate": "Duplicate",
         "delete": "Delete"
@@ -669,7 +670,9 @@
     "customModel": "Custom Model",
     "modelNotAvailable": "Model not available",
     "maxFileSize": "Maximum file size: 20MB",
-    "invalidFileType": "Only .glb and .gltf files are supported"
+    "invalidFileType": "Only .glb and .gltf files are supported",
+    "addModel": "Add model",
+    "noModelAssigned": "No model"
   },
   "languages": {
     "en": "English"

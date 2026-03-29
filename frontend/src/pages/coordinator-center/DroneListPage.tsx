@@ -12,9 +12,46 @@ import Modal from "@/components/common/Modal";
 import Input from "@/components/common/Input";
 import RowActionMenu from "@/components/common/RowActionMenu";
 import DroneModelSelector from "@/components/drone/DroneModelSelector";
+import { DroneModelThumbnail } from "@/components/drone/DroneModelViewer";
 import { getBundledModel } from "@/config/droneModels";
 
+type SortKey =
+  | "name"
+  | "manufacturer"
+  | "model"
+  | "max_speed"
+  | "endurance_minutes"
+  | "mission_count";
+
+type SortDir = "asc" | "desc";
+
+const PAGE_SIZES = [10, 20, 50, 200] as const;
+
+/** build page indices with ellipsis when there are many pages. */
+function paginationRange(total: number, current: number): (number | "...")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  const pages: (number | "...")[] = [0];
+  const start = Math.max(1, current - 1);
+  const end = Math.min(total - 2, current + 1);
+  if (start > 1) pages.push("...");
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (end < total - 2) pages.push("...");
+  pages.push(total - 1);
+  return pages;
+}
+
+/** triangle indicator for sort direction. */
+function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return null;
+  return (
+    <span className="ml-1 text-tv-accent">
+      {dir === "asc" ? "\u25B2" : "\u25BC"}
+    </span>
+  );
+}
+
 export default function DroneListPage() {
+  /** drone profile list with sorting, pagination, and filtering. */
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -25,6 +62,14 @@ export default function DroneListPage() {
   // filters
   const [search, setSearch] = useState("");
   const [manufacturerFilter, setManufacturerFilter] = useState("");
+
+  // sort
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  // pagination
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // create dialog
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -48,6 +93,7 @@ export default function DroneListPage() {
   );
 
   const fetchDrones = useCallback(() => {
+    /** fetch all drone profiles. */
     setLoading(true);
     setError(false);
     listDroneProfiles({ limit: 200 })
@@ -60,13 +106,13 @@ export default function DroneListPage() {
     fetchDrones();
   }, [fetchDrones]);
 
-  // cleanup notification timer on unmount
   useEffect(() => {
     return () => {
       if (notificationTimer.current) clearTimeout(notificationTimer.current);
     };
   }, []);
 
+  /** show a temporary toast notification. */
   function showToast(msg: string) {
     if (notificationTimer.current) clearTimeout(notificationTimer.current);
     setNotification(msg);
@@ -74,6 +120,7 @@ export default function DroneListPage() {
   }
 
   const manufacturers = useMemo(() => {
+    /** extract unique manufacturer names for the filter dropdown. */
     const set = new Set<string>();
     for (const d of drones) {
       if (d.manufacturer) set.add(d.manufacturer);
@@ -81,6 +128,18 @@ export default function DroneListPage() {
     return Array.from(set).sort();
   }, [drones]);
 
+  /** toggle sort direction or switch sort column. */
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      const numeric: SortKey[] = ["max_speed", "endurance_minutes", "mission_count"];
+      setSortKey(key);
+      setSortDir(numeric.includes(key) ? "desc" : "asc");
+    }
+  }
+
+  // filtering
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return drones.filter((d) => {
@@ -91,6 +150,74 @@ export default function DroneListPage() {
     });
   }, [drones, search, manufacturerFilter]);
 
+  // sorting
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let av: string | number = "";
+      let bv: string | number = "";
+
+      switch (sortKey) {
+        case "name":
+          av = a.name;
+          bv = b.name;
+          break;
+        case "manufacturer":
+          av = a.manufacturer || "";
+          bv = b.manufacturer || "";
+          break;
+        case "model":
+          av = a.model || "";
+          bv = b.model || "";
+          break;
+        case "max_speed":
+          av = a.max_speed ?? -1;
+          bv = b.max_speed ?? -1;
+          break;
+        case "endurance_minutes":
+          av = a.endurance_minutes ?? -1;
+          bv = b.endurance_minutes ?? -1;
+          break;
+        case "mission_count":
+          av = a.mission_count;
+          bv = b.mission_count;
+          break;
+      }
+
+      if (typeof av === "number" && typeof bv === "number") {
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
+      const cmp = String(av).localeCompare(String(bv));
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [filtered, sortKey, sortDir]);
+
+  // pagination
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const paged = sorted.slice(page * pageSize, (page + 1) * pageSize);
+  const showFrom = sorted.length === 0 ? 0 : page * pageSize + 1;
+  const showTo = Math.min((page + 1) * pageSize, sorted.length);
+
+  /** update search and reset to first page. */
+  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setSearch(e.target.value);
+    setPage(0);
+  }
+
+  /** change page size and reset to first page. */
+  function handlePageSizeChange(size: number) {
+    setPageSize(size);
+    setPage(0);
+  }
+
+  /** resolve model identifier to a loadable url. */
+  function resolveModelUrl(identifier: string | null): string | null {
+    if (!identifier) return null;
+    const bundled = getBundledModel(identifier);
+    if (bundled) return bundled.path;
+    return `/static/models/custom/${identifier}`;
+  }
+
+  /** reset the create dialog form. */
   function resetCreateForm() {
     setCreateForm({
       name: "",
@@ -103,13 +230,7 @@ export default function DroneListPage() {
     setCreateModelId(null);
   }
 
-  /** resolve a model identifier to its thumbnail url. */
-  function getModelThumbnail(identifier: string | null): string | null {
-    if (!identifier) return null;
-    const bundled = getBundledModel(identifier);
-    return bundled?.thumbnail ?? null;
-  }
-
+  /** create a new drone profile. */
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!createForm.name.trim()) {
@@ -141,6 +262,7 @@ export default function DroneListPage() {
     }
   }
 
+  /** duplicate a drone profile. */
   async function handleDuplicate(drone: DroneProfileResponse) {
     try {
       const payload = {
@@ -165,6 +287,7 @@ export default function DroneListPage() {
     }
   }
 
+  /** delete the targeted drone profile. */
   async function handleDelete() {
     if (!deleteTarget) return;
     try {
@@ -175,6 +298,15 @@ export default function DroneListPage() {
       showToast(t("coordinator.drones.delete.deleteError"));
     }
   }
+
+  const columns: { key: SortKey; label: string }[] = [
+    { key: "name", label: t("coordinator.drones.columns.name") },
+    { key: "manufacturer", label: t("coordinator.drones.columns.manufacturer") },
+    { key: "model", label: t("coordinator.drones.columns.model") },
+    { key: "max_speed", label: t("coordinator.drones.columns.maxSpeed") },
+    { key: "endurance_minutes", label: t("coordinator.drones.columns.endurance") },
+    { key: "mission_count", label: t("coordinator.drones.columns.missions") },
+  ];
 
   return (
     <div className="flex flex-col items-center px-4 py-12">
@@ -196,7 +328,7 @@ export default function DroneListPage() {
         <input
           type="text"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={handleSearchChange}
           placeholder={t("coordinator.drones.searchPlaceholder")}
           className="flex-1 rounded-full border border-tv-border bg-tv-surface px-5 py-2.5
             text-sm text-tv-text-primary placeholder:text-tv-text-muted
@@ -205,7 +337,7 @@ export default function DroneListPage() {
         />
         <select
           value={manufacturerFilter}
-          onChange={(e) => setManufacturerFilter(e.target.value)}
+          onChange={(e) => { setManufacturerFilter(e.target.value); setPage(0); }}
           className="rounded-full border border-tv-border bg-tv-surface px-4 py-2.5 text-sm
             text-tv-text-primary focus:outline-none focus:border-tv-accent"
           data-testid="manufacturer-filter"
@@ -261,7 +393,7 @@ export default function DroneListPage() {
               {t("common.retry")}
             </button>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="px-6 py-16 text-center text-sm text-tv-text-muted">
             {drones.length === 0
               ? t("coordinator.drones.noDrones")
@@ -271,29 +403,22 @@ export default function DroneListPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-tv-border">
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-tv-text-secondary">
-                  {t("coordinator.drones.columns.name")}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-tv-text-secondary">
-                  {t("coordinator.drones.columns.manufacturer")}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-tv-text-secondary">
-                  {t("coordinator.drones.columns.model")}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-tv-text-secondary">
-                  {t("coordinator.drones.columns.maxSpeed")}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-tv-text-secondary">
-                  {t("coordinator.drones.columns.endurance")}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-tv-text-secondary">
-                  {t("coordinator.drones.columns.missions")}
-                </th>
+                {columns.map((col) => (
+                  <th
+                    key={col.key}
+                    onClick={() => handleSort(col.key)}
+                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider
+                      text-tv-text-secondary cursor-pointer select-none hover:text-tv-text-primary transition-colors"
+                  >
+                    {col.label}
+                    <SortIndicator active={sortKey === col.key} dir={sortDir} />
+                  </th>
+                ))}
                 <th className="w-10" />
               </tr>
             </thead>
             <tbody>
-              {filtered.map((drone) => (
+              {paged.map((drone) => (
                 <tr
                   key={drone.id}
                   onClick={() =>
@@ -305,29 +430,13 @@ export default function DroneListPage() {
                 >
                   <td className="px-4 py-3 font-semibold">
                     <div className="flex items-center gap-2">
-                      {getModelThumbnail(drone.model_identifier) ? (
-                        <img
-                          src={getModelThumbnail(drone.model_identifier)!}
-                          alt=""
-                          className="h-10 w-10 rounded-lg object-cover flex-shrink-0"
+                      <div className="h-10 w-10 rounded-lg bg-[var(--tv-surface-hover)] flex-shrink-0 overflow-hidden">
+                        <DroneModelThumbnail
+                          modelUrl={resolveModelUrl(drone.model_identifier)}
+                          size={128}
+                          className="h-full w-full"
                         />
-                      ) : (
-                        <div className="h-10 w-10 rounded-lg bg-[var(--tv-surface-hover)] flex items-center justify-center flex-shrink-0">
-                          <svg
-                            className="h-5 w-5 text-[var(--tv-text-muted)]"
-                            viewBox="0 0 64 64"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <circle cx="32" cy="32" r="4" />
-                            <line x1="32" y1="28" x2="20" y2="16" />
-                            <line x1="32" y1="28" x2="44" y2="16" />
-                            <line x1="32" y1="36" x2="20" y2="48" />
-                            <line x1="32" y1="36" x2="44" y2="48" />
-                          </svg>
-                        </div>
-                      )}
+                      </div>
                       <span>{drone.name}</span>
                     </div>
                   </td>
@@ -371,6 +480,51 @@ export default function DroneListPage() {
           </table>
         )}
       </div>
+
+      {/* pagination */}
+      {!loading && !error && sorted.length > 0 && (
+        <div className="relative flex items-center justify-between w-full max-w-5xl pt-3">
+          <span className="absolute left-1/2 -translate-x-1/2 text-xs text-tv-text-secondary">
+            {t("coordinator.drones.showing", { from: showFrom, to: showTo, total: sorted.length })}
+          </span>
+          <div className="flex items-center gap-1">
+            {PAGE_SIZES.map((size) => (
+              <button
+                key={size}
+                onClick={() => handlePageSizeChange(size)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  pageSize === size
+                    ? "bg-tv-accent text-tv-accent-text"
+                    : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
+                }`}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            {paginationRange(totalPages, page).map((item, idx) =>
+              item === "..." ? (
+                <span key={`ellipsis-${idx}`} className="px-1 text-xs text-tv-text-muted">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  onClick={() => setPage(item as number)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    page === item
+                      ? "bg-tv-accent text-tv-accent-text"
+                      : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
+                  }`}
+                >
+                  {(item as number) + 1}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+      )}
 
       {/* create dialog */}
       <Modal
