@@ -5,7 +5,7 @@ import Input from "@/components/common/Input";
 import Button from "@/components/common/Button";
 import MapCoordinatePicker from "./MapCoordinatePicker";
 import { createAirport } from "@/api/airports";
-import axios from "axios";
+import { isAxiosError } from "@/api/client";
 
 interface CreateAirportDialogProps {
   isOpen: boolean;
@@ -90,7 +90,7 @@ export default function CreateAirportDialog({
       });
       onCreated(result.id);
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.status === 409) {
+      if (isAxiosError(err) && err.response?.status === 409) {
         setErrors({ icaoCode: t("coordinator.createAirport.icaoConflict") });
       } else {
         setErrors({ form: t("coordinator.createAirport.createError") });
