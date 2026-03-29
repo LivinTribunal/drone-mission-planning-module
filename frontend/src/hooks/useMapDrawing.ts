@@ -47,13 +47,14 @@ export default function useMapDrawing(): MapDrawingReturn {
   const removeFeature = useCallback(
     (id: string) => {
       /** remove a drawn feature and record undo action. */
+      let removed: DrawnFeature | undefined;
       setDrawnFeatures((prev) => {
-        const feature = prev.find((f) => f.id === id);
-        if (feature) {
-          undoRedo.push({ type: "remove", featureId: id, before: feature });
-        }
+        removed = prev.find((f) => f.id === id);
         return prev.filter((f) => f.id !== id);
       });
+      if (removed) {
+        undoRedo.push({ type: "remove", featureId: id, before: removed });
+      }
     },
     [undoRedo],
   );
@@ -61,20 +62,21 @@ export default function useMapDrawing(): MapDrawingReturn {
   const updateFeature = useCallback(
     (id: string, geometry: GeoJSON.Geometry) => {
       /** update feature geometry and record undo action. */
+      let before: DrawnFeature | undefined;
+      let after: DrawnFeature | undefined;
       setDrawnFeatures((prev) =>
         prev.map((f) => {
           if (f.id === id) {
-            undoRedo.push({
-              type: "modify",
-              featureId: id,
-              before: f,
-              after: { ...f, geometry },
-            });
-            return { ...f, geometry };
+            before = f;
+            after = { ...f, geometry };
+            return after;
           }
           return f;
         }),
       );
+      if (before && after) {
+        undoRedo.push({ type: "modify", featureId: id, before, after });
+      }
     },
     [undoRedo],
   );

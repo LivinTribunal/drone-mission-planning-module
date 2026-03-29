@@ -8,7 +8,7 @@ export default function CoordinatorLayout() {
   const { t } = useTranslation();
 
   const coordinatorItems: NavItem[] = [
-    { label: t("nav.missionCenter"), to: "/operator-center/dashboard" },
+    { label: t("nav.missionCenter"), to: "/coordinator-center/dashboard" },
     { label: t("nav.airports"), to: "/coordinator-center/airports" },
     { label: t("nav.inspections"), to: "/coordinator-center/inspections" },
     { label: t("nav.drones"), to: "/coordinator-center/drones" },

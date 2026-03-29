@@ -8,6 +8,10 @@ import {
   deleteObstacle,
   deleteSafetyZone,
   deleteAGL,
+  updateSurface,
+  updateObstacle,
+  updateSafetyZone,
+  updateAGL,
 } from "@/api/airports";
 import type { AirportDetailResponse } from "@/types/airport";
 import type { MapFeature, MapLayerConfig } from "@/types/map";
@@ -40,6 +44,7 @@ export default function AirportEditPage() {
   const [showGeoJsonEditor, setShowGeoJsonEditor] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const drawing = useMapDrawing();
   const dirty = useDirtyState();
@@ -390,14 +395,45 @@ export default function AirportEditPage() {
 
             {/* right: save button */}
             <Button
-              disabled={!dirty.isDirty}
-              onClick={() => {
-                dirty.clearAll();
-                fetchAirport();
+              disabled={!dirty.isDirty || saving}
+              onClick={async () => {
+                if (!id || !airport) return;
+                setSaving(true);
+                try {
+                  const pending = dirty.getPendingChanges();
+                  await Promise.all(
+                    pending.map((change) => {
+                      if (change.action !== "update" || !change.data) return;
+                      switch (change.entityType) {
+                        case "surface":
+                          return updateSurface(id, change.entityId, change.data);
+                        case "obstacle":
+                          return updateObstacle(id, change.entityId, change.data);
+                        case "safety_zone":
+                          return updateSafetyZone(id, change.entityId, change.data);
+                        case "agl": {
+                          const surface = airport.surfaces.find((s) =>
+                            s.agls.some((a) => a.id === change.entityId),
+                          );
+                          if (surface) {
+                            return updateAGL(id, surface.id, change.entityId, change.data);
+                          }
+                          return;
+                        }
+                      }
+                    }),
+                  );
+                  dirty.clearAll();
+                  fetchAirport();
+                } catch {
+                  setError(true);
+                } finally {
+                  setSaving(false);
+                }
               }}
               data-testid="save-button"
             >
-              {t("coordinator.detail.save")}
+              {saving ? t("coordinator.detail.saving") : t("coordinator.detail.save")}
             </Button>
           </div>
         </AirportMap>

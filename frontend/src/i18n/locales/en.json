@@ -589,6 +589,9 @@
       "add": "Add",
       "icaoRequired": "ICAO code is required (4 uppercase letters)",
       "nameRequired": "Airport name is required",
+      "latRequired": "Valid latitude required (-90 to 90)",
+      "lonRequired": "Valid longitude required (-180 to 180)",
+      "altRequired": "Altitude is required",
       "createError": "Failed to create airport",
       "icaoConflict": "An airport with this ICAO code already exists"
     },
@@ -632,7 +635,34 @@
       "aglDistance": "Distance from Threshold (m)",
       "lhaUnitNumber": "Unit Number",
       "lhaSettingAngle": "Setting Angle",
-      "lhaLampType": "Lamp Type"
+      "lhaLampType": "Lamp Type",
+      "surfaceTypes": {
+        "runway": "Runway",
+        "taxiway": "Taxiway",
+        "apron": "Apron",
+        "helipad": "Helipad"
+      },
+      "obstacleTypes": {
+        "building": "Building",
+        "antenna": "Antenna",
+        "vegetation": "Vegetation",
+        "tower": "Tower",
+        "other": "Other"
+      },
+      "zoneTypes": {
+        "ctr": "CTR",
+        "restricted": "Restricted",
+        "prohibited": "Prohibited",
+        "temporaryNoFly": "Temporary No-Fly"
+      },
+      "aglSides": {
+        "left": "Left",
+        "right": "Right"
+      },
+      "lampTypes": {
+        "halogen": "Halogen",
+        "led": "LED"
+      }
     },
     "tools": {
       "pan": "Pan",

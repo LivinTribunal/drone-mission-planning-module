@@ -42,6 +42,17 @@ export default function CreateAirportDialog({
     if (!name.trim()) {
       errs.name = t("coordinator.createAirport.nameRequired");
     }
+    const parsedLat = parseFloat(lat);
+    const parsedLon = parseFloat(lon);
+    if (!lat.trim() || isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+      errs.lat = t("coordinator.createAirport.latRequired");
+    }
+    if (!lon.trim() || isNaN(parsedLon) || parsedLon < -180 || parsedLon > 180) {
+      errs.lon = t("coordinator.createAirport.lonRequired");
+    }
+    if (!alt.trim() || isNaN(parseFloat(alt))) {
+      errs.alt = t("coordinator.createAirport.altRequired");
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -144,30 +155,45 @@ export default function CreateAirportDialog({
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <Input
-                id="airport-lat"
-                label={t("coordinator.createAirport.latitude")}
-                type="number"
-                step="any"
-                value={lat}
-                onChange={(e) => setLat(e.target.value)}
-              />
-              <Input
-                id="airport-lon"
-                label={t("coordinator.createAirport.longitude")}
-                type="number"
-                step="any"
-                value={lon}
-                onChange={(e) => setLon(e.target.value)}
-              />
-              <Input
-                id="airport-alt"
-                label={t("coordinator.createAirport.altitude")}
-                type="number"
-                step="any"
-                value={alt}
-                onChange={(e) => setAlt(e.target.value)}
-              />
+              <div>
+                <Input
+                  id="airport-lat"
+                  label={t("coordinator.createAirport.latitude")}
+                  type="number"
+                  step="any"
+                  value={lat}
+                  onChange={(e) => setLat(e.target.value)}
+                />
+                {errors.lat && (
+                  <p className="text-xs text-tv-error mt-0.5">{errors.lat}</p>
+                )}
+              </div>
+              <div>
+                <Input
+                  id="airport-lon"
+                  label={t("coordinator.createAirport.longitude")}
+                  type="number"
+                  step="any"
+                  value={lon}
+                  onChange={(e) => setLon(e.target.value)}
+                />
+                {errors.lon && (
+                  <p className="text-xs text-tv-error mt-0.5">{errors.lon}</p>
+                )}
+              </div>
+              <div>
+                <Input
+                  id="airport-alt"
+                  label={t("coordinator.createAirport.altitude")}
+                  type="number"
+                  step="any"
+                  value={alt}
+                  onChange={(e) => setAlt(e.target.value)}
+                />
+                {errors.alt && (
+                  <p className="text-xs text-tv-error mt-0.5">{errors.alt}</p>
+                )}
+              </div>
             </div>
           </div>
 

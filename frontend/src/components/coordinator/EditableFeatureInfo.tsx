@@ -57,10 +57,10 @@ export default function EditableFeatureInfo({
                 onChange={(e) => handleChange("surface_type", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
-                <option value="RUNWAY">Runway</option>
-                <option value="TAXIWAY">Taxiway</option>
-                <option value="APRON">Apron</option>
-                <option value="HELIPAD">Helipad</option>
+                <option value="RUNWAY">{t("coordinator.detail.surfaceTypes.runway")}</option>
+                <option value="TAXIWAY">{t("coordinator.detail.surfaceTypes.taxiway")}</option>
+                <option value="APRON">{t("coordinator.detail.surfaceTypes.apron")}</option>
+                <option value="HELIPAD">{t("coordinator.detail.surfaceTypes.helipad")}</option>
               </select>
             </div>
             <Input
@@ -106,11 +106,11 @@ export default function EditableFeatureInfo({
                 onChange={(e) => handleChange("type", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
-                <option value="BUILDING">Building</option>
-                <option value="ANTENNA">Antenna</option>
-                <option value="VEGETATION">Vegetation</option>
-                <option value="TOWER">Tower</option>
-                <option value="OTHER">Other</option>
+                <option value="BUILDING">{t("coordinator.detail.obstacleTypes.building")}</option>
+                <option value="ANTENNA">{t("coordinator.detail.obstacleTypes.antenna")}</option>
+                <option value="VEGETATION">{t("coordinator.detail.obstacleTypes.vegetation")}</option>
+                <option value="TOWER">{t("coordinator.detail.obstacleTypes.tower")}</option>
+                <option value="OTHER">{t("coordinator.detail.obstacleTypes.other")}</option>
               </select>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -149,10 +149,10 @@ export default function EditableFeatureInfo({
                 onChange={(e) => handleChange("type", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
-                <option value="CTR">CTR</option>
-                <option value="RESTRICTED">Restricted</option>
-                <option value="PROHIBITED">Prohibited</option>
-                <option value="TEMPORARY_NO_FLY">Temporary No-Fly</option>
+                <option value="CTR">{t("coordinator.detail.zoneTypes.ctr")}</option>
+                <option value="RESTRICTED">{t("coordinator.detail.zoneTypes.restricted")}</option>
+                <option value="PROHIBITED">{t("coordinator.detail.zoneTypes.prohibited")}</option>
+                <option value="TEMPORARY_NO_FLY">{t("coordinator.detail.zoneTypes.temporaryNoFly")}</option>
               </select>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -207,8 +207,8 @@ export default function EditableFeatureInfo({
                 className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
                 <option value="">—</option>
-                <option value="LEFT">Left</option>
-                <option value="RIGHT">Right</option>
+                <option value="LEFT">{t("coordinator.detail.aglSides.left")}</option>
+                <option value="RIGHT">{t("coordinator.detail.aglSides.right")}</option>
               </select>
             </div>
             <Input
@@ -248,8 +248,8 @@ export default function EditableFeatureInfo({
                 onChange={(e) => handleChange("lamp_type", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
-                <option value="HALOGEN">Halogen</option>
-                <option value="LED">LED</option>
+                <option value="HALOGEN">{t("coordinator.detail.lampTypes.halogen")}</option>
+                <option value="LED">{t("coordinator.detail.lampTypes.led")}</option>
               </select>
             </div>
           </>
