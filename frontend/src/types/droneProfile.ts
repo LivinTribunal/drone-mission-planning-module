@@ -12,6 +12,9 @@ export interface DroneProfileResponse {
   camera_frame_rate: number | null;
   sensor_fov: number | null;
   weight: number | null;
+  created_at: string;
+  updated_at: string;
+  mission_count: number;
 }
 
 export interface DroneProfileCreate {

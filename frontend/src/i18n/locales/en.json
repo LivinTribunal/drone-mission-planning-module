@@ -568,7 +568,8 @@
         "manufacturer": "Manufacturer",
         "model": "Model",
         "maxSpeed": "Max Speed",
-        "endurance": "Endurance"
+        "endurance": "Endurance",
+        "missions": "Missions"
       },
       "create": {
         "title": "Add New Drone Profile",
@@ -594,18 +595,21 @@
         "backToList": "Back to list",
         "selectDrone": "Select drone",
         "addNew": "Add New",
-        "edit": "Edit",
+        "rename": "Rename",
         "duplicate": "Duplicate",
         "delete": "Delete",
-        "save": "Save Changes",
+        "saving": "Saving...",
         "saved": "Changes saved successfully",
+        "savedJustNow": "Saved just now",
+        "savedMinutesAgo": "Saved {{count}} min ago",
+        "savedAt": "Saved at {{time}}",
         "saveError": "Failed to save changes",
-        "unsavedTitle": "Unsaved Changes",
-        "unsavedMessage": "You have unsaved changes. Do you want to discard them?",
-        "keepEditing": "Keep Editing",
-        "discardChanges": "Discard Changes",
-        "readOnly": "Read-only",
-        "editing": "Editing"
+        "created": "Created",
+        "updated": "Updated",
+        "missions": "Missions",
+        "mission": "mission",
+        "missionsLabel": "missions",
+        "noMissions": "No missions use this drone profile"
       },
       "fields": {
         "name": "Drone Name",

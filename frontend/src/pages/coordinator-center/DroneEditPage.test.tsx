@@ -11,6 +11,7 @@ const mockListDroneProfiles = vi.fn();
 const mockCreateDroneProfile = vi.fn();
 const mockUpdateDroneProfile = vi.fn();
 const mockDeleteDroneProfile = vi.fn();
+const mockListMissions = vi.fn();
 
 vi.mock("@/api/droneProfiles", () => ({
   getDroneProfile: (...args: unknown[]) => mockGetDroneProfile(...args),
@@ -18,6 +19,10 @@ vi.mock("@/api/droneProfiles", () => ({
   createDroneProfile: (...args: unknown[]) => mockCreateDroneProfile(...args),
   updateDroneProfile: (...args: unknown[]) => mockUpdateDroneProfile(...args),
   deleteDroneProfile: (...args: unknown[]) => mockDeleteDroneProfile(...args),
+}));
+
+vi.mock("@/api/missions", () => ({
+  listMissions: (...args: unknown[]) => mockListMissions(...args),
 }));
 
 const mockNavigate = vi.fn();
@@ -44,6 +49,9 @@ const DRONE = {
   camera_frame_rate: 30,
   sensor_fov: 84,
   weight: 6.3,
+  created_at: "2026-03-19T00:00:00Z",
+  updated_at: "2026-03-19T00:00:00Z",
+  mission_count: 1,
 };
 
 const DRONE_2 = {
@@ -60,6 +68,9 @@ const DRONE_2 = {
   camera_frame_rate: 30,
   sensor_fov: 84,
   weight: 0.92,
+  created_at: "2026-03-18T00:00:00Z",
+  updated_at: "2026-03-18T00:00:00Z",
+  mission_count: 0,
 };
 
 function renderPage() {
@@ -79,116 +90,78 @@ function renderPage() {
 describe("DroneEditPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     localStorage.clear();
     mockGetDroneProfile.mockResolvedValue(DRONE);
     mockListDroneProfiles.mockResolvedValue({
       data: [DRONE, DRONE_2],
       meta: { total: 2 },
     });
+    mockListMissions.mockResolvedValue({
+      data: [],
+      meta: { total: 0 },
+    });
   });
 
-  it("renders drone fields in read-only mode after load", async () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("renders editable fields after load", async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
     });
-    expect(
-      screen.getByText("coordinator.drones.detail.readOnly"),
-    ).toBeInTheDocument();
-    // no input fields visible in read-only
-    expect(screen.queryByTestId("edit-name")).not.toBeInTheDocument();
-  });
-
-  it("toggling edit mode shows input fields", async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId("detail-edit-toggle"));
     expect(screen.getByTestId("edit-name")).toBeInTheDocument();
-    expect(
-      screen.getByText("coordinator.drones.detail.editing"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("edit-manufacturer")).toBeInTheDocument();
   });
 
-  it("shows name-required error when save is clicked with empty name", async () => {
+  it("autosaves after field change", async () => {
+    const updated = { ...DRONE, name: "Matrice 350" };
+    mockUpdateDroneProfile.mockResolvedValue(updated);
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("edit-name")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId("detail-edit-toggle"));
-    const nameInput = screen.getByTestId("edit-name");
-    fireEvent.change(nameInput, { target: { value: "" } });
-    fireEvent.click(screen.getByTestId("save-drone"));
-    expect(
-      screen.getByText("coordinator.drones.create.nameRequired"),
-    ).toBeInTheDocument();
-    expect(mockUpdateDroneProfile).not.toHaveBeenCalled();
-  });
-
-  it("calls updateDroneProfile and shows success toast on valid save", async () => {
-    const updatedDrone = { ...DRONE, name: "Matrice 350" };
-    mockUpdateDroneProfile.mockResolvedValue(updatedDrone);
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId("detail-edit-toggle"));
     fireEvent.change(screen.getByTestId("edit-name"), {
       target: { value: "Matrice 350" },
     });
-    fireEvent.click(screen.getByTestId("save-drone"));
+    vi.advanceTimersByTime(2000);
     await waitFor(() => {
-      expect(mockUpdateDroneProfile).toHaveBeenCalledWith("d-1", expect.objectContaining({ name: "Matrice 350" }));
+      expect(mockUpdateDroneProfile).toHaveBeenCalledWith(
+        "d-1",
+        expect.objectContaining({ name: "Matrice 350" }),
+      );
     });
-    expect(
-      screen.getByText("coordinator.drones.detail.saved"),
-    ).toBeInTheDocument();
   });
 
-  it("shows save error toast when update fails", async () => {
+  it("does not autosave when name is empty", async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId("edit-name")).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByTestId("edit-name"), {
+      target: { value: "" },
+    });
+    vi.advanceTimersByTime(2000);
+    expect(mockUpdateDroneProfile).not.toHaveBeenCalled();
+  });
+
+  it("shows save error when autosave fails", async () => {
     mockUpdateDroneProfile.mockRejectedValue(new Error("fail"));
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("edit-name")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId("detail-edit-toggle"));
     fireEvent.change(screen.getByTestId("edit-name"), {
       target: { value: "Changed" },
     });
-    fireEvent.click(screen.getByTestId("save-drone"));
+    vi.advanceTimersByTime(2000);
     await waitFor(() => {
       expect(
         screen.getByText("coordinator.drones.detail.saveError"),
       ).toBeInTheDocument();
     });
-  });
-
-  it("cancel edit resets form to original values", async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId("detail-edit-toggle"));
-    fireEvent.change(screen.getByTestId("edit-name"), {
-      target: { value: "Changed" },
-    });
-    // cancel
-    fireEvent.click(screen.getByTestId("detail-edit-toggle"));
-    // back to read-only, original name shows
-    expect(
-      screen.getByText("coordinator.drones.detail.readOnly"),
-    ).toBeInTheDocument();
-  });
-
-  it("save button disabled when form unchanged", async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId("detail-edit-toggle"));
-    const saveBtn = screen.getByTestId("save-drone");
-    expect(saveBtn).toBeDisabled();
   });
 
   it("drone selector dropdown shows all drones", async () => {
@@ -200,57 +173,23 @@ describe("DroneEditPage", () => {
     expect(screen.getByText("Mavic 3E")).toBeInTheDocument();
   });
 
-  it("shows unsaved-changes dialog when navigating away with dirty form", async () => {
+  it("back-to-list navigates to drone list", async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId("detail-edit-toggle"));
-    fireEvent.change(screen.getByTestId("edit-name"), {
-      target: { value: "Changed" },
-    });
     fireEvent.click(screen.getByTestId("back-to-list"));
-    expect(
-      screen.getByText("coordinator.drones.detail.unsavedMessage"),
-    ).toBeInTheDocument();
-  });
-
-  it("discard + navigate proceeds on confirm", async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId("detail-edit-toggle"));
-    fireEvent.change(screen.getByTestId("edit-name"), {
-      target: { value: "Changed" },
-    });
-    fireEvent.click(screen.getByTestId("back-to-list"));
-    fireEvent.click(
-      screen.getByText("coordinator.drones.detail.discardChanges"),
-    );
     expect(mockNavigate).toHaveBeenCalledWith("/coordinator-center/drones");
   });
 
-  it("keep editing closes unsaved dialog", async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId("detail-edit-toggle"));
-    fireEvent.change(screen.getByTestId("edit-name"), {
-      target: { value: "Changed" },
-    });
-    fireEvent.click(screen.getByTestId("back-to-list"));
-    fireEvent.click(
-      screen.getByText("coordinator.drones.detail.keepEditing"),
-    );
-    expect(
-      screen.queryByText("coordinator.drones.detail.unsavedMessage"),
-    ).not.toBeInTheDocument();
-  });
-
   it("duplicate calls createDroneProfile and navigates to new drone", async () => {
-    mockCreateDroneProfile.mockResolvedValue({ id: "d-copy", name: "Matrice 300 (Copy)" });
+    mockCreateDroneProfile.mockResolvedValue({
+      id: "d-copy",
+      name: "Matrice 300 (Copy)",
+      created_at: "2026-03-19T00:00:00Z",
+      updated_at: "2026-03-19T00:00:00Z",
+      mission_count: 0,
+    });
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
@@ -259,7 +198,9 @@ describe("DroneEditPage", () => {
     await waitFor(() => {
       expect(mockCreateDroneProfile).toHaveBeenCalled();
     });
-    expect(mockNavigate).toHaveBeenCalledWith("/coordinator-center/drones/d-copy");
+    expect(mockNavigate).toHaveBeenCalledWith(
+      "/coordinator-center/drones/d-copy",
+    );
   });
 
   it("duplicate shows error toast when API fails", async () => {

@@ -266,6 +266,9 @@ export default function DroneListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-tv-text-secondary">
                   {t("coordinator.drones.columns.endurance")}
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-tv-text-secondary">
+                  {t("coordinator.drones.columns.missions")}
+                </th>
                 <th className="w-10" />
               </tr>
             </thead>
@@ -296,6 +299,9 @@ export default function DroneListPage() {
                     {drone.endurance_minutes != null
                       ? `${drone.endurance_minutes} ${t("coordinator.drones.units.min")}`
                       : "\u2014"}
+                  </td>
+                  <td className="px-4 py-3 text-tv-text-secondary">
+                    {drone.mission_count}
                   </td>
                   <td className="px-4 py-3">
                     <RowActionMenu

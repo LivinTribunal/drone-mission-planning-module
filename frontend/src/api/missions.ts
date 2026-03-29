@@ -20,6 +20,7 @@ export async function listMissions(params?: {
   limit?: number;
   offset?: number;
   airport_id?: string;
+  drone_profile_id?: string;
 }): Promise<{ data: MissionResponse[]; meta: ListMeta }> {
   const res = await client.get("/missions", { params });
   return res.data;

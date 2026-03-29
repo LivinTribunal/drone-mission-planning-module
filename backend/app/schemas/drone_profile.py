@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -55,6 +56,9 @@ class DroneProfileResponse(BaseModel):
     camera_frame_rate: int | None = None
     sensor_fov: float | None = None
     weight: float | None = None
+    created_at: datetime
+    updated_at: datetime
+    mission_count: int = 0
 
     model_config = {"from_attributes": True}
 

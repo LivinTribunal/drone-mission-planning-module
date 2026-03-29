@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -8,14 +8,19 @@ import {
   updateDroneProfile,
   deleteDroneProfile,
 } from "@/api/droneProfiles";
+import { listMissions } from "@/api/missions";
 import type {
   DroneProfileResponse,
   DroneProfileUpdate,
 } from "@/types/droneProfile";
+import type { MissionResponse } from "@/types/mission";
+import { Layers, Clock, Pencil } from "lucide-react";
+import Badge from "@/components/common/Badge";
 import Button from "@/components/common/Button";
 import Card from "@/components/common/Card";
 import Modal from "@/components/common/Modal";
 import Input from "@/components/common/Input";
+import type { MissionStatus } from "@/types/enums";
 
 interface FieldDef {
   key: keyof DroneProfileResponse;
@@ -73,6 +78,9 @@ const FIELDS: FieldDef[] = [
   { key: "weight", labelKey: "weight", unitKey: "kg", type: "number" },
 ];
 
+const AUTOSAVE_DELAY = 1500;
+
+/** convert drone response to form values. */
 function droneToForm(drone: DroneProfileResponse): Record<string, string> {
   const form: Record<string, string> = {};
   for (const f of FIELDS) {
@@ -82,6 +90,7 @@ function droneToForm(drone: DroneProfileResponse): Record<string, string> {
   return form;
 }
 
+/** convert form values to api payload. */
 function formToPayload(form: Record<string, string>): DroneProfileUpdate {
   const payload: Record<string, unknown> = {};
   for (const f of FIELDS) {
@@ -92,11 +101,62 @@ function formToPayload(form: Record<string, string>): DroneProfileUpdate {
       payload[f.key] = val || null;
     }
   }
-  // name should not be null
   if (form.name) payload.name = form.name;
   return payload as DroneProfileUpdate;
 }
 
+/** format a date as a human-readable saved timestamp. */
+function formatTimestamp(
+  date: Date,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+
+  if (diffMin < 1) return t("coordinator.drones.detail.savedJustNow");
+  if (diffMin < 60)
+    return t("coordinator.drones.detail.savedMinutesAgo", { count: diffMin });
+
+  return t("coordinator.drones.detail.savedAt", {
+    time: date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  });
+}
+
+/** format an iso date string for display in the dropdown. */
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/** format seconds as m:ss duration string. */
+function formatDuration(seconds: number): string {
+  const min = Math.floor(seconds / 60);
+  const sec = Math.round(seconds % 60);
+  return `${min}:${sec.toString().padStart(2, "0")}`;
+}
+
+/** chevron icon that rotates when expanded. */
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+    >
+      <path
+        fillRule="evenodd"
+        d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+/** drone profile editor with autosave. */
 export default function DroneEditPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -104,15 +164,31 @@ export default function DroneEditPage() {
 
   const [drone, setDrone] = useState<DroneProfileResponse | null>(null);
   const [allDrones, setAllDrones] = useState<DroneProfileResponse[]>([]);
+  const [missions, setMissions] = useState<MissionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [notification, setNotification] = useState("");
   const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [nameError, setNameError] = useState("");
+
+  // autosave state
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestFormRef = useRef<Record<string, string>>({});
+  const droneRef = useRef<DroneProfileResponse | null>(null);
+
+  // tick for relative timestamp display
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!lastSaved) return;
+    const interval = setInterval(() => setTick((n) => n + 1), 30000);
+    return () => clearInterval(interval);
+  }, [lastSaved]);
 
   // create dialog
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -122,30 +198,99 @@ export default function DroneEditPage() {
   // delete dialog
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // unsaved changes dialog
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
-  const [pendingNav, setPendingNav] = useState<string | null>(null);
-
   // drone selector
   const [showSelector, setShowSelector] = useState(false);
+  const [droneSearch, setDroneSearch] = useState("");
   const selectorRef = useRef<HTMLDivElement>(null);
+  const droneSearchRef = useRef<HTMLInputElement>(null);
 
-  const isDirty = useMemo(() => {
-    if (!drone || !isEditing) return false;
-    const original = droneToForm(drone);
-    return FIELDS.some((f) => formData[f.key] !== original[f.key]);
-  }, [drone, formData, isEditing]);
+  // collapsible left panel
+  const [panelExpanded, setPanelExpanded] = useState(true);
 
+  // collapsible mission list
+  const [missionsExpanded, setMissionsExpanded] = useState(true);
+
+  // filtered drones for search
+  const filteredDrones = droneSearch
+    ? allDrones.filter((d) =>
+        d.name.toLowerCase().includes(droneSearch.toLowerCase()),
+      )
+    : allDrones;
+
+  // sum of mission durations for the selected drone
+  const totalDuration = missions.reduce(
+    (sum, m) => sum + (m.estimated_duration ?? 0),
+    0,
+  );
+
+  const performSave = useCallback(
+    async (form: Record<string, string>) => {
+      /** save the current form data to the backend. */
+      if (!id || !droneRef.current) return;
+      if (!form.name?.trim()) return;
+
+      setSaving(true);
+      setSaveError(false);
+      try {
+        const updated = await updateDroneProfile(id, formToPayload(form));
+        setDrone(updated);
+        droneRef.current = updated;
+        setLastSaved(new Date());
+        setSaveError(false);
+      } catch {
+        setSaveError(true);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [id],
+  );
+
+  /** schedule an autosave after debounce delay. */
+  function scheduleAutosave(form: Record<string, string>) {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      performSave(form);
+    }, AUTOSAVE_DELAY);
+  }
+
+  // cleanup autosave timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+  }, []);
+
+  // flush pending autosave on navigation away
+  useEffect(() => {
+    function handleBeforeUnload() {
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current);
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  /** fetch drone profile, all drones list, and missions using this drone. */
   const fetchDrone = useCallback(() => {
     if (!id) return;
     setLoading(true);
     setError(false);
-    Promise.all([getDroneProfile(id), listDroneProfiles({ limit: 200 })])
-      .then(([droneData, listData]) => {
+    Promise.all([
+      getDroneProfile(id),
+      listDroneProfiles({ limit: 200 }),
+      listMissions({ drone_profile_id: id, limit: 200 }),
+    ])
+      .then(([droneData, listData, missionsData]) => {
         setDrone(droneData);
+        droneRef.current = droneData;
         setAllDrones(listData.data);
-        setFormData(droneToForm(droneData));
-        setIsEditing(false);
+        setMissions(missionsData.data);
+        const form = droneToForm(droneData);
+        setFormData(form);
+        latestFormRef.current = form;
+        setLastSaved(new Date(droneData.updated_at));
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
@@ -163,79 +308,64 @@ export default function DroneEditPage() {
         !selectorRef.current.contains(e.target as Node)
       ) {
         setShowSelector(false);
+        setDroneSearch("");
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // warn before browser unload with unsaved changes
+  // auto-focus search when dropdown opens
   useEffect(() => {
-    if (!isDirty) return;
-    function handleBeforeUnload(e: BeforeUnloadEvent) {
-      e.preventDefault();
+    if (showSelector) {
+      setTimeout(() => droneSearchRef.current?.focus(), 0);
     }
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isDirty]);
+  }, [showSelector]);
 
+  /** show a temporary toast notification. */
   function showToast(msg: string) {
     if (notificationTimer.current) clearTimeout(notificationTimer.current);
     setNotification(msg);
     notificationTimer.current = setTimeout(() => setNotification(""), 3000);
   }
 
-  function tryNavigate(path: string) {
-    if (isDirty) {
-      setPendingNav(path);
-      setShowUnsavedDialog(true);
+  /** handle field value change and schedule autosave. */
+  function handleFieldChange(key: string, value: string) {
+    if (key === "name") setNameError("");
+    const next = { ...formData, [key]: value };
+    setFormData(next);
+    latestFormRef.current = next;
+
+    if (!droneRef.current) return;
+    const orig = droneToForm(droneRef.current);
+    const dirty = FIELDS.some((f) => next[f.key] !== orig[f.key]);
+    if (dirty) {
+      scheduleAutosave(next);
     } else {
-      navigate(path);
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     }
   }
 
-  function handleDiscardAndNavigate() {
-    setIsEditing(false);
-    setShowUnsavedDialog(false);
-    if (pendingNav) {
-      navigate(pendingNav);
-      setPendingNav(null);
-    }
-  }
-
+  /** navigate to a different drone profile. */
   function handleSelectDrone(droneId: string) {
     setShowSelector(false);
+    setDroneSearch("");
     if (droneId === id) return;
-    tryNavigate(`/coordinator-center/drones/${droneId}`);
+    // flush pending save before navigating
+    if (autosaveTimer.current) {
+      clearTimeout(autosaveTimer.current);
+      const orig = droneRef.current ? droneToForm(droneRef.current) : {};
+      const dirty = FIELDS.some(
+        (f) => latestFormRef.current[f.key] !== orig[f.key],
+      );
+      if (dirty && latestFormRef.current.name?.trim()) {
+        performSave(latestFormRef.current);
+      }
+    }
+    navigate(`/coordinator-center/drones/${droneId}`);
   }
 
-  function handleToggleEdit() {
-    if (isEditing) {
-      // cancel editing
-      if (drone) setFormData(droneToForm(drone));
-      setIsEditing(false);
-    } else {
-      setIsEditing(true);
-    }
-  }
-
-  async function handleSave() {
-    if (!id || !drone) return;
-    if (!formData.name?.trim()) {
-      setNameError(t("coordinator.drones.create.nameRequired"));
-      return;
-    }
-    try {
-      const updated = await updateDroneProfile(id, formToPayload(formData));
-      setDrone(updated);
-      setFormData(droneToForm(updated));
-      setIsEditing(false);
-      showToast(t("coordinator.drones.detail.saved"));
-    } catch {
-      showToast(t("coordinator.drones.detail.saveError"));
-    }
-  }
-
+  /** duplicate the current drone profile. */
   async function handleDuplicate() {
     if (!drone) return;
     try {
@@ -260,6 +390,7 @@ export default function DroneEditPage() {
     }
   }
 
+  /** delete the current drone profile. */
   async function handleDelete() {
     if (!id) return;
     try {
@@ -271,6 +402,7 @@ export default function DroneEditPage() {
     }
   }
 
+  /** create a new drone profile from the dialog form. */
   async function handleCreateNew(e: React.FormEvent) {
     e.preventDefault();
     if (!createName.trim()) {
@@ -325,140 +457,321 @@ export default function DroneEditPage() {
   }
 
   return (
-    <div className="flex h-full bg-tv-bg">
-      {/* left panel */}
-      <div className="w-72 flex-shrink-0 border-r border-tv-border bg-tv-surface flex flex-col">
-        {/* header */}
-        <div className="px-4 py-4 border-b border-tv-border">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-tv-text-secondary uppercase tracking-wider">
-              {t("coordinator.drones.title")}
-            </span>
+    <div className="flex h-full px-4 bg-tv-bg">
+      {/* left panel - 30% matching navbar app title width */}
+      <div className="w-[30%] flex-shrink-0 flex">
+        <div
+          className="flex-1 overflow-y-auto flex flex-col gap-4"
+          style={{ scrollbarGutter: "stable" }}
+        >
+          {/* drone selector panel */}
+          <div className="bg-tv-surface border border-tv-border rounded-2xl flex flex-col">
+            {/* collapsible header */}
             <button
-              onClick={() => tryNavigate("/coordinator-center/drones")}
-              className="rounded-full p-1 text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
-              title={t("coordinator.drones.detail.backToList")}
-              data-testid="back-to-list"
+              onClick={() => setPanelExpanded(!panelExpanded)}
+              className="flex items-center justify-between w-full px-4 py-3"
+              data-testid="panel-toggle"
             >
-              <svg
-                className="h-4 w-4"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              <span className="rounded-full bg-tv-bg px-3 py-1 text-xs font-medium text-tv-text-secondary uppercase tracking-wider">
+                {t("coordinator.drones.title")}
+              </span>
+              <ChevronIcon expanded={panelExpanded} />
             </button>
+
+            {panelExpanded && (
+              <>
+                {/* drone selector */}
+                <div className="px-4 pb-3">
+                  <div className="relative" ref={selectorRef}>
+                    <button
+                      onClick={() => setShowSelector(!showSelector)}
+                      className="w-full flex items-center justify-between rounded-full px-3 py-2 text-sm
+                        font-semibold text-tv-text-primary bg-tv-bg hover:bg-tv-surface-hover transition-colors"
+                      data-testid="drone-selector"
+                    >
+                      <span className="truncate">{drone.name}</span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {/* rename button */}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            document
+                              .getElementById("edit-name")
+                              ?.focus();
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.stopPropagation();
+                              document
+                                .getElementById("edit-name")
+                                ?.focus();
+                            }
+                          }}
+                          className="flex h-5 w-5 items-center justify-center rounded-full
+                            bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors cursor-pointer"
+                          title={t("coordinator.drones.detail.rename")}
+                          data-testid="rename-drone"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </span>
+                        {/* deselect button */}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate("/coordinator-center/drones");
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.stopPropagation();
+                              navigate("/coordinator-center/drones");
+                            }
+                          }}
+                          className="flex h-5 w-5 items-center justify-center rounded-full
+                            bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors cursor-pointer"
+                          title={t("coordinator.drones.detail.backToList")}
+                          data-testid="back-to-list"
+                        >
+                          <svg
+                            className="h-3 w-3"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </span>
+                        <ChevronIcon expanded={showSelector} />
+                      </div>
+                    </button>
+                    {showSelector && (
+                      <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-2xl border-2 border-tv-text-muted bg-tv-surface p-2">
+                        <input
+                          ref={droneSearchRef}
+                          value={droneSearch}
+                          onChange={(e) => setDroneSearch(e.target.value)}
+                          placeholder={t(
+                            "coordinator.drones.searchPlaceholder",
+                          )}
+                          className="w-full rounded-full px-4 py-2 text-sm bg-tv-bg border border-tv-border
+                            text-tv-text-primary placeholder:text-tv-text-muted outline-none focus:border-tv-accent mb-2"
+                        />
+                        <div className="max-h-48 overflow-y-auto">
+                          {filteredDrones.length === 0 ? (
+                            <div className="px-4 py-2.5 text-sm text-tv-text-muted">
+                              {t("coordinator.drones.noMatch")}
+                            </div>
+                          ) : (
+                            filteredDrones.map((d) => {
+                              const isSelected = d.id === id;
+                              return (
+                                <button
+                                  key={d.id}
+                                  onClick={() => handleSelectDrone(d.id)}
+                                  className={`w-full text-left rounded-xl px-3 py-2 text-sm transition-colors ${
+                                    isSelected
+                                      ? "bg-tv-nav-active-bg text-tv-nav-active-text"
+                                      : "text-tv-text-primary hover:bg-tv-surface-hover"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="truncate font-medium">
+                                      {d.name}
+                                    </span>
+                                  </div>
+                                  <div
+                                    className={`flex items-center gap-3 text-xs mt-0.5 ${isSelected ? "text-tv-nav-active-text/70" : "text-tv-text-muted"}`}
+                                  >
+                                    <span className="flex items-center gap-1">
+                                      <Layers className="w-3 h-3" />
+                                      {isSelected
+                                        ? missions.length
+                                        : d.mission_count}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="w-3 h-3" />
+                                      {isSelected && totalDuration > 0
+                                        ? formatDuration(totalDuration)
+                                        : "\u2014"}
+                                    </span>
+                                    <span className="ml-auto">
+                                      {formatDate(d.updated_at)}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* action buttons */}
+                <div className="px-4 pb-3 flex flex-col gap-2">
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      setShowCreateDialog(true);
+                      setCreateName("");
+                      setCreateError("");
+                    }}
+                    data-testid="detail-add-new"
+                  >
+                    {t("coordinator.drones.detail.addNew")}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={handleDuplicate}
+                    data-testid="detail-duplicate"
+                  >
+                    {t("coordinator.drones.detail.duplicate")}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    className="w-full"
+                    onClick={() => setShowDeleteDialog(true)}
+                    data-testid="detail-delete"
+                  >
+                    {t("coordinator.drones.detail.delete")}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* drone selector */}
-          <div className="relative" ref={selectorRef}>
+          {/* missions panel */}
+          <div className="bg-tv-surface border border-tv-border rounded-2xl flex flex-col">
             <button
-              onClick={() => setShowSelector(!showSelector)}
-              className="w-full flex items-center justify-between rounded-full px-3 py-2 text-sm
-                font-semibold text-tv-text-primary bg-tv-bg hover:bg-tv-surface-hover transition-colors"
-              data-testid="drone-selector"
+              onClick={() => setMissionsExpanded(!missionsExpanded)}
+              className="flex items-center justify-between w-full px-4 py-3"
+              data-testid="missions-panel-toggle"
             >
-              <span className="truncate">{drone.name}</span>
-              <svg
-                className={`h-4 w-4 flex-shrink-0 transition-transform ${showSelector ? "rotate-180" : ""}`}
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-tv-bg px-3 py-1 text-xs font-medium text-tv-text-secondary uppercase tracking-wider">
+                  {t("coordinator.drones.detail.missions")}
+                </span>
+                <span className="rounded-full bg-tv-accent text-tv-accent-text px-2 py-0.5 text-xs font-semibold">
+                  {missions.length}
+                </span>
+              </div>
+              <ChevronIcon expanded={missionsExpanded} />
             </button>
-            {showSelector && (
-              <div className="absolute left-0 right-0 top-full mt-1 z-30 max-h-64 overflow-y-auto rounded-2xl border border-tv-border bg-tv-surface p-1">
-                {allDrones.map((d) => (
-                  <button
-                    key={d.id}
-                    onClick={() => handleSelectDrone(d.id)}
-                    className={`w-full text-left rounded-xl px-3 py-2 text-sm transition-colors truncate ${
-                      d.id === id
-                        ? "bg-tv-accent text-tv-accent-text"
-                        : "text-tv-text-primary hover:bg-tv-surface-hover"
-                    }`}
-                  >
-                    {d.name}
-                  </button>
-                ))}
+
+            {missionsExpanded && (
+              <div className="px-4 pb-3">
+                {missions.length === 0 ? (
+                  <p className="text-sm text-tv-text-muted py-2">
+                    {t("coordinator.drones.detail.noMissions")}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {missions.map((m) => (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between rounded-xl px-3 py-2 bg-tv-bg"
+                      >
+                        <div className="min-w-0">
+                          <span className="block text-sm font-medium text-tv-text-primary truncate">
+                            {m.name}
+                          </span>
+                          <span className="block text-xs text-tv-text-muted">
+                            {t("coordinator.drones.detail.created")}{" "}
+                            {formatDate(m.created_at)}
+                            {" · "}
+                            {t("coordinator.drones.detail.updated")}{" "}
+                            {formatDate(m.updated_at)}
+                          </span>
+                        </div>
+                        <Badge
+                          status={m.status as MissionStatus}
+                          className="flex-shrink-0 ml-2"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
-
-        {/* action buttons */}
-        <div className="px-4 py-3 flex flex-col gap-2">
-          <Button
-            className="w-full"
-            onClick={() => {
-              setShowCreateDialog(true);
-              setCreateName("");
-              setCreateError("");
-            }}
-            data-testid="detail-add-new"
-          >
-            {t("coordinator.drones.detail.addNew")}
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={handleToggleEdit}
-            data-testid="detail-edit-toggle"
-          >
-            {isEditing
-              ? t("common.cancel")
-              : t("coordinator.drones.detail.edit")}
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={handleDuplicate}
-            data-testid="detail-duplicate"
-          >
-            {t("coordinator.drones.detail.duplicate")}
-          </Button>
-          <Button
-            variant="danger"
-            className="w-full"
-            onClick={() => setShowDeleteDialog(true)}
-            data-testid="detail-delete"
-          >
-            {t("coordinator.drones.detail.delete")}
-          </Button>
-        </div>
+        <div className="w-6 flex-shrink-0" />
       </div>
 
-      {/* right panel */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <Card className="max-w-2xl mx-auto p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-base font-semibold text-tv-text-primary">
-              {drone.name}
-            </h2>
-            <span className="text-xs text-tv-text-muted rounded-full border border-tv-border px-3 py-1">
-              {isEditing
-                ? t("coordinator.drones.detail.editing")
-                : t("coordinator.drones.detail.readOnly")}
-            </span>
-          </div>
+      {/* right panel - mirrors navbar right section flex structure */}
+      <div className="flex-1 flex items-start gap-4 min-w-0">
+        <div className="flex-1 overflow-y-auto min-w-0">
+        <Card className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-base font-semibold text-tv-text-primary">
+                {drone.name}
+              </h2>
 
-          <div className="grid grid-cols-2 gap-4">
-            {FIELDS.map((field) => {
-              const label = t(`coordinator.drones.fields.${field.labelKey}`);
-              const unitLabel = field.unitKey
-                ? t(`coordinator.drones.units.${field.unitKey}`)
-                : "";
+              {/* saved status indicator */}
+              <span className="text-xs text-tv-text-muted flex items-center gap-1.5">
+                {saving && (
+                  <>
+                    <svg
+                      className="h-3 w-3 animate-spin"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                      />
+                    </svg>
+                    {t("coordinator.drones.detail.saving")}
+                  </>
+                )}
+                {!saving && saveError && (
+                  <span className="text-tv-error">
+                    {t("coordinator.drones.detail.saveError")}
+                  </span>
+                )}
+                {!saving && !saveError && lastSaved && (
+                  <>
+                    <svg
+                      className="h-3 w-3 text-tv-success"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {formatTimestamp(lastSaved, t)}
+                  </>
+                )}
+              </span>
+            </div>
 
-              if (isEditing) {
+            <div className="grid grid-cols-2 gap-4">
+              {FIELDS.map((field) => {
+                const label = t(`coordinator.drones.fields.${field.labelKey}`);
+                const unitLabel = field.unitKey
+                  ? t(`coordinator.drones.units.${field.unitKey}`)
+                  : "";
+
                 return (
                   <div key={field.key}>
                     <Input
@@ -467,57 +780,37 @@ export default function DroneEditPage() {
                       type={field.type}
                       step={field.type === "number" ? "any" : undefined}
                       value={formData[field.key] ?? ""}
-                      onChange={(e) => {
-                        if (field.key === "name") setNameError("");
-                        setFormData((f) => ({
-                          ...f,
-                          [field.key]: e.target.value,
-                        }));
-                      }}
+                      onChange={(e) =>
+                        handleFieldChange(field.key, e.target.value)
+                      }
                       data-testid={`edit-${field.key}`}
                     />
                     {field.key === "name" && nameError && (
-                      <p className="mt-1 text-sm text-tv-error" data-testid="name-error">
+                      <p
+                        className="mt-1 text-sm text-tv-error"
+                        data-testid="name-error"
+                      >
                         {nameError}
                       </p>
                     )}
                   </div>
                 );
-              }
-
-              const rawVal = drone[field.key];
-              const display =
-                rawVal != null
-                  ? unitLabel
-                    ? `${rawVal} ${unitLabel}`
-                    : String(rawVal)
-                  : "\u2014";
-
-              return (
-                <div key={field.key}>
-                  <span className="block text-xs font-medium text-tv-text-secondary mb-1">
-                    {label}
-                  </span>
-                  <span className="text-sm text-tv-text-primary">
-                    {display}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {isEditing && (
-            <div className="mt-6 flex justify-end">
-              <Button
-                onClick={handleSave}
-                disabled={!isDirty}
-                data-testid="save-drone"
-              >
-                {t("coordinator.drones.detail.save")}
-              </Button>
+              })}
             </div>
-          )}
-        </Card>
+          </Card>
+        </div>
+
+        {/* invisible spacers - same classes as navbar airport selector, theme toggle, user dropdown */}
+        <div className="relative min-w-[280px] flex-shrink-0">
+          <div className="flex w-full items-center gap-2 rounded-full px-4 h-11 text-sm" />
+        </div>
+        <div className="flex items-center gap-1 rounded-full p-1 h-11">
+          <div className="rounded-full p-2"><div className="h-4 w-4" /></div>
+          <div className="rounded-full p-2"><div className="h-4 w-4" /></div>
+        </div>
+        <div className="relative w-[140px] flex-shrink-0">
+          <div className="flex items-center gap-2 rounded-full px-4 h-11 text-sm" />
+        </div>
       </div>
 
       {/* toast notification */}
@@ -587,34 +880,6 @@ export default function DroneEditPage() {
           </Button>
           <Button variant="danger" onClick={handleDelete}>
             {t("common.delete")}
-          </Button>
-        </div>
-      </Modal>
-
-      {/* unsaved changes dialog */}
-      <Modal
-        isOpen={showUnsavedDialog}
-        onClose={() => {
-          setShowUnsavedDialog(false);
-          setPendingNav(null);
-        }}
-        title={t("coordinator.drones.detail.unsavedTitle")}
-      >
-        <p className="text-sm text-tv-text-primary mb-6">
-          {t("coordinator.drones.detail.unsavedMessage")}
-        </p>
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setShowUnsavedDialog(false);
-              setPendingNav(null);
-            }}
-          >
-            {t("coordinator.drones.detail.keepEditing")}
-          </Button>
-          <Button variant="danger" onClick={handleDiscardAndNavigate}>
-            {t("coordinator.drones.detail.discardChanges")}
           </Button>
         </div>
       </Modal>

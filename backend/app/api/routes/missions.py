@@ -31,13 +31,19 @@ router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
 def list_missions(
     airport_id: UUID | None = Query(None),
     status: str | None = Query(None),
+    drone_profile_id: UUID | None = Query(None),
     limit: int = Query(20, le=200),
     offset: int = Query(0),
     db: Session = Depends(get_db),
 ):
     """list missions with filters and pagination."""
     missions, total = mission_service.list_missions(
-        db, airport_id=airport_id, status=status, limit=limit, offset=offset
+        db,
+        airport_id=airport_id,
+        status=status,
+        drone_profile_id=drone_profile_id,
+        limit=limit,
+        offset=offset,
     )
 
     data = []
