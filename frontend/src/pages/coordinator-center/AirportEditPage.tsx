@@ -257,7 +257,6 @@ export default function AirportEditPage() {
                 items={surfaces}
                 getId={(s) => s.id}
                 getName={(s) => s.identifier}
-                onAdd={() => drawing.setActiveTool("drawPolygon")}
                 onEdit={(s) => handleFeatureClick({ type: "surface", data: s })}
                 onDelete={handleDeleteSurface}
                 addLabel={t("coordinator.detail.addSurface")}
@@ -280,7 +279,6 @@ export default function AirportEditPage() {
                 items={obstacles}
                 getId={(o) => o.id}
                 getName={(o) => o.name}
-                onAdd={() => drawing.setActiveTool("placePoint")}
                 onEdit={(o) => handleFeatureClick({ type: "obstacle", data: o })}
                 onDelete={handleDeleteObstacle}
                 addLabel={t("coordinator.detail.addObstacle")}
@@ -300,7 +298,6 @@ export default function AirportEditPage() {
                 items={safetyZones}
                 getId={(z) => z.id}
                 getName={(z) => z.name}
-                onAdd={() => drawing.setActiveTool("drawPolygon")}
                 onEdit={(z) => handleFeatureClick({ type: "safety_zone", data: z })}
                 onDelete={handleDeleteSafetyZone}
                 addLabel={t("coordinator.detail.addSafetyZone")}
@@ -324,7 +321,6 @@ export default function AirportEditPage() {
                 items={allAgls}
                 getId={(a) => a.id}
                 getName={(a) => a.name}
-                onAdd={() => drawing.setActiveTool("placePoint")}
                 onEdit={(a) => handleFeatureClick({ type: "agl", data: a })}
                 onDelete={handleDeleteAgl}
                 addLabel={t("coordinator.detail.addAgl")}
@@ -431,7 +427,7 @@ export default function AirportEditPage() {
                             return undefined;
                         }
                       })
-                      .filter(Boolean),
+                      .filter((p): p is NonNullable<typeof p> => p !== undefined),
                   );
                   dirty.clearAll();
                   await fetchAirport();

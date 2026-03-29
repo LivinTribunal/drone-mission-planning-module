@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import Input from "@/components/common/Input";
@@ -16,9 +17,24 @@ export default function EditableFeatureInfo({
 }: EditableFeatureInfoProps) {
   /** editable feature info panel for selected map features. */
   const { t } = useTranslation();
+  const [formData, setFormData] = useState<Record<string, unknown>>(
+    feature.data as unknown as Record<string, unknown>,
+  );
+
+  useEffect(() => {
+    setFormData(feature.data as unknown as Record<string, unknown>);
+  }, [feature]);
+
+  function val(key: string): string {
+    /** get form field value as string for input binding. */
+    const v = formData[key];
+    if (v == null) return "";
+    return String(v);
+  }
 
   function handleChange(field: string, value: string | number | boolean) {
     /** propagate field change to parent. */
+    setFormData((prev) => ({ ...prev, [field]: value }));
     onUpdate({ [field]: value });
   }
 
@@ -45,7 +61,7 @@ export default function EditableFeatureInfo({
             <Input
               id="feat-identifier"
               label={t("coordinator.detail.surfaceIdentifier")}
-              value={feature.data.identifier}
+              value={val("identifier")}
               onChange={(e) => handleChange("identifier", e.target.value)}
             />
             <div>
@@ -53,7 +69,7 @@ export default function EditableFeatureInfo({
                 {t("coordinator.detail.surfaceType")}
               </label>
               <select
-                value={feature.data.surface_type}
+                value={val("surface_type")}
                 onChange={(e) => handleChange("surface_type", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
@@ -67,7 +83,7 @@ export default function EditableFeatureInfo({
               id="feat-heading"
               label={t("coordinator.detail.surfaceHeading")}
               type="number"
-              value={feature.data.heading ?? ""}
+              value={val("heading")}
               onChange={(e) => handleChange("heading", parseFloat(e.target.value) || 0)}
             />
             <div className="grid grid-cols-2 gap-2">
@@ -75,14 +91,14 @@ export default function EditableFeatureInfo({
                 id="feat-length"
                 label={t("coordinator.detail.surfaceLength")}
                 type="number"
-                value={feature.data.length ?? ""}
+                value={val("length")}
                 onChange={(e) => handleChange("length", parseFloat(e.target.value) || 0)}
               />
               <Input
                 id="feat-width"
                 label={t("coordinator.detail.surfaceWidth")}
                 type="number"
-                value={feature.data.width ?? ""}
+                value={val("width")}
                 onChange={(e) => handleChange("width", parseFloat(e.target.value) || 0)}
               />
             </div>
@@ -94,7 +110,7 @@ export default function EditableFeatureInfo({
             <Input
               id="feat-name"
               label={t("coordinator.detail.obstacleName")}
-              value={feature.data.name}
+              value={val("name")}
               onChange={(e) => handleChange("name", e.target.value)}
             />
             <div>
@@ -102,7 +118,7 @@ export default function EditableFeatureInfo({
                 {t("coordinator.detail.obstacleType")}
               </label>
               <select
-                value={feature.data.type}
+                value={val("type")}
                 onChange={(e) => handleChange("type", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
@@ -118,14 +134,14 @@ export default function EditableFeatureInfo({
                 id="feat-height"
                 label={t("coordinator.detail.obstacleHeight")}
                 type="number"
-                value={feature.data.height}
+                value={val("height")}
                 onChange={(e) => handleChange("height", parseFloat(e.target.value) || 0)}
               />
               <Input
                 id="feat-radius"
                 label={t("coordinator.detail.obstacleRadius")}
                 type="number"
-                value={feature.data.radius}
+                value={val("radius")}
                 onChange={(e) => handleChange("radius", parseFloat(e.target.value) || 0)}
               />
             </div>
@@ -137,7 +153,7 @@ export default function EditableFeatureInfo({
             <Input
               id="feat-name"
               label={t("coordinator.detail.zoneName")}
-              value={feature.data.name}
+              value={val("name")}
               onChange={(e) => handleChange("name", e.target.value)}
             />
             <div>
@@ -145,7 +161,7 @@ export default function EditableFeatureInfo({
                 {t("coordinator.detail.zoneType")}
               </label>
               <select
-                value={feature.data.type}
+                value={val("type")}
                 onChange={(e) => handleChange("type", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
@@ -160,21 +176,21 @@ export default function EditableFeatureInfo({
                 id="feat-floor"
                 label={t("coordinator.detail.zoneFloor")}
                 type="number"
-                value={feature.data.altitude_floor ?? ""}
+                value={val("altitude_floor")}
                 onChange={(e) => handleChange("altitude_floor", parseFloat(e.target.value) || 0)}
               />
               <Input
                 id="feat-ceiling"
                 label={t("coordinator.detail.zoneCeiling")}
                 type="number"
-                value={feature.data.altitude_ceiling ?? ""}
+                value={val("altitude_ceiling")}
                 onChange={(e) => handleChange("altitude_ceiling", parseFloat(e.target.value) || 0)}
               />
             </div>
             <label className="flex items-center gap-2 text-sm text-tv-text-primary">
               <input
                 type="checkbox"
-                checked={feature.data.is_active}
+                checked={Boolean(formData.is_active)}
                 onChange={(e) => handleChange("is_active", e.target.checked)}
                 className="accent-tv-accent"
               />
@@ -188,13 +204,13 @@ export default function EditableFeatureInfo({
             <Input
               id="feat-name"
               label={t("coordinator.detail.aglName")}
-              value={feature.data.name}
+              value={val("name")}
               onChange={(e) => handleChange("name", e.target.value)}
             />
             <Input
               id="feat-type"
               label={t("coordinator.detail.aglType")}
-              value={feature.data.agl_type}
+              value={val("agl_type")}
               onChange={(e) => handleChange("agl_type", e.target.value)}
             />
             <div>
@@ -202,7 +218,7 @@ export default function EditableFeatureInfo({
                 {t("coordinator.detail.aglSide")}
               </label>
               <select
-                value={feature.data.side ?? ""}
+                value={val("side")}
                 onChange={(e) => handleChange("side", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
@@ -216,7 +232,7 @@ export default function EditableFeatureInfo({
               label={t("coordinator.detail.aglGlideAngle")}
               type="number"
               step="0.1"
-              value={feature.data.glide_slope_angle ?? ""}
+              value={val("glide_slope_angle")}
               onChange={(e) => handleChange("glide_slope_angle", parseFloat(e.target.value) || 0)}
             />
           </>
@@ -228,7 +244,7 @@ export default function EditableFeatureInfo({
               id="feat-unit"
               label={t("coordinator.detail.lhaUnitNumber")}
               type="number"
-              value={feature.data.unit_number}
+              value={val("unit_number")}
               onChange={(e) => handleChange("unit_number", parseInt(e.target.value) || 0)}
             />
             <Input
@@ -236,7 +252,7 @@ export default function EditableFeatureInfo({
               label={t("coordinator.detail.lhaSettingAngle")}
               type="number"
               step="0.1"
-              value={feature.data.setting_angle}
+              value={val("setting_angle")}
               onChange={(e) => handleChange("setting_angle", parseFloat(e.target.value) || 0)}
             />
             <div>
@@ -244,7 +260,7 @@ export default function EditableFeatureInfo({
                 {t("coordinator.detail.lhaLampType")}
               </label>
               <select
-                value={feature.data.lamp_type}
+                value={val("lamp_type")}
                 onChange={(e) => handleChange("lamp_type", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >

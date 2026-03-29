@@ -9,7 +9,7 @@ interface InfrastructureListPanelProps<T> {
   getId: (item: T) => string;
   getName: (item: T) => string;
   renderItem: (item: T) => React.ReactNode;
-  onAdd: () => void;
+  onAdd?: () => void;
   onEdit: (item: T) => void;
   onDelete: (id: string) => void;
   addLabel: string;
@@ -55,14 +55,16 @@ export default function InfrastructureListPanel<T>({
             </span>
           </button>
           <div className="flex items-center gap-1">
-            <button
-              onClick={onAdd}
-              title={addLabel}
-              className="rounded-full p-1.5 text-tv-accent hover:bg-tv-surface-hover transition-colors"
-              data-testid={`add-${title.toLowerCase().replace(/\s+/g, "-")}`}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
+            {onAdd && (
+              <button
+                onClick={onAdd}
+                title={addLabel}
+                className="rounded-full p-1.5 text-tv-accent hover:bg-tv-surface-hover transition-colors"
+                data-testid={`add-${title.toLowerCase().replace(/\s+/g, "-")}`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button onClick={() => setCollapsed(!collapsed)}>
               {collapsed ? (
                 <ChevronRight className="h-3.5 w-3.5 text-tv-text-muted" />
