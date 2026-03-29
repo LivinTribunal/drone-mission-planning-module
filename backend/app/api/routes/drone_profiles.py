@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
@@ -64,3 +65,29 @@ def delete_drone(drone_id: UUID, db: Session = Depends(get_db)):
     warnings = drone_profile_service.delete_drone(db, drone_id)
 
     return DeleteResponse(deleted=True, warnings=warnings)
+
+
+@router.post("/{drone_id}/model")
+async def upload_drone_model(drone_id: UUID, file: UploadFile, db: Session = Depends(get_db)):
+    """upload a custom 3d model file for a drone profile."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="no file provided")
+
+    content = await file.read()
+    identifier = drone_profile_service.upload_drone_model(db, drone_id, content, file.filename)
+
+    return {
+        "model_identifier": identifier,
+        "model_url": f"/static/models/custom/{identifier}",
+    }
+
+
+@router.get("/{drone_id}/model")
+def get_drone_model(drone_id: UUID, db: Session = Depends(get_db)):
+    """serve a custom uploaded model file."""
+    drone = drone_profile_service.get_drone(db, drone_id)
+    if not drone.model_identifier:
+        raise HTTPException(status_code=404, detail="no model assigned")
+
+    path = drone_profile_service.get_drone_model_path(drone_id, drone.model_identifier)
+    return FileResponse(path, media_type="model/gltf-binary")

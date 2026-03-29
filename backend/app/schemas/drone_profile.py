@@ -7,7 +7,7 @@ from app.schemas.common import ListMeta
 
 
 class DroneProfileCreate(BaseModel):
-    """drone profile create schema"""
+    """drone profile create schema."""
 
     name: str
     manufacturer: str | None = None
@@ -21,10 +21,11 @@ class DroneProfileCreate(BaseModel):
     camera_frame_rate: int | None = None
     sensor_fov: float | None = None
     weight: float | None = None
+    model_identifier: str | None = None
 
 
 class DroneProfileUpdate(BaseModel):
-    """drone profile update schema"""
+    """drone profile update schema."""
 
     name: str | None = None
     manufacturer: str | None = None
@@ -38,10 +39,11 @@ class DroneProfileUpdate(BaseModel):
     camera_frame_rate: int | None = None
     sensor_fov: float | None = None
     weight: float | None = None
+    model_identifier: str | None = None
 
 
 class DroneProfileResponse(BaseModel):
-    """drone profile response schema"""
+    """drone profile response schema."""
 
     id: UUID
     name: str
@@ -56,6 +58,7 @@ class DroneProfileResponse(BaseModel):
     camera_frame_rate: int | None = None
     sensor_fov: float | None = None
     weight: float | None = None
+    model_identifier: str | None = None
     created_at: datetime
     updated_at: datetime
     mission_count: int = 0

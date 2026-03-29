@@ -660,6 +660,17 @@
       "TEMPORARY_NO_FLY": "Temporary No-Fly"
     }
   },
+  "drone": {
+    "model3d": "3D Model",
+    "selectModel": "Select 3D Model",
+    "noModel": "No 3D model selected",
+    "uploadCustom": "Upload Custom",
+    "removeModel": "Remove Model",
+    "customModel": "Custom Model",
+    "modelNotAvailable": "Model not available",
+    "maxFileSize": "Maximum file size: 20MB",
+    "invalidFileType": "Only .glb and .gltf files are supported"
+  },
   "languages": {
     "en": "English"
   }

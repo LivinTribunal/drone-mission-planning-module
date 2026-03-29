@@ -19,9 +19,9 @@ def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mis
 
     try:
         mission.transition_to(target_status)
-    except ValueError:
+    except ValueError as e:
         raise DomainError(
-            "invalid status transition",
+            str(e),
             status_code=409,
             extra={
                 "error": "invalid status transition",

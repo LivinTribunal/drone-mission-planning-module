@@ -11,6 +11,8 @@ import Button from "@/components/common/Button";
 import Modal from "@/components/common/Modal";
 import Input from "@/components/common/Input";
 import RowActionMenu from "@/components/common/RowActionMenu";
+import DroneModelSelector from "@/components/drone/DroneModelSelector";
+import { getBundledModel } from "@/config/droneModels";
 
 export default function DroneListPage() {
   const { t } = useTranslation();
@@ -34,6 +36,7 @@ export default function DroneListPage() {
     camera_frame_rate: "",
   });
   const [createError, setCreateError] = useState("");
+  const [createModelId, setCreateModelId] = useState<string | null>(null);
 
   // notifications
   const [notification, setNotification] = useState("");
@@ -56,6 +59,13 @@ export default function DroneListPage() {
   useEffect(() => {
     fetchDrones();
   }, [fetchDrones]);
+
+  // cleanup notification timer on unmount
+  useEffect(() => {
+    return () => {
+      if (notificationTimer.current) clearTimeout(notificationTimer.current);
+    };
+  }, []);
 
   function showToast(msg: string) {
     if (notificationTimer.current) clearTimeout(notificationTimer.current);
@@ -90,6 +100,14 @@ export default function DroneListPage() {
       camera_frame_rate: "",
     });
     setCreateError("");
+    setCreateModelId(null);
+  }
+
+  /** resolve a model identifier to its thumbnail url. */
+  function getModelThumbnail(identifier: string | null): string | null {
+    if (!identifier) return null;
+    const bundled = getBundledModel(identifier);
+    return bundled?.thumbnail ?? null;
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -113,6 +131,7 @@ export default function DroneListPage() {
         camera_frame_rate: createForm.camera_frame_rate
           ? Number(createForm.camera_frame_rate)
           : undefined,
+        model_identifier: createModelId ?? undefined,
       });
       setShowCreateDialog(false);
       resetCreateForm();
@@ -137,6 +156,7 @@ export default function DroneListPage() {
         camera_frame_rate: drone.camera_frame_rate,
         sensor_fov: drone.sensor_fov,
         weight: drone.weight,
+        model_identifier: drone.model_identifier,
       };
       const created = await createDroneProfile(payload);
       navigate(`/coordinator-center/drones/${created.id}`);
@@ -283,7 +303,34 @@ export default function DroneListPage() {
                     text-sm text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
                   data-testid={`drone-row-${drone.id}`}
                 >
-                  <td className="px-4 py-3 font-semibold">{drone.name}</td>
+                  <td className="px-4 py-3 font-semibold">
+                    <div className="flex items-center gap-2">
+                      {getModelThumbnail(drone.model_identifier) ? (
+                        <img
+                          src={getModelThumbnail(drone.model_identifier)!}
+                          alt=""
+                          className="h-10 w-10 rounded-lg object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-lg bg-[var(--tv-surface-hover)] flex items-center justify-center flex-shrink-0">
+                          <svg
+                            className="h-5 w-5 text-[var(--tv-text-muted)]"
+                            viewBox="0 0 64 64"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <circle cx="32" cy="32" r="4" />
+                            <line x1="32" y1="28" x2="20" y2="16" />
+                            <line x1="32" y1="28" x2="44" y2="16" />
+                            <line x1="32" y1="36" x2="20" y2="48" />
+                            <line x1="32" y1="36" x2="44" y2="48" />
+                          </svg>
+                        </div>
+                      )}
+                      <span>{drone.name}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-tv-text-secondary">
                     {drone.manufacturer || "\u2014"}
                   </td>
@@ -394,6 +441,20 @@ export default function DroneListPage() {
               }
             />
           </div>
+
+          {/* model selection */}
+          <div className="mt-4">
+            <p className="text-xs font-medium text-tv-text-secondary uppercase tracking-wider mb-2">
+              {t("drone.selectModel")}
+            </p>
+            <DroneModelSelector
+              selectedModelId={createModelId}
+              onSelectModel={setCreateModelId}
+              onRemoveModel={() => setCreateModelId(null)}
+              showUpload={false}
+            />
+          </div>
+
           {createError && (
             <p className="mt-3 text-sm text-tv-error">{createError}</p>
           )}

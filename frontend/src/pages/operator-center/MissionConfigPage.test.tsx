@@ -139,6 +139,7 @@ describe("StatsPanel", () => {
           camera_frame_rate: null,
           sensor_fov: null,
           weight: null,
+          model_identifier: null,
           created_at: "2026-03-19T00:00:00Z",
           updated_at: "2026-03-19T00:00:00Z",
           mission_count: 0,

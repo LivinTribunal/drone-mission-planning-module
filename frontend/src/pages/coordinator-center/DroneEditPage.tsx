@@ -7,6 +7,7 @@ import {
   createDroneProfile,
   updateDroneProfile,
   deleteDroneProfile,
+  uploadDroneModel,
 } from "@/api/droneProfiles";
 import { listMissions } from "@/api/missions";
 import type {
@@ -20,6 +21,9 @@ import Button from "@/components/common/Button";
 import Card from "@/components/common/Card";
 import Modal from "@/components/common/Modal";
 import Input from "@/components/common/Input";
+import DroneModelViewer from "@/components/drone/DroneModelViewer";
+import DroneModelSelector from "@/components/drone/DroneModelSelector";
+import { getBundledModel } from "@/config/droneModels";
 import type { MissionStatus } from "@/types/enums";
 
 interface FieldDef {
@@ -101,7 +105,6 @@ function formToPayload(form: Record<string, string>): DroneProfileUpdate {
       payload[f.key] = val || null;
     }
   }
-  if (form.name) payload.name = form.name;
   return payload as DroneProfileUpdate;
 }
 
@@ -254,14 +257,15 @@ export default function DroneEditPage() {
     }, AUTOSAVE_DELAY);
   }
 
-  // cleanup autosave timer on unmount
+  // cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      if (notificationTimer.current) clearTimeout(notificationTimer.current);
     };
   }, []);
 
-  // flush pending autosave on navigation away
+  // cancel pending autosave on page unload
   useEffect(() => {
     function handleBeforeUnload() {
       if (autosaveTimer.current) {
@@ -382,6 +386,7 @@ export default function DroneEditPage() {
         camera_frame_rate: drone.camera_frame_rate,
         sensor_fov: drone.sensor_fov,
         weight: drone.weight,
+        model_identifier: drone.model_identifier,
       };
       const created = await createDroneProfile(payload);
       navigate(`/coordinator-center/drones/${created.id}`);
@@ -417,6 +422,59 @@ export default function DroneEditPage() {
       navigate(`/coordinator-center/drones/${created.id}`);
     } catch {
       setCreateError(t("coordinator.drones.create.createError"));
+    }
+  }
+
+  /** resolve model identifier to a loadable url. */
+  function resolveModelUrl(identifier: string | null): string | null {
+    if (!identifier) return null;
+    const bundled = getBundledModel(identifier);
+    if (bundled) return bundled.path;
+    return `/static/models/custom/${identifier}`;
+  }
+
+  /** select a bundled model and save immediately. */
+  async function handleSelectModel(modelId: string) {
+    if (!id || !drone) return;
+    try {
+      const updated = await updateDroneProfile(id, {
+        model_identifier: modelId,
+      });
+      setDrone(updated);
+      droneRef.current = updated;
+      setLastSaved(new Date());
+    } catch {
+      showToast(t("coordinator.drones.detail.saveError"));
+    }
+  }
+
+  /** remove the model selection. */
+  async function handleRemoveModel() {
+    if (!id || !drone) return;
+    try {
+      const updated = await updateDroneProfile(id, {
+        model_identifier: null,
+      });
+      setDrone(updated);
+      droneRef.current = updated;
+      setLastSaved(new Date());
+    } catch {
+      showToast(t("coordinator.drones.detail.saveError"));
+    }
+  }
+
+  /** upload a custom model file. */
+  async function handleUploadCustomModel(file: File) {
+    if (!id) return;
+    try {
+      const result = await uploadDroneModel(id, file);
+      const updated = await getDroneProfile(id);
+      setDrone(updated);
+      droneRef.current = updated;
+      setLastSaved(new Date());
+      void result;
+    } catch {
+      showToast(t("drone.invalidFileType"));
     }
   }
 
@@ -708,8 +766,29 @@ export default function DroneEditPage() {
 
       {/* right panel - mirrors navbar right section flex structure */}
       <div className="flex-1 flex items-start gap-4 min-w-0">
-        <div className="flex-1 overflow-y-auto min-w-0">
-        <Card className="p-6">
+        <div className="flex-1 overflow-y-auto min-w-0 flex flex-col gap-4">
+          {/* 3d model viewer section */}
+          <div
+            className="rounded-2xl border border-[var(--tv-border)] bg-[var(--tv-surface)] overflow-hidden"
+            data-testid="model-viewer-section"
+          >
+            <div className="h-[300px]">
+              <DroneModelViewer modelUrl={resolveModelUrl(drone.model_identifier)} />
+            </div>
+            <div className="px-4 py-3 border-t border-[var(--tv-border)]">
+              <p className="text-xs font-medium text-[var(--tv-text-secondary)] uppercase tracking-wider mb-2">
+                {t("drone.selectModel")}
+              </p>
+              <DroneModelSelector
+                selectedModelId={drone.model_identifier}
+                onSelectModel={handleSelectModel}
+                onRemoveModel={handleRemoveModel}
+                onUploadCustom={handleUploadCustomModel}
+              />
+            </div>
+          </div>
+
+          <Card className="p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-base font-semibold text-tv-text-primary">
                 {drone.name}

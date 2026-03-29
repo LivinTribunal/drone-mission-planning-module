@@ -39,6 +39,10 @@ const DRONE_1 = {
   camera_frame_rate: 30,
   sensor_fov: 84,
   weight: 6.3,
+  created_at: "2025-01-01T00:00:00Z",
+  updated_at: "2025-01-15T00:00:00Z",
+  mission_count: 3,
+  model_identifier: null,
 };
 
 const DRONE_2 = {
@@ -55,6 +59,10 @@ const DRONE_2 = {
   camera_frame_rate: 30,
   sensor_fov: 84,
   weight: 0.92,
+  created_at: "2025-02-01T00:00:00Z",
+  updated_at: "2025-02-10T00:00:00Z",
+  mission_count: 1,
+  model_identifier: null,
 };
 
 const DRONE_3 = {
@@ -71,6 +79,10 @@ const DRONE_3 = {
   camera_frame_rate: 60,
   sensor_fov: 82,
   weight: 1.19,
+  created_at: "2025-03-01T00:00:00Z",
+  updated_at: "2025-03-05T00:00:00Z",
+  mission_count: 0,
+  model_identifier: null,
 };
 
 function renderPage() {

@@ -1,12 +1,19 @@
-from uuid import UUID
+import os
+from pathlib import Path
+from uuid import UUID, uuid4
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import DomainError, NotFoundError
 from app.models.mission import DroneProfile, Mission
 from app.schemas.drone_profile import DroneProfileCreate, DroneProfileUpdate
 from app.services.geometry_converter import apply_schema_update, schema_to_model_data
+
+# custom model upload directory
+CUSTOM_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "models" / "custom"
+ALLOWED_EXTENSIONS = {".glb", ".gltf"}
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
 
 def list_drones(db: Session) -> list[DroneProfile]:
@@ -79,3 +86,36 @@ def delete_drone(db: Session, drone_id: UUID) -> list[str]:
     db.commit()
 
     return warnings
+
+
+def upload_drone_model(db: Session, drone_id: UUID, file_content: bytes, filename: str) -> str:
+    """upload a custom 3d model for a drone profile."""
+    drone = db.query(DroneProfile).filter(DroneProfile.id == drone_id).first()
+    if not drone:
+        raise NotFoundError("drone profile not found")
+
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise DomainError("only .glb and .gltf files are supported")
+
+    if len(file_content) > MAX_FILE_SIZE:
+        raise DomainError("file exceeds maximum size of 20MB")
+
+    safe_name = f"custom_{uuid4().hex[:12]}{ext}"
+    CUSTOM_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    dest = CUSTOM_MODELS_DIR / safe_name
+    dest.write_bytes(file_content)
+
+    drone.model_identifier = safe_name
+    db.commit()
+    db.refresh(drone)
+
+    return safe_name
+
+
+def get_drone_model_path(drone_id: UUID, model_identifier: str) -> Path:
+    """resolve path to a custom uploaded model file."""
+    path = CUSTOM_MODELS_DIR / model_identifier
+    if not path.exists():
+        raise NotFoundError("model file not found")
+    return path
