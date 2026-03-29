@@ -88,8 +88,8 @@ export default function InspectionEditPage() {
 
       // initialize config from template defaults
       initializeFromTemplate(tpl);
-    } catch {
-      setError(t("coordinator.inspections.loadError"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
     } finally {
       setLoading(false);
     }
@@ -156,7 +156,7 @@ export default function InspectionEditPage() {
       if (field === "custom_tolerances") {
         return {
           ...prev,
-          custom_tolerances: value !== null ? { default: value } : null,
+          custom_tolerances: value !== null ? { ...(prev.custom_tolerances ?? {}), default: value } : null,
         };
       }
       return { ...prev, [field]: value };
@@ -186,8 +186,8 @@ export default function InspectionEditPage() {
       setTemplate(result);
       setIsEditing(false);
       showNotif(t("coordinator.inspections.saved"));
-    } catch {
-      showNotif(t("coordinator.inspections.saveError"));
+    } catch (err) {
+      showNotif(err instanceof Error ? err.message : t("coordinator.inspections.saveError"));
     } finally {
       setSaving(false);
     }
@@ -203,8 +203,8 @@ export default function InspectionEditPage() {
         default_config: editConfig ?? undefined,
       });
       navigate(`/coordinator-center/inspections/${result.id}`);
-    } catch {
-      showNotif(t("coordinator.inspections.duplicateError"));
+    } catch (err) {
+      showNotif(err instanceof Error ? err.message : t("coordinator.inspections.duplicateError"));
     }
   }
 
@@ -213,8 +213,8 @@ export default function InspectionEditPage() {
     try {
       await deleteInspectionTemplate(id);
       navigate("/coordinator-center/inspections");
-    } catch {
-      showNotif(t("coordinator.inspections.deleteError"));
+    } catch (err) {
+      showNotif(err instanceof Error ? err.message : t("coordinator.inspections.deleteError"));
     }
     setShowDelete(false);
   }

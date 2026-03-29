@@ -34,7 +34,7 @@ export default function TemplateConfigSection({
         <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
           {t("coordinator.inspections.method")}
         </label>
-        <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[var(--tv-status-planned-bg)] text-[var(--tv-status-planned-text)]">
+        <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[var(--tv-status-draft-bg)] text-[var(--tv-status-draft-text)]">
           {formatMethod(method)}
         </span>
       </div>

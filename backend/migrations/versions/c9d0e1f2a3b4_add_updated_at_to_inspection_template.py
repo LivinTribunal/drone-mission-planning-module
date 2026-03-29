@@ -21,6 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """add updated_at column to inspection_template table."""
+    # note: onupdate=func.now() is orm-only - raw sql updates won't auto-set this column
     op.add_column(
         "inspection_template",
         sa.Column(

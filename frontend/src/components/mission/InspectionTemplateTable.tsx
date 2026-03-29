@@ -126,7 +126,7 @@ export default function InspectionTemplateTable({
                   {agl ? `${agl.name} - ${agl.agl_type}${agl.side ? ` - ${agl.side}` : ""}` : "-"}
                 </td>
                 <td className="py-3 px-3">
-                  <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[var(--tv-status-planned-bg)] text-[var(--tv-status-planned-text)]">
+                  <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[var(--tv-status-draft-bg)] text-[var(--tv-status-draft-text)]">
                     {formatMethod(tpl.methods[0] ?? "")}
                   </span>
                 </td>

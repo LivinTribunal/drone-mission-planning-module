@@ -225,7 +225,6 @@
     "placeLanding": "Place Landing",
     "computeTrajectory": "Compute Trajectory",
     "recomputeTrajectory": "Recompute Trajectory",
-    "validateTrajectory": "Validate Trajectory",
     "noChangesToRecompute": "No changes to recompute",
     "recomputeBeforeValidating": "Recompute trajectory before validating",
     "needsManualApproval": "Needs Manual Approval",

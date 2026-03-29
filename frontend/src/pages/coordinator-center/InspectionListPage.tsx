@@ -46,8 +46,8 @@ export default function InspectionListPage() {
         airportDetail ? { airport_id: airportDetail.id } : undefined,
       );
       setTemplates(res.data);
-    } catch {
-      setError(t("coordinator.inspections.loadError"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
     } finally {
       setLoading(false);
     }
