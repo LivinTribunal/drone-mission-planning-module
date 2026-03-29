@@ -156,6 +156,7 @@ export default function InspectionEditPage() {
       if (!prev) return prev;
       if (field === "custom_tolerances") {
         if (value === null) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { default: _, ...rest } = prev.custom_tolerances ?? {};
           return {
             ...prev,

@@ -28,8 +28,8 @@ def test_list_templates(client):
 
 def test_get_template(client):
     """test get inspection template"""
-    templates = client.get("/api/v1/inspection-templates").json()["data"]
-    template_id = templates[0]["id"]
+    created = client.post("/api/v1/inspection-templates", json=TEMPLATE_PAYLOAD).json()
+    template_id = created["id"]
 
     response = client.get(f"/api/v1/inspection-templates/{template_id}")
     assert response.status_code == 200
