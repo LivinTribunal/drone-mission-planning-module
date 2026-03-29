@@ -35,17 +35,33 @@ const ZONE_COLORS: Record<string, string> = {
 };
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import AirportMap from "@/components/map/AirportMap";
+import type { AirportMapHandle } from "@/components/map/AirportMap";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
 import InfrastructureListPanel from "@/components/coordinator/InfrastructureListPanel";
 import CoordinatorAGLPanel from "@/components/coordinator/CoordinatorAGLPanel";
 import AirportInfoPanel from "@/components/coordinator/AirportInfoPanel";
 import EditableFeatureInfo from "@/components/coordinator/EditableFeatureInfo";
+import CreationForm from "@/components/coordinator/CreationForm";
+import type { PendingGeometryType } from "@/components/coordinator/CreationForm";
 import UnsavedChangesDialog from "@/components/coordinator/UnsavedChangesDialog";
 import MapDrawingToolbar from "@/components/coordinator/MapDrawingToolbar";
 import CoordinatorMapHelpPanel from "@/components/coordinator/CoordinatorMapHelpPanel";
 import GeoJsonEditorModal from "@/components/coordinator/GeoJsonEditorModal";
 import useDirtyState from "@/hooks/useDirtyState";
 import useMapDrawing from "@/hooks/useMapDrawing";
+import useDrawPolygon from "@/hooks/useDrawPolygon";
+import useDrawCircle from "@/hooks/useDrawCircle";
+import type { CircleResult } from "@/hooks/useDrawCircle";
+import useDrawRectangle from "@/hooks/useDrawRectangle";
+import usePlacePoint from "@/hooks/usePlacePoint";
+import {
+  createSurface,
+  createObstacle,
+  createSafetyZone,
+  createAGL,
+} from "@/api/airports";
+import useVertexEditor from "@/hooks/useVertexEditor";
+import { extractCenterline, circleToPolygon } from "@/utils/geo";
 import type { DrawingTool } from "@/components/coordinator/MapDrawingToolbar";
 import { MapTool } from "@/hooks/useMapTools";
 
@@ -58,8 +74,7 @@ const DRAWING_TOOL_TO_MAP_TOOL: Record<DrawingTool, MapTool> = {
   drawPolygon: MapTool.SELECT,
   drawCircle: MapTool.SELECT,
   drawRectangle: MapTool.SELECT,
-  editVertices: MapTool.SELECT,
-  moveFeature: MapTool.SELECT,
+  placePoint: MapTool.SELECT,
   geoJsonEditor: MapTool.SELECT,
 };
 
@@ -93,17 +108,7 @@ export default function AirportEditPage() {
   const mapTool = DRAWING_TOOL_TO_MAP_TOOL[activeTool] ?? MapTool.SELECT;
   const [pendingNav, setPendingNav] = useState<string | null>(null);
 
-  // warn on browser refresh / tab close
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [isDirty]);
-
+  // fetch airport data - declared early so drawing hooks can reference it
   const fetchAirport = useCallback(async () => {
     /** fetch airport detail data. */
     if (!id) return;
@@ -118,6 +123,167 @@ export default function AirportEditPage() {
       setLoading(false);
     }
   }, [id]);
+
+  // map ref for drawing hooks
+  const mapHandleRef = useRef<AirportMapHandle>(null);
+  const getMap = useCallback(() => mapHandleRef.current?.getMap() ?? null, []);
+
+  // pending geometry from drawing tools
+  const [pendingGeometry, setPendingGeometry] = useState<GeoJSON.Polygon | null>(null);
+  const [pendingGeometryType, setPendingGeometryType] = useState<PendingGeometryType>("polygon");
+  const [pendingCircleRadius, setPendingCircleRadius] = useState<number | undefined>();
+  const [pendingCircleCenter, setPendingCircleCenter] = useState<[number, number] | undefined>();
+  const [pendingPointPosition, setPendingPointPosition] = useState<[number, number] | undefined>();
+
+  // drawing completion handlers
+  const handlePolygonComplete = useCallback((polygon: GeoJSON.Polygon) => {
+    /** handle completed polygon from draw polygon tool. */
+    setPendingGeometry(polygon);
+    setPendingGeometryType("polygon");
+    setPendingCircleRadius(undefined);
+    setPendingCircleCenter(undefined);
+    setPendingPointPosition(undefined);
+    setActiveTool("select");
+  }, [setActiveTool]);
+
+  const handleCircleComplete = useCallback((result: CircleResult) => {
+    /** handle completed circle from draw circle tool. */
+    setPendingGeometry(result.polygon);
+    setPendingGeometryType("circle");
+    setPendingCircleRadius(result.radius);
+    setPendingCircleCenter(result.center);
+    setPendingPointPosition(undefined);
+    setActiveTool("select");
+  }, [setActiveTool]);
+
+  const handleRectangleComplete = useCallback((polygon: GeoJSON.Polygon) => {
+    /** handle completed rectangle from draw rectangle tool. */
+    setPendingGeometry(polygon);
+    setPendingGeometryType("polygon");
+    setPendingCircleRadius(undefined);
+    setPendingCircleCenter(undefined);
+    setPendingPointPosition(undefined);
+    setActiveTool("select");
+  }, [setActiveTool]);
+
+  const handlePointComplete = useCallback((point: [number, number]) => {
+    /** handle completed point from place point tool. */
+    setPendingGeometry(null);
+    setPendingGeometryType("point");
+    setPendingCircleRadius(undefined);
+    setPendingCircleCenter(undefined);
+    setPendingPointPosition(point);
+    setActiveTool("select");
+  }, [setActiveTool]);
+
+  // wire drawing hooks
+  const map = getMap();
+  useDrawPolygon(map, activeTool === "drawPolygon", handlePolygonComplete);
+  useDrawCircle(map, activeTool === "drawCircle", handleCircleComplete);
+  useDrawRectangle(map, activeTool === "drawRectangle", handleRectangleComplete);
+  usePlacePoint(map, activeTool === "placePoint", handlePointComplete);
+
+  // vertex editor for selected features
+  const handleVertexGeometryUpdate = useCallback(
+    (featureType: string, featureId: string, geometry: GeoJSON.Geometry) => {
+      /** handle geometry update from vertex editor. */
+      markDirty(featureType, featureId, "update", { geometry });
+    },
+    [markDirty],
+  );
+
+  useVertexEditor(map, selectedFeature, activeTool === "select", handleVertexGeometryUpdate);
+
+  const handleCreationCancel = useCallback(() => {
+    /** cancel pending creation and clear geometry. */
+    setPendingGeometry(null);
+    setPendingPointPosition(undefined);
+    setPendingCircleCenter(undefined);
+    setPendingCircleRadius(undefined);
+  }, []);
+
+  const handleCreate = useCallback(
+    async (entityType: string, data: Record<string, unknown>) => {
+      /** create entity from the creation form. */
+      if (!id || !airport) return;
+      const elevation = airport.elevation;
+
+      if (entityType === "runway" || entityType === "taxiway") {
+        if (!pendingGeometry) return;
+        const ring = pendingGeometry.coordinates[0] as [number, number][];
+        const centerline = extractCenterline(ring);
+        const geomCoords: [number, number, number][] = centerline.map(([lng, lat]) => [lng, lat, elevation]);
+        await createSurface(id, {
+          identifier: String(data.name ?? ""),
+          surface_type: entityType === "runway" ? "RUNWAY" : "TAXIWAY",
+          geometry: { type: "LineString", coordinates: geomCoords },
+          heading: data.heading as number | undefined,
+          length: data.length as number | undefined,
+          width: data.width as number | undefined,
+        });
+      } else if (entityType.startsWith("safety_zone_")) {
+        if (!pendingGeometry) return;
+        const polyCoords: [number, number, number][][] = pendingGeometry.coordinates.map((ring) =>
+          (ring as [number, number][]).map(([lng, lat]): [number, number, number] => [lng, lat, elevation]),
+        );
+        const zoneType = entityType
+          .replace("safety_zone_", "")
+          .toUpperCase()
+          .replace("NO_FLY", "TEMPORARY_NO_FLY") as "CTR" | "RESTRICTED" | "PROHIBITED" | "TEMPORARY_NO_FLY";
+        await createSafetyZone(id, {
+          name: String(data.name ?? ""),
+          type: zoneType,
+          geometry: { type: "Polygon", coordinates: polyCoords },
+          altitude_floor: data.altitude_floor as number | undefined,
+          altitude_ceiling: data.altitude_ceiling as number | undefined,
+          is_active: data.is_active as boolean | undefined,
+        });
+      } else if (entityType === "obstacle") {
+        const center = (data.center as [number, number]) ?? pendingCircleCenter ?? pendingPointPosition;
+        if (!center) return;
+        const radius = data.radius as number ?? 0;
+        const ring = circleToPolygon(center, Math.max(radius, 1));
+        const obstacleCoords: [number, number, number][] = ring.map(([lng, lat]): [number, number, number] => [lng, lat, elevation]);
+        await createObstacle(id, {
+          name: String(data.name ?? ""),
+          position: { type: "Point", coordinates: [center[0], center[1], elevation] },
+          height: (data.height as number) ?? 0,
+          radius,
+          geometry: { type: "Polygon", coordinates: [obstacleCoords] },
+          type: (data.type as "BUILDING" | "TOWER" | "ANTENNA" | "VEGETATION" | "OTHER") ?? "BUILDING",
+        });
+      } else if (entityType === "agl") {
+        const pos = (data.center as [number, number]) ?? pendingPointPosition;
+        if (!pos) return;
+        const sid = data.surface_id as string;
+        if (!sid) return;
+        await createAGL(id, sid, {
+          agl_type: String(data.agl_type ?? "PAPI"),
+          name: String(data.name ?? ""),
+          position: { type: "Point", coordinates: [pos[0], pos[1], elevation] },
+          side: data.side as "LEFT" | "RIGHT" | undefined,
+          glide_slope_angle: data.glide_slope_angle as number | undefined,
+          distance_from_threshold: data.distance_from_threshold as number | undefined,
+        });
+      }
+
+      // refresh and cleanup
+      handleCreationCancel();
+      await fetchAirport();
+    },
+    [id, airport, pendingGeometry, pendingCircleCenter, pendingPointPosition, handleCreationCancel, fetchAirport],
+  );
+
+  // warn on browser refresh / tab close
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
   useEffect(() => {
     fetchAirport();
@@ -138,7 +304,8 @@ export default function AirportEditPage() {
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
       if (e.key === "Escape") {
-        setActiveTool("pan");
+        handleCreationCancel();
+        setActiveTool("select");
         setSelectedFeature(null);
         return;
       }
@@ -159,12 +326,11 @@ export default function AirportEditPage() {
       const keyMap: Record<string, () => void> = {
         s: () => setActiveTool("select"),
         p: () => setActiveTool("pan"),
-        w: () => setActiveTool("moveFeature"),
         m: () => setActiveTool("measurement"),
         g: () => setActiveTool("drawPolygon"),
         c: () => setActiveTool("drawCircle"),
         e: () => setActiveTool("drawRectangle"),
-        v: () => setActiveTool("editVertices"),
+        t: () => setActiveTool("placePoint"),
         z: () => setActiveTool("zoom"),
         r: () => setActiveTool("zoomReset"),
       };
@@ -184,7 +350,7 @@ export default function AirportEditPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setActiveTool, undo, redo, selectedFeature, activeTool]);
+  }, [setActiveTool, undo, redo, selectedFeature, activeTool, handleCreationCancel]);
 
   const handleFeatureClick = useCallback((feature: MapFeature | null) => {
     /** set selected feature when clicked on map or list panel. */
@@ -405,6 +571,7 @@ export default function AirportEditPage() {
       {/* map */}
       <div className="w-full h-full px-4 py-3">
         <AirportMap
+          ref={mapHandleRef}
           airport={airport}
           interactive={true}
           showLayerPanel={true}
@@ -607,7 +774,18 @@ export default function AirportEditPage() {
               airport={airport}
               onUpdate={handleAirportUpdate}
             />
-            {selectedFeature && selectedFeature.type !== "waypoint" && (
+            {/* creation form or feature editor */}
+            {(pendingGeometry || pendingPointPosition) ? (
+              <CreationForm
+                geometryType={pendingGeometryType}
+                circleRadius={pendingCircleRadius}
+                circleCenter={pendingCircleCenter}
+                pointPosition={pendingPointPosition}
+                surfaces={surfaces}
+                onCancel={handleCreationCancel}
+                onCreate={handleCreate}
+              />
+            ) : selectedFeature && selectedFeature.type !== "waypoint" ? (
               <EditableFeatureInfo
                 feature={selectedFeature}
                 onUpdate={handleFeatureUpdate}
@@ -621,7 +799,7 @@ export default function AirportEditPage() {
                     : undefined
                 }
               />
-            )}
+            ) : null}
           </div>
 
           {/* bottom-left: coordinator help panel */}

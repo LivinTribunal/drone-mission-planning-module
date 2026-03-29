@@ -8,8 +8,7 @@ import {
   Pentagon,
   Circle,
   Square,
-  Diamond,
-  Move,
+  MapPin,
   Ruler,
   Code2,
   Undo2,
@@ -26,8 +25,7 @@ export type DrawingTool =
   | "drawPolygon"
   | "drawCircle"
   | "drawRectangle"
-  | "editVertices"
-  | "moveFeature"
+  | "placePoint"
   | "geoJsonEditor";
 
 interface MapDrawingToolbarProps {
@@ -57,9 +55,9 @@ interface ToolDef {
 const ZOOM_PRESETS = [50, 75, 100, 150, 200, 300];
 
 const interactTools: ToolDef[] = [
-  { key: "select", icon: MousePointer2, tooltipKey: "coordinator.airports.tools.select" },
   { key: "pan", icon: Hand, tooltipKey: "coordinator.airports.tools.pan" },
-  { key: "moveFeature", icon: Move, tooltipKey: "coordinator.airports.tools.moveFeature" },
+  { key: "zoom", icon: ZoomIn, tooltipKey: "coordinator.airports.tools.zoom" },
+  { key: "select", icon: MousePointer2, tooltipKey: "coordinator.airports.tools.select" },
   { key: "measurement", icon: Ruler, tooltipKey: "coordinator.airports.tools.measurement" },
 ];
 
@@ -67,11 +65,7 @@ const drawTools: ToolDef[] = [
   { key: "drawPolygon", icon: Pentagon, tooltipKey: "coordinator.airports.tools.drawPolygon" },
   { key: "drawCircle", icon: Circle, tooltipKey: "coordinator.airports.tools.drawCircle" },
   { key: "drawRectangle", icon: Square, tooltipKey: "coordinator.airports.tools.drawRectangle" },
-];
-
-const editTools: ToolDef[] = [
-  { key: "editVertices", icon: Diamond, tooltipKey: "coordinator.airports.tools.editVertices" },
-  { key: "geoJsonEditor", icon: Code2, tooltipKey: "coordinator.airports.tools.geoJsonEditor" },
+  { key: "placePoint", icon: MapPin, tooltipKey: "coordinator.airports.tools.placePoint" },
 ];
 
 export default function MapDrawingToolbar({
@@ -161,34 +155,8 @@ export default function MapDrawingToolbar({
     >
       {/* main tools pill */}
       <div className="flex items-center rounded-full border border-tv-border bg-tv-bg px-1 py-1">
-        {/* group 1 - interact */}
+        {/* group 1 - interact (pan, zoom, zoom reset, select) */}
         {interactTools.map(renderToolButton)}
-
-        {renderSeparator()}
-
-        {/* group 2 - drawing */}
-        {drawTools.map(renderToolButton)}
-
-        {renderSeparator()}
-
-        {/* group 3 - geometry editing */}
-        {editTools.map(renderToolButton)}
-
-        {renderSeparator()}
-
-        {/* group 4 - zoom + heading */}
-        <button
-          onClick={() => handleClick("zoom")}
-          title={t("coordinator.airports.tools.zoom")}
-          className={`flex items-center justify-center rounded-full w-9 h-9 transition-colors ${
-            activeTool === "zoom"
-              ? "bg-tv-accent text-tv-accent-text"
-              : "text-tv-text-primary hover:bg-tv-surface-hover"
-          }`}
-          data-testid="tool-zoom"
-        >
-          <ZoomIn className="h-4 w-4" />
-        </button>
         <button
           onClick={() => handleClick("zoomReset")}
           title={t("coordinator.airports.tools.zoomReset")}
@@ -197,6 +165,15 @@ export default function MapDrawingToolbar({
         >
           <Maximize2 className="h-4 w-4" />
         </button>
+
+        {renderSeparator()}
+
+        {/* group 2 - drawing */}
+        {drawTools.map(renderToolButton)}
+
+        {renderSeparator()}
+
+        {/* group 3 - zoom field + geojson editor + compass */}
         <div className="relative" ref={zoomRef}>
           <button
             onClick={() => setZoomDropdownOpen(!zoomDropdownOpen)}
@@ -229,6 +206,16 @@ export default function MapDrawingToolbar({
             </div>
           )}
         </div>
+
+        {/* geojson editor */}
+        <button
+          onClick={() => handleClick("geoJsonEditor")}
+          title={t("coordinator.airports.tools.geoJsonEditor")}
+          className="flex items-center justify-center rounded-full w-9 h-9 text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+          data-testid="tool-geoJsonEditor"
+        >
+          <Code2 className="h-4 w-4" />
+        </button>
 
         {/* heading compass */}
         <button

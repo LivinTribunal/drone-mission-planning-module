@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Minus } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { AirportMapProps, MapFeature, MapLayerConfig } from "@/types/map";
+
+export interface AirportMapHandle {
+  /** get the underlying maplibre-gl map instance. */
+  getMap: () => maplibregl.Map | null;
+}
 import type { WaypointResponse } from "@/types/flightPlan";
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import { MapTool } from "@/hooks/useMapTools";
@@ -192,7 +197,7 @@ const TOOL_CURSORS: Record<string, string> = {
   [MapTool.PLACE_LANDING]: "crosshair",
 };
 
-export default function AirportMap({
+const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & { activeTool?: MapTool }>(function AirportMap({
   airport,
   layers: layersProp,
   interactive = true,
@@ -232,7 +237,7 @@ export default function AirportMap({
   is3D: is3DProp,
   onBearingChange,
   bearingResetKey,
-}: AirportMapProps & { activeTool?: MapTool }) {
+}, ref) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -246,6 +251,10 @@ export default function AirportMap({
   landingRef.current = landingCoordinate;
   const indexMapRef = useRef(inspectionIndexMap);
   indexMapRef.current = inspectionIndexMap;
+
+  useImperativeHandle(ref, () => ({
+    getMap: () => mapRef.current,
+  }), []);
 
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>({
     ...DEFAULT_LAYER_CONFIG,
@@ -1501,4 +1510,6 @@ export default function AirportMap({
       {children}
     </div>
   );
-}
+});
+
+export default AirportMap;
