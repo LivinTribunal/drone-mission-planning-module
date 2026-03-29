@@ -1,3 +1,5 @@
+import io
+
 from tests.data.drones import DRONE_PAYLOAD, DRONE_UPDATE_PAYLOAD, THROWAWAY_DRONE_PAYLOAD
 
 
@@ -50,3 +52,77 @@ def test_delete_drone(client):
     r = client.delete(f"/api/v1/drone-profiles/{drone_id}")
     assert r.status_code == 200
     assert r.json()["deleted"] is True
+
+
+# model upload and serving tests
+def test_upload_model(client):
+    """test uploading a custom glb model file."""
+    drone = client.post("/api/v1/drone-profiles", json={"name": "Upload Test Drone"}).json()
+    drone_id = drone["id"]
+
+    glb_content = b"\x00" * 100
+    r = client.post(
+        f"/api/v1/drone-profiles/{drone_id}/model",
+        files={"file": ("test.glb", io.BytesIO(glb_content), "model/gltf-binary")},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert "model_identifier" in data
+    assert data["model_identifier"].endswith(".glb")
+
+    # cleanup
+    client.delete(f"/api/v1/drone-profiles/{drone_id}")
+
+
+def test_upload_model_invalid_extension(client):
+    """test that uploading a non-glb/gltf file is rejected."""
+    drone = client.post("/api/v1/drone-profiles", json={"name": "Ext Test Drone"}).json()
+    drone_id = drone["id"]
+
+    r = client.post(
+        f"/api/v1/drone-profiles/{drone_id}/model",
+        files={"file": ("test.obj", io.BytesIO(b"\x00"), "application/octet-stream")},
+    )
+    assert r.status_code == 400
+
+    client.delete(f"/api/v1/drone-profiles/{drone_id}")
+
+
+def test_get_model_no_model_assigned(client):
+    """test that getting model for drone with no model returns 404."""
+    drone = client.post("/api/v1/drone-profiles", json={"name": "No Model Drone"}).json()
+    drone_id = drone["id"]
+
+    r = client.get(f"/api/v1/drone-profiles/{drone_id}/model")
+    assert r.status_code == 404
+
+    client.delete(f"/api/v1/drone-profiles/{drone_id}")
+
+
+def test_model_identifier_path_traversal_rejected(client):
+    """test that path traversal in model_identifier is rejected at schema level."""
+    drone = client.post("/api/v1/drone-profiles", json={"name": "Traversal Test"}).json()
+    drone_id = drone["id"]
+
+    r = client.put(
+        f"/api/v1/drone-profiles/{drone_id}",
+        json={"model_identifier": "../../../../etc/passwd"},
+    )
+    assert r.status_code == 422
+
+    client.delete(f"/api/v1/drone-profiles/{drone_id}")
+
+
+def test_model_identifier_safe_values_accepted(client):
+    """test that safe model identifiers pass validation."""
+    drone = client.post("/api/v1/drone-profiles", json={"name": "Safe ID Test"}).json()
+    drone_id = drone["id"]
+
+    r = client.put(
+        f"/api/v1/drone-profiles/{drone_id}",
+        json={"model_identifier": "custom_abc123.glb"},
+    )
+    assert r.status_code == 200
+    assert r.json()["model_identifier"] == "custom_abc123.glb"
+
+    client.delete(f"/api/v1/drone-profiles/{drone_id}")

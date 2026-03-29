@@ -7,6 +7,7 @@ interface DroneModelSelectorProps {
   onSelectModel: (modelId: string) => void;
   onRemoveModel: () => void;
   onUploadCustom?: (file: File) => void;
+  onInvalidFile?: (message: string) => void;
   showUpload?: boolean;
 }
 
@@ -16,6 +17,7 @@ export default function DroneModelSelector({
   onSelectModel,
   onRemoveModel,
   onUploadCustom,
+  onInvalidFile,
   showUpload = true,
 }: DroneModelSelectorProps) {
   const { t } = useTranslation();
@@ -28,6 +30,8 @@ export default function DroneModelSelector({
 
     const ext = file.name.toLowerCase().split(".").pop();
     if (ext !== "glb" && ext !== "gltf") {
+      onInvalidFile?.(t("drone.invalidFileType"));
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 

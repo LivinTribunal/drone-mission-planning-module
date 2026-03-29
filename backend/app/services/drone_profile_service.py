@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -14,6 +15,7 @@ from app.services.geometry_converter import apply_schema_update, schema_to_model
 CUSTOM_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "models" / "custom"
 ALLOWED_EXTENSIONS = {".glb", ".gltf"}
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+SAFE_IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9]+)?$")
 
 
 def list_drones(db: Session) -> list[DroneProfile]:
@@ -101,6 +103,13 @@ def upload_drone_model(db: Session, drone_id: UUID, file_content: bytes, filenam
     if len(file_content) > MAX_FILE_SIZE:
         raise DomainError("file exceeds maximum size of 20MB")
 
+    # delete previous custom model file if it exists
+    old_id = drone.model_identifier
+    if old_id and old_id.startswith("custom_"):
+        old_path = CUSTOM_MODELS_DIR / old_id
+        if old_path.exists() and old_path.resolve().is_relative_to(CUSTOM_MODELS_DIR.resolve()):
+            old_path.unlink()
+
     safe_name = f"custom_{uuid4().hex[:12]}{ext}"
     CUSTOM_MODELS_DIR.mkdir(parents=True, exist_ok=True)
     dest = CUSTOM_MODELS_DIR / safe_name
@@ -113,9 +122,21 @@ def upload_drone_model(db: Session, drone_id: UUID, file_content: bytes, filenam
     return safe_name
 
 
+def validate_model_identifier(identifier: str) -> None:
+    """validate that a model identifier contains only safe characters."""
+    if not SAFE_IDENTIFIER_RE.match(identifier):
+        raise DomainError("invalid model identifier - only alphanumeric, underscore, dash allowed")
+
+
 def get_drone_model_path(drone_id: UUID, model_identifier: str) -> Path:
     """resolve path to a custom uploaded model file."""
+    validate_model_identifier(model_identifier)
     path = CUSTOM_MODELS_DIR / model_identifier
+
+    # path traversal guard
+    if not path.resolve().is_relative_to(CUSTOM_MODELS_DIR.resolve()):
+        raise NotFoundError("model file not found")
+
     if not path.exists():
         raise NotFoundError("model file not found")
     return path

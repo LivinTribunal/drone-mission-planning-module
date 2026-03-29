@@ -240,7 +240,8 @@ export default function DroneEditPage() {
         droneRef.current = updated;
         setLastSaved(new Date());
         setSaveError(false);
-      } catch {
+      } catch (err) {
+        console.error("autosave failed", err);
         setSaveError(true);
       } finally {
         setSaving(false);
@@ -390,7 +391,8 @@ export default function DroneEditPage() {
       };
       const created = await createDroneProfile(payload);
       navigate(`/coordinator-center/drones/${created.id}`);
-    } catch {
+    } catch (err) {
+      console.error("duplicate failed", err);
       showToast(t("coordinator.drones.duplicate.error"));
     }
   }
@@ -402,7 +404,8 @@ export default function DroneEditPage() {
       await deleteDroneProfile(id);
       setShowDeleteDialog(false);
       navigate("/coordinator-center/drones");
-    } catch {
+    } catch (err) {
+      console.error("delete failed", err);
       showToast(t("coordinator.drones.delete.deleteError"));
     }
   }
@@ -420,7 +423,8 @@ export default function DroneEditPage() {
       setCreateName("");
       setCreateError("");
       navigate(`/coordinator-center/drones/${created.id}`);
-    } catch {
+    } catch (err) {
+      console.error("create failed", err);
       setCreateError(t("coordinator.drones.create.createError"));
     }
   }
@@ -443,7 +447,8 @@ export default function DroneEditPage() {
       setDrone(updated);
       droneRef.current = updated;
       setLastSaved(new Date());
-    } catch {
+    } catch (err) {
+      console.error("select model failed", err);
       showToast(t("coordinator.drones.detail.saveError"));
     }
   }
@@ -458,7 +463,8 @@ export default function DroneEditPage() {
       setDrone(updated);
       droneRef.current = updated;
       setLastSaved(new Date());
-    } catch {
+    } catch (err) {
+      console.error("remove model failed", err);
       showToast(t("coordinator.drones.detail.saveError"));
     }
   }
@@ -468,12 +474,18 @@ export default function DroneEditPage() {
     if (!id) return;
     try {
       const result = await uploadDroneModel(id, file);
-      const updated = await getDroneProfile(id);
-      setDrone(updated);
-      droneRef.current = updated;
+      setDrone((prev) =>
+        prev ? { ...prev, model_identifier: result.model_identifier } : prev,
+      );
+      if (droneRef.current) {
+        droneRef.current = {
+          ...droneRef.current,
+          model_identifier: result.model_identifier,
+        };
+      }
       setLastSaved(new Date());
-      void result;
-    } catch {
+    } catch (err) {
+      console.error("upload model failed", err);
       showToast(t("drone.invalidFileType"));
     }
   }
@@ -784,6 +796,7 @@ export default function DroneEditPage() {
                 onSelectModel={handleSelectModel}
                 onRemoveModel={handleRemoveModel}
                 onUploadCustom={handleUploadCustomModel}
+                onInvalidFile={(msg) => showToast(msg)}
               />
             </div>
           </div>

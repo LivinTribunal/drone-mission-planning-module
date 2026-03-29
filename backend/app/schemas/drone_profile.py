@@ -1,9 +1,19 @@
+import re
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.schemas.common import ListMeta
+
+SAFE_IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9]+)?$")
+
+
+def _validate_model_identifier(v: str | None) -> str | None:
+    """reject unsafe model identifier values."""
+    if v is not None and not SAFE_IDENTIFIER_RE.match(v):
+        raise ValueError("model_identifier must only contain alphanumeric, underscore, dash, dot")
+    return v
 
 
 class DroneProfileCreate(BaseModel):
@@ -23,6 +33,12 @@ class DroneProfileCreate(BaseModel):
     weight: float | None = None
     model_identifier: str | None = None
 
+    @field_validator("model_identifier")
+    @classmethod
+    def check_model_identifier(cls, v: str | None) -> str | None:
+        """validate model_identifier format."""
+        return _validate_model_identifier(v)
+
 
 class DroneProfileUpdate(BaseModel):
     """drone profile update schema."""
@@ -40,6 +56,12 @@ class DroneProfileUpdate(BaseModel):
     sensor_fov: float | None = None
     weight: float | None = None
     model_identifier: str | None = None
+
+    @field_validator("model_identifier")
+    @classmethod
+    def check_model_identifier(cls, v: str | None) -> str | None:
+        """validate model_identifier format."""
+        return _validate_model_identifier(v)
 
 
 class DroneProfileResponse(BaseModel):
