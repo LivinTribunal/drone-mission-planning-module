@@ -32,7 +32,7 @@ export default function EditableFeatureInfo({
     return String(v);
   }
 
-  function handleChange(field: string, value: string | number | boolean) {
+  function handleChange(field: string, value: string | number | boolean | null) {
     /** propagate field change to parent. */
     setFormData((prev) => ({ ...prev, [field]: value }));
     onUpdate({ [field]: value });
@@ -84,7 +84,7 @@ export default function EditableFeatureInfo({
               label={t("coordinator.detail.surfaceHeading")}
               type="number"
               value={val("heading")}
-              onChange={(e) => handleChange("heading", parseFloat(e.target.value) || 0)}
+              onChange={(e) => handleChange("heading", e.target.value === "" ? null : parseFloat(e.target.value))}
             />
             <div className="grid grid-cols-2 gap-2">
               <Input
@@ -92,14 +92,14 @@ export default function EditableFeatureInfo({
                 label={t("coordinator.detail.surfaceLength")}
                 type="number"
                 value={val("length")}
-                onChange={(e) => handleChange("length", parseFloat(e.target.value) || 0)}
+                onChange={(e) => handleChange("length", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
               <Input
                 id="feat-width"
                 label={t("coordinator.detail.surfaceWidth")}
                 type="number"
                 value={val("width")}
-                onChange={(e) => handleChange("width", parseFloat(e.target.value) || 0)}
+                onChange={(e) => handleChange("width", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
             </div>
           </>
@@ -135,14 +135,14 @@ export default function EditableFeatureInfo({
                 label={t("coordinator.detail.obstacleHeight")}
                 type="number"
                 value={val("height")}
-                onChange={(e) => handleChange("height", parseFloat(e.target.value) || 0)}
+                onChange={(e) => handleChange("height", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
               <Input
                 id="feat-radius"
                 label={t("coordinator.detail.obstacleRadius")}
                 type="number"
                 value={val("radius")}
-                onChange={(e) => handleChange("radius", parseFloat(e.target.value) || 0)}
+                onChange={(e) => handleChange("radius", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
             </div>
           </>
@@ -177,14 +177,14 @@ export default function EditableFeatureInfo({
                 label={t("coordinator.detail.zoneFloor")}
                 type="number"
                 value={val("altitude_floor")}
-                onChange={(e) => handleChange("altitude_floor", parseFloat(e.target.value) || 0)}
+                onChange={(e) => handleChange("altitude_floor", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
               <Input
                 id="feat-ceiling"
                 label={t("coordinator.detail.zoneCeiling")}
                 type="number"
                 value={val("altitude_ceiling")}
-                onChange={(e) => handleChange("altitude_ceiling", parseFloat(e.target.value) || 0)}
+                onChange={(e) => handleChange("altitude_ceiling", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
             </div>
             <label className="flex items-center gap-2 text-sm text-tv-text-primary">
@@ -233,7 +233,7 @@ export default function EditableFeatureInfo({
               type="number"
               step="0.1"
               value={val("glide_slope_angle")}
-              onChange={(e) => handleChange("glide_slope_angle", parseFloat(e.target.value) || 0)}
+              onChange={(e) => handleChange("glide_slope_angle", e.target.value === "" ? null : parseFloat(e.target.value))}
             />
           </>
         )}
@@ -245,7 +245,7 @@ export default function EditableFeatureInfo({
               label={t("coordinator.detail.lhaUnitNumber")}
               type="number"
               value={val("unit_number")}
-              onChange={(e) => handleChange("unit_number", parseInt(e.target.value) || 0)}
+              onChange={(e) => handleChange("unit_number", e.target.value === "" ? null : parseInt(e.target.value))}
             />
             <Input
               id="feat-angle"
@@ -253,7 +253,7 @@ export default function EditableFeatureInfo({
               type="number"
               step="0.1"
               value={val("setting_angle")}
-              onChange={(e) => handleChange("setting_angle", parseFloat(e.target.value) || 0)}
+              onChange={(e) => handleChange("setting_angle", e.target.value === "" ? null : parseFloat(e.target.value))}
             />
             <div>
               <label className="block text-xs font-medium mb-1 text-tv-text-secondary">

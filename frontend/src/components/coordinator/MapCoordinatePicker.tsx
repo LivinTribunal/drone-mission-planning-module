@@ -52,6 +52,12 @@ export default function MapCoordinatePicker({
     return () => map.remove();
   }, []);
 
+  useEffect(() => {
+    if (markerRef.current) {
+      markerRef.current.setLngLat([lon, lat]);
+    }
+  }, [lat, lon]);
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"

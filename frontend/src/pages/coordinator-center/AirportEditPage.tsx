@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useBlocker } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { getAirport } from "@/api/airports";
@@ -19,13 +19,10 @@ import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import AirportMap from "@/components/map/AirportMap";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
-import MapDrawingToolbar from "@/components/coordinator/MapDrawingToolbar";
 import InfrastructureListPanel from "@/components/coordinator/InfrastructureListPanel";
 import EditableFeatureInfo from "@/components/coordinator/EditableFeatureInfo";
-import GeoJsonEditorModal from "@/components/coordinator/GeoJsonEditorModal";
 import UnsavedChangesDialog from "@/components/coordinator/UnsavedChangesDialog";
 import Button from "@/components/common/Button";
-import useMapDrawing from "@/hooks/useMapDrawing";
 import useDirtyState from "@/hooks/useDirtyState";
 
 export default function AirportEditPage() {
@@ -41,14 +38,18 @@ export default function AirportEditPage() {
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(DEFAULT_LAYER_CONFIG);
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
   const [is3D, setIs3D] = useState(false);
-  const [showGeoJsonEditor, setShowGeoJsonEditor] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
 
-  const drawing = useMapDrawing();
   const dirty = useDirtyState();
+  const blocker = useBlocker(dirty.isDirty);
+
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+      setShowUnsavedDialog(true);
+    }
+  }, [blocker.state]);
 
   const fetchAirport = useCallback(async () => {
     /** fetch airport detail data. */
@@ -89,23 +90,26 @@ export default function AirportEditPage() {
   );
 
   const handleBack = useCallback(() => {
-    /** navigate back to list, with unsaved changes check. */
-    if (dirty.isDirty) {
-      setPendingNavigation("/coordinator-center/airports");
-      setShowUnsavedDialog(true);
-    } else {
-      navigate("/coordinator-center/airports");
+    /** navigate back to list - useBlocker intercepts if dirty. */
+    navigate("/coordinator-center/airports");
+  }, [navigate]);
+
+  const handleStay = useCallback(() => {
+    /** cancel navigation and stay on page. */
+    setShowUnsavedDialog(false);
+    if (blocker.state === "blocked") {
+      blocker.reset();
     }
-  }, [dirty.isDirty, navigate]);
+  }, [blocker]);
 
   const handleDiscard = useCallback(() => {
-    /** discard changes and navigate. */
+    /** discard changes and proceed with navigation. */
     setShowUnsavedDialog(false);
     dirty.clearAll();
-    if (pendingNavigation) {
-      navigate(pendingNavigation);
+    if (blocker.state === "blocked") {
+      blocker.proceed();
     }
-  }, [dirty, navigate, pendingNavigation]);
+  }, [dirty, blocker]);
 
   const handleDeleteSurface = useCallback(
     async (surfaceId: string) => {
@@ -175,15 +179,6 @@ export default function AirportEditPage() {
     [surfaces],
   );
 
-  function handleGeoJsonApply(geometry: GeoJSON.Geometry) {
-    /** add geojson geometry as a drawn feature. */
-    drawing.addFeature({
-      id: crypto.randomUUID(),
-      geometry,
-      properties: {},
-    });
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full bg-tv-bg">
@@ -218,19 +213,6 @@ export default function AirportEditPage() {
           <ArrowLeft className="h-4 w-4" />
           {t("coordinator.detail.backToList")}
         </button>
-      </div>
-
-      {/* drawing toolbar - top center */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
-        <MapDrawingToolbar
-          activeTool={drawing.activeTool}
-          onToolChange={drawing.setActiveTool}
-          canUndo={drawing.canUndo}
-          canRedo={drawing.canRedo}
-          onUndo={drawing.undo}
-          onRedo={drawing.redo}
-          onGeoJsonEditor={() => setShowGeoJsonEditor(true)}
-        />
       </div>
 
       {/* map */}
@@ -446,16 +428,9 @@ export default function AirportEditPage() {
         </AirportMap>
       </div>
 
-      {/* modals */}
-      <GeoJsonEditorModal
-        isOpen={showGeoJsonEditor}
-        onClose={() => setShowGeoJsonEditor(false)}
-        onApply={handleGeoJsonApply}
-      />
-
       <UnsavedChangesDialog
         isOpen={showUnsavedDialog}
-        onStay={() => setShowUnsavedDialog(false)}
+        onStay={handleStay}
         onDiscard={handleDiscard}
       />
     </div>

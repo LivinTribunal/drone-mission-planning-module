@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import Modal from "@/components/common/Modal";
 import Input from "@/components/common/Input";
@@ -32,6 +32,19 @@ export default function CreateAirportDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIcaoCode("");
+      setName("");
+      setCity("");
+      setCountry("");
+      setLat("");
+      setLon("");
+      setAlt("");
+      setErrors({});
+    }
+  }, [isOpen]);
 
   function validate(): boolean {
     /** validate form fields, return true if valid. */

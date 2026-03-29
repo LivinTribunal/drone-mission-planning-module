@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import Modal from "@/components/common/Modal";
 import Button from "@/components/common/Button";
@@ -18,6 +18,13 @@ export default function GeoJsonEditorModal({
   const { t } = useTranslation();
   const [text, setText] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setText("");
+      setError("");
+    }
+  }, [isOpen]);
 
   function handleApply() {
     /** parse and validate geojson, then apply. */
