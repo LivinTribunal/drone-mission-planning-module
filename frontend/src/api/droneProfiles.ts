@@ -42,3 +42,15 @@ export async function deleteDroneProfile(
   const res = await client.delete(`/drone-profiles/${id}`);
   return res.data;
 }
+
+export async function uploadDroneModel(
+  id: string,
+  file: File,
+): Promise<{ model_identifier: string; model_url: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await client.post(`/drone-profiles/${id}/model`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data;
+}
