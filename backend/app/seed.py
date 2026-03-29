@@ -589,8 +589,110 @@ def seed_lztt():
         db.close()
 
 
+DRONE_PROFILES = [
+    {
+        "name": "DJI Matrice 300 RTK",
+        "manufacturer": "DJI",
+        "model": "Matrice 300 RTK",
+        "max_speed": 23.0,
+        "max_climb_rate": 6.0,
+        "max_altitude": 500.0,
+        "battery_capacity": 5935.0,
+        "endurance_minutes": 55.0,
+        "camera_resolution": "20MP",
+        "camera_frame_rate": 30,
+        "sensor_fov": 84.0,
+        "weight": 6.3,
+    },
+    {
+        "name": "DJI Matrice 350 RTK",
+        "manufacturer": "DJI",
+        "model": "Matrice 350 RTK",
+        "max_speed": 23.0,
+        "max_climb_rate": 6.0,
+        "max_altitude": 500.0,
+        "battery_capacity": 5880.0,
+        "endurance_minutes": 55.0,
+        "camera_resolution": "48MP",
+        "camera_frame_rate": 30,
+        "sensor_fov": 84.0,
+        "weight": 6.47,
+    },
+    {
+        "name": "DJI Mavic 3 Enterprise",
+        "manufacturer": "DJI",
+        "model": "Mavic 3 Enterprise",
+        "max_speed": 21.0,
+        "max_climb_rate": 8.0,
+        "max_altitude": 500.0,
+        "battery_capacity": 5000.0,
+        "endurance_minutes": 45.0,
+        "camera_resolution": "20MP",
+        "camera_frame_rate": 30,
+        "sensor_fov": 84.0,
+        "weight": 0.92,
+    },
+    {
+        "name": "Autel EVO II Pro V3",
+        "manufacturer": "Autel Robotics",
+        "model": "EVO II Pro V3",
+        "max_speed": 20.0,
+        "max_climb_rate": 8.0,
+        "max_altitude": 500.0,
+        "battery_capacity": 7100.0,
+        "endurance_minutes": 42.0,
+        "camera_resolution": "20MP",
+        "camera_frame_rate": 30,
+        "sensor_fov": 82.0,
+        "weight": 1.25,
+    },
+    {
+        "name": "Freefly Astro",
+        "manufacturer": "Freefly Systems",
+        "model": "Astro",
+        "max_speed": 18.0,
+        "max_climb_rate": 5.0,
+        "max_altitude": 400.0,
+        "battery_capacity": 10000.0,
+        "endurance_minutes": 32.0,
+        "camera_resolution": "61MP",
+        "camera_frame_rate": 30,
+        "sensor_fov": 75.0,
+        "weight": 5.9,
+    },
+    {
+        "name": "senseFly eBee X",
+        "manufacturer": "senseFly",
+        "model": "eBee X",
+        "max_speed": 40.0,
+        "max_climb_rate": 4.0,
+        "max_altitude": 500.0,
+        "battery_capacity": 4000.0,
+        "endurance_minutes": 90.0,
+        "camera_resolution": "24MP",
+        "camera_frame_rate": 1,
+        "sensor_fov": 73.0,
+        "weight": 1.6,
+    },
+    {
+        "name": "Skydio X10",
+        "manufacturer": "Skydio",
+        "model": "X10",
+        "max_speed": 18.0,
+        "max_climb_rate": 8.0,
+        "max_altitude": 400.0,
+        "battery_capacity": 5500.0,
+        "endurance_minutes": 40.0,
+        "camera_resolution": "48MP",
+        "camera_frame_rate": 60,
+        "sensor_fov": 63.0,
+        "weight": 2.2,
+    },
+]
+
+
 def seed_drone_profiles():
-    """seed drone profiles."""
+    """seed real-world drone profiles with full specs."""
     db = SessionLocal()
     try:
         existing = db.query(DroneProfile).filter_by(name="DJI Matrice 300 RTK").first()
@@ -598,23 +700,11 @@ def seed_drone_profiles():
             print("drone profiles already seeded")
             return
 
-        drone = DroneProfile(
-            name="DJI Matrice 300 RTK",
-            manufacturer="DJI",
-            model="Matrice 300 RTK",
-            max_speed=23.0,
-            max_climb_rate=6.0,
-            max_altitude=500.0,
-            battery_capacity=5935.0,
-            endurance_minutes=55.0,
-            camera_resolution="20MP",
-            camera_frame_rate=30,
-            sensor_fov=84.0,
-            weight=6.3,
-        )
-        db.add(drone)
+        for profile in DRONE_PROFILES:
+            db.add(DroneProfile(**profile))
+
         db.commit()
-        print("DJI Matrice 300 RTK seeded")
+        print(f"{len(DRONE_PROFILES)} drone profiles seeded")
     finally:
         db.close()
 

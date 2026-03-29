@@ -1,6 +1,9 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes.airports import router as airports_router
 from app.api.routes.drone_profiles import router as drone_profiles_router
@@ -42,6 +45,11 @@ app.include_router(drone_profiles_router)
 app.include_router(flight_plans_router)
 app.include_router(missions_router)
 app.include_router(templates_router)
+
+# static file serving for custom uploaded models
+_static_dir = Path(__file__).resolve().parent.parent / "static"
+_static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 
 @app.get("/api/v1/health")

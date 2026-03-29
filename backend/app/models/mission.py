@@ -60,6 +60,11 @@ class DroneProfile(Base):
     camera_frame_rate = Column(Integer)
     sensor_fov = Column(Float)
     weight = Column(Float)
+    model_identifier = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class Mission(Base):
