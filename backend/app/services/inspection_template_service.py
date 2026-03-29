@@ -79,6 +79,9 @@ def create_template(db: Session, schema: InspectionTemplateCreate) -> Inspection
 
     config = None
     if config_data:
+        # convert uuid objects to strings for jsonb storage
+        if "lha_ids" in config_data and config_data["lha_ids"] is not None:
+            config_data["lha_ids"] = [str(uid) for uid in config_data["lha_ids"]]
         config = InspectionConfiguration(**config_data)
         db.add(config)
         db.flush()

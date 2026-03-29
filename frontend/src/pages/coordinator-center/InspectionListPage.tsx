@@ -179,7 +179,7 @@ export default function InspectionListPage() {
     try {
       await deleteInspectionTemplate(deleteTarget.id);
       setDeleteTarget(null);
-      fetchTemplates();
+      await fetchTemplates();
     } catch (err) {
       setDeleteTarget(null);
       showNotif(err instanceof Error ? err.message : t("coordinator.inspections.deleteError"));

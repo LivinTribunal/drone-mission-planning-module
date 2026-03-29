@@ -221,6 +221,26 @@ def test_delete_template_with_linked_inspection(db_session):
         delete_template(db_session, created.id)
 
 
+def test_create_template_with_lha_ids(db_session):
+    """create template with lha_ids in config does not raise uuid serialization error"""
+    lha_id_1 = uuid4()
+    lha_id_2 = uuid4()
+
+    schema = InspectionTemplateCreate(
+        name="Template With LHA IDs",
+        methods=["ANGULAR_SWEEP"],
+        default_config={
+            "lha_ids": [lha_id_1, lha_id_2],
+            "altitude_offset": 1.0,
+        },
+    )
+    result = create_template(db_session, schema)
+
+    assert result.default_config is not None
+    assert result.default_config.lha_ids == [str(lha_id_1), str(lha_id_2)]
+    assert result.default_config.altitude_offset == 1.0
+
+
 def test_mission_count_enrichment(db_session):
     """mission count reflects linked inspections"""
     from app.models.airport import Airport
