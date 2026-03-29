@@ -1,11 +1,9 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
-from app.models.mission import Mission
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.drone_profile import (
     DroneProfileCreate,
@@ -22,13 +20,7 @@ router = APIRouter(prefix="/api/v1/drone-profiles", tags=["drone-profiles"])
 def list_drones(db: Session = Depends(get_db)):
     """list all drone profiles with mission counts."""
     drones = drone_profile_service.list_drones(db)
-
-    # batch-load mission counts
-    counts = dict(
-        db.query(Mission.drone_profile_id, func.count(Mission.id))
-        .group_by(Mission.drone_profile_id)
-        .all()
-    )
+    counts = drone_profile_service.get_mission_counts(db)
 
     data = []
     for d in drones:
@@ -44,9 +36,7 @@ def get_drone(drone_id: UUID, db: Session = Depends(get_db)):
     """get drone profile by id with mission count."""
     drone = drone_profile_service.get_drone(db, drone_id)
     resp = DroneProfileResponse.model_validate(drone)
-    resp.mission_count = (
-        db.query(func.count(Mission.id)).filter(Mission.drone_profile_id == drone_id).scalar() or 0
-    )
+    resp.mission_count = drone_profile_service.get_mission_count(db, drone_id)
     return resp
 
 
@@ -64,15 +54,13 @@ def update_drone(drone_id: UUID, body: DroneProfileUpdate, db: Session = Depends
     """update drone profile."""
     drone = drone_profile_service.update_drone(db, drone_id, body)
     resp = DroneProfileResponse.model_validate(drone)
-    resp.mission_count = (
-        db.query(func.count(Mission.id)).filter(Mission.drone_profile_id == drone_id).scalar() or 0
-    )
+    resp.mission_count = drone_profile_service.get_mission_count(db, drone_id)
     return resp
 
 
 @router.delete("/{drone_id}", response_model=DeleteResponse)
 def delete_drone(drone_id: UUID, db: Session = Depends(get_db)):
-    """delete drone profile - returns warnings if missions use it"""
+    """delete drone profile - returns warnings if missions use it."""
     warnings = drone_profile_service.delete_drone(db, drone_id)
 
     return DeleteResponse(deleted=True, warnings=warnings)

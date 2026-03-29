@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError
@@ -9,8 +10,25 @@ from app.services.geometry_converter import apply_schema_update, schema_to_model
 
 
 def list_drones(db: Session) -> list[DroneProfile]:
-    """list all drone profiles"""
+    """list all drone profiles."""
     return db.query(DroneProfile).all()
+
+
+def get_mission_counts(db: Session) -> dict[UUID, int]:
+    """batch-load mission counts grouped by drone_profile_id."""
+    rows = (
+        db.query(Mission.drone_profile_id, func.count(Mission.id))
+        .group_by(Mission.drone_profile_id)
+        .all()
+    )
+    return dict(rows)
+
+
+def get_mission_count(db: Session, drone_id: UUID) -> int:
+    """get mission count for a single drone profile."""
+    return (
+        db.query(func.count(Mission.id)).filter(Mission.drone_profile_id == drone_id).scalar() or 0
+    )
 
 
 def get_drone(db: Session, drone_id: UUID) -> DroneProfile:
