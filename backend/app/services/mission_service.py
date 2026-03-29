@@ -19,9 +19,9 @@ def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mis
 
     try:
         mission.transition_to(target_status)
-    except ValueError:
+    except ValueError as e:
         raise DomainError(
-            "invalid status transition",
+            str(e),
             status_code=409,
             extra={
                 "error": "invalid status transition",
@@ -41,6 +41,7 @@ def list_missions(
     db: Session,
     airport_id: UUID | None = None,
     status: str | None = None,
+    drone_profile_id: UUID | None = None,
     limit: int = 20,
     offset: int = 0,
 ) -> tuple[list[Mission], int]:
@@ -59,6 +60,8 @@ def list_missions(
         query = query.filter(Mission.airport_id == airport_id)
     if status:
         query = query.filter(Mission.status == status)
+    if drone_profile_id:
+        query = query.filter(Mission.drone_profile_id == drone_profile_id)
 
     # count on a clean query to avoid joinedload duplicates
     count_query = db.query(Mission)
@@ -66,6 +69,8 @@ def list_missions(
         count_query = count_query.filter(Mission.airport_id == airport_id)
     if status:
         count_query = count_query.filter(Mission.status == status)
+    if drone_profile_id:
+        count_query = count_query.filter(Mission.drone_profile_id == drone_profile_id)
     total = count_query.count()
 
     missions = query.order_by(Mission.created_at.desc()).offset(offset).limit(limit).all()

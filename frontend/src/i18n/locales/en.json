@@ -610,6 +610,88 @@
       "usedInMissions": "Used in {{count}} missions",
       "selectAirportFirst": "Select an airport to manage inspection templates",
       "noAglSystems": "No AGL systems at this airport"
+    "drones": {
+      "title": "Drone Profiles",
+      "searchPlaceholder": "Search drones by name...",
+      "addNew": "+ Add New Drone Profile",
+      "filterManufacturer": "Manufacturer",
+      "allManufacturers": "All Manufacturers",
+      "noMatch": "No drones match your filters",
+      "noDrones": "No drone profiles available",
+      "loading": "Loading drone profiles...",
+      "loadError": "Failed to load drone profiles",
+      "columns": {
+        "name": "Name",
+        "manufacturer": "Manufacturer",
+        "model": "Model",
+        "maxSpeed": "Max Speed",
+        "endurance": "Endurance",
+        "missions": "Missions"
+      },
+      "create": {
+        "title": "Add New Drone Profile",
+        "namePlaceholder": "e.g. DJI Matrice 300 RTK",
+        "add": "Add",
+        "nameRequired": "Drone name is required",
+        "createError": "Failed to create drone profile"
+      },
+      "delete": {
+        "title": "Delete Drone Profile",
+        "confirm": "Delete drone profile \"{{name}}\"? Missions using this profile will keep their current configuration.",
+        "deleteError": "Failed to delete drone profile"
+      },
+      "duplicate": {
+        "suffix": "(Copy)",
+        "error": "Failed to duplicate drone profile"
+      },
+      "showing": "Showing {{from}}-{{to}} of {{total}}",
+      "actions": {
+        "duplicate": "Duplicate",
+        "delete": "Delete"
+      },
+      "detail": {
+        "backToList": "Back to list",
+        "selectDrone": "Select drone",
+        "addNew": "Add New",
+        "rename": "Rename",
+        "duplicate": "Duplicate",
+        "delete": "Delete",
+        "saving": "Saving...",
+        "saved": "Changes saved successfully",
+        "savedJustNow": "Saved just now",
+        "savedMinutesAgo": "Saved {{count}} min ago",
+        "savedAt": "Saved at {{time}}",
+        "saveError": "Failed to save changes",
+        "created": "Created",
+        "updated": "Updated",
+        "missions": "Missions",
+        "mission": "mission",
+        "missionsLabel": "missions",
+        "noMissions": "No missions use this drone profile"
+      },
+      "fields": {
+        "name": "Drone Name",
+        "manufacturer": "Manufacturer",
+        "model": "Model",
+        "maxSpeed": "Max Speed",
+        "maxClimbRate": "Max Climb Rate",
+        "maxAltitude": "Max Altitude",
+        "batteryCapacity": "Battery Capacity",
+        "endurance": "Endurance",
+        "cameraResolution": "Camera Resolution",
+        "cameraFrameRate": "Camera Frame Rate",
+        "sensorFov": "Sensor FOV",
+        "weight": "Weight"
+      },
+      "units": {
+        "ms": "m/s",
+        "m": "m",
+        "min": "min",
+        "mah": "mAh",
+        "fps": "fps",
+        "degrees": "°",
+        "kg": "kg"
+      }
     }
   },
   "airport": {
@@ -635,6 +717,19 @@
       "PROHIBITED": "Prohibited",
       "TEMPORARY_NO_FLY": "Temporary No-Fly"
     }
+  },
+  "drone": {
+    "model3d": "3D Model",
+    "selectModel": "Select 3D Model",
+    "noModel": "No 3D model selected",
+    "uploadCustom": "Upload Custom",
+    "removeModel": "Remove Model",
+    "customModel": "Custom Model",
+    "modelNotAvailable": "Model not available",
+    "maxFileSize": "Maximum file size: 20MB",
+    "invalidFileType": "Only .glb and .gltf files are supported",
+    "addModel": "Add model",
+    "noModelAssigned": "No model"
   },
   "languages": {
     "en": "English"
