@@ -597,6 +597,7 @@
       "measurementDensity": "Measurement Density (pts)",
       "customTolerances": "Custom Tolerances (deg)",
       "hoverDuration": "Hover Duration (s)",
+      "rename": "Rename",
       "duplicateTemplate": "Duplicate",
       "deleteTemplate": "Delete",
       "deleteConfirm": "Delete inspection template {{name}}? Missions using this template will keep their current configuration but cannot regenerate.",

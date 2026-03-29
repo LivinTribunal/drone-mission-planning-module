@@ -67,6 +67,7 @@ export default function InspectionEditPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const performSaveRef = useRef<(() => Promise<void>) | null>(null);
 
   // tick for relative timestamp display
   const [, setTick] = useState(0);
@@ -220,18 +221,24 @@ export default function InspectionEditPage() {
       setTemplate(result);
       setLastSaved(new Date());
       setSaveError(false);
-    } catch {
+    } catch (err) {
+      console.error("autosave failed:", err instanceof Error ? err.message : String(err));
       setSaveError(true);
     } finally {
       setSaving(false);
     }
   }, [id, template, editConfig, editMethod, selectedAglId, selectedLhaIds, editName]);
 
+  // keep ref current so scheduled autosave always calls latest performSave
+  useEffect(() => {
+    performSaveRef.current = performSave;
+  }, [performSave]);
+
   function scheduleAutosave() {
     /**schedule an autosave after debounce delay.*/
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
-      performSave();
+      performSaveRef.current?.();
     }, AUTOSAVE_DELAY);
   }
 
@@ -410,7 +417,7 @@ export default function InspectionEditPage() {
                 <button
                   onClick={() => setIsRenamingName(true)}
                   className="flex items-center justify-center h-7 w-7 rounded-full bg-tv-warning/15 text-tv-warning hover:bg-tv-warning/25 transition-colors"
-                  title="Rename"
+                  title={t("coordinator.inspections.rename")}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
