@@ -1,23 +1,71 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
 import { listAirportSummaries } from "@/api/airports";
+import { useAirport } from "@/contexts/AirportContext";
 import type { AirportSummaryResponse } from "@/types/airport";
-import AirportTable from "@/components/coordinator/AirportTable";
-import AirportSearchBar from "@/components/coordinator/AirportSearchBar";
+import Button from "@/components/common/Button";
 import CreateAirportDialog from "@/components/coordinator/CreateAirportDialog";
 
+type SortKey =
+  | "icao_code"
+  | "name"
+  | "city"
+  | "country"
+  | "surfaces_count"
+  | "agls_count"
+  | "missions_count";
+
+type SortDir = "asc" | "desc";
+
+const PAGE_SIZES = [10, 20, 50, 200] as const;
+
+/** build page indices with ellipsis when there are many pages. */
+function paginationRange(total: number, current: number): (number | "...")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  const pages: (number | "...")[] = [0];
+  const start = Math.max(1, current - 1);
+  const end = Math.min(total - 2, current + 1);
+  if (start > 1) pages.push("...");
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (end < total - 2) pages.push("...");
+  pages.push(total - 1);
+  return pages;
+}
+
+function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
+  /** triangle indicator for sort direction. */
+  if (!active) return null;
+  return (
+    <span className="ml-1 text-tv-accent">
+      {dir === "asc" ? "\u25B2" : "\u25BC"}
+    </span>
+  );
+}
+
 export default function AirportListPage() {
-  /** full airport list page with search, filters, sortable table, and create dialog. */
+  /** airport list page with search, filters, sortable table, and pagination. */
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { selectAirport } = useAirport();
   const [airports, setAirports] = useState<AirportSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  // filters
   const [search, setSearch] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
   const [hasAglFilter, setHasAglFilter] = useState(false);
+
+  // sort
+  const [sortKey, setSortKey] = useState<SortKey>("icao_code");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  // pagination
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  // dialogs
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const fetchAirports = useCallback(async () => {
@@ -47,10 +95,45 @@ export default function AirportListPage() {
     return Array.from(set).sort();
   }, [airports]);
 
-  const filtered = useMemo(() => {
-    /** apply client-side search and filters. */
-    let result = airports;
+  const NUMERIC_KEYS: SortKey[] = ["surfaces_count", "agls_count", "missions_count"];
 
+  function handleSort(key: SortKey) {
+    /** toggle sort direction or switch sort column. desc default for numeric columns. */
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(NUMERIC_KEYS.includes(key) ? "desc" : "asc");
+    }
+  }
+
+  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
+    /** update search and reset to first page. */
+    setSearch(e.target.value);
+    setPage(0);
+  }
+
+  function handlePageSizeChange(size: number) {
+    /** change page size and reset to first page. */
+    setPageSize(size);
+    setPage(0);
+  }
+
+  function handleRowClick(airport: AirportSummaryResponse) {
+    /** select airport in context and navigate to detail editor. */
+    selectAirport(airport);
+    navigate(`/coordinator-center/airports/${airport.id}`);
+  }
+
+  function handleCreated(id: string) {
+    /** close dialog and navigate to newly created airport. */
+    setShowCreateDialog(false);
+    navigate(`/coordinator-center/airports/${id}`);
+  }
+
+  // filtering
+  const filtered = useMemo(() => {
+    let result = airports;
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -60,78 +143,226 @@ export default function AirportListPage() {
           (a.city && a.city.toLowerCase().includes(q)),
       );
     }
-
     if (countryFilter) {
       result = result.filter((a) => a.country === countryFilter);
     }
-
     if (hasAglFilter) {
       result = result.filter((a) => a.agls_count > 0);
     }
-
     return result;
   }, [airports, search, countryFilter, hasAglFilter]);
 
-  function handleRowClick(id: string) {
-    /** navigate to airport detail editor. */
-    navigate(`/coordinator-center/airports/${id}`);
-  }
+  // sorting
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "string" && typeof bv === "string") {
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
+      return sortDir === "asc"
+        ? (av as number) - (bv as number)
+        : (bv as number) - (av as number);
+    });
+  }, [filtered, sortKey, sortDir]);
 
-  function handleCreated(id: string) {
-    /** close dialog and navigate to newly created airport. */
-    setShowCreateDialog(false);
-    navigate(`/coordinator-center/airports/${id}`);
-  }
+  // pagination
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const paged = sorted.slice(page * pageSize, (page + 1) * pageSize);
+  const showFrom = sorted.length === 0 ? 0 : page * pageSize + 1;
+  const showTo = Math.min((page + 1) * pageSize, sorted.length);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full bg-tv-bg">
-        <Loader2 className="h-6 w-6 animate-spin text-tv-accent" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full bg-tv-bg gap-3">
-        <p className="text-sm text-tv-error">{t("coordinator.airportList.loadError")}</p>
-        <button
-          onClick={fetchAirports}
-          className="px-4 py-2 rounded-full text-sm font-semibold bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover transition-colors"
-        >
-          {t("common.retry")}
-        </button>
-      </div>
-    );
-  }
+  const columns: { key: SortKey; label: string }[] = [
+    { key: "icao_code", label: t("coordinator.airportList.columns.icaoCode") },
+    { key: "name", label: t("coordinator.airportList.columns.name") },
+    { key: "city", label: t("coordinator.airportList.columns.city") },
+    { key: "country", label: t("coordinator.airportList.columns.country") },
+    { key: "surfaces_count", label: t("coordinator.airportList.columns.runways") },
+    { key: "agls_count", label: t("coordinator.airportList.columns.aglSystems") },
+    { key: "missions_count", label: t("coordinator.airportList.columns.missions") },
+  ];
 
   return (
-    <div className="h-full bg-tv-bg p-6" data-testid="airport-list-page">
-      <div className="max-w-7xl mx-auto flex flex-col gap-4">
-        <AirportSearchBar
-          search={search}
-          onSearchChange={setSearch}
-          country={countryFilter}
-          onCountryChange={setCountryFilter}
-          countries={countries}
-          hasAglFilter={hasAglFilter}
-          onHasAglChange={setHasAglFilter}
-          onAddClick={() => setShowCreateDialog(true)}
+    <div className="flex flex-col items-center px-4 py-12" data-testid="airport-list-page">
+      {/* search bar + filters + add button */}
+      <div className="flex items-center gap-3 w-full max-w-5xl mb-4">
+        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-tv-accent flex-shrink-0">
+          <svg className="h-5 w-5 text-tv-accent-text" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </div>
+        <input
+          type="text"
+          value={search}
+          onChange={handleSearchChange}
+          placeholder={t("coordinator.airportList.searchPlaceholder")}
+          className="flex-1 rounded-full border border-tv-border bg-tv-surface px-5 py-2.5
+            text-sm text-tv-text-primary placeholder:text-tv-text-muted
+            focus:outline-none focus:border-tv-accent"
+          data-testid="airport-search-input"
         />
 
-        {filtered.length === 0 ? (
+        {/* country filter */}
+        <select
+          value={countryFilter}
+          onChange={(e) => { setCountryFilter(e.target.value); setPage(0); }}
+          className="rounded-full border border-tv-border bg-tv-surface px-4 py-2.5 text-sm
+            text-tv-text-primary focus:outline-none focus:border-tv-accent"
+          data-testid="country-filter"
+        >
+          <option value="">{t("coordinator.airportList.filterCountry")}</option>
+          {countries.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+
+        {/* has agl toggle */}
+        <label className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-surface cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={hasAglFilter}
+            onChange={(e) => { setHasAglFilter(e.target.checked); setPage(0); }}
+            className="accent-tv-accent"
+            data-testid="agl-filter"
+          />
+          <span className="text-tv-text-primary whitespace-nowrap">{t("coordinator.airportList.filterHasAgl")}</span>
+        </label>
+
+        <Button
+          onClick={() => setShowCreateDialog(true)}
+          data-testid="add-airport-button"
+        >
+          {t("coordinator.airportList.addAirport")}
+        </Button>
+      </div>
+
+      {/* airport table */}
+      <div className="w-full max-w-5xl rounded-2xl border border-tv-border bg-tv-surface overflow-hidden">
+        {loading ? (
           <div className="flex items-center justify-center py-16">
-            <p className="text-sm text-tv-text-muted">
-              {airports.length === 0
-                ? t("coordinator.airportList.noAirports")
-                : t("coordinator.airportList.noMatch")}
-            </p>
+            <svg className="h-6 w-6 animate-spin text-tv-text-muted" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          </div>
+        ) : error ? (
+          <div className="px-6 py-16 text-center text-sm text-tv-error">
+            {t("coordinator.airportList.loadError")}
+            <button onClick={fetchAirports} className="ml-2 underline hover:no-underline">
+              {t("common.retry")}
+            </button>
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="px-6 py-16 text-center text-sm text-tv-text-muted">
+            {airports.length === 0
+              ? t("coordinator.airportList.noAirports")
+              : t("coordinator.airportList.noMatch")}
           </div>
         ) : (
-          <AirportTable airports={filtered} onRowClick={handleRowClick} />
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-tv-border">
+                {columns.map((col) => (
+                  <th
+                    key={col.key}
+                    onClick={() => handleSort(col.key)}
+                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider
+                      text-tv-text-secondary cursor-pointer select-none hover:text-tv-text-primary transition-colors"
+                  >
+                    {col.label}
+                    <SortIndicator active={sortKey === col.key} dir={sortDir} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {paged.map((airport) => (
+                <tr
+                  key={airport.id}
+                  onClick={() => handleRowClick(airport)}
+                  className="border-b border-tv-border last:border-b-0 cursor-pointer
+                    text-sm text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                  data-testid={`airport-row-${airport.id}`}
+                >
+                  <td className="px-4 py-3 font-semibold text-tv-accent">
+                    {airport.icao_code}
+                  </td>
+                  <td className="px-4 py-3">{airport.name}</td>
+                  <td className="px-4 py-3 text-tv-text-secondary">
+                    {airport.city ?? "\u2014"}
+                  </td>
+                  <td className="px-4 py-3 text-tv-text-secondary">
+                    {airport.country ?? "\u2014"}
+                  </td>
+                  <td className="px-4 py-3 text-tv-text-secondary text-center">
+                    {airport.surfaces_count}
+                  </td>
+                  <td className="px-4 py-3 text-tv-text-secondary text-center">
+                    {airport.agls_count}
+                  </td>
+                  <td className="px-4 py-3 text-tv-text-secondary text-center">
+                    {airport.missions_count}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
+      {/* pagination */}
+      {!loading && !error && sorted.length > 0 && (
+        <div className="relative flex items-center justify-between w-full max-w-5xl pt-3">
+          <span className="absolute left-1/2 -translate-x-1/2 text-xs text-tv-text-secondary">
+            {t("coordinator.airportList.showing", { from: showFrom, to: showTo, total: sorted.length })}
+          </span>
+          <div className="flex items-center gap-1">
+            {PAGE_SIZES.map((size) => (
+              <button
+                key={size}
+                onClick={() => handlePageSizeChange(size)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  pageSize === size
+                    ? "bg-tv-accent text-tv-accent-text"
+                    : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
+                }`}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            {paginationRange(totalPages, page).map((item, idx) =>
+              item === "..." ? (
+                <span key={`ellipsis-${idx}`} className="px-1 text-xs text-tv-text-muted">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  onClick={() => setPage(item as number)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    page === item
+                      ? "bg-tv-accent text-tv-accent-text"
+                      : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
+                  }`}
+                >
+                  {(item as number) + 1}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* create airport dialog */}
       <CreateAirportDialog
         isOpen={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}

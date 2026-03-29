@@ -1,25 +1,34 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 import Input from "@/components/common/Input";
+import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import type { MapFeature } from "@/types/map";
+import type { SurfaceResponse } from "@/types/airport";
 
 interface EditableFeatureInfoProps {
   feature: MapFeature;
   onUpdate: (data: Record<string, unknown>) => void;
   onClose: () => void;
+  surfaces?: SurfaceResponse[];
+  onDelete?: (featureType: string, id: string) => void;
+  deleteWarnings?: string[];
 }
 
 export default function EditableFeatureInfo({
   feature,
   onUpdate,
   onClose,
+  surfaces,
+  onDelete,
+  deleteWarnings,
 }: EditableFeatureInfoProps) {
   /** editable feature info panel for selected map features. */
   const { t } = useTranslation();
   const [formData, setFormData] = useState<Record<string, unknown>>(
     feature.data as unknown as Record<string, unknown>,
   );
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     setFormData(feature.data as unknown as Record<string, unknown>);
@@ -55,7 +64,7 @@ export default function EditableFeatureInfo({
         </button>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5 [&_input]:!px-3 [&_input]:!py-1.5 [&_input]:!text-xs">
         {feature.type === "surface" && (
           <>
             <Input
@@ -71,7 +80,7 @@ export default function EditableFeatureInfo({
               <select
                 value={val("surface_type")}
                 onChange={(e) => handleChange("surface_type", e.target.value)}
-                className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
                 <option value="RUNWAY">{t("coordinator.detail.surfaceTypes.runway")}</option>
                 <option value="TAXIWAY">{t("coordinator.detail.surfaceTypes.taxiway")}</option>
@@ -86,7 +95,7 @@ export default function EditableFeatureInfo({
               value={val("heading")}
               onChange={(e) => handleChange("heading", e.target.value === "" ? null : parseFloat(e.target.value))}
             />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1.5">
               <Input
                 id="feat-length"
                 label={t("coordinator.detail.surfaceLength")}
@@ -120,7 +129,7 @@ export default function EditableFeatureInfo({
               <select
                 value={val("type")}
                 onChange={(e) => handleChange("type", e.target.value)}
-                className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
                 <option value="BUILDING">{t("coordinator.detail.obstacleTypes.building")}</option>
                 <option value="ANTENNA">{t("coordinator.detail.obstacleTypes.antenna")}</option>
@@ -129,7 +138,7 @@ export default function EditableFeatureInfo({
                 <option value="OTHER">{t("coordinator.detail.obstacleTypes.other")}</option>
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1.5">
               <Input
                 id="feat-height"
                 label={t("coordinator.detail.obstacleHeight")}
@@ -163,7 +172,7 @@ export default function EditableFeatureInfo({
               <select
                 value={val("type")}
                 onChange={(e) => handleChange("type", e.target.value)}
-                className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
                 <option value="CTR">{t("coordinator.detail.zoneTypes.ctr")}</option>
                 <option value="RESTRICTED">{t("coordinator.detail.zoneTypes.restricted")}</option>
@@ -171,7 +180,7 @@ export default function EditableFeatureInfo({
                 <option value="TEMPORARY_NO_FLY">{t("coordinator.detail.zoneTypes.temporaryNoFly")}</option>
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1.5">
               <Input
                 id="feat-floor"
                 label={t("coordinator.detail.zoneFloor")}
@@ -187,7 +196,7 @@ export default function EditableFeatureInfo({
                 onChange={(e) => handleChange("altitude_ceiling", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
             </div>
-            <label className="flex items-center gap-2 text-sm text-tv-text-primary">
+            <label className="flex items-center gap-2 text-xs text-tv-text-primary">
               <input
                 type="checkbox"
                 checked={Boolean(formData.is_active)}
@@ -207,6 +216,25 @@ export default function EditableFeatureInfo({
               value={val("name")}
               onChange={(e) => handleChange("name", e.target.value)}
             />
+            {surfaces && surfaces.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                  {t("coordinator.detail.aglSurface")}
+                </label>
+                <select
+                  value={val("surface_id")}
+                  onChange={(e) => handleChange("surface_id", e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                >
+                  <option value="">-</option>
+                  {surfaces.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.surface_type === "RUNWAY" ? "RWY" : "TWY"} {s.identifier}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <Input
               id="feat-type"
               label={t("coordinator.detail.aglType")}
@@ -220,7 +248,7 @@ export default function EditableFeatureInfo({
               <select
                 value={val("side")}
                 onChange={(e) => handleChange("side", e.target.value)}
-                className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
                 <option value="">—</option>
                 <option value="LEFT">{t("coordinator.detail.aglSides.left")}</option>
@@ -262,7 +290,7 @@ export default function EditableFeatureInfo({
               <select
                 value={val("lamp_type")}
                 onChange={(e) => handleChange("lamp_type", e.target.value)}
-                className="w-full px-4 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
               >
                 <option value="HALOGEN">{t("coordinator.detail.lampTypes.halogen")}</option>
                 <option value="LED">{t("coordinator.detail.lampTypes.led")}</option>
@@ -270,7 +298,33 @@ export default function EditableFeatureInfo({
             </div>
           </>
         )}
+
+        {/* delete button */}
+        {onDelete && (
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="flex items-center justify-center gap-1.5 w-full mt-1 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-tv-error hover:opacity-90 transition-colors"
+            data-testid="feature-delete-button"
+          >
+            <Trash2 className="h-3 w-3" />
+            {t("coordinator.detail.deleteFeature")}
+          </button>
+        )}
       </div>
+
+      {onDelete && (
+        <ConfirmDeleteDialog
+          isOpen={showDeleteConfirm}
+          name={val("name") || val("identifier") || val("unit_number") || ""}
+          warnings={deleteWarnings}
+          onConfirm={() => {
+            setShowDeleteConfirm(false);
+            onDelete(feature.type, String(formData.id));
+            onClose();
+          }}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
     </div>
   );
 }

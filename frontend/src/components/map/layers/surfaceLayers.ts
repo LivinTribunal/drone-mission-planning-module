@@ -108,6 +108,7 @@ export function addSurfaceLayers(
           properties: {
             id: r.id,
             identifier: r.identifier,
+            entityType: "surface",
           },
           geometry: {
             type: "Polygon" as const,
@@ -202,6 +203,7 @@ export function addSurfaceLayers(
           properties: {
             id: t.id,
             identifier: t.identifier,
+            entityType: "surface",
           },
           geometry: {
             type: "Polygon" as const,

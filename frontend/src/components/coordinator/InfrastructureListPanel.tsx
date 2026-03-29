@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Pencil, Trash2, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2, Plus } from "lucide-react";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 
 interface InfrastructureListPanelProps<T> {
@@ -13,6 +13,7 @@ interface InfrastructureListPanelProps<T> {
   onEdit: (item: T) => void;
   onDelete: (id: string) => void;
   addLabel: string;
+  getDeleteWarnings?: (item: T) => string[];
 }
 
 export default function InfrastructureListPanel<T>({
@@ -25,6 +26,7 @@ export default function InfrastructureListPanel<T>({
   onEdit,
   onDelete,
   addLabel,
+  getDeleteWarnings,
 }: InfrastructureListPanelProps<T>) {
   /** generic collapsible crud list panel for infrastructure entities. */
   const { t } = useTranslation();
@@ -85,20 +87,14 @@ export default function InfrastructureListPanel<T>({
               items.map((item, idx) => (
                 <div
                   key={getId(item)}
-                  className={`flex items-center gap-2 px-3 py-2 hover:bg-tv-surface-hover transition-colors ${
-                    idx < count - 1 ? "border-b border-tv-border" : ""
+                  onClick={() => onEdit(item)}
+                  className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-tv-surface-hover transition-colors ${
+                    idx === count - 1 ? "rounded-b-2xl" : "border-b border-tv-border"
                   }`}
                 >
                   <div className="flex-1 min-w-0">{renderItem(item)}</div>
                   <button
-                    onClick={() => onEdit(item)}
-                    className="rounded-full p-1 text-tv-text-muted hover:text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-                    title={t("common.edit")}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(item)}
+                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }}
                     className="rounded-full p-1 text-tv-error hover:bg-tv-surface-hover transition-colors"
                     title={t("common.delete")}
                   >
@@ -114,6 +110,7 @@ export default function InfrastructureListPanel<T>({
       <ConfirmDeleteDialog
         isOpen={deleteTarget !== null}
         name={deleteTarget ? getName(deleteTarget) : ""}
+        warnings={deleteTarget && getDeleteWarnings ? getDeleteWarnings(deleteTarget) : undefined}
         onConfirm={() => {
           if (deleteTarget) {
             onDelete(getId(deleteTarget));
