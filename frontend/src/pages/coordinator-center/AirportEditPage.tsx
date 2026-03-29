@@ -36,14 +36,17 @@ const ZONE_COLORS: Record<string, string> = {
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import AirportMap from "@/components/map/AirportMap";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
-import TerrainToggle from "@/components/map/overlays/TerrainToggle";
 import InfrastructureListPanel from "@/components/coordinator/InfrastructureListPanel";
 import CoordinatorAGLPanel from "@/components/coordinator/CoordinatorAGLPanel";
 import AirportInfoPanel from "@/components/coordinator/AirportInfoPanel";
 import EditableFeatureInfo from "@/components/coordinator/EditableFeatureInfo";
 import UnsavedChangesDialog from "@/components/coordinator/UnsavedChangesDialog";
+import MapDrawingToolbar from "@/components/coordinator/MapDrawingToolbar";
+import CoordinatorMapHelpPanel from "@/components/coordinator/CoordinatorMapHelpPanel";
+import GeoJsonEditorModal from "@/components/coordinator/GeoJsonEditorModal";
 import Button from "@/components/common/Button";
 import useDirtyState from "@/hooks/useDirtyState";
+import useMapDrawing from "@/hooks/useMapDrawing";
 
 export default function AirportEditPage() {
   /** full airport detail editor with map, drawing tools, and infrastructure crud. */
@@ -64,20 +67,24 @@ export default function AirportEditPage() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+  const [showGeoJsonEditor, setShowGeoJsonEditor] = useState(false);
+  const [zoomPercent, setZoomPercent] = useState(100);
 
-  const dirty = useDirtyState();
+  const { isDirty, markDirty, clearAll, getPendingChanges } = useDirtyState();
+  const { activeTool, setActiveTool, canUndo, canRedo, undo, redo } = useMapDrawing();
   const [pendingNav, setPendingNav] = useState<string | null>(null);
 
   // warn on browser refresh / tab close
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (dirty.isDirty) {
+      if (isDirty) {
         e.preventDefault();
       }
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [dirty.isDirty]);
+  }, [isDirty]);
 
   const fetchAirport = useCallback(async () => {
     /** fetch airport detail data. */
@@ -105,6 +112,62 @@ export default function AirportEditPage() {
     }
   }, [airport]);
 
+  // keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      /** handle keyboard shortcuts for drawing tools. */
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.key === "Escape") {
+        setActiveTool("pan");
+        setSelectedFeature(null);
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "Z") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      const keyMap: Record<string, () => void> = {
+        p: () => setActiveTool("pan"),
+        z: () => setActiveTool("zoom"),
+        r: () => setActiveTool("zoomReset"),
+        s: () => setActiveTool("select"),
+        g: () => setActiveTool("drawPolygon"),
+        c: () => setActiveTool("drawCircle"),
+        e: () => setActiveTool("drawRectangle"),
+        t: () => setActiveTool("placePoint"),
+        v: () => setActiveTool("editVertices"),
+        m: () => setActiveTool("moveFeature"),
+      };
+
+      const action = keyMap[e.key.toLowerCase()];
+      if (action) {
+        e.preventDefault();
+        action();
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedFeature && activeTool === "select") {
+          // delete is handled by EditableFeatureInfo's delete button
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [setActiveTool, undo, redo, selectedFeature, activeTool]);
+
   const handleFeatureClick = useCallback((feature: MapFeature | null) => {
     /** set selected feature when clicked on map or list panel. */
     setSelectedFeature(feature);
@@ -119,18 +182,18 @@ export default function AirportEditPage() {
     (data: Record<string, unknown>) => {
       /** handle editable feature info field change. */
       if (!selectedFeature) return;
-      dirty.markDirty(selectedFeature.type, selectedFeature.data.id, "update", data);
+      markDirty(selectedFeature.type, selectedFeature.data.id, "update", data);
     },
-    [selectedFeature, dirty],
+    [selectedFeature, markDirty],
   );
 
   const handleAirportUpdate = useCallback(
     (data: Record<string, unknown>) => {
       /** track airport-level field changes. */
       if (!id) return;
-      dirty.markDirty("airport", id, "update", data);
+      markDirty("airport", id, "update", data);
     },
-    [id, dirty],
+    [id, markDirty],
   );
 
   const handleStay = useCallback(() => {
@@ -142,22 +205,23 @@ export default function AirportEditPage() {
   const handleDiscard = useCallback(() => {
     /** discard changes and proceed with navigation. */
     setShowUnsavedDialog(false);
-    dirty.clearAll();
+    clearAll();
     if (pendingNav) {
       navigate(pendingNav);
       setPendingNav(null);
     }
-  }, [dirty, pendingNav, navigate]);
+  }, [clearAll, pendingNav, navigate]);
 
   const handleDeleteSurface = useCallback(
     async (surfaceId: string) => {
       /** delete a surface and refresh. */
       if (!id) return;
+      setDeleteError(false);
       try {
         await deleteSurface(id, surfaceId);
         await fetchAirport();
       } catch {
-        // silently fail - could add error toast
+        setDeleteError(true);
       }
     },
     [id, fetchAirport],
@@ -167,11 +231,12 @@ export default function AirportEditPage() {
     async (obstacleId: string) => {
       /** delete an obstacle and refresh. */
       if (!id) return;
+      setDeleteError(false);
       try {
         await deleteObstacle(id, obstacleId);
         await fetchAirport();
       } catch {
-        // silently fail
+        setDeleteError(true);
       }
     },
     [id, fetchAirport],
@@ -181,11 +246,12 @@ export default function AirportEditPage() {
     async (zoneId: string) => {
       /** delete a safety zone and refresh. */
       if (!id) return;
+      setDeleteError(false);
       try {
         await deleteSafetyZone(id, zoneId);
         await fetchAirport();
       } catch {
-        // silently fail
+        setDeleteError(true);
       }
     },
     [id, fetchAirport],
@@ -199,11 +265,12 @@ export default function AirportEditPage() {
         s.agls.some((a) => a.id === aglId),
       );
       if (!surface) return;
+      setDeleteError(false);
       try {
         await deleteAGL(id, surface.id, aglId);
         await fetchAirport();
       } catch {
-        // silently fail
+        setDeleteError(true);
       }
     },
     [id, airport, fetchAirport],
@@ -229,6 +296,20 @@ export default function AirportEditPage() {
       setSelectedFeature(null);
     },
     [handleDeleteSurface, handleDeleteObstacle, handleDeleteSafetyZone, handleDeleteAgl],
+  );
+
+  const handleZoomTo = useCallback((percent: number) => {
+    /** set zoom level from toolbar dropdown. */
+    setZoomPercent(percent);
+  }, []);
+
+  const handleGeoJsonApply = useCallback(
+    (geometry: GeoJSON.Geometry) => {
+      /** apply geojson geometry to selected feature. */
+      if (!selectedFeature) return;
+      markDirty(selectedFeature.type, selectedFeature.data.id, "update", { geometry });
+    },
+    [selectedFeature, markDirty],
   );
 
   const surfaces = useMemo(() => airport?.surfaces ?? [], [airport]);
@@ -268,6 +349,7 @@ export default function AirportEditPage() {
           showLegend={false}
           showPoiInfo={false}
           showWaypointList={false}
+          showHelpPanel={false}
           terrainMode={terrainMode}
           onTerrainChange={setTerrainMode}
           onFeatureClick={handleFeatureClick}
@@ -275,6 +357,8 @@ export default function AirportEditPage() {
           focusFeature={selectedFeature}
           is3D={is3D}
           onToggle3D={setIs3D}
+          zoomPercent={zoomPercent}
+          onZoomChange={setZoomPercent}
           leftPanelChildren={
             <div className="flex flex-col gap-2">
               {/* infrastructure crud panels */}
@@ -286,6 +370,7 @@ export default function AirportEditPage() {
                 onEdit={(s) => handleFeatureClick({ type: "surface", data: s })}
                 onDelete={handleDeleteSurface}
                 addLabel={t("coordinator.detail.addSurface")}
+                onAdd={() => setActiveTool("drawPolygon")}
                 getDeleteWarnings={(s) => {
                   if (s.agls.length === 0) return [];
                   return s.agls.map((a) =>
@@ -337,6 +422,7 @@ export default function AirportEditPage() {
                 onEdit={(o) => handleFeatureClick({ type: "obstacle", data: o })}
                 onDelete={handleDeleteObstacle}
                 addLabel={t("coordinator.detail.addObstacle")}
+                onAdd={() => setActiveTool("placePoint")}
                 renderItem={(o) => {
                   const color = OBSTACLE_COLORS[o.type] ?? "#6b6b6b";
                   return (
@@ -371,6 +457,7 @@ export default function AirportEditPage() {
                 onEdit={(z) => handleFeatureClick({ type: "safety_zone", data: z })}
                 onDelete={handleDeleteSafetyZone}
                 addLabel={t("coordinator.detail.addSafetyZone")}
+                onAdd={() => setActiveTool("drawPolygon")}
                 renderItem={(z) => {
                   const color = ZONE_COLORS[z.type] ?? "#6b6b6b";
                   return (
@@ -419,6 +506,25 @@ export default function AirportEditPage() {
             </div>
           }
         >
+          {/* top-center: drawing toolbar */}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+            <MapDrawingToolbar
+              activeTool={activeTool}
+              onToolChange={setActiveTool}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              onUndo={undo}
+              onRedo={redo}
+              onGeoJsonEditor={() => setShowGeoJsonEditor(true)}
+              zoomPercent={zoomPercent}
+              onZoomTo={handleZoomTo}
+              is3D={is3D}
+              onToggle3D={setIs3D}
+              terrainMode={terrainMode}
+              onTerrainChange={setTerrainMode}
+            />
+          </div>
+
           {/* right side: legend + feature info */}
           <div
             className="absolute top-3 right-3 bottom-[60px] z-10 w-56 flex flex-col gap-2 overflow-y-auto pr-1"
@@ -449,50 +555,27 @@ export default function AirportEditPage() {
             )}
           </div>
 
+          {/* bottom-left: coordinator help panel */}
+          <div className="absolute bottom-3 left-3 z-10">
+            <CoordinatorMapHelpPanel />
+          </div>
+
           {/* bottom bar */}
           <div className="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-end">
             <div className="flex items-center gap-2">
-              {/* 2D/3D toggle */}
-              <div className="flex rounded-full border border-tv-border bg-tv-surface p-1">
-                <button
-                  onClick={() => setIs3D(false)}
-                  title={t("map.toggle2d")}
-                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                    !is3D
-                      ? "bg-tv-accent text-tv-accent-text"
-                      : "text-tv-text-secondary hover:text-tv-text-primary"
-                  }`}
-                >
-                  2D
-                </button>
-                <button
-                  onClick={() => setIs3D(true)}
-                  title={t("map.toggle3d")}
-                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                    is3D
-                      ? "bg-tv-accent text-tv-accent-text"
-                      : "text-tv-text-secondary hover:text-tv-text-primary"
-                  }`}
-                >
-                  3D
-                </button>
-              </div>
-
-              {/* terrain toggle */}
-              <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />
-
-              {/* save */}
-              {saveError && (
-                <p className="text-xs text-tv-error">{t("coordinator.detail.saveError")}</p>
+              {(saveError || deleteError) && (
+                <p className="text-xs text-tv-error">
+                  {saveError ? t("coordinator.detail.saveError") : t("coordinator.detail.deleteError")}
+                </p>
               )}
               <Button
-                disabled={!dirty.isDirty || saving}
+                disabled={!isDirty || saving}
                 onClick={async () => {
                   if (!id || !airport) return;
                   setSaving(true);
                   setSaveError(false);
                   try {
-                    const pending = dirty.getPendingChanges();
+                    const pending = getPendingChanges();
                     await Promise.all(
                       pending
                         .map((change) => {
@@ -521,7 +604,7 @@ export default function AirportEditPage() {
                         })
                         .filter((p): p is NonNullable<typeof p> => p !== undefined),
                     );
-                    dirty.clearAll();
+                    clearAll();
                     await fetchAirport();
                   } catch {
                     setSaveError(true);
@@ -542,6 +625,12 @@ export default function AirportEditPage() {
         isOpen={showUnsavedDialog}
         onStay={handleStay}
         onDiscard={handleDiscard}
+      />
+
+      <GeoJsonEditorModal
+        isOpen={showGeoJsonEditor}
+        onClose={() => setShowGeoJsonEditor(false)}
+        onApply={handleGeoJsonApply}
       />
     </div>
   );

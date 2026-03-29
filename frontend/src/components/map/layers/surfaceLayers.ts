@@ -63,6 +63,7 @@ function bufferLineString(
   }
 
   // close the polygon: left side forward, right side reversed
+  if (left.length === 0) return [];
   right.reverse();
   const ring = [...left, ...right, left[0]];
   return ring;

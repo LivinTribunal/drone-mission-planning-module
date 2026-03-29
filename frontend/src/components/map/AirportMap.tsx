@@ -228,6 +228,7 @@ export default function AirportMap({
   focusFeature,
   showZoomControls = true,
   showCompass = true,
+  showHelpPanel = true,
   is3D: is3DProp,
   onBearingChange,
   bearingResetKey,
@@ -1428,9 +1429,11 @@ export default function AirportMap({
       )}
 
       {/* bottom-left: map help */}
-      <div className="absolute bottom-3 left-3 z-10">
-        <MapHelpPanel />
-      </div>
+      {showHelpPanel && (
+        <div className="absolute bottom-3 left-3 z-10">
+          <MapHelpPanel />
+        </div>
+      )}
 
       {/* right side: compass + zoom controls */}
       {(showCompass || showZoomControls) && (

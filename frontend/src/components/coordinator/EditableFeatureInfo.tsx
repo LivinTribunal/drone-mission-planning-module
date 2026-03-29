@@ -317,9 +317,9 @@ export default function EditableFeatureInfo({
           isOpen={showDeleteConfirm}
           name={val("name") || val("identifier") || val("unit_number") || ""}
           warnings={deleteWarnings}
-          onConfirm={() => {
+          onConfirm={async () => {
             setShowDeleteConfirm(false);
-            onDelete(feature.type, String(formData.id));
+            await onDelete(feature.type, String(formData.id));
             onClose();
           }}
           onCancel={() => setShowDeleteConfirm(false)}

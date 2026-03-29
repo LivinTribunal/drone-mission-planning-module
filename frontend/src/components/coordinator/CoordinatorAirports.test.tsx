@@ -134,6 +134,12 @@ describe("MapDrawingToolbar", () => {
     onUndo: vi.fn(),
     onRedo: vi.fn(),
     onGeoJsonEditor: vi.fn(),
+    zoomPercent: 100,
+    onZoomTo: vi.fn(),
+    is3D: false,
+    onToggle3D: vi.fn(),
+    terrainMode: "satellite" as const,
+    onTerrainChange: vi.fn(),
   };
 
   it("renders toolbar with tool buttons", () => {
@@ -142,6 +148,8 @@ describe("MapDrawingToolbar", () => {
     expect(screen.getByTestId("tool-pan")).toBeInTheDocument();
     expect(screen.getByTestId("tool-select")).toBeInTheDocument();
     expect(screen.getByTestId("tool-drawPolygon")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-editVertices")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-moveFeature")).toBeInTheDocument();
   });
 
   it("calls onToolChange when tool is clicked", () => {
@@ -164,5 +172,34 @@ describe("MapDrawingToolbar", () => {
     render(<MapDrawingToolbar {...defaultProps} />);
     fireEvent.click(screen.getByTestId("tool-geoJsonEditor"));
     expect(defaultProps.onGeoJsonEditor).toHaveBeenCalled();
+  });
+
+  it("renders zoom field with current percent", () => {
+    render(<MapDrawingToolbar {...defaultProps} zoomPercent={150} />);
+    expect(screen.getByTestId("zoom-field")).toHaveTextContent("150%");
+  });
+
+  it("renders 2D/3D toggle", () => {
+    render(<MapDrawingToolbar {...defaultProps} />);
+    expect(screen.getByTestId("toggle-2d")).toBeInTheDocument();
+    expect(screen.getByTestId("toggle-3d")).toBeInTheDocument();
+  });
+
+  it("renders map/satellite toggle", () => {
+    render(<MapDrawingToolbar {...defaultProps} />);
+    expect(screen.getByTestId("toggle-map")).toBeInTheDocument();
+    expect(screen.getByTestId("toggle-satellite")).toBeInTheDocument();
+  });
+
+  it("calls onToggle3D when 3D button clicked", () => {
+    render(<MapDrawingToolbar {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("toggle-3d"));
+    expect(defaultProps.onToggle3D).toHaveBeenCalledWith(true);
+  });
+
+  it("calls onTerrainChange when map button clicked", () => {
+    render(<MapDrawingToolbar {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("toggle-map"));
+    expect(defaultProps.onTerrainChange).toHaveBeenCalledWith("map");
   });
 });
