@@ -116,7 +116,17 @@ export interface AirportMapProps {
     labels: GeoJSON.FeatureCollection;
   };
   onMeasureClear?: () => void;
+  onMeasureFinish?: () => void;
   onMeasureMouseMove?: (lng: number, lat: number) => void;
+  isMeasureDrawing?: boolean;
+  headingData?: {
+    point: GeoJSON.FeatureCollection;
+    line: GeoJSON.FeatureCollection;
+    label: GeoJSON.FeatureCollection;
+  };
+  onHeadingClear?: () => void;
+  onHeadingMouseMove?: (lng: number, lat: number) => void;
+  isHeadingDrawing?: boolean;
   onWaypointDrag?: (waypointId: string, newPosition: [number, number, number]) => void;
   zoomPercent?: number;
   onZoomChange?: (percent: number) => void;

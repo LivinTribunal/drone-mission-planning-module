@@ -62,6 +62,8 @@ import {
   createLHA,
 } from "@/api/airports";
 import useVertexEditor from "@/hooks/useVertexEditor";
+import useMeasureDistance from "@/hooks/useMeasureDistance";
+import useHeadingTool from "@/hooks/useHeadingTool";
 import { extractCenterline, circleToPolygon } from "@/utils/geo";
 import type { DrawingTool } from "@/components/coordinator/MapDrawingToolbar";
 import { MapTool } from "@/hooks/useMapTools";
@@ -70,7 +72,7 @@ const DRAWING_TOOL_TO_MAP_TOOL: Record<DrawingTool, MapTool> = {
   select: MapTool.SELECT,
   pan: MapTool.PAN,
   measurement: MapTool.MEASURE,
-  heading: MapTool.MEASURE,
+  heading: MapTool.HEADING,
   zoom: MapTool.ZOOM,
   zoomReset: MapTool.ZOOM_RESET,
   drawPolygon: MapTool.SELECT,
@@ -208,6 +210,47 @@ export default function AirportEditPage() {
   );
 
   useVertexEditor(map, selectedFeature, activeTool === "select", handleVertexGeometryUpdate);
+
+  // measurement and heading tools
+  const measure = useMeasureDistance();
+  const heading = useHeadingTool();
+  const measureRef = useRef(measure);
+  measureRef.current = measure;
+  const headingRef = useRef(heading);
+  headingRef.current = heading;
+  const handleMapClick = useCallback(
+    (lngLat: { lng: number; lat: number }) => {
+      /** handle map click for measurement and heading tools. */
+      const m = measureRef.current;
+      const h = headingRef.current;
+      if (mapTool === MapTool.MEASURE && (m.isDrawing || !m.hasPoints)) {
+        m.addPoint(lngLat.lng, lngLat.lat);
+      } else if (mapTool === MapTool.HEADING) {
+        h.addPoint(lngLat.lng, lngLat.lat);
+      }
+    },
+    [mapTool],
+  );
+
+  // cancel pending creation when user picks another drawing tool, clear tools on switch
+  const SAFE_TOOLS: DrawingTool[] = ["select", "pan", "zoom", "zoomReset", "measurement", "heading"];
+  const handleToolChange = useCallback((tool: DrawingTool) => {
+    /** handle toolbar tool change, cancelling pending creation if needed. */
+    setActiveTool(tool);
+
+    // clear heading when switching away from heading
+    if (tool !== "heading") headingRef.current.clear();
+    // clear measurement when switching away from measurement
+    if (tool !== "measurement") measureRef.current.clear();
+
+    if (SAFE_TOOLS.includes(tool)) return;
+    if (!(pendingGeometry || pendingPointPosition)) return;
+    setPendingGeometry(null);
+    setPendingPointPosition(undefined);
+    setPendingCircleCenter(undefined);
+    setPendingCircleRadius(undefined);
+    setPendingLhaParentAglId(null);
+  }, [setActiveTool, pendingGeometry, pendingPointPosition]);
 
   const handleCreationCancel = useCallback(() => {
     /** cancel pending creation and clear geometry. */
@@ -363,16 +406,16 @@ export default function AirportEditPage() {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const keyMap: Record<string, () => void> = {
-        s: () => setActiveTool("select"),
-        p: () => setActiveTool("pan"),
-        m: () => setActiveTool("measurement"),
-        h: () => setActiveTool("heading"),
-        g: () => setActiveTool("drawPolygon"),
-        c: () => setActiveTool("drawCircle"),
-        e: () => setActiveTool("drawRectangle"),
-        t: () => setActiveTool("placePoint"),
-        z: () => setActiveTool("zoom"),
-        r: () => setActiveTool("zoomReset"),
+        s: () => handleToolChange("select"),
+        p: () => handleToolChange("pan"),
+        m: () => handleToolChange("measurement"),
+        h: () => handleToolChange("heading"),
+        g: () => handleToolChange("drawPolygon"),
+        c: () => handleToolChange("drawCircle"),
+        e: () => handleToolChange("drawRectangle"),
+        t: () => handleToolChange("placePoint"),
+        z: () => handleToolChange("zoom"),
+        r: () => handleToolChange("zoomReset"),
       };
 
       const action = keyMap[e.key.toLowerCase()];
@@ -390,7 +433,7 @@ export default function AirportEditPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setActiveTool, undo, redo, selectedFeature, activeTool, handleCreationCancel]);
+  }, [handleToolChange, undo, redo, selectedFeature, activeTool, handleCreationCancel]);
 
   const handleFeatureClick = useCallback((feature: MapFeature | null) => {
     /** set selected feature when clicked on map or list panel - skip during drawing. */
@@ -644,9 +687,29 @@ export default function AirportEditPage() {
           onFeatureClick={handleFeatureClick}
           onLayerChange={handleLayerChange}
           focusFeature={selectedFeature}
+          pendingGeometry={pendingGeometry}
+          pendingPointPosition={pendingPointPosition}
           is3D={is3D}
           onToggle3D={setIs3D}
           activeTool={mapTool}
+          onMapClick={mapTool === MapTool.MEASURE || mapTool === MapTool.HEADING ? handleMapClick : undefined}
+          measureData={{
+            points: measure.pointsGeoJSON,
+            lines: measure.linesGeoJSON,
+            labels: measure.labelsGeoJSON,
+          }}
+          onMeasureClear={measure.clear}
+          onMeasureFinish={measure.finishDrawing}
+          onMeasureMouseMove={measure.setCursor}
+          isMeasureDrawing={measure.isDrawing}
+          headingData={{
+            point: heading.pointGeoJSON,
+            line: heading.lineGeoJSON,
+            label: heading.labelGeoJSON,
+          }}
+          onHeadingClear={heading.clear}
+          onHeadingMouseMove={heading.setCursor}
+          isHeadingDrawing={heading.isDrawing}
           zoomPercent={zoomPercent}
           onZoomChange={setZoomPercent}
           onBearingChange={setBearing}
@@ -802,7 +865,7 @@ export default function AirportEditPage() {
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
             <MapDrawingToolbar
               activeTool={activeTool}
-              onToolChange={setActiveTool}
+              onToolChange={handleToolChange}
               canUndo={canUndo}
               canRedo={canRedo}
               onUndo={undo}

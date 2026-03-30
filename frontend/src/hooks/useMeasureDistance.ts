@@ -14,6 +14,7 @@ interface MeasureReturn {
   segments: MeasureSegment[];
   totalDistance: number;
   cursorPoint: [number, number] | null;
+  isDrawing: boolean;
   pointsGeoJSON: GeoJSON.FeatureCollection;
   linesGeoJSON: GeoJSON.FeatureCollection;
   labelsGeoJSON: GeoJSON.FeatureCollection;
@@ -21,6 +22,7 @@ interface MeasureReturn {
   setCursor: (lng: number, lat: number) => void;
   clearCursor: () => void;
   clear: () => void;
+  finishDrawing: () => void;
   hasPoints: boolean;
 }
 
@@ -48,12 +50,14 @@ function formatDistance(meters: number): string {
 export default function useMeasureDistance(): MeasureReturn {
   const [points, setPoints] = useState<[number, number][]>([]);
   const [cursorPoint, setCursorPoint] = useState<[number, number] | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   const addPoint = useCallback((lng: number, lat: number) => {
     setPoints((prev) => {
       if (prev.length >= MAX_POINTS) return prev;
       return [...prev, [lng, lat]];
     });
+    setIsDrawing(true);
   }, []);
 
   const setCursor = useCallback((lng: number, lat: number) => {
@@ -64,9 +68,24 @@ export default function useMeasureDistance(): MeasureReturn {
     setCursorPoint(null);
   }, []);
 
+  const finishDrawing = useCallback(() => {
+    /** finish drawing - clear if only one point (no visible segment). */
+    setPoints((prev) => {
+      if (prev.length < 2) {
+        setIsDrawing(false);
+        setCursorPoint(null);
+        return [];
+      }
+      setIsDrawing(false);
+      setCursorPoint(null);
+      return prev;
+    });
+  }, []);
+
   const clear = useCallback(() => {
     setPoints([]);
     setCursorPoint(null);
+    setIsDrawing(false);
   }, []);
 
   const segments = useMemo((): MeasureSegment[] => {
@@ -174,6 +193,7 @@ export default function useMeasureDistance(): MeasureReturn {
     segments,
     totalDistance,
     cursorPoint,
+    isDrawing,
     pointsGeoJSON,
     linesGeoJSON,
     labelsGeoJSON,
@@ -181,6 +201,7 @@ export default function useMeasureDistance(): MeasureReturn {
     setCursor,
     clearCursor,
     clear,
+    finishDrawing,
     hasPoints: points.length > 0,
   };
 }

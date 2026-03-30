@@ -28,5 +28,19 @@ const measureCompositeSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" 
   </g>
 </svg>`;
 
+// arrow cursor with a small compass/heading icon badge in the bottom-right
+const headingCompositeSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+  <path d="M2 1 L2 18 L6.5 14 L10 22 L13 20.5 L9.5 12.5 L15 12.5 Z" fill="white" stroke="black" stroke-width="1.2" stroke-linejoin="round"/>
+  <g transform="translate(13,13)">
+    <rect x="0" y="0" width="14" height="14" rx="3" fill="rgba(0,0,0,0.75)"/>
+    <g transform="translate(7,7)" fill="none" stroke="orange" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="0" cy="0" r="4"/>
+      <path d="M0-4v1.5M0 2.5v1.5M-4 0h1.5M2.5 0h1.5"/>
+      <path d="M0-2l1.2 3-1.2-.8-1.2.8z" fill="orange"/>
+    </g>
+  </g>
+</svg>`;
+
 export const TOOL_CURSOR_MOVE = svgCursor(moveCompositeSvg, 2, 1);
 export const TOOL_CURSOR_MEASURE = svgCursor(measureCompositeSvg, 2, 1);
+export const TOOL_CURSOR_HEADING = svgCursor(headingCompositeSvg, 2, 1);

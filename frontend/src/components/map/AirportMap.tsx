@@ -16,6 +16,7 @@ import { MapTool } from "@/hooks/useMapTools";
 import {
   TOOL_CURSOR_MOVE,
   TOOL_CURSOR_MEASURE,
+  TOOL_CURSOR_HEADING,
 } from "@/utils/cursors";
 import { registerAllMapImages } from "./layers/mapImages";
 import {
@@ -192,12 +193,24 @@ const TOOL_CURSORS: Record<string, string> = {
   [MapTool.PAN]: "grab",
   [MapTool.MOVE_WAYPOINT]: TOOL_CURSOR_MOVE,
   [MapTool.MEASURE]: TOOL_CURSOR_MEASURE,
+  [MapTool.HEADING]: TOOL_CURSOR_HEADING,
   [MapTool.ZOOM]: "zoom-in",
   [MapTool.PLACE_TAKEOFF]: "crosshair",
   [MapTool.PLACE_LANDING]: "crosshair",
 };
 
-const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & { activeTool?: MapTool }>(function AirportMap({
+const PENDING_PREVIEW_SOURCE = "pending-preview";
+const PENDING_PREVIEW_FILL_LAYER = "pending-preview-fill";
+const PENDING_PREVIEW_BORDER_LAYER = "pending-preview-border";
+const PENDING_PREVIEW_POINT_LAYER = "pending-preview-point";
+
+const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
+  activeTool?: MapTool;
+  pendingGeometry?: GeoJSON.Polygon | null;
+  pendingPointPosition?: [number, number] | null;
+}>(function AirportMap({
   airport,
   layers: layersProp,
   interactive = true,
@@ -226,7 +239,13 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & { activeTool?:
   onPlaceLanding,
   measureData,
   onMeasureClear,
+  onMeasureFinish,
   onMeasureMouseMove,
+  isMeasureDrawing,
+  headingData,
+  onHeadingClear,
+  onHeadingMouseMove,
+  isHeadingDrawing,
   onWaypointDrag,
   zoomPercent,
   onZoomChange,
@@ -237,6 +256,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & { activeTool?:
   is3D: is3DProp,
   onBearingChange,
   bearingResetKey,
+  pendingGeometry,
+  pendingPointPosition,
 }, ref) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -380,18 +401,33 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & { activeTool?:
         lon = coords.reduce((s, c) => s + c[0], 0) / coords.length;
         lat = coords.reduce((s, c) => s + c[1], 0) / coords.length;
       }
-    } else if (focusFeature.type === "safety_zone") {
-      const ring = focusFeature.data.geometry.coordinates[0];
-      if (ring && ring.length > 0) {
-        lon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
-        lat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
-      }
     }
 
     if (lon !== undefined && lat !== undefined) {
       map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), minZoom), duration: 800 });
     }
   }, [focusFeature]);
+
+  // sync pending creation preview geometry
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const src = map.getSource(PENDING_PREVIEW_SOURCE) as maplibregl.GeoJSONSource | undefined;
+    if (!src) return;
+
+    const features: GeoJSON.Feature[] = [];
+    if (pendingGeometry) {
+      features.push({ type: "Feature", properties: {}, geometry: pendingGeometry });
+    }
+    if (pendingPointPosition) {
+      features.push({
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: pendingPointPosition },
+      });
+    }
+    src.setData({ type: "FeatureCollection", features });
+  }, [pendingGeometry, pendingPointPosition]);
 
   // apply cursor based on active tool
   useEffect(() => {
@@ -406,43 +442,87 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & { activeTool?:
     const map = mapRef.current;
     if (!map || !interactive) return;
     const tool = activeTool ?? MapTool.SELECT;
-    if (tool === MapTool.PAN) {
-      map.dragPan.enable();
-    } else {
+    if (tool === MapTool.MOVE_WAYPOINT) {
       map.dragPan.disable();
+    } else {
+      map.dragPan.enable();
     }
     return () => {
       if (map.dragPan) map.dragPan.enable();
     };
   }, [activeTool, interactive]);
 
-  // measure tool: contextmenu to clear, mousemove for cursor line
+  // measure tool: contextmenu to finish/clear, mousemove for cursor line, esc to clear
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const tool = activeTool ?? MapTool.SELECT;
-
-    if (tool !== MapTool.MEASURE) {
-      onMeasureClear?.();
-      return;
-    }
+    if (tool !== MapTool.MEASURE) return;
 
     function handleContextMenu(e: maplibregl.MapMouseEvent) {
       e.preventDefault();
-      onMeasureClear?.();
+      if (isMeasureDrawing) {
+        onMeasureFinish?.();
+      } else {
+        onMeasureClear?.();
+      }
     }
 
     function handleMouseMove(e: maplibregl.MapMouseEvent) {
-      onMeasureMouseMove?.(e.lngLat.lng, e.lngLat.lat);
+      if (isMeasureDrawing) {
+        onMeasureMouseMove?.(e.lngLat.lng, e.lngLat.lat);
+      }
+    }
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onMeasureClear?.();
+      }
     }
 
     map.on("contextmenu", handleContextMenu);
     map.on("mousemove", handleMouseMove);
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
       map.off("contextmenu", handleContextMenu);
       map.off("mousemove", handleMouseMove);
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeTool, onMeasureClear, onMeasureMouseMove]);
+  }, [activeTool, isMeasureDrawing, onMeasureClear, onMeasureFinish, onMeasureMouseMove]);
+
+  // heading tool: right-click/esc to clear, mousemove for cursor line
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const tool = activeTool ?? MapTool.SELECT;
+    if (tool !== MapTool.HEADING) return;
+
+    function handleContextMenu(e: maplibregl.MapMouseEvent) {
+      e.preventDefault();
+      onHeadingClear?.();
+    }
+
+    function handleMouseMove(e: maplibregl.MapMouseEvent) {
+      if (isHeadingDrawing) {
+        onHeadingMouseMove?.(e.lngLat.lng, e.lngLat.lat);
+      }
+    }
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onHeadingClear?.();
+      }
+    }
+
+    map.on("contextmenu", handleContextMenu);
+    map.on("mousemove", handleMouseMove);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      map.off("contextmenu", handleContextMenu);
+      map.off("mousemove", handleMouseMove);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeTool, isHeadingDrawing, onHeadingClear, onHeadingMouseMove]);
 
   // move waypoint tool: drag behavior with live preview
   useEffect(() => {
@@ -704,6 +784,84 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & { activeTool?:
     }
   }
 
+  // add heading tool sources and layers to the map
+  function addHeadingLayersToMap(map: maplibregl.Map) {
+    const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+    if (!map.getSource("heading-point")) {
+      map.addSource("heading-point", { type: "geojson", data: emptyFC });
+      map.addLayer({
+        id: "heading-point-layer",
+        type: "circle",
+        source: "heading-point",
+        paint: {
+          "circle-radius": 4,
+          "circle-color": "#4595e5",
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2,
+        },
+      });
+    }
+
+    if (!map.getSource("heading-line")) {
+      map.addSource("heading-line", { type: "geojson", data: emptyFC });
+      map.addLayer({
+        id: "heading-line-layer",
+        type: "line",
+        source: "heading-line",
+        paint: {
+          "line-color": "#4595e5",
+          "line-width": 2,
+        },
+      });
+    }
+
+    // arrowhead at endpoint using a symbol layer
+    if (!map.getLayer("heading-arrow-layer")) {
+      map.addLayer({
+        id: "heading-arrow-layer",
+        type: "symbol",
+        source: "heading-line",
+        layout: {
+          "symbol-placement": "line",
+          "symbol-spacing": 1,
+          "text-field": "▶",
+          "text-size": 14,
+          "text-keep-upright": false,
+          "text-rotation-alignment": "map",
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
+        paint: {
+          "text-color": "#4595e5",
+        },
+      });
+    }
+
+    if (!map.getSource("heading-label")) {
+      map.addSource("heading-label", { type: "geojson", data: emptyFC });
+      map.addLayer({
+        id: "heading-label-layer",
+        type: "symbol",
+        source: "heading-label",
+        layout: {
+          "text-field": ["get", "label"],
+          "text-size": 13,
+          "text-offset": [0, -1.2],
+          "text-anchor": "bottom",
+          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
+        paint: {
+          "text-color": "#4595e5",
+          "text-halo-color": "#000000",
+          "text-halo-width": 1.5,
+        },
+      });
+    }
+  }
+
   // highlight layer ids for selected infrastructure features
   const HIGHLIGHT_RUNWAY = "highlight-runway";
   const HIGHLIGHT_TAXIWAY = "highlight-taxiway";
@@ -833,6 +991,38 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & { activeTool?:
     }
   }
 
+  function addPendingPreviewLayers(map: maplibregl.Map) {
+    /** add source and layers for pending creation preview. */
+    if (map.getSource(PENDING_PREVIEW_SOURCE)) return;
+    map.addSource(PENDING_PREVIEW_SOURCE, { type: "geojson", data: EMPTY_FC });
+    map.addLayer({
+      id: PENDING_PREVIEW_FILL_LAYER,
+      type: "fill",
+      source: PENDING_PREVIEW_SOURCE,
+      filter: ["==", ["geometry-type"], "Polygon"],
+      paint: { "fill-color": "#ff6b00", "fill-opacity": 0.2 },
+    });
+    map.addLayer({
+      id: PENDING_PREVIEW_BORDER_LAYER,
+      type: "line",
+      source: PENDING_PREVIEW_SOURCE,
+      filter: ["==", ["geometry-type"], "Polygon"],
+      paint: { "line-color": "#ff6b00", "line-width": 2, "line-dasharray": [4, 3] },
+    });
+    map.addLayer({
+      id: PENDING_PREVIEW_POINT_LAYER,
+      type: "circle",
+      source: PENDING_PREVIEW_SOURCE,
+      filter: ["==", ["geometry-type"], "Point"],
+      paint: {
+        "circle-radius": 7,
+        "circle-color": "#ff6b00",
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 2,
+      },
+    });
+  }
+
   // shared helper to add all infrastructure layers
   const addAllLayers = useCallback(
     (map: maplibregl.Map) => {
@@ -843,7 +1033,9 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & { activeTool?:
       addObstacleLayers(map, airport.obstacles);
       addAglLayers(map, airport.surfaces);
       addMeasureLayersToMap(map);
+      addHeadingLayersToMap(map);
       addHighlightLayers(map);
+      addPendingPreviewLayers(map);
       layersAddedRef.current = true;
     },
     [airport],
@@ -1380,6 +1572,27 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & { activeTool?:
     if (linesSrc) linesSrc.setData(lines);
     if (labelsSrc) labelsSrc.setData(labels);
   }, [measureData]);
+
+  // sync heading data to sources
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    addHeadingLayersToMap(map);
+
+    const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+    const point = headingData?.point ?? emptyFC;
+    const line = headingData?.line ?? emptyFC;
+    const label = headingData?.label ?? emptyFC;
+
+    const pointSrc = map.getSource("heading-point") as maplibregl.GeoJSONSource | undefined;
+    const lineSrc = map.getSource("heading-line") as maplibregl.GeoJSONSource | undefined;
+    const labelSrc = map.getSource("heading-label") as maplibregl.GeoJSONSource | undefined;
+
+    if (pointSrc) pointSrc.setData(point);
+    if (lineSrc) lineSrc.setData(line);
+    if (labelSrc) labelSrc.setData(label);
+  }, [headingData]);
 
   return (
     <div
