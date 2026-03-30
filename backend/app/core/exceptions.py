@@ -20,6 +20,14 @@ class NotFoundError(DomainError):
         super().__init__(message, status_code=404)
 
 
+class ConflictError(DomainError):
+    """operation conflicts with existing state"""
+
+    def __init__(self, message: str = "conflict"):
+        """create conflict error"""
+        super().__init__(message, status_code=409)
+
+
 class TrajectoryGenerationError(DomainError):
     """trajectory generation failed due to constraint violations or missing data"""
 

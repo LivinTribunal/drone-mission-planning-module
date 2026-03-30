@@ -1,11 +1,587 @@
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Loader2, X, Pencil, Copy, Trash2, Plus } from "lucide-react";
+import { useAirport } from "@/contexts/AirportContext";
+import {
+  getInspectionTemplate,
+  listInspectionTemplates,
+  updateInspectionTemplate,
+  deleteInspectionTemplate,
+  createInspectionTemplate,
+} from "@/api/inspectionTemplates";
+import type { InspectionTemplateResponse, InspectionConfigResponse } from "@/types/inspectionTemplate";
+import type { InspectionMethod } from "@/types/enums";
+import Button from "@/components/common/Button";
+import Modal from "@/components/common/Modal";
+import AirportMap from "@/components/map/AirportMap";
+import TerrainToggle from "@/components/map/overlays/TerrainToggle";
+import TemplateConfigSection from "@/components/mission/TemplateConfigSection";
+import TemplateSelectorDropdown from "@/components/mission/TemplateSelectorDropdown";
+import CreateTemplateDialog from "@/components/mission/CreateTemplateDialog";
+
+const AUTOSAVE_DELAY = 1200;
+
+/** format a date as a human-readable saved timestamp. */
+function formatTimestamp(
+  date: Date,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+
+  if (diffMin < 1) return t("coordinator.inspections.savedJustNow");
+  if (diffMin < 60)
+    return t("coordinator.inspections.savedMinutesAgo", { count: diffMin });
+
+  return t("coordinator.inspections.savedAt", {
+    time: date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  });
+}
 
 export default function InspectionEditPage() {
+  /**inspection template editor with autosave.*/
+  const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { airportDetail } = useAirport();
+
+  const [template, setTemplate] = useState<InspectionTemplateResponse | null>(null);
+  const [allTemplates, setAllTemplates] = useState<InspectionTemplateResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // config edit state
+  const [editConfig, setEditConfig] = useState<Omit<InspectionConfigResponse, "id"> | null>(null);
+  const [editMethod, setEditMethod] = useState<InspectionMethod>("ANGULAR_SWEEP");
+  const [selectedAglId, setSelectedAglId] = useState<string>("");
+  const [selectedLhaIds, setSelectedLhaIds] = useState<Set<string>>(new Set());
+  const [editName, setEditName] = useState("");
+  const [isRenamingName, setIsRenamingName] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
+  const notificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // autosave state
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const performSaveRef = useRef<(() => Promise<void>) | null>(null);
+
+  // tick for relative timestamp display
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!lastSaved) return;
+    const interval = setInterval(() => setTick((n) => n + 1), 30000);
+    return () => clearInterval(interval);
+  }, [lastSaved]);
+
+  // ui
+  const [configExpanded, setConfigExpanded] = useState(true);
+
+  // dialogs
+  const [showCreate, setShowCreate] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+
+  // map
+  const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
+
+  // all agls from airport
+  const allAgls = useMemo(() => {
+    if (!airportDetail) return [];
+    return airportDetail.surfaces.flatMap((s) => s.agls);
+  }, [airportDetail]);
+
+  function showNotif(msg: string) {
+    /**show a temporary notification toast.*/
+    setNotification(msg);
+    if (notificationTimer.current) clearTimeout(notificationTimer.current);
+    notificationTimer.current = setTimeout(() => setNotification(null), 4000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimer.current) clearTimeout(notificationTimer.current);
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    /**fetch template and all templates list.*/
+    if (!id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [tpl, allTpl] = await Promise.all([
+        getInspectionTemplate(id),
+        listInspectionTemplates(
+          airportDetail ? { airport_id: airportDetail.id } : undefined,
+        ),
+      ]);
+      setTemplate(tpl);
+      setAllTemplates(allTpl.data);
+      initializeFromTemplate(tpl);
+
+      // initialize last saved from db timestamp
+      if (tpl.updated_at) {
+        setLastSaved(new Date(tpl.updated_at));
+      } else if (tpl.created_at) {
+        setLastSaved(new Date(tpl.created_at));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
+    } finally {
+      setLoading(false);
+    }
+  }, [id, airportDetail, t]);
+
+  function initializeFromTemplate(tpl: InspectionTemplateResponse) {
+    /**initialize edit state from a template.*/
+    const cfg = tpl.default_config;
+    setEditConfig(
+      cfg
+        ? {
+            altitude_offset: cfg.altitude_offset,
+            speed_override: cfg.speed_override,
+            measurement_density: cfg.measurement_density,
+            custom_tolerances: cfg.custom_tolerances,
+            density: cfg.density,
+            hover_duration: cfg.hover_duration,
+            horizontal_distance: cfg.horizontal_distance,
+            sweep_angle: cfg.sweep_angle,
+            lha_ids: cfg.lha_ids,
+          }
+        : {
+            altitude_offset: null,
+            speed_override: null,
+            measurement_density: null,
+            custom_tolerances: null,
+            density: null,
+            hover_duration: null,
+            horizontal_distance: null,
+            sweep_angle: null,
+            lha_ids: null,
+          },
+    );
+
+    setEditMethod((tpl.methods[0] ?? "ANGULAR_SWEEP") as InspectionMethod);
+    setEditName(tpl.name);
+
+    const aglId = tpl.target_agl_ids[0] ?? "";
+    setSelectedAglId(aglId);
+
+    // initialize lha selection from config or all lhas
+    if (cfg?.lha_ids && cfg.lha_ids.length > 0) {
+      setSelectedLhaIds(new Set(cfg.lha_ids.map(String)));
+    } else if (aglId) {
+      const agl = allAgls.find((a) => a.id === aglId);
+      if (agl) setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
+    }
+  }
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // re-init lha selection when allAgls load after template
+  useEffect(() => {
+    if (!template || allAgls.length === 0) return;
+    const aglId = template.target_agl_ids[0] ?? "";
+    if (!aglId) return;
+
+    const agl = allAgls.find((a) => a.id === aglId);
+    if (!agl) return;
+
+    const cfg = template.default_config;
+    if (cfg?.lha_ids && cfg.lha_ids.length > 0) {
+      setSelectedLhaIds(new Set(cfg.lha_ids.map(String)));
+    } else {
+      setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
+    }
+  }, [allAgls, template]);
+
+  // autosave
+  const performSave = useCallback(async () => {
+    /**persist current edit state to the backend.*/
+    if (!id || !template) return;
+    setSaving(true);
+    setSaveError(false);
+    try {
+      const configPayload = editConfig
+        ? { ...editConfig, lha_ids: Array.from(selectedLhaIds) }
+        : undefined;
+
+      const result = await updateInspectionTemplate(id, {
+        name: editName !== template.name ? editName : undefined,
+        methods: [editMethod],
+        target_agl_ids: selectedAglId ? [selectedAglId] : undefined,
+        default_config: configPayload,
+      });
+      setTemplate(result);
+      setLastSaved(new Date());
+      setSaveError(false);
+    } catch (err) {
+      console.error("autosave failed:", err instanceof Error ? err.message : String(err));
+      setSaveError(true);
+    } finally {
+      setSaving(false);
+    }
+  }, [id, template, editConfig, editMethod, selectedAglId, selectedLhaIds, editName]);
+
+  // keep ref current so scheduled autosave always calls latest performSave
+  useEffect(() => {
+    performSaveRef.current = performSave;
+  }, [performSave]);
+
+  function scheduleAutosave() {
+    /**schedule an autosave after debounce delay.*/
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      performSaveRef.current?.();
+    }, AUTOSAVE_DELAY);
+  }
+
+  function handleConfigChange(field: string, value: number | null) {
+    /**handle a config field change and schedule autosave.*/
+    setEditConfig((prev) => {
+      if (!prev) return prev;
+      if (field === "custom_tolerances") {
+        if (value === null) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { default: _, ...rest } = prev.custom_tolerances ?? {};
+          return {
+            ...prev,
+            custom_tolerances: Object.keys(rest).length > 0 ? rest : null,
+          };
+        }
+        return {
+          ...prev,
+          custom_tolerances: { ...(prev.custom_tolerances ?? {}), default: value },
+        };
+      }
+      return { ...prev, [field]: value };
+    });
+    scheduleAutosave();
+  }
+
+  function handleMethodChange(method: InspectionMethod) {
+    /**handle method change and schedule autosave.*/
+    setEditMethod(method);
+    scheduleAutosave();
+  }
+
+  function handleAglChange(aglId: string) {
+    /**handle agl change and schedule autosave.*/
+    setSelectedAglId(aglId);
+    if (aglId) {
+      const agl = allAgls.find((a) => a.id === aglId);
+      if (agl) setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
+    } else {
+      setSelectedLhaIds(new Set());
+    }
+    scheduleAutosave();
+  }
+
+  function handleToggleLha(lhaId: string) {
+    /**toggle a single lha unit and schedule autosave.*/
+    setSelectedLhaIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(lhaId)) next.delete(lhaId);
+      else next.add(lhaId);
+      return next;
+    });
+    scheduleAutosave();
+  }
+
+  function handleSelectAllLhas() {
+    /**select all lha units and schedule autosave.*/
+    const agl = allAgls.find((a) => a.id === selectedAglId);
+    if (agl) setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
+    scheduleAutosave();
+  }
+
+  function handleDeselectAllLhas() {
+    /**deselect all lha units and schedule autosave.*/
+    setSelectedLhaIds(new Set());
+    scheduleAutosave();
+  }
+
+  function handleNameChange(name: string) {
+    /**handle name edit and schedule autosave.*/
+    setEditName(name);
+    scheduleAutosave();
+  }
+
+  function handleRenameFinish() {
+    /**finish inline rename.*/
+    setIsRenamingName(false);
+  }
+
+  async function handleDuplicate() {
+    /**duplicate the current template.*/
+    if (!template) return;
+    try {
+      const result = await createInspectionTemplate({
+        name: `${template.name} (Copy)`,
+        target_agl_ids: template.target_agl_ids,
+        methods: template.methods,
+        default_config: editConfig ?? undefined,
+      });
+      navigate(`/coordinator-center/inspections/${result.id}`);
+    } catch (err) {
+      showNotif(err instanceof Error ? err.message : t("coordinator.inspections.duplicateError"));
+    }
+  }
+
+  async function handleDelete() {
+    /**delete the current template.*/
+    if (!id) return;
+    try {
+      await deleteInspectionTemplate(id);
+      setShowDelete(false);
+      navigate("/coordinator-center/inspections");
+    } catch (err) {
+      setShowDelete(false);
+      showNotif(err instanceof Error ? err.message : t("coordinator.inspections.deleteError"));
+    }
+  }
+
+  async function handleCreate(data: { name: string; aglId: string; method: InspectionMethod }) {
+    /**create a new template.*/
+    try {
+      const result = await createInspectionTemplate({
+        name: data.name,
+        target_agl_ids: [data.aglId],
+        methods: [data.method],
+      });
+      setShowCreate(false);
+      navigate(`/coordinator-center/inspections/${result.id}`);
+    } catch (err) {
+      showNotif(err instanceof Error ? err.message : t("coordinator.inspections.createError"));
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-tv-accent" />
+      </div>
+    );
+  }
+
+  if (error || !template) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-3">
+        <p className="text-sm text-tv-error">{error ?? t("common.error")}</p>
+        <Button onClick={fetchData}>{t("common.retry")}</Button>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex items-center justify-center h-full bg-tv-bg">
-      <p className="text-sm text-tv-text-muted">{t("coordinator.inspectionTemplateEditor")}</p>
+    <div className="flex px-4 h-[calc(100vh-7rem)]" data-testid="inspection-edit-page">
+      {/* left panel - 30% */}
+      <div className="w-[30%] flex-shrink-0 flex">
+        <div className="flex-1 overflow-y-auto flex flex-col gap-4 pb-4" style={{ scrollbarGutter: "stable" }}>
+          {/* template selector */}
+          <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-tv-text-primary flex items-center gap-2">
+                <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">
+                  {t("coordinator.inspections.title")}
+                </span>
+                <span
+                  className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-tv-accent-text"
+                  style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
+                >
+                  {allTemplates.length}
+                </span>
+              </span>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setShowCreate(true)}
+                  className="flex items-center justify-center h-7 w-7 rounded-full bg-tv-accent/15 text-tv-accent hover:bg-tv-accent/25 transition-colors"
+                  title={t("coordinator.inspections.addNew")}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={handleDuplicate}
+                  className="flex items-center justify-center h-7 w-7 rounded-full bg-tv-info/15 text-tv-info hover:bg-tv-info/25 transition-colors"
+                  title={t("coordinator.inspections.duplicateTemplate")}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => setIsRenamingName(true)}
+                  className="flex items-center justify-center h-7 w-7 rounded-full bg-tv-warning/15 text-tv-warning hover:bg-tv-warning/25 transition-colors"
+                  title={t("coordinator.inspections.rename")}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => setShowDelete(true)}
+                  className="flex items-center justify-center h-7 w-7 rounded-full bg-tv-error/15 text-tv-error hover:bg-tv-error/25 transition-colors"
+                  title={t("coordinator.inspections.deleteTemplate")}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => navigate("/coordinator-center/inspections")}
+                  className="flex items-center justify-center h-7 w-7 rounded-full bg-tv-text-muted/15 text-tv-text-secondary hover:bg-tv-text-muted/25 transition-colors"
+                  aria-label={t("common.close")}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="border-b border-tv-border -mx-4 my-3" />
+
+            {/* template selector dropdown with inline rename */}
+            <TemplateSelectorDropdown
+              templates={allTemplates}
+              currentId={template.id}
+              onSelect={(tid) => navigate(`/coordinator-center/inspections/${tid}`)}
+              isRenaming={isRenamingName}
+              editName={editName}
+              onNameChange={handleNameChange}
+              onRenameFinish={handleRenameFinish}
+            />
+          </div>
+
+          {/* configuration form - collapsible container */}
+          <div className="bg-tv-surface border border-tv-border rounded-3xl">
+            <button
+              onClick={() => setConfigExpanded(!configExpanded)}
+              className="flex w-full items-center gap-2 p-4 text-left"
+            >
+              <span className="text-base font-semibold text-tv-text-primary rounded-full px-3 py-1 bg-tv-bg border border-tv-border">
+                {t("coordinator.inspections.configuration")}
+              </span>
+              <span className="flex-1" />
+              {/* autosave status */}
+              <span className="flex items-center gap-1.5 text-xs text-tv-text-muted" onClick={(e) => e.stopPropagation()}>
+                {saving && (
+                  <>
+                    <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    {t("coordinator.inspections.saving")}
+                  </>
+                )}
+                {!saving && saveError && (
+                  <span className="text-tv-error">
+                    {t("coordinator.inspections.saveError")}
+                  </span>
+                )}
+                {!saving && !saveError && lastSaved && (
+                  <>
+                    <svg className="h-3 w-3 text-tv-success" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    {formatTimestamp(lastSaved, t)}
+                  </>
+                )}
+              </span>
+              <svg
+                className={`h-5 w-5 flex-shrink-0 text-tv-text-secondary transition-transform duration-200 ${
+                  configExpanded ? "rotate-180" : ""
+                }`}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+            {configExpanded && (
+              <>
+                <div className="border-b border-tv-border" />
+                <div className="px-4 py-4">
+                  <TemplateConfigSection
+                    config={editConfig}
+                    method={editMethod}
+                    onChange={handleConfigChange}
+                    onMethodChange={handleMethodChange}
+                    allAgls={allAgls}
+                    selectedAglId={selectedAglId}
+                    onAglChange={handleAglChange}
+                    selectedLhaIds={selectedLhaIds}
+                    onToggleLha={handleToggleLha}
+                    onSelectAllLhas={handleSelectAllLhas}
+                    onDeselectAllLhas={handleDeselectAllLhas}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="w-6 flex-shrink-0" />
+      </div>
+
+      {/* right panel - map */}
+      <div className="flex-1 flex flex-col min-w-0 pb-4">
+        {airportDetail ? (
+          <div className="flex-1 relative rounded-2xl overflow-hidden border border-tv-border">
+            <AirportMap
+              airport={airportDetail}
+              terrainMode={terrainMode}
+              onTerrainChange={setTerrainMode}
+              showTerrainToggle={false}
+            />
+
+            {/* bottom right - terrain toggle */}
+            <div className="absolute bottom-3 right-3 z-10">
+              <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center bg-tv-surface rounded-2xl border border-tv-border">
+            <Loader2 className="h-6 w-6 animate-spin text-tv-accent" />
+          </div>
+        )}
+      </div>
+
+      {/* create dialog */}
+      <CreateTemplateDialog
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        agls={allAgls}
+        onSubmit={handleCreate}
+      />
+
+      {/* delete confirmation */}
+      <Modal
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        title={t("coordinator.inspections.deleteTemplate")}
+      >
+        <p className="text-sm text-tv-text-secondary mb-4">
+          {t("coordinator.inspections.deleteConfirm", { name: template.name })}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setShowDelete(false)}>
+            {t("common.cancel")}
+          </Button>
+          <Button variant="danger" onClick={handleDelete}>
+            {t("common.delete")}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* notification toast */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-tv-surface border border-tv-border text-sm text-tv-text-primary">
+          {notification}
+        </div>
+      )}
     </div>
   );
 }

@@ -100,6 +100,7 @@ class InspectionTemplate(Base):
     angular_tolerances = Column(JSONB)
     created_by = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     default_config = relationship("InspectionConfiguration")
     targets = relationship("AGL", secondary=insp_template_targets)
