@@ -3,9 +3,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.agl import AGL
 from app.models.inspection import (
+    Inspection,
     InspectionConfiguration,
     InspectionTemplate,
     insp_template_methods,
@@ -24,6 +25,10 @@ def _enrich(template: InspectionTemplate, db: Session) -> InspectionTemplate:
 
     template.methods = [row[0] for row in methods_rows]
     template.target_agl_ids = [agl.id for agl in template.targets]
+
+    template.mission_count = (
+        db.query(Inspection).filter(Inspection.template_id == template.id).count()
+    )
 
     return template
 
@@ -74,6 +79,9 @@ def create_template(db: Session, schema: InspectionTemplateCreate) -> Inspection
 
     config = None
     if config_data:
+        # convert uuid objects to strings for jsonb storage
+        if "lha_ids" in config_data and config_data["lha_ids"] is not None:
+            config_data["lha_ids"] = [str(uid) for uid in config_data["lha_ids"]]
         config = InspectionConfiguration(**config_data)
         db.add(config)
         db.flush()
@@ -103,7 +111,10 @@ def update_template(
     """update inspection template"""
     template = (
         db.query(InspectionTemplate)
-        .options(joinedload(InspectionTemplate.targets))
+        .options(
+            joinedload(InspectionTemplate.default_config),
+            joinedload(InspectionTemplate.targets),
+        )
         .filter(InspectionTemplate.id == template_id)
         .first()
     )
@@ -113,8 +124,22 @@ def update_template(
     data = schema.model_dump(exclude_unset=True)
     target_ids = data.pop("target_agl_ids", None)
     methods = data.pop("methods", None)
+    config_data = data.pop("default_config", None)
 
     apply_dict_update(template, data)
+
+    if config_data is not None:
+        # convert uuid objects to strings for jsonb storage
+        if "lha_ids" in config_data and config_data["lha_ids"] is not None:
+            config_data["lha_ids"] = [str(uid) for uid in config_data["lha_ids"]]
+
+        if template.default_config:
+            apply_dict_update(template.default_config, config_data)
+        else:
+            config = InspectionConfiguration(**config_data)
+            db.add(config)
+            db.flush()
+            template.default_config_id = config.id
 
     if target_ids is not None:
         agls = db.query(AGL).filter(AGL.id.in_(target_ids)).all()
@@ -144,6 +169,10 @@ def delete_template(db: Session, template_id: UUID):
     )
     if not template:
         raise NotFoundError("template not found")
+
+    linked = db.query(Inspection).filter(Inspection.template_id == template_id).count()
+    if linked > 0:
+        raise ConflictError(f"cannot delete template used by {linked} inspection(s)")
 
     config = template.default_config
     db.delete(template)

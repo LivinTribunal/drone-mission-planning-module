@@ -57,6 +57,7 @@ class InspectionTemplateUpdate(BaseModel):
     angular_tolerances: dict | None = None
     target_agl_ids: list[UUID] | None = None
     methods: list[str] | None = None
+    default_config: InspectionConfigCreate | None = None
 
 
 class InspectionTemplateResponse(BaseModel):
@@ -68,9 +69,11 @@ class InspectionTemplateResponse(BaseModel):
     angular_tolerances: dict | None = None
     created_by: str | None = None
     created_at: datetime | None = None
+    updated_at: datetime | None = None
     default_config: InspectionConfigResponse | None = None
     target_agl_ids: list[UUID] = []
     methods: list[str] = []
+    mission_count: int = 0
 
     model_config = {"from_attributes": True}
 

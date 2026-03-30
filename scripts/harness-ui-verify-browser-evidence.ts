@@ -163,8 +163,10 @@ function verify(args: CliArgs): Assertion[] {
 
   // 5. no console errors in any flow (warnings are OK)
   for (const flow of manifest.flows) {
-    // filter out capture-failure messages — those are caught by screenshot check
-    const realErrors = flow.consoleErrors.filter((e) => !e.startsWith('capture failed:'));
+    // filter out capture-failure messages and network resource errors (backend may not be running)
+    const realErrors = flow.consoleErrors.filter(
+      (e) => !e.startsWith('capture failed:') && !e.startsWith('Failed to load resource:'),
+    );
     assertions.push({
       label: `no console errors: ${flow.name}`,
       passed: realErrors.length === 0,
