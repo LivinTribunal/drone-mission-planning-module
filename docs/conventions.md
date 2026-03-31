@@ -179,7 +179,7 @@ select = ["E", "F", "I"]
 
 ### TypeScript / Frontend
 
-ESLint configured via `package.json`: `npm run lint`.
+ESLint configured via `eslint.config.js`: `npm run lint`.
 
 ---
 
