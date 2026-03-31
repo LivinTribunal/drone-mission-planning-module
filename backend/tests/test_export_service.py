@@ -144,7 +144,7 @@ class TestGenerateJson:
         result = export_service.generate_json(fp, "Test Mission", 290.0)
         data = json.loads(result)
 
-        assert data["version"] == "1.0"
+        assert data["version"] == "1.0.0+0"
         assert data["mission_name"] == "Test Mission"
         assert "mission_id" in data
         assert "waypoints" in data
@@ -169,7 +169,7 @@ class TestGenerateJson:
         result = export_service.generate_json(fp, "", 0)
         data = json.loads(result)
 
-        assert data["version"] == "1.0"
+        assert data["version"] == "1.0.0+0"
         assert data["waypoints"] == []
 
     def test_waypoint_fields(self):
@@ -277,3 +277,49 @@ class TestSanitizeFilename:
     def test_strips_null_bytes(self):
         """null bytes and control characters are removed."""
         assert export_service._sanitize_filename("mis\x00sion\x01test\x7f") == "missiontest"
+
+    def test_strips_dotdot_slash_variant(self):
+        """combined dotdot and slash variants are stripped."""
+        assert export_service._sanitize_filename("....//evil") == "evil"
+
+
+class TestExportMissionFormats:
+    """tests for export_mission format validation."""
+
+    def test_invalid_format_raises_domain_error(self):
+        """unknown format string raises DomainError 422 before any db mutation."""
+        from app.core.exceptions import DomainError
+
+        db = MagicMock()
+        mission = MagicMock()
+        mission.status = "VALIDATED"
+        mission.name = "test"
+        db.query.return_value.filter.return_value.first.return_value = mission
+
+        fp = _make_flight_plan(1)
+        fp.airport_id = uuid4()
+
+        airport = MagicMock()
+        airport.elevation = 100.0
+
+        # first query().filter().first() -> mission
+        # second query().options().filter().first() -> flight_plan
+        # third query().filter().first() -> airport
+        def query_side_effect(model):
+            """route db.query to the right mock based on model."""
+            mock_chain = MagicMock()
+            if model.__name__ == "Mission":
+                mock_chain.filter.return_value.first.return_value = mission
+            elif model.__name__ == "FlightPlan":
+                mock_chain.options.return_value.filter.return_value.first.return_value = fp
+            elif model.__name__ == "Airport":
+                mock_chain.filter.return_value.first.return_value = airport
+            return mock_chain
+
+        db.query.side_effect = query_side_effect
+
+        import pytest
+
+        with pytest.raises(DomainError) as exc_info:
+            export_service.export_mission(db, uuid4(), ["INVALID"])
+        assert exc_info.value.status_code == 422

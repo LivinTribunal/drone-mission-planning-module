@@ -142,7 +142,7 @@ def generate_json(
         )
 
     data = {
-        "version": "1.0",
+        "version": "1.0.0+0",
         "mission_name": mission_name,
         "mission_id": flight_plan.mission_id,
         "airport_elevation": airport_elevation,
@@ -273,10 +273,16 @@ def export_mission(
             mission.transition_to("EXPORTED")
             db.commit()
             db.refresh(mission)
-        except ValueError:
-            raise DomainError("invalid status transition", status_code=409)
+        except ValueError as e:
+            raise DomainError("invalid status transition", status_code=409) from e
 
     safe_name = _sanitize_filename(mission.name)
+
+    unsupported = [fmt for fmt in formats if fmt not in _EXPORT_GENERATORS]
+    if unsupported:
+        raise DomainError(
+            f"unsupported export format(s): {', '.join(unsupported)}", status_code=422
+        )
 
     files: dict[str, tuple[bytes, str]] = {}
     for fmt in formats:
