@@ -25,7 +25,7 @@ export default function useMapTools(): MapToolsReturn {
   const [is3D, setIs3D] = useState(false);
 
   const setTool = useCallback((tool: MapTool) => {
-    if (tool === MapTool.ZOOM_RESET) return;
+    if (tool === MapTool.ZOOM_RESET) return; // one-shot action handled by toolbar, not a persistent tool
     setActiveTool(tool);
   }, []);
 

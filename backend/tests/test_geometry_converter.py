@@ -5,7 +5,7 @@ import pytest
 from geoalchemy2.elements import WKTElement
 from pydantic import BaseModel
 
-from app.schemas.geometry import LineStringZ, PointZ, PolygonZ
+from app.schemas.geometry import LineStringZ, PointZ, PolygonZ, parse_ewkb
 from app.services.geometry_converter import (
     apply_dict_update,
     apply_schema_update,
@@ -150,6 +150,67 @@ class TestApplySchemaUpdate:
         apply_schema_update(obj, schema)
         assert obj.name == "updated"
         assert obj.location == "keep-this"
+
+
+class TestParseEwkbErrors:
+    """tests that parse_ewkb handles malformed input gracefully."""
+
+    def test_empty_bytes_raises_valueerror(self):
+        """empty bytes input raises ValueError."""
+        with pytest.raises(ValueError, match="malformed EWKB data"):
+            parse_ewkb(b"")
+
+    def test_truncated_buffer_raises_valueerror(self):
+        """truncated buffer raises ValueError."""
+        with pytest.raises(ValueError, match="malformed EWKB data"):
+            parse_ewkb(b"\x01\x00")
+
+    def test_empty_hex_string_raises_valueerror(self):
+        """empty hex string raises ValueError."""
+        with pytest.raises(ValueError, match="malformed EWKB data"):
+            parse_ewkb("")
+
+
+class TestGeojsonToEwkt2D:
+    """tests that geojson_to_ewkt handles 2D coordinates gracefully."""
+
+    def test_2d_point_defaults_z_to_zero(self):
+        """2D point coordinates default z to 0."""
+        geojson = {"type": "Point", "coordinates": [16.5, 48.1]}
+        result = geojson_to_ewkt(geojson)
+        assert result == "SRID=4326;POINTZ(16.5 48.1 0)"
+
+    def test_2d_linestring_defaults_z_to_zero(self):
+        """2D linestring coordinates default z to 0."""
+        geojson = {"type": "LineString", "coordinates": [[16.5, 48.1], [16.6, 48.2]]}
+        result = geojson_to_ewkt(geojson)
+        assert result == "SRID=4326;LINESTRINGZ(16.5 48.1 0, 16.6 48.2 0)"
+
+    def test_1d_coordinate_raises_valueerror(self):
+        """coordinate with only 1 element raises ValueError."""
+        geojson = {"type": "Point", "coordinates": [16.5]}
+        with pytest.raises(ValueError, match="at least 2 elements"):
+            geojson_to_ewkt(geojson)
+
+
+class TestPolygonZRingClosure:
+    """tests that PolygonZ validates ring closure."""
+
+    def test_unclosed_ring_rejected(self):
+        """unclosed polygon ring is rejected."""
+        with pytest.raises(Exception, match="not closed"):
+            PolygonZ(
+                type="Polygon",
+                coordinates=[[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]]],
+            )
+
+    def test_closed_ring_accepted(self):
+        """closed polygon ring is accepted."""
+        pg = PolygonZ(
+            type="Polygon",
+            coordinates=[[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 0, 0]]],
+        )
+        assert len(pg.coordinates[0]) == 4
 
 
 class TestGeometrySchemaValidation:

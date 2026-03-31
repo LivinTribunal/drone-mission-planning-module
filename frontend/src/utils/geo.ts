@@ -92,7 +92,7 @@ export function rectangleDimensions(
 }
 
 export function polygonCentroid(coords: [number, number][]): [number, number] {
-  /** compute centroid of a polygon ring. */
+  /** compute vertex-mean approximation of a polygon ring centroid - may fall outside non-convex shapes. */
   if (coords.length === 0) return [0, 0];
   const n = coords[coords.length - 1][0] === coords[0][0] && coords[coords.length - 1][1] === coords[0][1]
     ? coords.length - 1

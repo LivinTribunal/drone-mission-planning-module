@@ -20,23 +20,31 @@ GEOM_FIELDS = {
 }
 
 
+def _fmt_coord(c: list) -> str:
+    """format a single coordinate as 'x y z', defaulting z to 0 if missing."""
+    if len(c) < 2:
+        raise ValueError(f"coordinate must have at least 2 elements, got {len(c)}")
+    z = c[2] if len(c) >= 3 else 0
+    return f"{c[0]} {c[1]} {z}"
+
+
 def geojson_to_ewkt(geojson: GeoJSON) -> EWKT:
     """convert GeoJSON dict to EWKT string"""
     coords = geojson["coordinates"]
     geom_type = geojson["type"]
 
     if geom_type == "Point":
-        return f"SRID=4326;POINTZ({coords[0]} {coords[1]} {coords[2]})"
+        return f"SRID=4326;POINTZ({_fmt_coord(coords)})"
 
     if geom_type == "LineString":
-        pts = ", ".join(f"{c[0]} {c[1]} {c[2]}" for c in coords)
+        pts = ", ".join(_fmt_coord(c) for c in coords)
 
         return f"SRID=4326;LINESTRINGZ({pts})"
 
     if geom_type == "Polygon":
         rings = []
         for ring in coords:
-            pts = ", ".join(f"{c[0]} {c[1]} {c[2]}" for c in ring)
+            pts = ", ".join(_fmt_coord(c) for c in ring)
             rings.append(f"({pts})")
 
         return f"SRID=4326;POLYGONZ({', '.join(rings)})"
