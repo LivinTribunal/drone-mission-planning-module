@@ -55,6 +55,7 @@ class AirfieldSurface(Base):
     identifier = Column(String(10), nullable=False)
     surface_type = Column(String(20), nullable=False)
     geometry = Column(Geometry("LINESTRINGZ", srid=4326), nullable=False)
+    boundary = Column(Geometry("POLYGONZ", srid=4326))
 
     # runway-specific columns
     heading = Column(Float)

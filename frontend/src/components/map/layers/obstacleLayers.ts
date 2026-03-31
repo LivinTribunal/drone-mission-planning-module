@@ -84,6 +84,7 @@ export function addObstacleLayers(
           return {
             type: "Feature" as const,
             properties: {
+              id: o.id,
               color: obstacleColors[o.type] ?? "#6b6b6b",
             },
             geometry: {

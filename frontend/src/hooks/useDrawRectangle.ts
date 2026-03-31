@@ -89,40 +89,29 @@ function removeSources(map: maplibregl.Map) {
   }
 }
 
-function rotatePoint(
-  origin: [number, number],
-  point: [number, number],
-  angleDeg: number,
-): [number, number] {
-  /** rotate a point around an origin by angle in degrees. */
-  const rad = (angleDeg * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  const dx = point[0] - origin[0];
-  const dy = point[1] - origin[1];
-  return [
-    origin[0] + dx * cos - dy * sin,
-    origin[1] + dx * sin + dy * cos,
-  ];
-}
-
-function rectRing(
+function screenAlignedRing(
+  map: maplibregl.Map,
   c1: [number, number],
   c2: [number, number],
-  bearing = 0,
 ): [number, number][] {
-  /** compute rectangle ring from two opposite corners, rotated by bearing. */
-  const corners: [number, number][] = [
-    c1,
-    [c2[0], c1[1]],
-    c2,
-    [c1[0], c2[1]],
+  /** build rectangle ring aligned to screen edges via project/unproject. */
+  const p1 = map.project(c1);
+  const p2 = map.project(c2);
+
+  // screen-aligned corners
+  const tl = map.unproject([p1.x, p1.y]);
+  const tr = map.unproject([p2.x, p1.y]);
+  const br = map.unproject([p2.x, p2.y]);
+  const bl = map.unproject([p1.x, p2.y]);
+
+  const ring: [number, number][] = [
+    [tl.lng, tl.lat],
+    [tr.lng, tr.lat],
+    [br.lng, br.lat],
+    [bl.lng, bl.lat],
+    [tl.lng, tl.lat],
   ];
-
-  if (bearing === 0) return [...corners, corners[0]];
-
-  const rotated = corners.map((pt) => rotatePoint(c1, pt, bearing));
-  return [...rotated, rotated[0]];
+  return ring;
 }
 
 interface UseDrawRectangleReturn {
@@ -134,13 +123,11 @@ export default function useDrawRectangle(
   map: maplibregl.Map | null,
   active: boolean,
   onComplete: (polygon: GeoJSON.Polygon) => void,
-  bearing = 0,
+  _bearing: number = 0, // eslint-disable-line @typescript-eslint/no-unused-vars
 ): UseDrawRectangleReturn {
-  /** rectangle drawing tool - click two opposite corners, aligned to map bearing. */
+  /** rectangle drawing tool - click two opposite corners, edges parallel to screen. */
   const corner1Ref = useRef<[number, number] | null>(null);
   const cursorRef = useRef<[number, number] | null>(null);
-  const bearingRef = useRef(bearing);
-  bearingRef.current = bearing;
   const [isDrawing, setIsDrawing] = useState(false);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
@@ -148,6 +135,7 @@ export default function useDrawRectangle(
   const updatePreview = useCallback(() => {
     /** sync rectangle preview to map sources. */
     if (!map) return;
+    if (map.isStyleLoaded()) ensureSources(map);
     const c1 = corner1Ref.current;
     const cursor = cursorRef.current;
 
@@ -156,7 +144,7 @@ export default function useDrawRectangle(
       return;
     }
 
-    const ring = rectRing(c1, cursor, bearingRef.current);
+    const ring = screenAlignedRing(map, c1, cursor);
     const { width, height } = rectangleDimensions(c1, cursor);
 
     const fillSrc = map.getSource(SRC_FILL) as maplibregl.GeoJSONSource | undefined;
@@ -230,7 +218,6 @@ export default function useDrawRectangle(
     }
 
     map.getCanvas().style.cursor = "crosshair";
-    map.dragPan.disable();
 
     function handleClick(e: maplibregl.MapMouseEvent) {
       if (!map) return;
@@ -241,7 +228,7 @@ export default function useDrawRectangle(
         setIsDrawing(true);
         updatePreview();
       } else {
-        const ring = rectRing(corner1Ref.current, lngLat, bearingRef.current);
+        const ring = screenAlignedRing(map, corner1Ref.current, lngLat);
         const polygon: GeoJSON.Polygon = { type: "Polygon", coordinates: [ring] };
         reset();
         onCompleteRef.current(polygon);
@@ -267,7 +254,6 @@ export default function useDrawRectangle(
       map.off("mousemove", handleMouseMove);
       map.off("contextmenu", handleContextMenu);
       map.getCanvas().style.cursor = "";
-      map.dragPan.enable();
       clearSources(map);
     };
   }, [map, active, updatePreview, reset]);

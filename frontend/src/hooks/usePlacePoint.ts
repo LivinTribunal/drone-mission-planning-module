@@ -56,7 +56,6 @@ export default function usePlacePoint(
     }
 
     map.getCanvas().style.cursor = "crosshair";
-    map.dragPan.disable();
 
     function handleClick(e: maplibregl.MapMouseEvent) {
       if (!map) return;
@@ -66,6 +65,7 @@ export default function usePlacePoint(
 
     function handleMouseMove(e: maplibregl.MapMouseEvent) {
       if (!map) return;
+      if (map.isStyleLoaded()) ensureSources(map);
       const s = map.getSource(SRC_PREVIEW) as maplibregl.GeoJSONSource | undefined;
       if (s) {
         s.setData({
@@ -93,7 +93,6 @@ export default function usePlacePoint(
       map.off("mousemove", handleMouseMove);
       map.off("contextmenu", handleContextMenu);
       map.getCanvas().style.cursor = "";
-      map.dragPan.enable();
       clearSources(map);
     };
   }, [map, active]);

@@ -101,12 +101,19 @@ export default function useHeadingTool(): HeadingReturn {
     if (origin) {
       features.push({
         type: "Feature",
-        properties: {},
+        properties: { kind: "origin" },
         geometry: { type: "Point", coordinates: origin },
       });
     }
+    if (target && bearing !== null) {
+      features.push({
+        type: "Feature",
+        properties: { kind: "endpoint", bearing: bearing - 90 },
+        geometry: { type: "Point", coordinates: target },
+      });
+    }
     return { type: "FeatureCollection", features };
-  }, [origin]);
+  }, [origin, target, bearing]);
 
   const lineGeoJSON = useMemo((): GeoJSON.FeatureCollection => {
     const features: GeoJSON.Feature[] = [];

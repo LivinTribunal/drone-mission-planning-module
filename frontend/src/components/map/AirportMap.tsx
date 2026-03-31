@@ -21,11 +21,13 @@ import {
 import { registerAllMapImages } from "./layers/mapImages";
 import {
   addSurfaceLayers,
+  RUNWAY_SOURCE,
   RUNWAY_FILL_LAYER,
   RUNWAY_STROKE_LAYER,
   RUNWAY_CENTERLINE_LAYER,
   RUNWAY_LABEL_LAYER,
   RUNWAY_POLYGON_SOURCE,
+  TAXIWAY_SOURCE,
   TAXIWAY_FILL_LAYER,
   TAXIWAY_STROKE_LAYER,
   TAXIWAY_LABEL_LAYER,
@@ -34,6 +36,7 @@ import {
 import {
   addObstacleLayers,
   OBSTACLE_SOURCE,
+  OBSTACLE_RADIUS_SOURCE,
   OBSTACLE_ICON_LAYER,
   OBSTACLE_RADIUS_LAYER,
   OBSTACLE_LABEL_LAYER,
@@ -244,7 +247,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   isMeasureDrawing,
   headingData,
   onHeadingClear,
-  onHeadingMouseMove,
+  headingOrigin,
   isHeadingDrawing,
   onWaypointDrag,
   zoomPercent,
@@ -490,12 +493,34 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     };
   }, [activeTool, isMeasureDrawing, onMeasureClear, onMeasureFinish, onMeasureMouseMove]);
 
-  // heading tool: right-click/esc to clear, mousemove for cursor line
+  // refs for tool clear callbacks (used in terrain change without adding to deps)
+  const onMeasureClearRef = useRef(onMeasureClear);
+  onMeasureClearRef.current = onMeasureClear;
+  const onHeadingClearRef = useRef(onHeadingClear);
+  onHeadingClearRef.current = onHeadingClear;
+
+  // heading tool: right-click/esc to clear, mousemove updates sources directly (no react state)
+  const headingOriginRef = useRef(headingOrigin);
+  headingOriginRef.current = headingOrigin;
+  const isHeadingDrawingRef = useRef(isHeadingDrawing);
+  isHeadingDrawingRef.current = isHeadingDrawing;
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const tool = activeTool ?? MapTool.SELECT;
     if (tool !== MapTool.HEADING) return;
+
+    function computeBearing(lng1: number, lat1: number, lng2: number, lat2: number): number {
+      /** geographic bearing from point 1 to point 2. */
+      const toRad = (d: number) => (d * Math.PI) / 180;
+      const toDeg = (r: number) => (r * 180) / Math.PI;
+      const dLng = toRad(lng2 - lng1);
+      const y = Math.sin(dLng) * Math.cos(toRad(lat2));
+      const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2))
+        - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
+      return (toDeg(Math.atan2(y, x)) + 360) % 360;
+    }
 
     function handleContextMenu(e: maplibregl.MapMouseEvent) {
       e.preventDefault();
@@ -503,9 +528,37 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     }
 
     function handleMouseMove(e: maplibregl.MapMouseEvent) {
-      if (isHeadingDrawing) {
-        onHeadingMouseMove?.(e.lngLat.lng, e.lngLat.lat);
-      }
+      const origin = headingOriginRef.current;
+      if (!isHeadingDrawingRef.current || !origin) return;
+
+      const cursor: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+      const bearing = Math.round(computeBearing(origin[0], origin[1], cursor[0], cursor[1]));
+
+      // update sources directly - no react re-render
+      if (!map!.getSource("heading-point")) return;
+
+      const pointSrc = map!.getSource("heading-point") as maplibregl.GeoJSONSource | undefined;
+      if (pointSrc) pointSrc.setData({
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { kind: "origin" }, geometry: { type: "Point", coordinates: origin } },
+          { type: "Feature", properties: { kind: "endpoint", bearing: bearing - 90 }, geometry: { type: "Point", coordinates: cursor } },
+        ],
+      });
+
+      const lineSrc = map!.getSource("heading-line") as maplibregl.GeoJSONSource | undefined;
+      if (lineSrc) lineSrc.setData({
+        type: "FeatureCollection",
+        features: [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [origin, cursor] } }],
+      });
+
+      const labelSrc = map!.getSource("heading-label") as maplibregl.GeoJSONSource | undefined;
+      const midLng = (origin[0] + cursor[0]) / 2;
+      const midLat = (origin[1] + cursor[1]) / 2;
+      if (labelSrc) labelSrc.setData({
+        type: "FeatureCollection",
+        features: [{ type: "Feature", properties: { label: `${bearing}°` }, geometry: { type: "Point", coordinates: [midLng, midLat] } }],
+      });
     }
 
     function handleKeyDown(e: KeyboardEvent) {
@@ -522,7 +575,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       map.off("mousemove", handleMouseMove);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeTool, isHeadingDrawing, onHeadingClear, onHeadingMouseMove]);
+  }, [activeTool, onHeadingClear]);
 
   // move waypoint tool: drag behavior with live preview
   useEffect(() => {
@@ -790,15 +843,38 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
 
     if (!map.getSource("heading-point")) {
       map.addSource("heading-point", { type: "geojson", data: emptyFC });
+
+      // origin circle
       map.addLayer({
         id: "heading-point-layer",
         type: "circle",
         source: "heading-point",
+        filter: ["==", ["get", "kind"], "origin"],
         paint: {
           "circle-radius": 4,
           "circle-color": "#4595e5",
           "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 2,
+        },
+      });
+
+      // arrowhead at endpoint - bearing property is already offset by -90
+      map.addLayer({
+        id: "heading-arrow-layer",
+        type: "symbol",
+        source: "heading-point",
+        filter: ["==", ["get", "kind"], "endpoint"],
+        layout: {
+          "text-field": "▶",
+          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-size": 16,
+          "text-rotate": ["get", "bearing"],
+          "text-rotation-alignment": "map",
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
+        paint: {
+          "text-color": "#4595e5",
         },
       });
     }
@@ -812,28 +888,6 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         paint: {
           "line-color": "#4595e5",
           "line-width": 2,
-        },
-      });
-    }
-
-    // arrowhead at endpoint using a symbol layer
-    if (!map.getLayer("heading-arrow-layer")) {
-      map.addLayer({
-        id: "heading-arrow-layer",
-        type: "symbol",
-        source: "heading-line",
-        layout: {
-          "symbol-placement": "line",
-          "symbol-spacing": 1,
-          "text-field": "▶",
-          "text-size": 14,
-          "text-keep-upright": false,
-          "text-rotation-alignment": "map",
-          "text-allow-overlap": true,
-          "text-ignore-placement": true,
-        },
-        paint: {
-          "text-color": "#4595e5",
         },
       });
     }
@@ -1024,6 +1078,33 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   }
 
   // shared helper to add all infrastructure layers
+  // infrastructure source/layer names for cleanup
+  const INFRA_SOURCES = [
+    SAFETY_ZONE_SOURCE, RUNWAY_SOURCE, RUNWAY_POLYGON_SOURCE,
+    TAXIWAY_SOURCE, TAXIWAY_POLYGON_SOURCE, OBSTACLE_SOURCE,
+    OBSTACLE_RADIUS_SOURCE, AGL_SOURCE, LHA_SOURCE,
+  ];
+
+  function removeInfraLayers(map: maplibregl.Map) {
+    /** remove infrastructure layers and sources so they can be re-added with fresh data. */
+    const style = map.getStyle();
+    if (!style?.layers) return;
+    // remove layers that reference infra sources
+    for (const layer of [...style.layers]) {
+      if (INFRA_SOURCES.includes((layer as { source?: string }).source ?? "")) {
+        try { map.removeLayer(layer.id); } catch { /* noop */ }
+      }
+    }
+    // remove highlight layers too
+    for (const lyr of [HIGHLIGHT_RUNWAY, HIGHLIGHT_TAXIWAY, HIGHLIGHT_OBSTACLE, HIGHLIGHT_SAFETY_ZONE, HIGHLIGHT_AGL, HIGHLIGHT_LHA]) {
+      try { if (map.getLayer(lyr)) map.removeLayer(lyr); } catch { /* noop */ }
+    }
+    // remove sources
+    for (const src of INFRA_SOURCES) {
+      try { if (map.getSource(src)) map.removeSource(src); } catch { /* noop */ }
+    }
+  }
+
   const addAllLayers = useCallback(
     (map: maplibregl.Map) => {
       if (layersAddedRef.current) return;
@@ -1041,25 +1122,42 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     [airport],
   );
 
-  // add infrastructure layers once map + airport data are ready
+  // add infrastructure layers once map + airport data are ready, refresh on airport change
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     function addLayers() {
       if (!map) return;
+      // if layers already exist, remove and re-add with fresh airport data
+      if (layersAddedRef.current) {
+        removeInfraLayers(map);
+        layersAddedRef.current = false;
+      }
       addAllLayers(map);
+
+      // keep vertex editor overlay on top of rebuilt infra layers
+      for (const lyr of ["vertex-edit-corners", "vertex-edit-center"]) {
+        if (map.getLayer(lyr)) map.moveLayer(lyr);
+      }
     }
 
     if (map.isStyleLoaded()) {
       addLayers();
     } else {
-      map.on("load", addLayers);
+      // poll until style is ready - "load" event only fires once and may have already fired
+      let cancelled = false;
+      function poll() {
+        if (cancelled) return;
+        if (map!.isStyleLoaded()) {
+          addLayers();
+        } else {
+          requestAnimationFrame(poll);
+        }
+      }
+      requestAnimationFrame(poll);
+      return () => { cancelled = true; };
     }
-
-    return () => {
-      map.off("load", addLayers);
-    };
   }, [airport, addAllLayers]);
 
   // apply inspection visibility filters to waypoint layers
@@ -1233,6 +1331,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     function handleClick(e: maplibregl.MapMouseEvent) {
       if (!map) return;
 
+
       // pick mode takes priority
       if (onMapClick) {
         onMapClick({ lng: e.lngLat.lng, lat: e.lngLat.lat });
@@ -1395,6 +1494,10 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       layersAddedRef.current = false;
       cancelStylePollRef.current?.();
 
+      // clear measurement and heading tools before style reset
+      onMeasureClearRef.current?.();
+      onHeadingClearRef.current?.();
+
       map.setStyle(mode === "satellite" ? makeSatelliteStyle() : makeMapStyle());
 
       cancelStylePollRef.current = waitForStyleLoaded(map, () => {
@@ -1554,44 +1657,67 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   // sync measure data to sources - ensure layers exist first
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
 
-    // ensure measure layers exist (may have been lost after style change)
-    addMeasureLayersToMap(map);
+    function sync() {
+      /** push measure geojson into map sources. */
+      if (!map) return;
+      if (!map.getSource("measure-points")) addMeasureLayersToMap(map);
 
-    const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
-    const points = measureData?.points ?? emptyFC;
-    const lines = measureData?.lines ?? emptyFC;
-    const labels = measureData?.labels ?? emptyFC;
+      const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+      const points = measureData?.points ?? emptyFC;
+      const lines = measureData?.lines ?? emptyFC;
+      const labels = measureData?.labels ?? emptyFC;
 
-    const pointsSrc = map.getSource("measure-points") as maplibregl.GeoJSONSource | undefined;
-    const linesSrc = map.getSource("measure-lines") as maplibregl.GeoJSONSource | undefined;
-    const labelsSrc = map.getSource("measure-labels") as maplibregl.GeoJSONSource | undefined;
+      const pointsSrc = map.getSource("measure-points") as maplibregl.GeoJSONSource | undefined;
+      const linesSrc = map.getSource("measure-lines") as maplibregl.GeoJSONSource | undefined;
+      const labelsSrc = map.getSource("measure-labels") as maplibregl.GeoJSONSource | undefined;
 
-    if (pointsSrc) pointsSrc.setData(points);
-    if (linesSrc) linesSrc.setData(lines);
-    if (labelsSrc) labelsSrc.setData(labels);
+      if (pointsSrc) pointsSrc.setData(points);
+      if (linesSrc) linesSrc.setData(lines);
+      if (labelsSrc) labelsSrc.setData(labels);
+    }
+
+    if (map.isStyleLoaded()) {
+      sync();
+    } else {
+      const cancel = waitForStyleLoaded(map, sync);
+      return cancel;
+    }
   }, [measureData]);
 
   // sync heading data to sources
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
 
-    addHeadingLayersToMap(map);
+    function sync() {
+      /** push heading geojson into map sources. */
+      if (!map) return;
 
-    const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
-    const point = headingData?.point ?? emptyFC;
-    const line = headingData?.line ?? emptyFC;
-    const label = headingData?.label ?? emptyFC;
+      // only add layers if sources missing (first call or after style change)
+      if (!map.getSource("heading-point")) addHeadingLayersToMap(map);
 
-    const pointSrc = map.getSource("heading-point") as maplibregl.GeoJSONSource | undefined;
-    const lineSrc = map.getSource("heading-line") as maplibregl.GeoJSONSource | undefined;
-    const labelSrc = map.getSource("heading-label") as maplibregl.GeoJSONSource | undefined;
+      const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+      const point = headingData?.point ?? emptyFC;
+      const line = headingData?.line ?? emptyFC;
+      const label = headingData?.label ?? emptyFC;
 
-    if (pointSrc) pointSrc.setData(point);
-    if (lineSrc) lineSrc.setData(line);
-    if (labelSrc) labelSrc.setData(label);
+      const pointSrc = map.getSource("heading-point") as maplibregl.GeoJSONSource | undefined;
+      const lineSrc = map.getSource("heading-line") as maplibregl.GeoJSONSource | undefined;
+      const labelSrc = map.getSource("heading-label") as maplibregl.GeoJSONSource | undefined;
+
+      if (pointSrc) pointSrc.setData(point);
+      if (lineSrc) lineSrc.setData(line);
+      if (labelSrc) labelSrc.setData(label);
+    }
+
+    if (map.isStyleLoaded()) {
+      sync();
+    } else {
+      const cancel = waitForStyleLoaded(map, sync);
+      return cancel;
+    }
   }, [headingData]);
 
   return (

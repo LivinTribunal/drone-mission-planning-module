@@ -62,11 +62,33 @@ import {
   createLHA,
 } from "@/api/airports";
 import useVertexEditor from "@/hooks/useVertexEditor";
+import type { VertexGeometryUpdate } from "@/hooks/useVertexEditor";
 import useMeasureDistance from "@/hooks/useMeasureDistance";
 import useHeadingTool from "@/hooks/useHeadingTool";
-import { extractCenterline, circleToPolygon } from "@/utils/geo";
+import type maplibregl from "maplibre-gl";
+import { extractCenterline, circleToPolygon, haversineDistance } from "@/utils/geo";
 import type { DrawingTool } from "@/components/coordinator/MapDrawingToolbar";
 import { MapTool } from "@/hooks/useMapTools";
+
+function updateSourceFeatureGeometry(
+  map: maplibregl.Map,
+  sourceName: string,
+  featureId: string,
+  geometry: GeoJSON.Geometry,
+) {
+  /** update a single feature's geometry in a geojson source for live preview. */
+  const src = map.getSource(sourceName) as maplibregl.GeoJSONSource | undefined;
+  if (!src || !src._data) return;
+  const fc = src._data as GeoJSON.FeatureCollection;
+  if (!fc.features) return;
+  const updated = {
+    ...fc,
+    features: fc.features.map((f) =>
+      f.properties?.id === featureId ? { ...f, geometry } : f,
+    ),
+  };
+  src.setData(updated);
+}
 
 const DRAWING_TOOL_TO_MAP_TOOL: Record<DrawingTool, MapTool> = {
   select: MapTool.SELECT,
@@ -119,16 +141,20 @@ export default function AirportEditPage() {
   const [pendingLhaParentAglId, setPendingLhaParentAglId] = useState<string | null>(null);
 
   // fetch airport data - declared early so drawing hooks can reference it
-  const fetchAirport = useCallback(async () => {
+  const initialLoadDone = useRef(false);
+  const fetchAirport = useCallback(async (): Promise<AirportDetailResponse | null> => {
     /** fetch airport detail data. */
-    if (!id) return;
-    setLoading(true);
+    if (!id) return null;
+    if (!initialLoadDone.current) setLoading(true);
     setError(false);
     try {
       const data = await getAirport(id);
       setAirport(data);
+      initialLoadDone.current = true;
+      return data;
     } catch {
       setError(true);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -202,11 +228,53 @@ export default function AirportEditPage() {
 
   // vertex editor for selected features
   const handleVertexGeometryUpdate = useCallback(
-    (featureType: string, featureId: string, geometry: GeoJSON.Geometry) => {
-      /** handle geometry update from vertex editor. */
-      markDirty(featureType, featureId, "update", { geometry });
+    (featureType: string, featureId: string, update: VertexGeometryUpdate) => {
+      /** handle geometry update from vertex editor - mark dirty and update map preview. */
+      // only include api-safe fields in dirty data (exclude `polygon` which is preview-only)
+      const dirtyData: Record<string, unknown> = { geometry: update.geometry };
+      if (update.boundary) dirtyData.boundary = update.boundary;
+      if (update.position) dirtyData.position = update.position;
+      if (update.radius != null) dirtyData.radius = update.radius;
+      if (update.width != null) dirtyData.width = update.width;
+      if (update.taxiway_width != null) dirtyData.taxiway_width = update.taxiway_width;
+      if (update.length != null) dirtyData.length = update.length;
+      if (update.heading != null) dirtyData.heading = update.heading;
+      markDirty(featureType, featureId, "update", dirtyData);
+
+      // live preview: update map source so the shape moves with the vertices
+      const m = getMap();
+      if (!m) return;
+
+      if (featureType === "safety_zone") {
+        updateSourceFeatureGeometry(m, "safety-zones", featureId, update.geometry);
+      } else if (featureType === "obstacle") {
+        // update radius polygon
+        updateSourceFeatureGeometry(m, "obstacles-radius", featureId, update.geometry);
+        // update center point position
+        if (update.position) {
+          updateSourceFeatureGeometry(m, "obstacles", featureId, update.position);
+        }
+      } else if (featureType === "surface") {
+        const surfaceData = airport?.surfaces.find((s) => s.id === featureId);
+        if (!surfaceData) return;
+        const surfaceType = surfaceData.surface_type;
+        const polySource = surfaceType === "RUNWAY" ? "runways-polygon" : "taxiways-polygon";
+        const clSource = surfaceType === "RUNWAY" ? "runways" : "taxiways";
+
+        // live preview: use the boundary polygon directly
+        if (update.boundary) {
+          updateSourceFeatureGeometry(m, polySource, featureId, update.boundary);
+        } else if (update.polygon) {
+          updateSourceFeatureGeometry(m, polySource, featureId, update.polygon);
+        }
+
+        // update centerline source so labels/dashes follow
+        if (update.geometry.type === "LineString") {
+          updateSourceFeatureGeometry(m, clSource, featureId, update.geometry);
+        }
+      }
     },
-    [markDirty],
+    [markDirty, getMap, airport],
   );
 
   useVertexEditor(map, selectedFeature, activeTool === "select", handleVertexGeometryUpdate);
@@ -271,24 +339,55 @@ export default function AirportEditPage() {
   const handleCreate = useCallback(
     async (entityType: string, data: Record<string, unknown>) => {
       /** create entity from the creation form. */
-      if (!id || !airport) return;
+      if (!id || !airport) throw new Error("missing airport context");
       const elevation = airport.elevation;
 
       if (entityType === "runway" || entityType === "taxiway") {
-        if (!pendingGeometry) return;
+        if (!pendingGeometry) throw new Error("missing geometry");
         const ring = pendingGeometry.coordinates[0] as [number, number][];
+
+        // store the drawn polygon as boundary (source of truth)
+        const boundaryCoords: [number, number, number][][] = pendingGeometry.coordinates.map((r) =>
+          (r as [number, number][]).map(([lng, lat]): [number, number, number] => [lng, lat, elevation]),
+        );
+
+        // derive centerline from the polygon for labels/dashes
         const centerline = extractCenterline(ring);
         const geomCoords: [number, number, number][] = centerline.map(([lng, lat]) => [lng, lat, elevation]);
+
+        // derive width/length/heading from polygon for metadata
+        const pts = ring[ring.length - 1][0] === ring[0][0] && ring[ring.length - 1][1] === ring[0][1]
+          ? ring.slice(0, -1) : ring;
+        let drawnWidth: number | undefined;
+        let drawnLength: number | undefined;
+        if (pts.length === 4) {
+          const d01 = haversineDistance(pts[0][0], pts[0][1], pts[1][0], pts[1][1]);
+          const d12 = haversineDistance(pts[1][0], pts[1][1], pts[2][0], pts[2][1]);
+          if (d01 >= d12) {
+            drawnLength = d01;
+            drawnWidth = (d12 + haversineDistance(pts[3][0], pts[3][1], pts[0][0], pts[0][1])) / 2;
+          } else {
+            drawnLength = d12;
+            drawnWidth = (d01 + haversineDistance(pts[2][0], pts[2][1], pts[3][0], pts[3][1])) / 2;
+          }
+        }
+        const dLng = centerline[1][0] - centerline[0][0];
+        const dLat = centerline[1][1] - centerline[0][1];
+        const drawnHeading = ((Math.atan2(dLng, dLat) * 180) / Math.PI + 360) % 360;
+
+        const computedWidth = drawnWidth != null ? Math.round(drawnWidth * 100) / 100 : undefined;
         await createSurface(id, {
           identifier: String(data.name ?? ""),
           surface_type: entityType === "runway" ? "RUNWAY" : "TAXIWAY",
           geometry: { type: "LineString", coordinates: geomCoords },
-          heading: data.heading as number | undefined,
-          length: data.length as number | undefined,
-          width: data.width as number | undefined,
+          boundary: { type: "Polygon", coordinates: boundaryCoords },
+          heading: drawnHeading != null ? Math.round(drawnHeading * 10) / 10 : undefined,
+          length: drawnLength != null ? Math.round(drawnLength * 100) / 100 : undefined,
+          width: entityType === "runway" ? computedWidth : undefined,
+          taxiway_width: entityType === "taxiway" ? computedWidth : undefined,
         });
       } else if (entityType.startsWith("safety_zone_")) {
-        if (!pendingGeometry) return;
+        if (!pendingGeometry) throw new Error("missing geometry");
         const polyCoords: [number, number, number][][] = pendingGeometry.coordinates.map((ring) =>
           (ring as [number, number][]).map(([lng, lat]): [number, number, number] => [lng, lat, elevation]),
         );
@@ -306,7 +405,7 @@ export default function AirportEditPage() {
         });
       } else if (entityType === "obstacle") {
         const center = (data.center as [number, number]) ?? pendingCircleCenter ?? pendingPointPosition;
-        if (!center) return;
+        if (!center) throw new Error("missing position");
         const radius = data.radius as number ?? 0;
         const ring = circleToPolygon(center, Math.max(radius, 1));
         const obstacleCoords: [number, number, number][] = ring.map(([lng, lat]): [number, number, number] => [lng, lat, elevation]);
@@ -320,9 +419,9 @@ export default function AirportEditPage() {
         });
       } else if (entityType === "agl") {
         const pos = (data.center as [number, number]) ?? pendingPointPosition;
-        if (!pos) return;
+        if (!pos) throw new Error("missing position");
         const sid = data.surface_id as string;
-        if (!sid) return;
+        if (!sid) throw new Error("missing surface");
         await createAGL(id, sid, {
           agl_type: String(data.agl_type ?? "PAPI"),
           name: String(data.name ?? ""),
@@ -333,20 +432,22 @@ export default function AirportEditPage() {
         });
       } else if (entityType === "lha") {
         const pos = (data.center as [number, number]) ?? pendingPointPosition;
-        if (!pos) return;
+        if (!pos) throw new Error("missing position");
         const aglId = (data.agl_id as string) || pendingLhaParentAglId;
-        if (!aglId) return;
+        if (!aglId) throw new Error("missing AGL");
         // find the surface that owns this agl
         const parentSurface = airport.surfaces.find((s) =>
           s.agls.some((a) => a.id === aglId),
         );
-        if (!parentSurface) return;
+        if (!parentSurface) throw new Error("missing parent surface");
         await createLHA(id, parentSurface.id, aglId, {
           unit_number: (data.unit_number as number) ?? 1,
           setting_angle: (data.setting_angle as number) ?? 3.0,
           lamp_type: (data.lamp_type as "HALOGEN" | "LED") ?? "HALOGEN",
           position: { type: "Point", coordinates: [pos[0], pos[1], elevation] },
         });
+      } else {
+        throw new Error(`unknown entity type: ${entityType}`);
       }
 
       // refresh and cleanup
@@ -626,7 +727,26 @@ export default function AirportEditPage() {
           .filter((p): p is NonNullable<typeof p> => p !== undefined),
       );
       clearAll();
-      await fetchAirport();
+      const freshAirport = await fetchAirport();
+
+      // sync selected feature with fresh data so vertex editor uses updated geometry
+      if (freshAirport && selectedFeature) {
+        const ft = selectedFeature.type;
+        const fid = selectedFeature.data.id;
+        let freshData;
+        if (ft === "surface") {
+          freshData = freshAirport.surfaces.find((s) => s.id === fid);
+        } else if (ft === "obstacle") {
+          freshData = freshAirport.obstacles.find((o) => o.id === fid);
+        } else if (ft === "safety_zone") {
+          freshData = freshAirport.safety_zones.find((z) => z.id === fid);
+        }
+        if (freshData) {
+          setSelectedFeature({ type: ft, data: freshData } as MapFeature);
+        } else {
+          setSelectedFeature(null);
+        }
+      }
 
       // restore viewport after re-render
       if (viewport && mapInst) {
@@ -639,7 +759,7 @@ export default function AirportEditPage() {
     } finally {
       setSaving(false);
     }
-  }, [id, airport, getPendingChanges, clearAll, fetchAirport]);
+  }, [id, airport, getPendingChanges, clearAll, fetchAirport, selectedFeature]);
 
   const surfaces = useMemo(() => airport?.surfaces ?? [], [airport]);
   const obstacles = useMemo(() => airport?.obstacles ?? [], [airport]);
@@ -708,7 +828,7 @@ export default function AirportEditPage() {
             label: heading.labelGeoJSON,
           }}
           onHeadingClear={heading.clear}
-          onHeadingMouseMove={heading.setCursor}
+          headingOrigin={heading.origin}
           isHeadingDrawing={heading.isDrawing}
           zoomPercent={zoomPercent}
           onZoomChange={setZoomPercent}

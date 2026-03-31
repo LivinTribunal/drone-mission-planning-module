@@ -1,5 +1,6 @@
 from typing import Any
 
+from geoalchemy2.elements import WKTElement
 from pydantic import BaseModel
 
 GeoJSON = dict[str, Any]
@@ -44,11 +45,11 @@ def geojson_to_ewkt(geojson: GeoJSON) -> EWKT:
 
 
 def schema_to_model_data(schema: BaseModel) -> dict:
-    """convert pydantic schema to dict with geometry fields as EWKT"""
+    """convert pydantic schema to dict with geometry fields as WKTElement"""
     data = schema.model_dump()
     for key in GEOM_FIELDS & data.keys():
         if data[key] is not None:
-            data[key] = geojson_to_ewkt(data[key])
+            data[key] = WKTElement(geojson_to_ewkt(data[key]), srid=4326)
 
     return data
 
@@ -59,9 +60,9 @@ def apply_schema_update(obj, schema: BaseModel):
 
 
 def apply_dict_update(obj, data: dict):
-    """apply dict to ORM model, converting geometry fields to EWKT"""
+    """apply dict to ORM model, converting geometry fields to WKTElement"""
     for key, val in data.items():
         if key in GEOM_FIELDS and val is not None:
-            setattr(obj, key, geojson_to_ewkt(val))
+            setattr(obj, key, WKTElement(geojson_to_ewkt(val), srid=4326))
         else:
             setattr(obj, key, val)

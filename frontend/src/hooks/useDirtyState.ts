@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 
 interface PendingChange {
   entityType: string;
@@ -17,6 +17,8 @@ interface DirtyStateReturn {
 export default function useDirtyState(): DirtyStateReturn {
   /** track pending edits across entity types for batched saving. */
   const [changes, setChanges] = useState<Map<string, PendingChange>>(new Map());
+  const changesRef = useRef(changes);
+  changesRef.current = changes;
 
   const markDirty = useCallback(
     (entityType: string, entityId: string, action: PendingChange["action"], data?: Record<string, unknown>) => {
@@ -38,9 +40,9 @@ export default function useDirtyState(): DirtyStateReturn {
   }, []);
 
   const getPendingChanges = useCallback(() => {
-    /** return array of all pending changes. */
-    return Array.from(changes.values());
-  }, [changes]);
+    /** return array of all pending changes via ref to avoid stale closures. */
+    return Array.from(changesRef.current.values());
+  }, []);
 
   const isDirty = useMemo(() => changes.size > 0, [changes]);
 

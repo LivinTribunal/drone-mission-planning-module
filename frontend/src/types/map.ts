@@ -125,7 +125,7 @@ export interface AirportMapProps {
     label: GeoJSON.FeatureCollection;
   };
   onHeadingClear?: () => void;
-  onHeadingMouseMove?: (lng: number, lat: number) => void;
+  headingOrigin?: [number, number] | null;
   isHeadingDrawing?: boolean;
   onWaypointDrag?: (waypointId: string, newPosition: [number, number, number]) => void;
   zoomPercent?: number;

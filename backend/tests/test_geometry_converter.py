@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from typing import Optional
 
 import pytest
+from geoalchemy2.elements import WKTElement
 from pydantic import BaseModel
 
 from app.services.geometry_converter import (
@@ -86,7 +87,8 @@ class TestSchemaToModelData:
         )
         data = schema_to_model_data(schema)
         assert data["name"] == "test"
-        assert data["location"] == "SRID=4326;POINTZ(16.5 48.1 300.0)"
+        assert isinstance(data["location"], WKTElement)
+        assert str(data["location"]) == "SRID=4326;POINTZ(16.5 48.1 300.0)"
 
     def test_none_geometry_left_as_none(self):
         """None geometry fields are not converted."""
@@ -108,7 +110,8 @@ class TestApplyDictUpdate:
         }
         apply_dict_update(obj, data)
         assert obj.name == "mission-1"
-        assert obj.location == "SRID=4326;POINTZ(16.5 48.1 300.0)"
+        assert isinstance(obj.location, WKTElement)
+        assert str(obj.location) == "SRID=4326;POINTZ(16.5 48.1 300.0)"
 
     def test_none_geometry_stays_none(self):
         """None geometry fields are set as None, not converted."""
@@ -136,7 +139,8 @@ class TestApplySchemaUpdate:
         )
         apply_schema_update(obj, schema)
         assert obj.name == "new"
-        assert obj.location == "SRID=4326;POINTZ(1.0 2.0 3.0)"
+        assert isinstance(obj.location, WKTElement)
+        assert str(obj.location) == "SRID=4326;POINTZ(1.0 2.0 3.0)"
 
     def test_excludes_unset_fields(self):
         """only explicitly set fields are applied."""

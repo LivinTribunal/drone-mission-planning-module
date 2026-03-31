@@ -788,6 +788,7 @@
       "title": "Pick Location",
       "instructions": "Click on the map to set coordinates",
       "confirm": "Confirm"
+    },
     "inspections": {
       "title": "Inspection Templates",
       "searchPlaceholder": "Search inspection templates by name...",

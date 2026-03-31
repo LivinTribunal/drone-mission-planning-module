@@ -13,6 +13,7 @@ class SurfaceCreate(BaseModel):
     identifier: str
     surface_type: str
     geometry: LineStringZ
+    boundary: PolygonZ | None = None
     heading: float | None = None
     length: float | None = None
     width: float | None = None
@@ -26,6 +27,7 @@ class SurfaceUpdate(BaseModel):
 
     identifier: str | None = None
     geometry: LineStringZ | None = None
+    boundary: PolygonZ | None = None
     heading: float | None = None
     length: float | None = None
     width: float | None = None
@@ -42,6 +44,7 @@ class SurfaceResponse(BaseModel):
     identifier: str
     surface_type: str
     geometry: LineStringZ
+    boundary: PolygonZ | None = None
     heading: float | None = None
     length: float | None = None
     width: float | None = None

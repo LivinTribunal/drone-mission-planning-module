@@ -10,7 +10,7 @@
 
 **airport** — icao_code (VARCHAR 4, unique), name, elevation, location (PointZ 4326)
 
-**airfield_surface** — airport_id (FK), identifier (VARCHAR 10), surface_type (RUNWAY|TAXIWAY discriminator), geometry (LineStringZ 4326). RUNWAY adds: heading, length, width, threshold_position (PointZ), end_position (PointZ). TAXIWAY adds: width. Single-table inheritance.
+**airfield_surface** — airport_id (FK), identifier (VARCHAR 10), surface_type (RUNWAY|TAXIWAY discriminator), geometry (LineStringZ 4326, derived centerline), boundary (PolygonZ 4326, nullable, the actual drawn polygon - source of truth for rendering). RUNWAY adds: heading, length, width, threshold_position (PointZ), end_position (PointZ). TAXIWAY adds: taxiway_width. Single-table inheritance.
 
 **obstacle** — airport_id (FK), name, position (PointZ 4326), height, radius, geometry (PolygonZ 4326), type (ObstacleType enum)
 
