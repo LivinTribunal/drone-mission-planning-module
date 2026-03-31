@@ -78,9 +78,7 @@ export function addSurfaceLayers(
   surfaces: SurfaceResponse[],
 ): string[] {
   const runways = surfaces.filter((s) => s.surface_type === "RUNWAY");
-  const taxiways = surfaces.filter(
-    (s) => s.surface_type === "TAXIWAY" || s.surface_type === "APRON",
-  );
+  const taxiways = surfaces.filter((s) => s.surface_type === "TAXIWAY");
 
   // centerline source for labels and centerline dashes
   map.addSource(RUNWAY_SOURCE, {

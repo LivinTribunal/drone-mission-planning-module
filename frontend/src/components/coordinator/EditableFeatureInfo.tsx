@@ -86,8 +86,6 @@ export default function EditableFeatureInfo({
               >
                 <option value="RUNWAY">{t("coordinator.detail.surfaceTypes.runway")}</option>
                 <option value="TAXIWAY">{t("coordinator.detail.surfaceTypes.taxiway")}</option>
-                <option value="APRON">{t("coordinator.detail.surfaceTypes.apron")}</option>
-                <option value="HELIPAD">{t("coordinator.detail.surfaceTypes.helipad")}</option>
               </select>
             </div>
             <Input

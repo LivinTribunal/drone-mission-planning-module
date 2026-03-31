@@ -58,7 +58,7 @@ function extractEditState(feature: MapFeature): EditState | null {
     // fallback: reconstruct from centerline + width (legacy data without boundary)
     const coords = feature.data.geometry.coordinates;
     if (!coords || coords.length < 2) return null;
-    const isTaxiway = feature.data.surface_type === "TAXIWAY" || feature.data.surface_type === "APRON";
+    const isTaxiway = feature.data.surface_type === "TAXIWAY";
     const width = isTaxiway ? (feature.data.taxiway_width ?? 20) : (feature.data.width ?? 45);
     const ring2d = bufferLineString(coords, width);
     if (ring2d.length < 4) return null;
@@ -275,7 +275,7 @@ export default function useVertexEditor(
       const dLat = centerline[1][1] - centerline[0][1];
       const heading = ((Math.atan2(dLng, dLat) * 180) / Math.PI + 360) % 360;
 
-      const isTaxiway = feat.data.surface_type === "TAXIWAY" || feat.data.surface_type === "APRON";
+      const isTaxiway = feat.data.surface_type === "TAXIWAY";
       const roundedWidth = width != null ? Math.round(width * 100) / 100 : undefined;
       onUpdateRef.current(feat.type, feat.data.id, {
         geometry: { type: "LineString", coordinates: clCoords },
@@ -384,11 +384,15 @@ export default function useVertexEditor(
     map.on("mousemove", handleMouseMove);
     map.on("mouseup", handleMouseUp);
 
+    // fallback: release drag if mouse leaves canvas
+    document.addEventListener("mouseup", handleMouseUp);
+
     return () => {
       cancelPoll?.();
       map.off("mousedown", handleMouseDown);
       map.off("mousemove", handleMouseMove);
       map.off("mouseup", handleMouseUp);
+      document.removeEventListener("mouseup", handleMouseUp);
       clearSources(map);
       dragRef.current = null;
     };

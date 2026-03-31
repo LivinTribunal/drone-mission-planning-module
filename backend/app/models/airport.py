@@ -72,7 +72,6 @@ class AirfieldSurface(Base):
 
     __mapper_args__ = {
         "polymorphic_on": surface_type,
-        "polymorphic_identity": "SURFACE",
     }
 
     __table_args__ = (

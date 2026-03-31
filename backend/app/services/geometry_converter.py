@@ -68,9 +68,11 @@ def apply_schema_update(obj, schema: BaseModel):
 
 
 def apply_dict_update(obj, data: dict):
-    """apply dict to ORM model, converting geometry fields to WKTElement"""
+    """apply dict to ORM model, converting geometry fields to WKTElement."""
     for key, val in data.items():
-        if key in GEOM_FIELDS and val is not None:
-            setattr(obj, key, WKTElement(geojson_to_ewkt(val), srid=4326))
+        if key in GEOM_FIELDS:
+            if val is not None:
+                setattr(obj, key, WKTElement(geojson_to_ewkt(val), srid=4326))
+            # skip setting geometry fields to None - prevents nulling non-nullable columns
         else:
             setattr(obj, key, val)

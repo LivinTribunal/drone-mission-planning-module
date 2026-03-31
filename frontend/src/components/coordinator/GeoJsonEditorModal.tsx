@@ -31,19 +31,12 @@ export default function GeoJsonEditorModal({
     setError("");
     try {
       const parsed = JSON.parse(text);
-      const validTypes = [
-        "Point", "MultiPoint", "LineString", "MultiLineString",
-        "Polygon", "MultiPolygon", "GeometryCollection",
-      ];
+      const validTypes = ["Point", "LineString", "Polygon"];
       if (!parsed.type || !validTypes.includes(parsed.type)) {
         setError(t("coordinator.geoJsonEditor.invalidGeoJson"));
         return;
       }
-      if (parsed.type === "GeometryCollection" && !Array.isArray(parsed.geometries)) {
-        setError(t("coordinator.geoJsonEditor.invalidGeoJson"));
-        return;
-      }
-      if (parsed.type !== "GeometryCollection" && !Array.isArray(parsed.coordinates)) {
+      if (!Array.isArray(parsed.coordinates)) {
         setError(t("coordinator.geoJsonEditor.invalidGeoJson"));
         return;
       }
