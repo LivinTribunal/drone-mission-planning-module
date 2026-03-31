@@ -323,3 +323,42 @@ class TestExportMissionFormats:
         with pytest.raises(DomainError) as exc_info:
             export_service.export_mission(db, uuid4(), ["INVALID"])
         assert exc_info.value.status_code == 422
+        db.commit.assert_not_called()
+
+    def test_valid_format_exports_and_commits(self):
+        """successful export transitions status, commits, and returns files."""
+        db = MagicMock()
+        mission = MagicMock()
+        mission.status = "VALIDATED"
+        mission.name = "Test Mission"
+
+        fp = _make_flight_plan(2)
+        fp.airport_id = uuid4()
+
+        airport = MagicMock()
+        airport.elevation = 100.0
+
+        def query_side_effect(model):
+            """route db.query to the right mock based on model."""
+            mock_chain = MagicMock()
+            if model.__name__ == "Mission":
+                mock_chain.filter.return_value.first.return_value = mission
+            elif model.__name__ == "FlightPlan":
+                mock_chain.options.return_value.filter.return_value.first.return_value = fp
+            elif model.__name__ == "Airport":
+                mock_chain.filter.return_value.first.return_value = airport
+            return mock_chain
+
+        db.query.side_effect = query_side_effect
+
+        files, safe_name = export_service.export_mission(db, uuid4(), ["JSON"])
+
+        assert safe_name == "Test Mission"
+        assert len(files) == 1
+        filename = list(files.keys())[0]
+        assert filename == "mission_Test Mission.json"
+        content, content_type = files[filename]
+        assert content_type == "application/json"
+        assert len(content) > 0
+        mission.transition_to.assert_called_once_with("EXPORTED")
+        db.commit.assert_called_once()

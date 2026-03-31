@@ -268,6 +268,12 @@ def export_mission(
         )
     airport_elevation = airport.elevation
 
+    unsupported = [fmt for fmt in formats if fmt not in _EXPORT_GENERATORS]
+    if unsupported:
+        raise DomainError(
+            f"unsupported export format(s): {', '.join(unsupported)}", status_code=422
+        )
+
     if mission.status == "VALIDATED":
         try:
             mission.transition_to("EXPORTED")
@@ -277,12 +283,6 @@ def export_mission(
             raise DomainError("invalid status transition", status_code=409) from e
 
     safe_name = _sanitize_filename(mission.name)
-
-    unsupported = [fmt for fmt in formats if fmt not in _EXPORT_GENERATORS]
-    if unsupported:
-        raise DomainError(
-            f"unsupported export format(s): {', '.join(unsupported)}", status_code=422
-        )
 
     files: dict[str, tuple[bytes, str]] = {}
     for fmt in formats:
