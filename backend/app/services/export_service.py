@@ -142,6 +142,7 @@ def generate_json(
         )
 
     data = {
+        "version": "1.0",
         "mission_name": mission_name,
         "mission_id": flight_plan.mission_id,
         "airport_elevation": airport_elevation,

@@ -144,6 +144,7 @@ class TestGenerateJson:
         result = export_service.generate_json(fp, "Test Mission", 290.0)
         data = json.loads(result)
 
+        assert data["version"] == "1.0"
         assert data["mission_name"] == "Test Mission"
         assert "mission_id" in data
         assert "waypoints" in data
@@ -151,6 +152,25 @@ class TestGenerateJson:
         assert "estimated_duration" in data
         assert data["airport_elevation"] == 290.0
         assert len(data["waypoints"]) == 3
+
+    def test_version_field_is_first_key(self):
+        """version field appears first in json output - ugcs reads it before parsing."""
+        fp = _make_flight_plan(2)
+
+        result = export_service.generate_json(fp, "Test", 0)
+        data = json.loads(result)
+
+        assert list(data.keys())[0] == "version"
+
+    def test_version_field_with_empty_waypoints(self):
+        """version field present even with zero waypoints."""
+        fp = _make_flight_plan(0)
+
+        result = export_service.generate_json(fp, "", 0)
+        data = json.loads(result)
+
+        assert data["version"] == "1.0"
+        assert data["waypoints"] == []
 
     def test_waypoint_fields(self):
         """each waypoint has all required fields."""
