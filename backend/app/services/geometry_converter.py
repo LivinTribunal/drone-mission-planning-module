@@ -19,6 +19,9 @@ GEOM_FIELDS = {
     "boundary",
 }
 
+# geometry fields that are NOT NULL in the database - never set these to None
+NON_NULLABLE_GEOM_FIELDS = {"location", "geometry", "position"}
+
 
 def _fmt_coord(c: list) -> str:
     """format a single coordinate as 'x y z', defaulting z to 0 if missing."""
@@ -73,6 +76,8 @@ def apply_dict_update(obj, data: dict):
         if key in GEOM_FIELDS:
             if val is not None:
                 setattr(obj, key, WKTElement(geojson_to_ewkt(val), srid=4326))
-            # skip setting geometry fields to None - prevents nulling non-nullable columns
+            elif key not in NON_NULLABLE_GEOM_FIELDS:
+                setattr(obj, key, None)
+            # skip None for non-nullable geometry fields
         else:
             setattr(obj, key, val)

@@ -114,17 +114,17 @@ class TestApplyDictUpdate:
         assert isinstance(obj.location, WKTElement)
         assert str(obj.location) == "SRID=4326;POINTZ(16.5 48.1 300.0)"
 
-    def test_none_geometry_skipped(self):
-        """none geometry fields are skipped to protect non-nullable columns."""
+    def test_none_non_nullable_geometry_skipped(self):
+        """none on non-nullable geometry fields is skipped to protect constraints."""
         obj = SimpleNamespace(location="existing")
         apply_dict_update(obj, {"location": None})
         assert obj.location == "existing"
 
-    def test_none_geometry_skipped_no_attr(self):
-        """none geometry on fresh object does not create the attribute."""
-        obj = SimpleNamespace()
-        apply_dict_update(obj, {"location": None})
-        assert not hasattr(obj, "location")
+    def test_none_nullable_geometry_set(self):
+        """none on nullable geometry fields is applied (e.g. boundary, camera_target)."""
+        obj = SimpleNamespace(boundary="existing")
+        apply_dict_update(obj, {"boundary": None})
+        assert obj.boundary is None
 
     def test_non_geometry_field_set_directly(self):
         """non-geometry fields are set without conversion."""

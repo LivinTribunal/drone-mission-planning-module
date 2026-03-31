@@ -28,6 +28,7 @@ def parse_ewkb(data) -> dict:
         type_int = struct.unpack_from(f"{fmt}I", raw, offset)[0]
         offset += 4
 
+        # PostGIS EWKB flags - ISO WKB Z types (1001/1002/1003) not handled
         has_z = bool(type_int & 0x80000000)
         has_srid = bool(type_int & 0x20000000)
         geom_type = type_int & 0xFF

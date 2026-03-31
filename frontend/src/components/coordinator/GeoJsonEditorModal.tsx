@@ -36,7 +36,7 @@ export default function GeoJsonEditorModal({
         setError(t("coordinator.geoJsonEditor.invalidGeoJson"));
         return;
       }
-      if (!Array.isArray(parsed.coordinates)) {
+      if (!Array.isArray(parsed.coordinates) || parsed.coordinates.length === 0) {
         setError(t("coordinator.geoJsonEditor.invalidGeoJson"));
         return;
       }

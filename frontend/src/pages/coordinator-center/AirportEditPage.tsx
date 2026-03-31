@@ -231,7 +231,7 @@ export default function AirportEditPage() {
     setPendingGeometryType("point");
 
     setActiveTool("select");
-  }, [setActiveTool, pendingLhaParentAglId]);
+  }, [setActiveTool]);
 
   // wire drawing hooks
   const map = getMap();
@@ -484,6 +484,7 @@ export default function AirportEditPage() {
 
   useEffect(() => {
     fetchAirport();
+    return () => sourceDataCache.clear();
   }, [fetchAirport]);
 
   // sync fetched airport to context so the navbar selector shows it
