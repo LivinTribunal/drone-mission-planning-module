@@ -69,7 +69,7 @@ export default function NavBar({ items, role }: NavBarProps) {
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
             <span className="text-sm font-semibold text-tv-text-primary">
-              {t("common.appTitle")}
+              {t(role === "coordinator" ? "common.appTitleCoordinator" : "common.appTitle")}
             </span>
           </NavLink>
         </div>
@@ -81,7 +81,7 @@ export default function NavBar({ items, role }: NavBarProps) {
         {/* nav pills */}
         <div className="flex flex-1 items-center justify-center gap-1 rounded-full bg-tv-surface p-1 h-11">
           {items.map((item) => {
-            const disabled = item.disabled || !selectedAirport;
+            const disabled = item.disabled || (role === "operator" && !selectedAirport);
             return (
               <NavLink
                 key={item.to}

@@ -20,7 +20,7 @@ export const TAXIWAY_LAYER = TAXIWAY_FILL_LAYER;
 const EARTH_RADIUS = 6371000;
 
 /** buffers a linestring centerline by half-width in meters to produce a polygon. */
-function bufferLineString(
+export function bufferLineString(
   coordinates: number[][],
   widthMeters: number,
 ): number[][] {
@@ -43,26 +43,30 @@ function bufferLineString(
       dy = lat - coordinates[i - 1][1];
     }
 
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len === 0) continue;
-
-    // perpendicular unit vector (rotated 90 degrees)
-    const perpX = -dy / len;
-    const perpY = dx / len;
-
-    // scale perpendicular to meters (rough conversion at this latitude)
+    // convert direction to meters so perpendicular is geographically correct
     const latRad = (lat * Math.PI) / 180;
     const mPerDegLon = (Math.PI / 180) * EARTH_RADIUS * Math.cos(latRad);
     const mPerDegLat = (Math.PI / 180) * EARTH_RADIUS;
 
-    const offsetLon = (perpX * half) / mPerDegLon;
-    const offsetLat = (perpY * half) / mPerDegLat;
+    const dxM = dx * mPerDegLon;
+    const dyM = dy * mPerDegLat;
+    const lenM = Math.sqrt(dxM * dxM + dyM * dyM);
+    if (lenM === 0) continue;
+
+    // perpendicular unit vector in metric space (rotated 90 degrees)
+    const perpXM = -dyM / lenM;
+    const perpYM = dxM / lenM;
+
+    // convert meter offset back to degrees
+    const offsetLon = (perpXM * half) / mPerDegLon;
+    const offsetLat = (perpYM * half) / mPerDegLat;
 
     left.push([lon + offsetLon, lat + offsetLat]);
     right.push([lon - offsetLon, lat - offsetLat]);
   }
 
   // close the polygon: left side forward, right side reversed
+  if (left.length === 0) return [];
   right.reverse();
   const ring = [...left, ...right, left[0]];
   return ring;
@@ -74,9 +78,7 @@ export function addSurfaceLayers(
   surfaces: SurfaceResponse[],
 ): string[] {
   const runways = surfaces.filter((s) => s.surface_type === "RUNWAY");
-  const taxiways = surfaces.filter(
-    (s) => s.surface_type === "TAXIWAY" || s.surface_type === "APRON",
-  );
+  const taxiways = surfaces.filter((s) => s.surface_type === "TAXIWAY");
 
   // centerline source for labels and centerline dashes
   map.addSource(RUNWAY_SOURCE, {
@@ -96,20 +98,21 @@ export function addSurfaceLayers(
     },
   });
 
-  // polygon source for geographic fill
+  // polygon source for geographic fill - use stored boundary when available
   map.addSource(RUNWAY_POLYGON_SOURCE, {
     type: "geojson",
     data: {
       type: "FeatureCollection",
       features: runways
-        .filter((r) => r.geometry.coordinates.length >= 2)
+        .filter((r) => r.boundary || r.geometry.coordinates.length >= 2)
         .map((r) => ({
           type: "Feature" as const,
           properties: {
             id: r.id,
             identifier: r.identifier,
+            entityType: "surface",
           },
-          geometry: {
+          geometry: r.boundary ?? {
             type: "Polygon" as const,
             coordinates: [bufferLineString(r.geometry.coordinates, r.width ?? 45)],
           },
@@ -190,20 +193,21 @@ export function addSurfaceLayers(
     },
   });
 
-  // taxiway polygon source for geographic fill
+  // taxiway polygon source for geographic fill - use stored boundary when available
   map.addSource(TAXIWAY_POLYGON_SOURCE, {
     type: "geojson",
     data: {
       type: "FeatureCollection",
       features: taxiways
-        .filter((t) => t.geometry.coordinates.length >= 2)
+        .filter((t) => t.boundary || t.geometry.coordinates.length >= 2)
         .map((t) => ({
           type: "Feature" as const,
           properties: {
             id: t.id,
             identifier: t.identifier,
+            entityType: "surface",
           },
-          geometry: {
+          geometry: t.boundary ?? {
             type: "Polygon" as const,
             coordinates: [bufferLineString(t.geometry.coordinates, t.taxiway_width ?? 20)],
           },

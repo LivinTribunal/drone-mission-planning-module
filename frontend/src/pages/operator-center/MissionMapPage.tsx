@@ -336,7 +336,7 @@ export default function MissionMapPage() {
         return;
       }
 
-      if (activeTool === MapTool.MEASURE) {
+      if (activeTool === MapTool.MEASURE && (measure.isDrawing || !measure.hasPoints)) {
         measure.addPoint(lngLat.lng, lngLat.lat);
         return;
       }
@@ -710,7 +710,9 @@ export default function MissionMapPage() {
               labels: measure.labelsGeoJSON,
             }}
             onMeasureClear={measure.clear}
+            onMeasureFinish={measure.finishDrawing}
             onMeasureMouseMove={measure.setCursor}
+            isMeasureDrawing={measure.isDrawing}
             onWaypointDrag={handleWaypointDrag}
             zoomPercent={zoomPercent}
             onZoomChange={setZoomPercent}

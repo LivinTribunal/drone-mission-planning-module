@@ -2,8 +2,10 @@ from types import SimpleNamespace
 from typing import Optional
 
 import pytest
+from geoalchemy2.elements import WKTElement
 from pydantic import BaseModel
 
+from app.schemas.geometry import LineStringZ, PointZ, PolygonZ, parse_ewkb
 from app.services.geometry_converter import (
     apply_dict_update,
     apply_schema_update,
@@ -86,7 +88,8 @@ class TestSchemaToModelData:
         )
         data = schema_to_model_data(schema)
         assert data["name"] == "test"
-        assert data["location"] == "SRID=4326;POINTZ(16.5 48.1 300.0)"
+        assert isinstance(data["location"], WKTElement)
+        assert str(data["location"]) == "SRID=4326;POINTZ(16.5 48.1 300.0)"
 
     def test_none_geometry_left_as_none(self):
         """None geometry fields are not converted."""
@@ -108,13 +111,20 @@ class TestApplyDictUpdate:
         }
         apply_dict_update(obj, data)
         assert obj.name == "mission-1"
-        assert obj.location == "SRID=4326;POINTZ(16.5 48.1 300.0)"
+        assert isinstance(obj.location, WKTElement)
+        assert str(obj.location) == "SRID=4326;POINTZ(16.5 48.1 300.0)"
 
-    def test_none_geometry_stays_none(self):
-        """None geometry fields are set as None, not converted."""
-        obj = SimpleNamespace()
+    def test_none_non_nullable_geometry_skipped(self):
+        """none on non-nullable geometry fields is skipped to protect constraints."""
+        obj = SimpleNamespace(location="existing")
         apply_dict_update(obj, {"location": None})
-        assert obj.location is None
+        assert obj.location == "existing"
+
+    def test_none_nullable_geometry_set(self):
+        """none on nullable geometry fields is applied (e.g. boundary, camera_target)."""
+        obj = SimpleNamespace(boundary="existing")
+        apply_dict_update(obj, {"boundary": None})
+        assert obj.boundary is None
 
     def test_non_geometry_field_set_directly(self):
         """non-geometry fields are set without conversion."""
@@ -136,7 +146,8 @@ class TestApplySchemaUpdate:
         )
         apply_schema_update(obj, schema)
         assert obj.name == "new"
-        assert obj.location == "SRID=4326;POINTZ(1.0 2.0 3.0)"
+        assert isinstance(obj.location, WKTElement)
+        assert str(obj.location) == "SRID=4326;POINTZ(1.0 2.0 3.0)"
 
     def test_excludes_unset_fields(self):
         """only explicitly set fields are applied."""
@@ -145,3 +156,104 @@ class TestApplySchemaUpdate:
         apply_schema_update(obj, schema)
         assert obj.name == "updated"
         assert obj.location == "keep-this"
+
+
+class TestParseEwkbErrors:
+    """tests that parse_ewkb handles malformed input gracefully."""
+
+    def test_empty_bytes_raises_valueerror(self):
+        """empty bytes input raises ValueError."""
+        with pytest.raises(ValueError, match="malformed EWKB data"):
+            parse_ewkb(b"")
+
+    def test_truncated_buffer_raises_valueerror(self):
+        """truncated buffer raises ValueError."""
+        with pytest.raises(ValueError, match="malformed EWKB data"):
+            parse_ewkb(b"\x01\x00")
+
+    def test_empty_hex_string_raises_valueerror(self):
+        """empty hex string raises ValueError."""
+        with pytest.raises(ValueError, match="malformed EWKB data"):
+            parse_ewkb("")
+
+
+class TestGeojsonToEwkt2D:
+    """tests that geojson_to_ewkt handles 2D coordinates gracefully."""
+
+    def test_2d_point_defaults_z_to_zero(self):
+        """2D point coordinates default z to 0."""
+        geojson = {"type": "Point", "coordinates": [16.5, 48.1]}
+        result = geojson_to_ewkt(geojson)
+        assert result == "SRID=4326;POINTZ(16.5 48.1 0)"
+
+    def test_2d_linestring_defaults_z_to_zero(self):
+        """2D linestring coordinates default z to 0."""
+        geojson = {"type": "LineString", "coordinates": [[16.5, 48.1], [16.6, 48.2]]}
+        result = geojson_to_ewkt(geojson)
+        assert result == "SRID=4326;LINESTRINGZ(16.5 48.1 0, 16.6 48.2 0)"
+
+    def test_1d_coordinate_raises_valueerror(self):
+        """coordinate with only 1 element raises ValueError."""
+        geojson = {"type": "Point", "coordinates": [16.5]}
+        with pytest.raises(ValueError, match="at least 2 elements"):
+            geojson_to_ewkt(geojson)
+
+
+class TestPolygonZRingClosure:
+    """tests that PolygonZ validates ring closure."""
+
+    def test_unclosed_ring_rejected(self):
+        """unclosed polygon ring is rejected."""
+        with pytest.raises(Exception, match="not closed"):
+            PolygonZ(
+                type="Polygon",
+                coordinates=[[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]]],
+            )
+
+    def test_closed_ring_accepted(self):
+        """closed polygon ring is accepted."""
+        pg = PolygonZ(
+            type="Polygon",
+            coordinates=[[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 0, 0]]],
+        )
+        assert len(pg.coordinates[0]) == 4
+
+
+class TestGeometrySchemaValidation:
+    """tests that geometry schemas reject 2D coordinates."""
+
+    def test_pointz_rejects_2d(self):
+        """PointZ rejects coordinates without altitude."""
+        with pytest.raises(Exception, match="at least 3 elements"):
+            PointZ(type="Point", coordinates=[16.5, 48.1])
+
+    def test_pointz_accepts_3d(self):
+        """PointZ accepts coordinates with altitude."""
+        p = PointZ(type="Point", coordinates=[16.5, 48.1, 300.0])
+        assert len(p.coordinates) == 3
+
+    def test_linestringz_rejects_2d(self):
+        """LineStringZ rejects coordinates without altitude."""
+        with pytest.raises(Exception, match="at least 3 elements"):
+            LineStringZ(type="LineString", coordinates=[[16.5, 48.1], [16.6, 48.2]])
+
+    def test_linestringz_accepts_3d(self):
+        """LineStringZ accepts coordinates with altitude."""
+        ls = LineStringZ(type="LineString", coordinates=[[16.5, 48.1, 0], [16.6, 48.2, 0]])
+        assert len(ls.coordinates) == 2
+
+    def test_polygonz_rejects_2d(self):
+        """PolygonZ rejects coordinates without altitude."""
+        with pytest.raises(Exception, match="at least 3 elements"):
+            PolygonZ(
+                type="Polygon",
+                coordinates=[[[0, 0], [1, 0], [1, 1], [0, 0]]],
+            )
+
+    def test_polygonz_accepts_3d(self):
+        """PolygonZ accepts coordinates with altitude."""
+        pg = PolygonZ(
+            type="Polygon",
+            coordinates=[[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 0, 0]]],
+        )
+        assert len(pg.coordinates[0]) == 4
