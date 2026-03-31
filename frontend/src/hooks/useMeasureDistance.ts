@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
+import { haversineDistance, formatDistance } from "../utils/geo";
 
 const MAX_POINTS = 25;
 
@@ -14,6 +15,7 @@ interface MeasureReturn {
   segments: MeasureSegment[];
   totalDistance: number;
   cursorPoint: [number, number] | null;
+  isDrawing: boolean;
   pointsGeoJSON: GeoJSON.FeatureCollection;
   linesGeoJSON: GeoJSON.FeatureCollection;
   labelsGeoJSON: GeoJSON.FeatureCollection;
@@ -21,39 +23,21 @@ interface MeasureReturn {
   setCursor: (lng: number, lat: number) => void;
   clearCursor: () => void;
   clear: () => void;
+  finishDrawing: () => void;
   hasPoints: boolean;
-}
-
-function haversineDistance(
-  lng1: number,
-  lat1: number,
-  lng2: number,
-  lat2: number,
-): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function formatDistance(meters: number): string {
-  if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`;
-  return `${Math.round(meters)} m`;
 }
 
 export default function useMeasureDistance(): MeasureReturn {
   const [points, setPoints] = useState<[number, number][]>([]);
   const [cursorPoint, setCursorPoint] = useState<[number, number] | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   const addPoint = useCallback((lng: number, lat: number) => {
     setPoints((prev) => {
       if (prev.length >= MAX_POINTS) return prev;
       return [...prev, [lng, lat]];
     });
+    setIsDrawing(true);
   }, []);
 
   const setCursor = useCallback((lng: number, lat: number) => {
@@ -64,9 +48,24 @@ export default function useMeasureDistance(): MeasureReturn {
     setCursorPoint(null);
   }, []);
 
+  const finishDrawing = useCallback(() => {
+    /** finish drawing - clear if only one point (no visible segment). */
+    setPoints((prev) => {
+      if (prev.length < 2) {
+        setIsDrawing(false);
+        setCursorPoint(null);
+        return [];
+      }
+      setIsDrawing(false);
+      setCursorPoint(null);
+      return prev;
+    });
+  }, []);
+
   const clear = useCallback(() => {
     setPoints([]);
     setCursorPoint(null);
+    setIsDrawing(false);
   }, []);
 
   const segments = useMemo((): MeasureSegment[] => {
@@ -174,6 +173,7 @@ export default function useMeasureDistance(): MeasureReturn {
     segments,
     totalDistance,
     cursorPoint,
+    isDrawing,
     pointsGeoJSON,
     linesGeoJSON,
     labelsGeoJSON,
@@ -181,6 +181,7 @@ export default function useMeasureDistance(): MeasureReturn {
     setCursor,
     clearCursor,
     clear,
+    finishDrawing,
     hasPoints: points.length > 0,
   };
 }

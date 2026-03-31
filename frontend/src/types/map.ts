@@ -116,7 +116,17 @@ export interface AirportMapProps {
     labels: GeoJSON.FeatureCollection;
   };
   onMeasureClear?: () => void;
+  onMeasureFinish?: () => void;
   onMeasureMouseMove?: (lng: number, lat: number) => void;
+  isMeasureDrawing?: boolean;
+  headingData?: {
+    point: GeoJSON.FeatureCollection;
+    line: GeoJSON.FeatureCollection;
+    label: GeoJSON.FeatureCollection;
+  };
+  onHeadingClear?: () => void;
+  headingOrigin?: [number, number] | null;
+  isHeadingDrawing?: boolean;
   onWaypointDrag?: (waypointId: string, newPosition: [number, number, number]) => void;
   zoomPercent?: number;
   onZoomChange?: (percent: number) => void;
@@ -127,7 +137,21 @@ export interface AirportMapProps {
   onToggle3D?: (val: boolean) => void;
   onBearingChange?: (bearing: number) => void;
   bearingResetKey?: number;
+  showHelpPanel?: boolean;
 }
+
+export type DrawingTool =
+  | "pan"
+  | "zoom"
+  | "zoomReset"
+  | "select"
+  | "measurement"
+  | "heading"
+  | "drawPolygon"
+  | "drawCircle"
+  | "drawRectangle"
+  | "placePoint"
+  | "geoJsonEditor";
 
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {
   runways: true,

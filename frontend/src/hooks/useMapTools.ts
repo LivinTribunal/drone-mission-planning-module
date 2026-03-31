@@ -5,6 +5,7 @@ export enum MapTool {
   PAN = "PAN",
   MOVE_WAYPOINT = "MOVE_WAYPOINT",
   MEASURE = "MEASURE",
+  HEADING = "HEADING",
   ZOOM = "ZOOM",
   ZOOM_RESET = "ZOOM_RESET",
   PLACE_TAKEOFF = "PLACE_TAKEOFF",
@@ -24,7 +25,7 @@ export default function useMapTools(): MapToolsReturn {
   const [is3D, setIs3D] = useState(false);
 
   const setTool = useCallback((tool: MapTool) => {
-    if (tool === MapTool.ZOOM_RESET) return;
+    if (tool === MapTool.ZOOM_RESET) return; // one-shot action handled by toolbar, not a persistent tool
     setActiveTool(tool);
   }, []);
 

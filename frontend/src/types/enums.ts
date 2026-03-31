@@ -40,7 +40,7 @@ export type LampType = "HALOGEN" | "LED";
 
 export type PAPISide = "LEFT" | "RIGHT";
 
-export type SurfaceType = "RUNWAY" | "TAXIWAY" | "APRON" | "HELIPAD";
+export type SurfaceType = "RUNWAY" | "TAXIWAY";
 
 export type ConstraintType = "NO_FLY" | "ALTITUDE_LIMIT" | "SPEED_LIMIT";
 

@@ -1,12 +1,36 @@
-import { Outlet } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAirport } from "@/contexts/AirportContext";
 import NavBar from "./NavBar";
 import type { NavItem } from "./NavBar";
 
 export default function CoordinatorLayout() {
-  const { selectedAirport } = useAirport();
+  /** coordinator center layout - clears operator airport on mount, syncs selector to routes. */
   const { t } = useTranslation();
+  const { selectedAirport, clearAirport } = useAirport();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const mountedRef = useRef(false);
+
+  // clear operator's cached airport on first mount
+  useEffect(() => {
+    clearAirport();
+    mountedRef.current = true;
+  }, [clearAirport]);
+
+  // navigate when airport selection changes (only after mount)
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    const onAirportsSection = location.pathname.startsWith("/coordinator-center/airports");
+    if (!onAirportsSection) return;
+
+    if (selectedAirport && location.pathname === "/coordinator-center/airports") {
+      navigate(`/coordinator-center/airports/${selectedAirport.id}`);
+    } else if (!selectedAirport && location.pathname !== "/coordinator-center/airports") {
+      navigate("/coordinator-center/airports");
+    }
+  }, [selectedAirport, location.pathname, navigate]);
 
   const coordinatorItems: NavItem[] = [
     { label: t("nav.missionCenter"), to: "/operator-center/dashboard" },
@@ -19,26 +43,7 @@ export default function CoordinatorLayout() {
     <div className="flex flex-col h-screen bg-tv-bg text-tv-text-primary">
       <NavBar items={coordinatorItems} role="coordinator" />
       <main className="flex-1 overflow-auto">
-        {selectedAirport ? (
-          <Outlet />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-tv-text-muted">
-            <p className="text-lg mb-2">{t("nav.selectAirport")}</p>
-            <svg
-              className="h-8 w-8 animate-bounce"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 10l7-7m0 0l7 7m-7-7v18"
-              />
-            </svg>
-          </div>
-        )}
+        <Outlet />
       </main>
     </div>
   );

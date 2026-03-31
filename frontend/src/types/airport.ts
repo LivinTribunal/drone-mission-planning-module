@@ -35,6 +35,7 @@ export interface SurfaceResponse {
   identifier: string;
   surface_type: SurfaceType;
   geometry: LineStringZ;
+  boundary: PolygonZ | null;
   heading: number | null;
   length: number | null;
   width: number | null;
@@ -110,6 +111,7 @@ export interface SurfaceCreate {
   identifier: string;
   surface_type: SurfaceType;
   geometry: LineStringZ;
+  boundary?: PolygonZ;
   heading?: number | null;
   length?: number | null;
   width?: number | null;
@@ -122,6 +124,7 @@ export interface SurfaceUpdate {
   identifier?: string;
   surface_type?: SurfaceType;
   geometry?: LineStringZ;
+  boundary?: PolygonZ;
   heading?: number | null;
   length?: number | null;
   width?: number | null;
