@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import useUndoRedo from "./useUndoRedo";
-import type { DrawingTool } from "@/components/coordinator/MapDrawingToolbar";
+import type { DrawingTool } from "@/types/map";
 
 interface DrawnFeature {
   id: string;

@@ -5,6 +5,7 @@ import pytest
 from geoalchemy2.elements import WKTElement
 from pydantic import BaseModel
 
+from app.schemas.geometry import LineStringZ, PointZ, PolygonZ
 from app.services.geometry_converter import (
     apply_dict_update,
     apply_schema_update,
@@ -149,3 +150,43 @@ class TestApplySchemaUpdate:
         apply_schema_update(obj, schema)
         assert obj.name == "updated"
         assert obj.location == "keep-this"
+
+
+class TestGeometrySchemaValidation:
+    """tests that geometry schemas reject 2D coordinates."""
+
+    def test_pointz_rejects_2d(self):
+        """PointZ rejects coordinates without altitude."""
+        with pytest.raises(Exception, match="at least 3 elements"):
+            PointZ(type="Point", coordinates=[16.5, 48.1])
+
+    def test_pointz_accepts_3d(self):
+        """PointZ accepts coordinates with altitude."""
+        p = PointZ(type="Point", coordinates=[16.5, 48.1, 300.0])
+        assert len(p.coordinates) == 3
+
+    def test_linestringz_rejects_2d(self):
+        """LineStringZ rejects coordinates without altitude."""
+        with pytest.raises(Exception, match="at least 3 elements"):
+            LineStringZ(type="LineString", coordinates=[[16.5, 48.1], [16.6, 48.2]])
+
+    def test_linestringz_accepts_3d(self):
+        """LineStringZ accepts coordinates with altitude."""
+        ls = LineStringZ(type="LineString", coordinates=[[16.5, 48.1, 0], [16.6, 48.2, 0]])
+        assert len(ls.coordinates) == 2
+
+    def test_polygonz_rejects_2d(self):
+        """PolygonZ rejects coordinates without altitude."""
+        with pytest.raises(Exception, match="at least 3 elements"):
+            PolygonZ(
+                type="Polygon",
+                coordinates=[[[0, 0], [1, 0], [1, 1], [0, 0]]],
+            )
+
+    def test_polygonz_accepts_3d(self):
+        """PolygonZ accepts coordinates with altitude."""
+        pg = PolygonZ(
+            type="Polygon",
+            coordinates=[[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 0, 0]]],
+        )
+        assert len(pg.coordinates[0]) == 4

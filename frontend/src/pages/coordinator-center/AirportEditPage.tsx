@@ -67,8 +67,26 @@ import useMeasureDistance from "@/hooks/useMeasureDistance";
 import useHeadingTool from "@/hooks/useHeadingTool";
 import type maplibregl from "maplibre-gl";
 import { extractCenterline, circleToPolygon, haversineDistance } from "@/utils/geo";
-import type { DrawingTool } from "@/components/coordinator/MapDrawingToolbar";
+import type { DrawingTool } from "@/types/map";
 import { MapTool } from "@/hooks/useMapTools";
+
+// tracks current feature collections per source for live geometry preview updates
+const sourceDataCache = new Map<string, GeoJSON.FeatureCollection>();
+
+function snapshotSource(map: maplibregl.Map, sourceName: string): GeoJSON.FeatureCollection | null {
+  /** snapshot current features from a map source into cache via public api. */
+  const rendered = map.querySourceFeatures(sourceName);
+  if (!rendered.length) return null;
+  // strip maplibre-internal fields, keep only standard geojson
+  const features: GeoJSON.Feature[] = rendered.map((f) => ({
+    type: "Feature",
+    properties: f.properties,
+    geometry: f.geometry,
+  }));
+  const fc: GeoJSON.FeatureCollection = { type: "FeatureCollection", features };
+  sourceDataCache.set(sourceName, fc);
+  return fc;
+}
 
 function updateSourceFeatureGeometry(
   map: maplibregl.Map,
@@ -78,15 +96,16 @@ function updateSourceFeatureGeometry(
 ) {
   /** update a single feature's geometry in a geojson source for live preview. */
   const src = map.getSource(sourceName) as maplibregl.GeoJSONSource | undefined;
-  if (!src || !src._data) return;
-  const fc = src._data as GeoJSON.FeatureCollection;
-  if (!fc.features) return;
+  if (!src) return;
+  const fc = sourceDataCache.get(sourceName) ?? snapshotSource(map, sourceName);
+  if (!fc?.features) return;
   const updated = {
     ...fc,
     features: fc.features.map((f) =>
       f.properties?.id === featureId ? { ...f, geometry } : f,
     ),
   };
+  sourceDataCache.set(sourceName, updated);
   src.setData(updated);
 }
 
@@ -209,12 +228,7 @@ export default function AirportEditPage() {
     setPendingCircleCenter(undefined);
     setPendingPointPosition(point);
 
-    if (pendingLhaParentAglId) {
-      // lha creation workflow - keep point type and pre-select lha category
-      setPendingGeometryType("point");
-    } else {
-      setPendingGeometryType("point");
-    }
+    setPendingGeometryType("point");
 
     setActiveTool("select");
   }, [setActiveTool, pendingLhaParentAglId]);

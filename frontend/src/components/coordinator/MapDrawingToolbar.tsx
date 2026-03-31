@@ -17,18 +17,8 @@ import {
   Loader2,
 } from "lucide-react";
 
-export type DrawingTool =
-  | "pan"
-  | "zoom"
-  | "zoomReset"
-  | "select"
-  | "measurement"
-  | "heading"
-  | "drawPolygon"
-  | "drawCircle"
-  | "drawRectangle"
-  | "placePoint"
-  | "geoJsonEditor";
+import type { DrawingTool } from "@/types/map";
+export type { DrawingTool } from "@/types/map";
 
 interface MapDrawingToolbarProps {
   activeTool: DrawingTool;

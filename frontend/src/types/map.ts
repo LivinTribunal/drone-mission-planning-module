@@ -140,6 +140,19 @@ export interface AirportMapProps {
   showHelpPanel?: boolean;
 }
 
+export type DrawingTool =
+  | "pan"
+  | "zoom"
+  | "zoomReset"
+  | "select"
+  | "measurement"
+  | "heading"
+  | "drawPolygon"
+  | "drawCircle"
+  | "drawRectangle"
+  | "placePoint"
+  | "geoJsonEditor";
+
 export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {
   runways: true,
   taxiways: true,

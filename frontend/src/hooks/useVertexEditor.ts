@@ -117,9 +117,9 @@ function clearSources(map: maplibregl.Map) {
 function removeSources(map: maplibregl.Map) {
   /** remove vertex editing layers and sources. */
   for (const lyr of [LYR_CENTER, LYR_CORNERS]) {
-    try { if (map.getLayer(lyr)) map.removeLayer(lyr); } catch { /* noop */ }
+    try { if (map.getLayer(lyr)) map.removeLayer(lyr); } catch (e) { console.warn("vertex editor: failed to remove layer", lyr, e); }
   }
-  try { if (map.getSource(SRC_NODES)) map.removeSource(SRC_NODES); } catch { /* noop */ }
+  try { if (map.getSource(SRC_NODES)) map.removeSource(SRC_NODES); } catch (e) { console.warn("vertex editor: failed to remove source", SRC_NODES, e); }
 }
 
 /** poll map.isStyleLoaded() until true, then call callback. returns cancel fn. */
