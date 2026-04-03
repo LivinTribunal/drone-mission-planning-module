@@ -166,7 +166,7 @@ class ExportResult(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "format IN ('MAVLINK', 'KML', 'KMZ', 'JSON')",
+            "format IN ('MAVLINK', 'KML', 'KMZ', 'JSON', 'UGCS')",
             name="ck_export_format",
         ),
     )

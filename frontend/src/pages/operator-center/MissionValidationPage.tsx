@@ -183,7 +183,9 @@ export default function MissionValidationPage() {
               ? "kmz"
               : formats[0] === "JSON"
                 ? "json"
-                : "waypoints";
+                : formats[0] === "UGCS"
+                  ? "ugcs.json"
+                  : "waypoints";
         const safeName = mission.name.replace(/[/\\:*?"<>|]/g, "_");
         a.download = `mission_${safeName}.${ext}`;
       } else {

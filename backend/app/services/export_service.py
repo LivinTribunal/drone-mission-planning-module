@@ -2,6 +2,7 @@
 
 import io
 import json
+import math
 import re
 import zipfile
 from datetime import datetime, timezone
@@ -142,7 +143,6 @@ def generate_json(
         )
 
     data = {
-        "version": "1.0.0+0",
         "mission_name": mission_name,
         "mission_id": flight_plan.mission_id,
         "airport_elevation": airport_elevation,
@@ -153,6 +153,117 @@ def generate_json(
     }
 
     return json.dumps(data, indent=2, cls=_UUIDEncoder).encode("utf-8")
+
+
+# ugcs data model version - matches the version ugcs expects for route import.
+# update these values if your ugcs installation uses a different schema version.
+_UGCS_VERSION = {
+    "major": 5,
+    "minor": 16,
+    "patch": 1,
+    "build": "9205",
+    "component": "DATABASE",
+}
+
+# ugcs import only accepts "Waypoint" for all segments - Takeoff/Landing
+# are internal types assigned by ugcs route planner, not valid for import.
+
+
+def _deg_to_rad(degrees: float) -> float:
+    """convert degrees to radians for ugcs coordinate format."""
+    return degrees * math.pi / 180.0
+
+
+def _build_ugcs_actions(wp) -> list[dict]:
+    """build ugcs action list from waypoint fields.
+
+    camera actions are intentionally excluded - ugcs requires camera mode
+    configuration that depends on the vehicle profile. users should configure
+    camera settings within ugcs after route import.
+    """
+    actions = []
+
+    if wp.hover_duration and wp.hover_duration > 0:
+        actions.append({"type": "Wait", "interval": wp.hover_duration})
+
+    return actions
+
+
+def generate_ugcs(
+    flight_plan: FlightPlan,
+    mission_name: str = "",
+    airport_elevation: float = 0,
+) -> bytes:
+    """serialize flight plan to ugcs-compatible json route format."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+
+    segments = []
+    for wp in waypoints:
+        lon, lat, alt = _extract_coords(wp.position)
+        agl = alt - airport_elevation
+        speed = wp.speed or 0.0
+
+        # ugcs turn type - hover waypoints stop, others fly through
+        turn_type = "STOP_AND_TURN" if wp.waypoint_type == "HOVER" else "SPLINE"
+
+        segment = {
+            "type": "Waypoint",
+            "actions": _build_ugcs_actions(wp),
+            "point": {
+                "latitude": _deg_to_rad(lat),
+                "longitude": _deg_to_rad(lon),
+                "altitude": agl,
+                "altitudeType": "AGL",
+            },
+            "parameters": {
+                "avoidObstacles": False,
+                "avoidTerrain": False,
+                "speed": speed,
+                "wpTurnType": turn_type,
+                "altitudeType": "AGL",
+                "cornerRadius": None,
+            },
+        }
+        segments.append(segment)
+
+    if flight_plan.generated_at:
+        creation_time = int(flight_plan.generated_at.timestamp() * 1000)
+    else:
+        creation_time = int(datetime.now(timezone.utc).timestamp() * 1000)
+
+    initial_speed = waypoints[0].speed if waypoints else 5.0
+
+    data = {
+        "version": _UGCS_VERSION,
+        "payloadProfiles": [],
+        "vehicleProfiles": [],
+        "route": {
+            "name": mission_name or "Untitled Route",
+            "creationTime": creation_time,
+            "scheduledTime": None,
+            "startDelay": None,
+            "vehicleProfile": None,
+            "trajectoryType": None,
+            "safeAltitude": 50.0,
+            "maxAltitude": 1500.0,
+            "initialSpeed": initial_speed or 5.0,
+            "maxSpeed": None,
+            "failsafes": {
+                "rcLost": "GO_HOME",
+                "gpsLost": None,
+                "lowBattery": None,
+                "datalinkLost": None,
+            },
+            "checkAerodromeNfz": False,
+            "checkCustomNfz": False,
+            "segments": segments,
+            "takeoffHeight": None,
+            "cornerRadius": 20.0,
+        },
+    }
+
+    # ugcs uses java jackson serializer - match its formatting
+    return json.dumps(data, indent=2, separators=(",", " : "), cls=_UUIDEncoder).encode("utf-8")
 
 
 # mavlink command codes
@@ -206,6 +317,7 @@ _EXPORT_CONTENT_TYPES = {
     "KMZ": ("application/vnd.google-earth.kmz", "kmz"),
     "JSON": ("application/json", "json"),
     "MAVLINK": ("text/plain", "waypoints"),
+    "UGCS": ("application/json", "ugcs.json"),
 }
 
 _EXPORT_GENERATORS = {
@@ -213,6 +325,7 @@ _EXPORT_GENERATORS = {
     "KMZ": generate_kmz,
     "JSON": generate_json,
     "MAVLINK": generate_mavlink,
+    "UGCS": generate_ugcs,
 }
 
 
