@@ -344,6 +344,51 @@ class TestExportMissionFormats:
         mission.transition_to.assert_called_once_with("EXPORTED")
         db.commit.assert_called_once()
 
+    def test_ugcs_format_exports_and_commits(self):
+        """ugcs format export transitions status, commits, and returns files."""
+        db = MagicMock()
+        mission = MagicMock()
+        mission.status = "VALIDATED"
+        mission.name = "Test Mission"
+
+        fp = _make_flight_plan(2)
+        fp.airport_id = uuid4()
+
+        airport = MagicMock()
+        airport.elevation = 100.0
+
+        def query_side_effect(model):
+            """route db.query to the right mock based on model."""
+            mock_chain = MagicMock()
+            if model.__name__ == "Mission":
+                mock_chain.filter.return_value.first.return_value = mission
+            elif model.__name__ == "FlightPlan":
+                mock_chain.options.return_value.filter.return_value.first.return_value = fp
+            elif model.__name__ == "Airport":
+                mock_chain.filter.return_value.first.return_value = airport
+            return mock_chain
+
+        db.query.side_effect = query_side_effect
+
+        files, safe_name = export_service.export_mission(db, uuid4(), ["UGCS"])
+
+        assert safe_name == "Test Mission"
+        assert len(files) == 1
+        filename = list(files.keys())[0]
+        assert filename == "mission_Test Mission.ugcs.json"
+        content, content_type = files[filename]
+        assert content_type == "application/json"
+        assert len(content) > 0
+
+        # verify it's valid ugcs json with version and route
+        data = json.loads(content)
+        assert "version" in data
+        assert "route" in data
+        assert isinstance(data["version"]["build"], int)
+
+        mission.transition_to.assert_called_once_with("EXPORTED")
+        db.commit.assert_called_once()
+
 
 class TestGenerateUgcs:
     """tests for ugcs json route export generation."""
@@ -381,9 +426,9 @@ class TestGenerateUgcs:
         v = data["version"]
         assert v["major"] == 5
         assert v["minor"] == 16
-        assert v["patch"] == 1
-        assert v["build"] == "9205"
-        assert isinstance(v["build"], str)
+        assert "patch" not in v
+        assert v["build"] == 9205
+        assert isinstance(v["build"], int)
         assert v["component"] == "DATABASE"
 
     def test_coordinates_in_radians(self):

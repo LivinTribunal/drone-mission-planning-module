@@ -160,8 +160,7 @@ def generate_json(
 _UGCS_VERSION = {
     "major": 5,
     "minor": 16,
-    "patch": 1,
-    "build": "9205",
+    "build": 9205,
     "component": "DATABASE",
 }
 
