@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, Flag } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -1738,12 +1738,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
             <LayerPanel
               layers={layerConfig}
               onToggle={handleLayerToggle}
-              hasWaypoints={!!(waypoints?.length || takeoffCoordinate || landingCoordinate)}
-              hasSimplifiedTrajectory={!!(waypoints?.length)}
-              hasTakeoff={!!takeoffCoordinate}
-              hasLanding={!!landingCoordinate}
-              onPlaceTakeoff={onPlaceTakeoff}
-              onPlaceLanding={onPlaceLanding}
+              hasFlightPlan={!!(waypoints?.length)}
+              hasTakeoffLanding={!!(takeoffCoordinate || landingCoordinate)}
             />
           )}
           {leftPanelChildren}
@@ -1762,6 +1758,30 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
               feature={selectedFeature}
               onClose={() => setSelectedFeature(null)}
             />
+          )}
+
+          {/* placement buttons - full width, after waypoint list */}
+          {!takeoffCoordinate && onPlaceTakeoff && (
+            <button
+              onClick={onPlaceTakeoff}
+              className="flex items-center justify-center gap-2 w-full rounded-2xl px-3 py-2 text-xs font-semibold border border-tv-success text-white transition-colors"
+              style={{ backgroundColor: "var(--tv-success)" }}
+              data-testid="place-takeoff-btn"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              {t("map.placeTakeoff")}
+            </button>
+          )}
+          {!landingCoordinate && onPlaceLanding && (
+            <button
+              onClick={onPlaceLanding}
+              className="flex items-center justify-center gap-2 w-full rounded-2xl px-3 py-2 text-xs font-semibold border border-tv-error text-white transition-colors"
+              style={{ backgroundColor: "var(--tv-error)" }}
+              data-testid="place-landing-btn"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              {t("map.placeLanding")}
+            </button>
           )}
         </div>
       )}

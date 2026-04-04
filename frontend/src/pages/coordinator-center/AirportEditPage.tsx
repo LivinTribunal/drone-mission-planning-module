@@ -15,17 +15,9 @@ import {
   updateAirport,
 } from "@/api/airports";
 import { useAirport } from "@/contexts/AirportContext";
+import { OBSTACLE_COLORS, ObstacleTypeIcon } from "@/components/map/obstacleIcons";
 import type { AirportDetailResponse } from "@/types/airport";
-import type { ObstacleType } from "@/types/enums";
 import type { MapFeature, MapLayerConfig } from "@/types/map";
-
-const OBSTACLE_COLORS: Record<ObstacleType, string> = {
-  BUILDING: "#e54545",
-  TOWER: "#9b59b6",
-  ANTENNA: "#e5a545",
-  VEGETATION: "#3bbb3b",
-  OTHER: "#6b6b6b",
-};
 
 const ZONE_COLORS: Record<string, string> = {
   CTR: "#4595e5",
@@ -917,9 +909,7 @@ export default function AirportEditPage() {
                   const color = OBSTACLE_COLORS[o.type] ?? "#6b6b6b";
                   return (
                     <div className="flex items-center gap-2">
-                      <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 10 10">
-                        <polygon points="5,1 9,9 1,9" fill={color} />
-                      </svg>
+                      <ObstacleTypeIcon type={o.type} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium text-tv-text-primary truncate">{o.name}</span>
