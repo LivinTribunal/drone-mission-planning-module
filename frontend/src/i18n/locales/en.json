@@ -327,6 +327,7 @@
       "created": "Created",
       "lastUpdated": "Last Updated",
       "operatorNotes": "Operator Notes",
+      "noNotes": "No notes",
       "missionName": "Mission Name",
       "status": "Status",
       "transitDistance": "Transit Distance",

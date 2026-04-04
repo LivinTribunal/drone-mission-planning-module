@@ -8,6 +8,7 @@ interface CoordinateInputProps {
   onChange: (value: PointZ | null) => void;
   picking?: boolean;
   onPickOnMap?: () => void;
+  defaultAltitude?: number;
 }
 
 export default function CoordinateInput({
@@ -16,6 +17,7 @@ export default function CoordinateInput({
   onChange,
   picking,
   onPickOnMap,
+  defaultAltitude,
 }: CoordinateInputProps) {
   /** lat/lon/alt input group with optional pick-on-map button. */
   const { t } = useTranslation();
@@ -42,7 +44,7 @@ export default function CoordinateInput({
 
     const curLat = value ? value.coordinates[1] : 0;
     const curLon = value ? value.coordinates[0] : 0;
-    const curAlt = value ? value.coordinates[2] : 0;
+    const curAlt = value ? value.coordinates[2] : (defaultAltitude ?? 0);
 
     const newLat = field === "lat" ? num : curLat;
     const newLon = field === "lon" ? num : curLon;

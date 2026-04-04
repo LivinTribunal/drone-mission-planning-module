@@ -691,6 +691,7 @@ export default function MissionConfigPage() {
             onChange={handleMissionChange}
             pickingCoord={pickingCoord}
             onPickCoord={setPickingCoord}
+            defaultAltitude={airportDetail?.elevation ?? 0}
           />
         </div>
 
