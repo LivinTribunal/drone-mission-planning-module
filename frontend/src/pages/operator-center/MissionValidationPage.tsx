@@ -354,7 +354,7 @@ export default function MissionValidationPage() {
                     !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  2D
+                  {t("common.2d")}
                 </button>
                 <button
                   onClick={() => setIs3D(true)}
@@ -362,7 +362,7 @@ export default function MissionValidationPage() {
                     is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  3D
+                  {t("common.3d")}
                 </button>
               </div>
               <TerrainToggle

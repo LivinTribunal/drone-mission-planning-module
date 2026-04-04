@@ -79,9 +79,8 @@ export default function MissionOverviewPage() {
       try {
         const fp = await getFlightPlan(id);
         setFlightPlan(fp);
-        if (fp.validation_result?.violations?.length) {
-          setWarnings(fp.validation_result.violations);
-        }
+        const violations = fp.validation_result?.violations ?? [];
+        setWarnings(violations.length > 0 ? violations : null);
       } catch (err) {
         console.error("flight plan fetch failed:", err instanceof Error ? err.message : String(err));
         setFlightPlan(null);
@@ -223,7 +222,7 @@ export default function MissionOverviewPage() {
                     !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  2D
+                  {t("common.2d")}
                 </button>
                 <button
                   onClick={() => setIs3D(true)}
@@ -231,7 +230,7 @@ export default function MissionOverviewPage() {
                     is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  3D
+                  {t("common.3d")}
                 </button>
               </div>
               <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />

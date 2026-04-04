@@ -226,9 +226,8 @@ export default function MissionConfigPage() {
         setFlightPlan(fp);
 
         // load warnings from existing flight plan
-        if (fp.validation_result?.violations?.length) {
-          setWarnings(fp.validation_result.violations);
-        }
+        const violations = fp.validation_result?.violations ?? [];
+        setWarnings(violations.length > 0 ? violations : null);
       } catch (err) {
         if (!isAxiosError(err) || err.response?.status !== 404) throw err;
         setFlightPlan(null);
@@ -781,7 +780,7 @@ export default function MissionConfigPage() {
                     !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  2D
+                  {t("common.2d")}
                 </button>
                 <button
                   onClick={() => setIs3D(true)}
@@ -789,7 +788,7 @@ export default function MissionConfigPage() {
                     is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  3D
+                  {t("common.3d")}
                 </button>
               </div>
               <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />

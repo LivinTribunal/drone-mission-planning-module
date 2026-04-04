@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Loader2, Pencil, X, Check, Upload } from "lucide-react";
 import { useMission } from "@/contexts/MissionContext";
@@ -52,6 +52,7 @@ export default function MissionTabNav() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     missions,
     selectedMission,
@@ -153,8 +154,7 @@ export default function MissionTabNav() {
     /** switch to a different mission. */
     setMissionDropdownOpen(false);
     setMissionSearch("");
-    const path = window.location.pathname;
-    const tabMatch = path.match(/\/missions\/[^/]+\/(.+)/);
+    const tabMatch = location.pathname.match(/\/missions\/[^/]+\/(.+)/);
     const tab = tabMatch?.[1] ?? "configuration";
     navigate(`/operator-center/missions/${missionId}/${tab}`);
   }

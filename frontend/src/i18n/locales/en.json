@@ -19,7 +19,9 @@
     "warning_one": "warning",
     "warning_other": "warnings",
     "violation_one": "violation",
-    "violation_other": "violations"
+    "violation_other": "violations",
+    "2d": "2D",
+    "3d": "3D"
   },
   "nav": {
     "dashboard": "Dashboard",
