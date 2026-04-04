@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import NavBar from "./NavBar";
 import type { NavItem } from "./NavBar";
+import { MissionProvider } from "@/contexts/MissionContext";
 
 export default function OperatorLayout() {
   const { t } = useTranslation();
@@ -17,7 +18,9 @@ export default function OperatorLayout() {
     <div className="flex flex-col h-screen bg-tv-bg text-tv-text-primary">
       <NavBar items={operatorItems} role="operator" />
       <main className="flex-1 overflow-auto">
-        <Outlet />
+        <MissionProvider>
+          <Outlet />
+        </MissionProvider>
       </main>
     </div>
   );

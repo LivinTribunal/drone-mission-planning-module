@@ -13,6 +13,7 @@ vi.mock("react-router-dom", () => ({
     setSaveContext: vi.fn(),
     setComputeContext: vi.fn(),
     refreshMissions: vi.fn(),
+    updateMissionFromPage: vi.fn(),
   }),
 }));
 

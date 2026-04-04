@@ -23,7 +23,7 @@ export default function MissionOverviewPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext, setComputeContext, refreshMissions } =
+  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage } =
     useOutletContext<MissionTabOutletContext>();
 
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
@@ -109,14 +109,14 @@ export default function MissionOverviewPage() {
       ]);
       setMission(missionData);
       setDroneProfiles(dpData.data);
+      updateMissionFromPage(missionData);
       refreshMissions();
 
       try {
         const fp = await getFlightPlan(id);
         setFlightPlan(fp);
-        if (fp.validation_result?.violations?.length) {
-          setWarnings(fp.validation_result.violations);
-        }
+        const violations = fp.validation_result?.violations ?? [];
+        setWarnings(violations.length > 0 ? violations : null);
       } catch (err) {
         console.error("flight plan fetch failed:", err instanceof Error ? err.message : String(err));
         setFlightPlan(null);
@@ -127,7 +127,7 @@ export default function MissionOverviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, refreshMissions]);
+  }, [id, refreshMissions, updateMissionFromPage]);
 
   useEffect(() => {
     fetchData();
@@ -265,7 +265,7 @@ export default function MissionOverviewPage() {
                     !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  2D
+                  {t("common.2d")}
                 </button>
                 <button
                   onClick={() => setIs3D(true)}
@@ -273,7 +273,7 @@ export default function MissionOverviewPage() {
                     is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  3D
+                  {t("common.3d")}
                 </button>
               </div>
               <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />

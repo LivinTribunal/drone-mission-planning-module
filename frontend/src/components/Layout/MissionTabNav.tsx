@@ -1,11 +1,11 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Loader2, Pencil, X, Check, Upload } from "lucide-react";
-import { useAirport } from "@/contexts/AirportContext";
-import { listMissions, updateMission } from "@/api/missions";
-import type { MissionResponse } from "@/types/mission";
+import { useMission } from "@/contexts/MissionContext";
+import { updateMission } from "@/api/missions";
+import type { MissionResponse, MissionDetailResponse } from "@/types/mission";
 import Badge from "@/components/common/Badge";
 import type { MissionStatus } from "@/types/enums";
 
@@ -44,14 +44,23 @@ export interface ComputeContext {
 export interface MissionTabOutletContext {
   setSaveContext: (ctx: SaveContext) => void;
   setComputeContext: (ctx: ComputeContext) => void;
-  refreshMissions: () => void;
+  refreshMissions: () => Promise<void>;
+  mission: MissionDetailResponse | null;
+  updateMissionFromPage: (m: MissionResponse) => void;
 }
 
 export default function MissionTabNav() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { selectedAirport } = useAirport();
+  const location = useLocation();
+  const {
+    missions,
+    selectedMission,
+    refreshMissions,
+    updateMissionInList,
+  } = useMission();
+
   const [saveCtx, setSaveCtx] = useState<SaveContext>({
     onSave: null,
     isDirty: false,
@@ -63,8 +72,9 @@ export default function MissionTabNav() {
     canCompute: false,
     isComputing: false,
   });
-  const [missions, setMissions] = useState<MissionResponse[]>([]);
   const [missionDropdownOpen, setMissionDropdownOpen] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const renameErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setSaveContext = useCallback((ctx: SaveContext) => {
     setSaveCtx(ctx);
@@ -74,39 +84,19 @@ export default function MissionTabNav() {
     setComputeCtx(ctx);
   }, []);
 
-  const refreshMissions = useCallback(() => {
-    /** refresh the mission list for the current airport. */
-    if (!selectedAirport) return;
-    listMissions({ airport_id: selectedAirport.id, limit: 100 })
-      .then((res) => {
-        setMissions(res.data);
-      })
-      .catch(() => {
-        // ignore
-      });
-  }, [selectedAirport]);
-
-  // fetch missions for this airport
-  useEffect(() => {
-    refreshMissions();
-  }, [refreshMissions]);
-
-  // when airport changes or is cleared, deselect current mission
-  const prevAirportIdRef = useRef(selectedAirport?.id);
-  useEffect(() => {
-    const prevId = prevAirportIdRef.current;
-    const newId = selectedAirport?.id;
-    prevAirportIdRef.current = newId;
-    if (prevId && prevId !== newId && id) {
-      // airport cleared - go to dashboard; airport switched - go to mission list
-      navigate(newId ? "/operator-center/missions" : "/operator-center", { replace: true });
-    }
-  }, [selectedAirport?.id, id, navigate]);
+  // update mission in context when a page pushes a status change
+  const updateMissionFromPage = useCallback(
+    (updated: MissionResponse) => {
+      updateMissionInList(updated);
+    },
+    [updateMissionInList],
+  );
 
   const currentMission = missions.find((m) => m.id === id);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [missionSearch, setMissionSearch] = useState("");
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const selectorRef = useRef<HTMLDivElement>(null);
   const portalDropdownRef = useRef<HTMLDivElement>(null);
@@ -118,6 +108,26 @@ export default function MissionTabNav() {
     const q = missionSearch.toLowerCase();
     return missions.filter((m) => m.name.toLowerCase().includes(q));
   }, [missions, missionSearch]);
+
+  // compute portal dropdown position and keep it updated on scroll/resize
+  useLayoutEffect(() => {
+    if (!missionDropdownOpen || !selectorRef.current) {
+      setDropdownPos(null);
+      return;
+    }
+    function update() {
+      if (!selectorRef.current) return;
+      const rect = selectorRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [missionDropdownOpen]);
 
   // focus search input when dropdown opens
   useEffect(() => {
@@ -147,8 +157,7 @@ export default function MissionTabNav() {
     /** switch to a different mission. */
     setMissionDropdownOpen(false);
     setMissionSearch("");
-    const path = window.location.pathname;
-    const tabMatch = path.match(/\/missions\/[^/]+\/(.+)/);
+    const tabMatch = location.pathname.match(/\/missions\/[^/]+\/(.+)/);
     const tab = tabMatch?.[1] ?? "configuration";
     navigate(`/operator-center/missions/${missionId}/${tab}`);
   }
@@ -169,13 +178,11 @@ export default function MissionTabNav() {
     }
     try {
       await updateMission(id, { name: renameValue.trim() });
-      // refresh missions list
-      if (selectedAirport) {
-        const res = await listMissions({ airport_id: selectedAirport.id, limit: 100 });
-        setMissions(res.data);
-      }
+      await refreshMissions();
     } catch {
-      // ignore
+      setRenameError(t("mission.renameError"));
+      if (renameErrorTimer.current) clearTimeout(renameErrorTimer.current);
+      renameErrorTimer.current = setTimeout(() => setRenameError(null), 4000);
     }
     setRenaming(false);
   }
@@ -278,14 +285,14 @@ export default function MissionTabNav() {
           </div>
 
             {/* dropdown via portal to avoid overflow-hidden clipping */}
-            {missionDropdownOpen && selectorRef.current && createPortal(
+            {missionDropdownOpen && selectorRef.current && dropdownPos && createPortal(
               <div
                 ref={portalDropdownRef}
                 className="fixed z-50 bg-tv-surface border-2 border-tv-text-muted rounded-2xl p-2"
                 style={{
-                  top: selectorRef.current.getBoundingClientRect().bottom + 4,
-                  left: selectorRef.current.getBoundingClientRect().left,
-                  width: selectorRef.current.getBoundingClientRect().width,
+                  top: dropdownPos.top,
+                  left: dropdownPos.left,
+                  width: dropdownPos.width,
                 }}
               >
                 <input
@@ -412,10 +419,22 @@ export default function MissionTabNav() {
         </div>
       </div>
 
+      {renameError && (
+        <div className="mx-4 mb-2 rounded-xl bg-red-500/20 border border-red-500/40 px-4 py-2 text-sm text-red-400">
+          {renameError}
+        </div>
+      )}
+
       <div className="py-2">
         <Outlet
           context={
-            { setSaveContext, setComputeContext, refreshMissions } satisfies MissionTabOutletContext
+            {
+              setSaveContext,
+              setComputeContext,
+              refreshMissions,
+              mission: selectedMission,
+              updateMissionFromPage,
+            } satisfies MissionTabOutletContext
           }
         />
       </div>
