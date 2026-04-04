@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { GripVertical, Trash2, Eye, EyeOff, Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { GripVertical, Trash2, Eye, EyeOff, Plus, ChevronDown } from "lucide-react";
 import type { InspectionResponse } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 
@@ -125,11 +125,7 @@ export default function InspectionList({
             <Plus className="h-3.5 w-3.5" />
             {t("mission.config.addInspection")}
           </button>
-          {collapsed ? (
-            <ChevronDown className="h-4 w-4 text-tv-text-primary" />
-          ) : (
-            <ChevronUp className="h-4 w-4 text-tv-text-primary" />
-          )}
+          <ChevronDown className={`h-4 w-4 text-tv-text-primary transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`} />
         </div>
       </div>
       {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}

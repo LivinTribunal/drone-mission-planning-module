@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronUp, Link, Search } from "lucide-react";
+import { ChevronDown, Link, Search } from "lucide-react";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 
 interface TemplateSelectorDropdownProps {
@@ -117,16 +117,12 @@ export default function TemplateSelectorDropdown({
           >
             {formatMethod(current?.methods[0] ?? "")}
           </span>
-          {open ? (
-            <ChevronUp className="h-4 w-4 text-tv-text-secondary flex-shrink-0" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-tv-text-secondary flex-shrink-0" />
-          )}
+          <ChevronDown className={`h-4 w-4 text-tv-text-secondary flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
         </div>
       </div>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 rounded-2xl border-2 border-tv-text-muted bg-tv-surface z-50">
+        <div className="absolute top-full left-0 right-0 mt-1 rounded-2xl border border-tv-border bg-tv-surface z-50">
           {/* search bar */}
           <div className="p-2">
             <div className="relative">

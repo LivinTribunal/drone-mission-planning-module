@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { SafetyZoneResponse } from "@/types/airport";
 import type { MapFeature, MapLayerConfig } from "@/types/map";
 
@@ -54,11 +54,7 @@ export default function SafetyZonesPanel({
           >
             {count}
           </span>
-          {collapsed ? (
-            <ChevronRight className="h-3.5 w-3.5 text-tv-text-muted" />
-          ) : (
-            <ChevronDown className="h-3.5 w-3.5 text-tv-text-muted" />
-          )}
+          <ChevronDown className={`h-3.5 w-3.5 text-tv-text-muted transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`} />
         </div>
       </button>
 

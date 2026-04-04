@@ -118,8 +118,8 @@ export default function AirportSelector() {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-full rounded-2xl border-2
-            border-tv-text-muted bg-tv-surface p-2 z-50"
+          className="absolute right-0 top-full mt-1 w-full rounded-2xl border
+            border-tv-border bg-tv-surface p-2 z-50"
         >
           {/* search bar */}
           <input

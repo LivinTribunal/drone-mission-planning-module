@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { AGLResponse, LHAResponse, SurfaceResponse } from "@/types/airport";
 import type { MapFeature, MapLayerConfig } from "@/types/map";
 
@@ -69,11 +69,7 @@ export default function AGLPanel({
           >
             {count}
           </span>
-          {collapsed ? (
-            <ChevronRight className="h-3.5 w-3.5 text-tv-text-muted" />
-          ) : (
-            <ChevronDown className="h-3.5 w-3.5 text-tv-text-muted" />
-          )}
+          <ChevronDown className={`h-3.5 w-3.5 text-tv-text-muted transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`} />
         </div>
       </button>
 
@@ -134,11 +130,7 @@ export default function AGLPanel({
                     </div>
 
                     {agl.lhas.length > 0 && (
-                      expanded ? (
-                        <ChevronUp className="h-3 w-3 text-tv-text-muted flex-shrink-0" />
-                      ) : (
-                        <ChevronDown className="h-3 w-3 text-tv-text-muted flex-shrink-0" />
-                      )
+                      <ChevronDown className={`h-3 w-3 text-tv-text-muted flex-shrink-0 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
                     )}
                   </button>
 

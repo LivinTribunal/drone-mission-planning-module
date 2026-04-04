@@ -6,7 +6,6 @@ import {
   MapPin,
   Battery,
   ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -39,11 +38,7 @@ export default function StatsPanel({
           className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
         >
           <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.estimatedStats")}</span>
-          {collapsed ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronUp className="h-4 w-4" />
-          )}
+          <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`} />
         </button>
         {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
         {!collapsed && (
@@ -107,11 +102,7 @@ export default function StatsPanel({
         className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
       >
         <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.estimatedStats")}</span>
-        {collapsed ? (
-          <ChevronDown className="h-4 w-4" />
-        ) : (
-          <ChevronUp className="h-4 w-4" />
-        )}
+        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`} />
       </button>
       {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
       {!collapsed && (

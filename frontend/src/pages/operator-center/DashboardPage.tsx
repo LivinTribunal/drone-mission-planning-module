@@ -24,6 +24,14 @@ import type { DroneProfileResponse } from "@/types/droneProfile";
 import CollapsibleSection from "@/components/common/CollapsibleSection";
 import Badge from "@/components/common/Badge";
 import Button from "@/components/common/Button";
+import RowActionButtons from "@/components/common/RowActionButtons";
+import {
+  ListPageContainer,
+  ListPageContent,
+  SearchBar,
+  Pagination,
+  SortIndicator,
+} from "@/components/common/ListPageLayout";
 import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
 import CreateMissionDialog from "@/components/mission/CreateMissionDialog";
@@ -38,36 +46,6 @@ type SortKey =
   | "missions_count";
 
 type SortDir = "asc" | "desc";
-
-const PAGE_SIZES = [10, 20, 50, 200] as const;
-
-/** build page indices with ellipsis when there are many pages. */
-function paginationRange(total: number, current: number): (number | "...")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
-  const pages: (number | "...")[] = [0];
-  const start = Math.max(1, current - 1);
-  const end = Math.min(total - 2, current + 1);
-  if (start > 1) pages.push("...");
-  for (let i = start; i <= end; i++) pages.push(i);
-  if (end < total - 2) pages.push("...");
-  pages.push(total - 1);
-  return pages;
-}
-
-function SortIndicator({
-  active,
-  dir,
-}: {
-  active: boolean;
-  dir: SortDir;
-}) {
-  if (!active) return null;
-  return (
-    <span className="ml-1 text-tv-accent">
-      {dir === "asc" ? "\u25B2" : "\u25BC"}
-    </span>
-  );
-}
 
 function AirportSelectionView() {
   const { selectAirport } = useAirport();
@@ -138,10 +116,7 @@ function AirportSelectionView() {
     });
   }, [filtered, sortKey, sortDir]);
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const paged = sorted.slice(page * pageSize, (page + 1) * pageSize);
-  const showFrom = sorted.length === 0 ? 0 : page * pageSize + 1;
-  const showTo = Math.min((page + 1) * pageSize, sorted.length);
 
   function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
     setSearch(e.target.value);
@@ -154,29 +129,15 @@ function AirportSelectionView() {
   }
 
   return (
-    <div className="flex flex-col items-center px-4 py-12">
-      <div className="flex items-center gap-3 w-full max-w-5xl mb-4">
-        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-tv-accent flex-shrink-0">
-          <svg className="h-5 w-5 text-tv-accent-text" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
-        <input
-          type="text"
-          value={search}
-          onChange={handleSearchChange}
-          placeholder={t("airportSelection.searchPlaceholder")}
-          className="flex-1 rounded-full border border-tv-border bg-tv-surface px-5 py-2.5
-            text-sm text-tv-text-primary placeholder:text-tv-text-muted
-            focus:outline-none focus:border-tv-accent"
-        />
-      </div>
+    <ListPageContainer>
+      <SearchBar
+        value={search}
+        onChange={handleSearchChange}
+        placeholder={t("airportSelection.searchPlaceholder")}
+        testId="dashboard-search"
+      />
 
-      <div className="w-full max-w-5xl rounded-2xl border border-tv-border bg-tv-surface overflow-hidden">
+      <ListPageContent className="rounded-2xl border border-tv-border bg-tv-surface overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <svg
@@ -261,54 +222,20 @@ function AirportSelectionView() {
           </table>
           </>
         )}
-      </div>
+      </ListPageContent>
 
       {/* pagination bar */}
       {!loading && !error && sorted.length > 0 && (
-        <div className="relative flex items-center justify-between w-full max-w-5xl pt-3">
-          <span className="absolute left-1/2 -translate-x-1/2 text-xs text-tv-text-secondary">
-            {t("airportSelection.showing", { from: showFrom, to: showTo, total: sorted.length })}
-          </span>
-          <div className="flex items-center gap-1">
-            {PAGE_SIZES.map((size) => (
-              <button
-                key={size}
-                onClick={() => handlePageSizeChange(size)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  pageSize === size
-                    ? "bg-tv-accent text-tv-accent-text"
-                    : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
-                }`}
-              >
-                {size}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1">
-            {paginationRange(totalPages, page).map((item, idx) =>
-              item === "..." ? (
-                <span key={`ellipsis-${idx}`} className="px-1 text-xs text-tv-text-muted">
-                  ...
-                </span>
-              ) : (
-                <button
-                  key={item}
-                  onClick={() => setPage(item as number)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    page === item
-                      ? "bg-tv-accent text-tv-accent-text"
-                      : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
-                  }`}
-                >
-                  {(item as number) + 1}
-                </button>
-              ),
-            )}
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={sorted.length}
+          onPageChange={setPage}
+          onPageSizeChange={handlePageSizeChange}
+          showingKey="airportSelection.showing"
+        />
       )}
-    </div>
+    </ListPageContainer>
   );
 }
 
@@ -437,38 +364,33 @@ function MissionListSection({
                       {mission.name}
                     </span>
                     <div className="flex items-center gap-1">
-                      <div className="flex items-center gap-0.5 mr-1">
-                        <button
-                          title={t("dashboard.mapAction")}
-                          onClick={(e) => { e.stopPropagation(); navigate(`/operator-center/missions/${mission.id}/map`); }}
-                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-tv-accent/15 transition-colors"
-                        >
-                          <Map className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
-                        </button>
-                        <button
-                          title={t("dashboard.exportAction")}
-                          onClick={(e) => { e.stopPropagation(); if (!terminal) navigate(`/operator-center/missions/${mission.id}/validation-export`); }}
-                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${terminal ? "opacity-40 cursor-not-allowed" : "hover:bg-tv-accent/15"}`}
-                          disabled={terminal}
-                        >
-                          <Download className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
-                        </button>
-                        <button
-                          title={t("dashboard.renameAction")}
-                          onClick={(e) => { e.stopPropagation(); setRenamingId(mission.id); setRenameValue(mission.name); }}
-                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-tv-accent/15 transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" style={{ color: "var(--tv-text-muted)" }} />
-                        </button>
-                        <button
-                          title={t("dashboard.deleteAction")}
-                          onClick={(e) => { e.stopPropagation(); if (!terminal) setDeletingId(mission.id); }}
-                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${terminal ? "opacity-40 cursor-not-allowed" : "hover:bg-tv-error/15"}`}
-                          disabled={terminal}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-tv-text-muted hover:text-tv-error" style={{ color: terminal ? "var(--tv-text-muted)" : undefined }} />
-                        </button>
-                      </div>
+                      <RowActionButtons
+                        actions={[
+                          {
+                            icon: Map,
+                            onClick: () => navigate(`/operator-center/missions/${mission.id}/map`),
+                            title: t("dashboard.mapAction"),
+                          },
+                          {
+                            icon: Download,
+                            onClick: () => navigate(`/operator-center/missions/${mission.id}/validation-export`),
+                            disabled: terminal,
+                            title: t("dashboard.exportAction"),
+                          },
+                          {
+                            icon: Pencil,
+                            onClick: () => { setRenamingId(mission.id); setRenameValue(mission.name); },
+                            title: t("dashboard.renameAction"),
+                          },
+                          {
+                            icon: Trash2,
+                            onClick: () => setDeletingId(mission.id),
+                            disabled: terminal,
+                            variant: "danger",
+                            title: t("dashboard.deleteAction"),
+                          },
+                        ]}
+                      />
                       <Badge status={mission.status} />
                     </div>
                   </div>

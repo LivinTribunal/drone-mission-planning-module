@@ -41,7 +41,7 @@ export default function InspectionListPanel({
         </span>
         <ChevronDown
           className={`h-3.5 w-3.5 text-tv-text-secondary transition-transform duration-200 ${
-            collapsed ? "-rotate-90" : ""
+            collapsed ? "" : "rotate-180"
           }`}
         />
       </button>

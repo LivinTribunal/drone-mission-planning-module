@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import FeatureInfoPanel from "@/components/common/FeatureInfoPanel";
 import type { MapFeature } from "@/types/map";
 import type { PointZ } from "@/types/common";
 
@@ -146,31 +147,10 @@ export default function PoiInfoPanel({
   }
 
   return (
-    <div
-      className="w-full rounded-2xl border border-tv-border bg-tv-bg flex-shrink-0"
-      data-testid="poi-info-panel"
-    >
-      <div className="flex items-center justify-between px-3 py-2">
-        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border text-xs font-semibold text-tv-text-primary">
-          {t("dashboard.poiInfo")}
-        </span>
-        <button
-          onClick={onClose}
-          className="rounded-full p-1 bg-tv-surface border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
-          aria-label={t("common.close")}
-        >
-          <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </button>
-      </div>
-      <div className="border-t border-tv-border px-3 pb-3 pt-2 space-y-1">
-        {renderContent()}
-      </div>
+    <div className="w-full flex-shrink-0" data-testid="poi-info-panel">
+      <FeatureInfoPanel title={t("dashboard.poiInfo")} onClose={onClose}>
+        <div className="space-y-1">{renderContent()}</div>
+      </FeatureInfoPanel>
     </div>
   );
 }
