@@ -171,7 +171,7 @@ describe("InspectionListPage", () => {
     /** verify add button shows the create template dialog. */
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("inspection-list-page")).toBeInTheDocument();
+      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
     });
     fireEvent.click(screen.getByText("coordinator.inspections.addNew"));
     await waitFor(() => {
