@@ -30,7 +30,7 @@ export default function MissionValidationPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext, setComputeContext, refreshMissions } =
+  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage } =
     useOutletContext<MissionTabOutletContext>();
 
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
@@ -95,6 +95,7 @@ export default function MissionValidationPage() {
       ]);
       setMission(missionData);
       setDroneProfiles(dpData.data);
+      updateMissionFromPage(missionData);
       refreshMissions();
 
       try {
@@ -113,7 +114,7 @@ export default function MissionValidationPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, refreshMissions]);
+  }, [id, refreshMissions, updateMissionFromPage]);
 
   useEffect(() => {
     fetchData();
@@ -353,7 +354,7 @@ export default function MissionValidationPage() {
                     !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  2D
+                  {t("common.2d")}
                 </button>
                 <button
                   onClick={() => setIs3D(true)}
@@ -361,7 +362,7 @@ export default function MissionValidationPage() {
                     is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  3D
+                  {t("common.3d")}
                 </button>
               </div>
               <TerrainToggle

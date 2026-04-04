@@ -7,6 +7,7 @@ const mockNavigate = vi.fn();
 const mockSetSaveContext = vi.fn();
 const mockSetComputeContext = vi.fn();
 const mockRefreshMissions = vi.fn();
+const mockUpdateMissionFromPage = vi.fn();
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
   return {
@@ -16,6 +17,7 @@ vi.mock("react-router-dom", async () => {
       setSaveContext: mockSetSaveContext,
       setComputeContext: mockSetComputeContext,
       refreshMissions: mockRefreshMissions,
+      updateMissionFromPage: mockUpdateMissionFromPage,
     }),
   };
 });

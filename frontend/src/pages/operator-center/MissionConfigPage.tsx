@@ -58,7 +58,7 @@ export default function MissionConfigPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext, setComputeContext, refreshMissions } =
+  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage } =
     useOutletContext<MissionTabOutletContext>();
 
   // core data
@@ -159,21 +159,24 @@ export default function MissionConfigPage() {
     notificationTimer.current = setTimeout(() => setNotification(null), 4000);
   }
 
-  function updateMissionState(fresh: MissionDetailResponse, previousStatus?: string) {
-    /** update local mission state, detect regression, and refresh nav. */
-    if (previousStatus) {
-      const oldIdx = STATUS_ORDER.indexOf(previousStatus);
-      const newIdx = STATUS_ORDER.indexOf(fresh.status);
-      if (newIdx < oldIdx) {
-        // status regressed - keep stale flight plan visible with warning
-        showNotification(
-          t("mission.config.statusRegressed", { status: fresh.status }),
-        );
+  const updateMissionState = useCallback(
+    (fresh: MissionDetailResponse, previousStatus?: string) => {
+      /** update local mission state, detect regression, and refresh nav. */
+      if (previousStatus) {
+        const oldIdx = STATUS_ORDER.indexOf(previousStatus);
+        const newIdx = STATUS_ORDER.indexOf(fresh.status);
+        if (newIdx < oldIdx) {
+          showNotification(
+            t("mission.config.statusRegressed", { status: fresh.status }),
+          );
+        }
       }
-    }
-    setMission(fresh);
-    refreshMissions();
-  }
+      setMission(fresh);
+      updateMissionFromPage(fresh);
+      refreshMissions();
+    },
+    [updateMissionFromPage, refreshMissions, t],
+  );
 
   // fetch mission data
   const fetchData = useCallback(async () => {
@@ -223,9 +226,8 @@ export default function MissionConfigPage() {
         setFlightPlan(fp);
 
         // load warnings from existing flight plan
-        if (fp.validation_result?.violations?.length) {
-          setWarnings(fp.validation_result.violations);
-        }
+        const violations = fp.validation_result?.violations ?? [];
+        setWarnings(violations.length > 0 ? violations : null);
       } catch (err) {
         if (!isAxiosError(err) || err.response?.status !== 404) throw err;
         setFlightPlan(null);
@@ -292,7 +294,7 @@ export default function MissionConfigPage() {
     } finally {
       setSaving(false);
     }
-  }, [id, mission, missionDirty, inspectionDirty, t]);
+  }, [id, mission, missionDirty, inspectionDirty, t, updateMissionState]);
 
   // wire up save context to tab nav
   useEffect(() => {
@@ -783,7 +785,7 @@ export default function MissionConfigPage() {
                     !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  2D
+                  {t("common.2d")}
                 </button>
                 <button
                   onClick={() => setIs3D(true)}
@@ -791,7 +793,7 @@ export default function MissionConfigPage() {
                     is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
                   }`}
                 >
-                  3D
+                  {t("common.3d")}
                 </button>
               </div>
               <TerrainToggle mode={terrainMode} onToggle={setTerrainMode} inline />
