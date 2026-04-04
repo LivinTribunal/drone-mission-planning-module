@@ -128,6 +128,7 @@ export interface AirportMapProps {
   headingOrigin?: [number, number] | null;
   isHeadingDrawing?: boolean;
   onWaypointDrag?: (waypointId: string, newPosition: [number, number, number]) => void;
+  onInfraPointDrag?: (featureType: "agl" | "lha", featureId: string, newPosition: [number, number, number]) => void;
   zoomPercent?: number;
   onZoomChange?: (percent: number) => void;
   focusFeature?: MapFeature | null;

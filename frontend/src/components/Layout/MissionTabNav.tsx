@@ -360,7 +360,7 @@ export default function MissionTabNav() {
                   ? (computeCtx.tooltip ?? t("mission.config.recomputeTooltip"))
                   : undefined
               }
-              className={`flex items-center justify-center gap-2 w-[280px] shrink h-11 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
+              className={`flex items-center justify-center gap-2 w-[280px] flex-shrink-0 h-11 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
                 computeCtx.variant === "secondary"
                   ? "border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover"
                   : computeCtx.isComputing

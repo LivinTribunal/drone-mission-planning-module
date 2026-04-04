@@ -780,7 +780,8 @@
       "surface": "Ground Surface",
       "createSuccess": "Created {{type}}: {{name}}",
       "createError": "Failed to create feature",
-      "selectSurface": "Select a surface"
+      "selectSurface": "Select a surface",
+      "area": "Area"
     },
     "geoJsonEditor": {
       "title": "GeoJSON Editor",
