@@ -242,7 +242,6 @@ export default function AirportEditPage() {
       if (update.position) dirtyData.position = update.position;
       if (update.radius != null) dirtyData.radius = update.radius;
       if (update.width != null) dirtyData.width = update.width;
-      if (update.taxiway_width != null) dirtyData.taxiway_width = update.taxiway_width;
       if (update.length != null) dirtyData.length = update.length;
       if (update.heading != null) dirtyData.heading = update.heading;
       markDirty(featureType, featureId, "update", dirtyData);
@@ -390,7 +389,6 @@ export default function AirportEditPage() {
           heading: drawnHeading != null ? Math.round(drawnHeading * 10) / 10 : undefined,
           length: drawnLength != null ? Math.round(drawnLength * 100) / 100 : undefined,
           width: entityType === "runway" ? computedWidth : undefined,
-          taxiway_width: entityType === "taxiway" ? computedWidth : undefined,
         });
       } else if (entityType.startsWith("safety_zone_")) {
         if (!pendingGeometry) throw new Error("missing geometry");

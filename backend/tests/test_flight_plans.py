@@ -57,6 +57,36 @@ def fp_mission_id(client, fp_airport_id, fp_drone_id):
     return r.json()["id"]
 
 
+def test_generate_trajectory_without_coordinates(client, fp_airport_id):
+    """generate trajectory returns 400 when takeoff/landing coordinates are missing."""
+    r = client.post(
+        "/api/v1/missions",
+        json={"name": "No Coords Mission", "airport_id": fp_airport_id},
+    )
+    mission_id = r.json()["id"]
+
+    r = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert r.status_code == 400
+    assert "Takeoff/landing coordinates must be set" in r.json()["detail"]
+
+
+def test_generate_trajectory_without_landing_coordinate(client, fp_airport_id):
+    """generate trajectory returns 400 when only takeoff is set."""
+    r = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "No Landing Mission",
+            "airport_id": fp_airport_id,
+            "takeoff_coordinate": {"type": "Point", "coordinates": [18.11, 49.69, 260.0]},
+        },
+    )
+    mission_id = r.json()["id"]
+
+    r = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert r.status_code == 400
+    assert "Takeoff/landing coordinates must be set" in r.json()["detail"]
+
+
 def test_batch_update_no_flight_plan(client, fp_mission_id):
     """batch update returns 404 when no flight plan exists."""
     r = client.put(

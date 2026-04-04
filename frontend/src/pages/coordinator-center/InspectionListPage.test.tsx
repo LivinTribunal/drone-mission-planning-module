@@ -29,7 +29,6 @@ const mockAirportDetail = {
       width: 45,
       threshold_position: null,
       end_position: null,
-      taxiway_width: null,
       agls: [
         {
           id: "agl-1",

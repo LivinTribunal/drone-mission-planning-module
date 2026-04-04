@@ -36,6 +36,7 @@ export interface ComputeContext {
   canCompute: boolean;
   isComputing: boolean;
   label?: string;
+  tooltip?: string;
   variant?: "primary" | "secondary";
   icon?: "upload";
 }
@@ -277,7 +278,7 @@ export default function MissionTabNav() {
           </div>
 
             {/* dropdown via portal to avoid overflow-hidden clipping */}
-            {missionDropdownOpen && missions.length > 0 && selectorRef.current && createPortal(
+            {missionDropdownOpen && selectorRef.current && createPortal(
               <div
                 ref={portalDropdownRef}
                 className="fixed z-50 bg-tv-surface border-2 border-tv-text-muted rounded-2xl p-2"
@@ -356,7 +357,7 @@ export default function MissionTabNav() {
               disabled={!computeCtx.canCompute || computeCtx.isComputing}
               title={
                 !computeCtx.canCompute && !computeCtx.isComputing
-                  ? t("mission.config.recomputeTooltip")
+                  ? (computeCtx.tooltip ?? t("mission.config.recomputeTooltip"))
                   : undefined
               }
               className={`flex items-center justify-center gap-2 w-[280px] shrink h-11 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${

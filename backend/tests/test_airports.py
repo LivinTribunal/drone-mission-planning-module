@@ -12,6 +12,7 @@ from tests.data.airports import (
 
 # Tests
 def test_create_airport(client):
+    """create an airport and verify response."""
     r = client.post("/api/v1/airports", json=AIRPORT_PAYLOAD)
     assert r.status_code == 201
     data = r.json()
@@ -21,6 +22,7 @@ def test_create_airport(client):
 
 
 def test_list_airports(client):
+    """list airports and verify pagination metadata."""
     r = client.get("/api/v1/airports")
     assert r.status_code == 200
     body = r.json()
@@ -29,6 +31,7 @@ def test_list_airports(client):
 
 
 def test_get_airport_detail(client):
+    """fetch airport detail with nested surfaces, obstacles, safety zones."""
     airports = client.get("/api/v1/airports").json()["data"]
     airport_id = airports[0]["id"]
 
@@ -41,6 +44,7 @@ def test_get_airport_detail(client):
 
 
 def test_update_airport(client):
+    """update airport name and verify response."""
     airports = client.get("/api/v1/airports").json()["data"]
     airport_id = airports[0]["id"]
 
@@ -50,6 +54,7 @@ def test_update_airport(client):
 
 
 def test_create_surface(client):
+    """create a surface under an airport."""
     airports = client.get("/api/v1/airports").json()["data"]
     airport_id = airports[0]["id"]
 
@@ -59,6 +64,7 @@ def test_create_surface(client):
 
 
 def test_create_obstacle(client):
+    """create an obstacle under an airport."""
     airports = client.get("/api/v1/airports").json()["data"]
     airport_id = airports[0]["id"]
 
@@ -68,6 +74,7 @@ def test_create_obstacle(client):
 
 
 def test_create_safety_zone(client):
+    """create a safety zone under an airport."""
     airports = client.get("/api/v1/airports").json()["data"]
     airport_id = airports[0]["id"]
 
@@ -77,6 +84,7 @@ def test_create_safety_zone(client):
 
 
 def test_create_agl_and_lha(client):
+    """create an agl and nested lha under a surface."""
     airports = client.get("/api/v1/airports").json()["data"]
     airport_id = airports[0]["id"]
 
@@ -95,6 +103,22 @@ def test_create_agl_and_lha(client):
     assert r.json()["unit_number"] == 1
 
 
+def test_surface_response_excludes_taxiway_width(client):
+    """surface response should not contain taxiway_width field."""
+    # create airport + surface to avoid ordering dependency
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LKTW"},
+    ).json()
+
+    client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD)
+    surfaces = client.get(f"/api/v1/airports/{apt['id']}/surfaces").json()["data"]
+    assert len(surfaces) >= 1
+
+    for surface in surfaces:
+        assert "taxiway_width" not in surface
+
+
 def test_create_airport_invalid_icao(client):
     """reject airports with invalid ICAO codes."""
     invalid_codes = ["lkpr", "LKP", "LK12", "LKPRX"]
@@ -105,6 +129,7 @@ def test_create_airport_invalid_icao(client):
 
 
 def test_airports_summary(client):
+    """fetch airports summary with counts."""
     r = client.get("/api/v1/airports/summary")
     assert r.status_code == 200
     body = r.json()
@@ -118,6 +143,7 @@ def test_airports_summary(client):
 
 
 def test_delete_airport(client):
+    """delete an airport and verify 404 on re-fetch."""
     r = client.post("/api/v1/airports", json=THROWAWAY_AIRPORT_PAYLOAD)
     assert r.status_code == 201
     airport_id = r.json()["id"]
