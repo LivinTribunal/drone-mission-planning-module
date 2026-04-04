@@ -40,6 +40,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
   const prevAirportIdRef = useRef<string | undefined>(selectedAirport?.id);
   const initialMountRef = useRef(true);
+  const pathnameRef = useRef(location.pathname);
 
   // persist selected mission id to localStorage
   const setSelectedMission = useCallback(
@@ -107,6 +108,11 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     refreshMissions();
   }, [refreshMissions]);
 
+  // keep pathname ref in sync for airport-change effect
+  useEffect(() => {
+    pathnameRef.current = location.pathname;
+  }, [location.pathname]);
+
   // FIX 10: when airport changes (not initial mount), clear mission and redirect
   useEffect(() => {
     const prevId = prevAirportIdRef.current;
@@ -120,11 +126,11 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
     if (prevId && prevId !== newId) {
       clearMission();
-      if (location.pathname.includes("/missions/")) {
+      if (pathnameRef.current.includes("/missions/")) {
         navigate("/operator-center/dashboard", { replace: true });
       }
     }
-  }, [selectedAirport?.id, clearMission, location.pathname, navigate]);
+  }, [selectedAirport?.id, clearMission, navigate]);
 
   // FIX 3: rehydrate selected mission from localStorage on mount
   const rehydratedRef = useRef(false);

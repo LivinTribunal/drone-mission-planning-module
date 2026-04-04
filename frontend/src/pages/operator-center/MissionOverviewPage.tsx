@@ -92,7 +92,7 @@ export default function MissionOverviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, refreshMissions]);
+  }, [id, refreshMissions, updateMissionFromPage]);
 
   useEffect(() => {
     fetchData();

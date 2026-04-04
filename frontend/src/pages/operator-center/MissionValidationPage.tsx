@@ -114,7 +114,7 @@ export default function MissionValidationPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, refreshMissions]);
+  }, [id, refreshMissions, updateMissionFromPage]);
 
   useEffect(() => {
     fetchData();

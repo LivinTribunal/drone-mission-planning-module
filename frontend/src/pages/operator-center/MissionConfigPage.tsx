@@ -159,21 +159,24 @@ export default function MissionConfigPage() {
     notificationTimer.current = setTimeout(() => setNotification(null), 4000);
   }
 
-  function updateMissionState(fresh: MissionDetailResponse, previousStatus?: string) {
-    /** update local mission state, detect regression, and refresh nav. */
-    if (previousStatus) {
-      const oldIdx = STATUS_ORDER.indexOf(previousStatus);
-      const newIdx = STATUS_ORDER.indexOf(fresh.status);
-      if (newIdx < oldIdx) {
-        showNotification(
-          t("mission.config.statusRegressed", { status: fresh.status }),
-        );
+  const updateMissionState = useCallback(
+    (fresh: MissionDetailResponse, previousStatus?: string) => {
+      /** update local mission state, detect regression, and refresh nav. */
+      if (previousStatus) {
+        const oldIdx = STATUS_ORDER.indexOf(previousStatus);
+        const newIdx = STATUS_ORDER.indexOf(fresh.status);
+        if (newIdx < oldIdx) {
+          showNotification(
+            t("mission.config.statusRegressed", { status: fresh.status }),
+          );
+        }
       }
-    }
-    setMission(fresh);
-    updateMissionFromPage(fresh);
-    refreshMissions();
-  }
+      setMission(fresh);
+      updateMissionFromPage(fresh);
+      refreshMissions();
+    },
+    [updateMissionFromPage, refreshMissions, t],
+  );
 
   // fetch mission data
   const fetchData = useCallback(async () => {
@@ -292,7 +295,7 @@ export default function MissionConfigPage() {
     } finally {
       setSaving(false);
     }
-  }, [id, mission, missionDirty, inspectionDirty, t]);
+  }, [id, mission, missionDirty, inspectionDirty, t, updateMissionState]);
 
   // wire up save context to tab nav
   useEffect(() => {

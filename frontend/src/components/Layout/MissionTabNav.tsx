@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -92,6 +92,7 @@ export default function MissionTabNav() {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [missionSearch, setMissionSearch] = useState("");
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const selectorRef = useRef<HTMLDivElement>(null);
   const portalDropdownRef = useRef<HTMLDivElement>(null);
@@ -103,6 +104,26 @@ export default function MissionTabNav() {
     const q = missionSearch.toLowerCase();
     return missions.filter((m) => m.name.toLowerCase().includes(q));
   }, [missions, missionSearch]);
+
+  // compute portal dropdown position and keep it updated on scroll/resize
+  useLayoutEffect(() => {
+    if (!missionDropdownOpen || !selectorRef.current) {
+      setDropdownPos(null);
+      return;
+    }
+    function update() {
+      if (!selectorRef.current) return;
+      const rect = selectorRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [missionDropdownOpen]);
 
   // focus search input when dropdown opens
   useEffect(() => {
@@ -259,14 +280,14 @@ export default function MissionTabNav() {
           </div>
 
             {/* dropdown via portal to avoid overflow-hidden clipping */}
-            {missionDropdownOpen && missions.length > 0 && selectorRef.current && createPortal(
+            {missionDropdownOpen && missions.length > 0 && dropdownPos && createPortal(
               <div
                 ref={portalDropdownRef}
                 className="fixed z-50 bg-tv-surface border-2 border-tv-text-muted rounded-2xl p-2"
                 style={{
-                  top: selectorRef.current.getBoundingClientRect().bottom + 4,
-                  left: selectorRef.current.getBoundingClientRect().left,
-                  width: selectorRef.current.getBoundingClientRect().width,
+                  top: dropdownPos.top,
+                  left: dropdownPos.left,
+                  width: dropdownPos.width,
                 }}
               >
                 <input

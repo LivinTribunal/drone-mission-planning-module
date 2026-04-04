@@ -349,7 +349,7 @@ export default function MissionMapPage() {
         return;
       }
     },
-    [activeTool, id, mission, measure, refreshMissions, updateMissionFromPage, resetTool, t],
+    [activeTool, id, mission, measure, refreshMissions, updateMissionFromPage, resetTool, t, airportDetail],
   );
 
   // handle tool change
