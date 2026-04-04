@@ -538,6 +538,8 @@ export default function MissionConfigPage() {
   missionDirtyRef.current = missionDirty;
   const missionRef = useRef(mission);
   missionRef.current = mission;
+  const airportDetailRef = useRef(airportDetail);
+  airportDetailRef.current = airportDetail;
 
   const handleMapClick = useCallback(
     (lngLat: { lng: number; lat: number }) => {
@@ -556,7 +558,7 @@ export default function MissionConfigPage() {
         target === "takeoff"
           ? dirty.takeoff_coordinate ?? m?.takeoff_coordinate
           : dirty.landing_coordinate ?? m?.landing_coordinate;
-      const alt = existing ? existing.coordinates[2] : (airportDetail?.elevation ?? 0);
+      const alt = existing ? existing.coordinates[2] : (airportDetailRef.current?.elevation ?? 0);
 
       handleMissionChange({
         [key]: {

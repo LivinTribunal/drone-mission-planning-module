@@ -88,7 +88,7 @@ export default function ObstaclesPanel({
                         color: OBSTACLE_COLORS[obstacle.type] ?? "#6b6b6b",
                       }}
                     >
-                      {obstacle.type}
+                      {t(`airportEdit.obstacleTypes.${obstacle.type.toLowerCase()}`)}
                     </span>
                   </div>
                   <p className="text-[10px] text-tv-text-secondary mt-0.5">

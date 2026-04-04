@@ -79,7 +79,7 @@ export default function CoordinateInput({
 
   function handleChange(field: "lat" | "lon" | "alt", raw: string) {
     /** update local string state on each keystroke. */
-    if (raw !== "" && isNaN(parseFloat(raw))) return;
+    if (raw !== "" && raw !== "-" && isNaN(parseFloat(raw))) return;
 
     const newLatStr = field === "lat" ? raw : latStr;
     const newLonStr = field === "lon" ? raw : lonStr;
@@ -93,11 +93,17 @@ export default function CoordinateInput({
   }
 
   function handleBlur(field: "lat" | "lon" | "alt") {
-    /** commit on blur to handle partial clears. */
-    const newLatStr = field === "lat" ? latStr : latStr;
-    const newLonStr = field === "lon" ? lonStr : lonStr;
-    const newAltStr = field === "alt" ? altStr : altStr;
-    commitValue(newLatStr, newLonStr, newAltStr);
+    /** reset partial strings (lone "-" or ".") on blur. */
+    const isPartial = (s: string) => s === "-" || s === "." || s === "-.";
+    const cleanLat = field === "lat" && isPartial(latStr) ? "" : latStr;
+    const cleanLon = field === "lon" && isPartial(lonStr) ? "" : lonStr;
+    const cleanAlt = field === "alt" && isPartial(altStr) ? "" : altStr;
+
+    if (field === "lat" && isPartial(latStr)) setLatStr("");
+    if (field === "lon" && isPartial(lonStr)) setLonStr("");
+    if (field === "alt" && isPartial(altStr)) setAltStr("");
+
+    commitValue(cleanLat, cleanLon, cleanAlt);
   }
 
   return (
