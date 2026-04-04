@@ -117,9 +117,9 @@ export default function GroundSurfacesPanel({
                         {surface.surface_type === "RUNWAY" ? t("airport.runway") : t("airport.taxiway")}
                       </span>
                     </div>
-                    {surface.length != null && (surface.width != null || surface.taxiway_width != null) && (
+                    {surface.length != null && surface.width != null && (
                       <p className="text-[10px] text-tv-text-secondary mt-0.5">
-                        {surface.length}m × {surface.width ?? surface.taxiway_width}m
+                        {surface.length}m × {surface.width}m
                       </p>
                     )}
                   </div>

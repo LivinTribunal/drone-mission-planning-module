@@ -15,7 +15,6 @@ const baseSurface: SurfaceResponse = {
   boundary: null,
   threshold_position: null,
   end_position: null,
-  taxiway_width: null,
   agls: [
     {
       id: "agl1",

@@ -1,5 +1,6 @@
 import type { Map as MaplibreMap } from "maplibre-gl";
 import type { SurfaceResponse } from "@/types/airport";
+import { DEFAULT_TAXIWAY_WIDTH_M } from "@/constants/surface";
 
 export const RUNWAY_SOURCE = "runways";
 export const RUNWAY_POLYGON_SOURCE = "runways-polygon";
@@ -52,8 +53,9 @@ export function bufferLineString(
     const dxM = dx * mPerDegLon;
     const dyM = dy * mPerDegLat;
     const lenM = Math.sqrt(dxM * dxM + dyM * dyM);
+
+    // coincident points - reuse previous offset to keep left/right arrays aligned
     if (lenM === 0) {
-      // zero-length segment - duplicate neighbor offset to keep arrays aligned
       if (left.length > 0) {
         left.push(left[left.length - 1]);
         right.push(right[right.length - 1]);
@@ -196,7 +198,7 @@ export function addSurfaceLayers(
         properties: {
           id: t.id,
           identifier: t.identifier,
-          width: t.taxiway_width ?? 20,
+          width: DEFAULT_TAXIWAY_WIDTH_M,
           entityType: "surface",
         },
         geometry: t.geometry,
@@ -220,7 +222,7 @@ export function addSurfaceLayers(
           },
           geometry: t.boundary ?? {
             type: "Polygon" as const,
-            coordinates: [bufferLineString(t.geometry.coordinates, t.taxiway_width ?? 20)],
+            coordinates: [bufferLineString(t.geometry.coordinates, DEFAULT_TAXIWAY_WIDTH_M)],
           },
         })),
     },

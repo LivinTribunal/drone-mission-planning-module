@@ -28,7 +28,6 @@ vi.mock("@/api/airports", () => ({
         width: 45,
         threshold_position: null,
         end_position: null,
-        taxiway_width: null,
         agls: [
           {
             id: "agl-1",
@@ -65,7 +64,6 @@ vi.mock("@/api/airports", () => ({
         width: 23,
         threshold_position: null,
         end_position: null,
-        taxiway_width: 23,
         agls: [],
       },
     ],
