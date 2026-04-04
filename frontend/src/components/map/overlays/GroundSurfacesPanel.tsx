@@ -95,7 +95,10 @@ export default function GroundSurfacesPanel({
                         <line x1="5" y1="1" x2="5" y2="9" stroke="white" strokeWidth="0.8" strokeDasharray="1.5 1" />
                       </>
                     ) : (
-                      <rect x="0" y="2" width="10" height="6" rx="1" fill="currentColor" />
+                      <>
+                        <rect x="1" y="0" width="8" height="10" rx="1" fill="#c8a83c" />
+                        <line x1="5" y1="1" x2="5" y2="9" stroke="#1a1a1a" strokeWidth="0.7" strokeDasharray="1.5 1" />
+                      </>
                     )}
                   </svg>
 

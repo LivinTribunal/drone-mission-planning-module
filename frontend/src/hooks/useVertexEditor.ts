@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import type maplibregl from "maplibre-gl";
 import type { MapFeature } from "@/types/map";
-import { polygonCentroid, haversineDistance, circleToPolygon, extractCenterline } from "@/utils/geo";
+import { polygonCentroid, haversineDistance, circleToPolygon, extractCenterline, computeBearing, EARTH_RADIUS } from "@/utils/geo";
 import { bufferLineString } from "@/components/map/layers/surfaceLayers";
 import { DEFAULT_TAXIWAY_WIDTH_M } from "@/constants/surface";
 
@@ -143,7 +143,7 @@ function waitForStyleLoaded(map: maplibregl.Map, callback: () => void): () => vo
 /** compute edge point for circle radius handle (east of center). */
 function radiusEdgePoint(center: [number, number], radiusMeters: number): [number, number] {
   const [lng, lat] = center;
-  const R = 6371000;
+  const R = EARTH_RADIUS;
   const dLng = (radiusMeters / (R * Math.cos((lat * Math.PI) / 180))) * (180 / Math.PI);
   return [lng + dLng, lat];
 }
@@ -277,9 +277,9 @@ export default function useVertexEditor(
         }
       }
       if (centerline.length < 2) return;
-      const dLng = centerline[1][0] - centerline[0][0];
-      const dLat = centerline[1][1] - centerline[0][1];
-      const heading = ((Math.atan2(dLng, dLat) * 180) / Math.PI + 360) % 360;
+      const heading = computeBearing(
+        centerline[0][0], centerline[0][1], centerline[1][0], centerline[1][1],
+      );
 
       const isTaxiway = feat.data.surface_type === "TAXIWAY";
       const roundedWidth = width != null ? Math.round(width * 100) / 100 : undefined;

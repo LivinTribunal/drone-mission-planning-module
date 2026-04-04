@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, RotateCcw } from "lucide-react";
 import Input from "@/components/common/Input";
 import type { SurfaceResponse, AGLResponse } from "@/types/airport";
 
@@ -29,6 +29,10 @@ interface CreationFormProps {
   surfaces: SurfaceResponse[];
   onCancel: () => void;
   onCreate: (entityType: EntityType, data: Record<string, unknown>) => Promise<void>;
+  prefilledWidth?: number;
+  prefilledLength?: number;
+  prefilledHeading?: number;
+  prefilledArea?: number;
 }
 
 const POLYGON_CATEGORIES: { value: CategoryPolygon; labelKey: string }[] = [
@@ -75,6 +79,10 @@ export default function CreationForm({
   surfaces,
   onCancel,
   onCreate,
+  prefilledWidth,
+  prefilledLength,
+  prefilledHeading,
+  prefilledArea,
 }: CreationFormProps) {
   /** creation form shown after drawing a geometry - two-tier type selection, fill fields, create entity. */
   const { t } = useTranslation();
@@ -85,9 +93,9 @@ export default function CreationForm({
 
   // form field state
   const [name, setName] = useState("");
-  const [heading, setHeading] = useState("");
-  const [length, setLength] = useState("");
-  const [width, setWidth] = useState("");
+  const [heading, setHeading] = useState(prefilledHeading != null ? String(Math.round(prefilledHeading * 10) / 10) : "");
+  const [length, setLength] = useState(prefilledLength != null ? String(Math.round(prefilledLength * 100) / 100) : "");
+  const [width, setWidth] = useState(prefilledWidth != null ? String(Math.round(prefilledWidth * 100) / 100) : "");
   const [altFloor, setAltFloor] = useState("0");
   const [altCeiling, setAltCeiling] = useState("");
   const [isActive, setIsActive] = useState(true);
@@ -217,9 +225,9 @@ export default function CreationForm({
     ? effectiveEntityType.replace("safety_zone_", "").toUpperCase().replace("NO_FLY", "TEMPORARY_NO_FLY")
     : "";
 
-  const canSubmit = effectiveEntityType && name.trim() && (
-    effectiveEntityType !== "lha" || lhaAglId
-  );
+  const canSubmit = effectiveEntityType && name.trim()
+    && (effectiveEntityType !== "lha" || lhaAglId)
+    && (effectiveEntityType !== "agl" || surfaceId);
 
   return (
     <div
@@ -322,6 +330,37 @@ export default function CreationForm({
                   value={heading}
                   onChange={(e) => setHeading(e.target.value)}
                 />
+                {heading && (
+                  <div className="flex items-center gap-2">
+                    <svg className="h-6 w-6 flex-shrink-0" viewBox="0 0 24 24">
+                      <line
+                        x1="12" y1="20" x2="12" y2="4"
+                        stroke="#3bbb3b" strokeWidth="2" strokeLinecap="round"
+                        transform={`rotate(${parseFloat(heading)}, 12, 12)`}
+                      />
+                      <polygon
+                        points="12,2 9,8 15,8"
+                        fill="#3bbb3b"
+                        transform={`rotate(${parseFloat(heading)}, 12, 12)`}
+                      />
+                    </svg>
+                    <span className="text-[10px] text-tv-text-muted">
+                      {Math.round(parseFloat(heading) * 10) / 10}°
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = parseFloat(heading);
+                        if (!isNaN(current)) setHeading(String((current + 180) % 360));
+                      }}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+                      title={t("coordinator.detail.oppositeHeading")}
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      {t("coordinator.detail.opposite")}
+                    </button>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-1.5">
                   <Input
                     id="create-length"
@@ -381,6 +420,11 @@ export default function CreationForm({
                   />
                   {t("coordinator.creation.active")}
                 </label>
+                {prefilledArea != null && (
+                  <p className="text-[10px] text-tv-text-muted">
+                    {t("coordinator.creation.area")}: {Math.round(prefilledArea)} m²
+                  </p>
+                )}
               </>
             )}
 
@@ -408,6 +452,11 @@ export default function CreationForm({
                     {t("coordinator.creation.position")}:{" "}
                     {(circleCenter ?? pointPosition)![1].toFixed(6)},{" "}
                     {(circleCenter ?? pointPosition)![0].toFixed(6)}
+                  </p>
+                )}
+                {prefilledArea != null && (
+                  <p className="text-[10px] text-tv-text-muted">
+                    {t("coordinator.creation.area")}: {Math.round(prefilledArea)} m²
                   </p>
                 )}
               </>

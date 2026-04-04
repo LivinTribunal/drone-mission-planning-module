@@ -60,39 +60,49 @@ export default function AirportSelector() {
   }, [airports, search]);
 
   return (
-    <div ref={ref} className="relative min-w-[280px]">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 rounded-full px-4 h-11 text-sm font-medium
-          bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-        data-testid="airport-selector"
-      >
-        <span className="flex-1 text-left truncate">
-          {selectedAirport
-            ? `${selectedAirport.icao_code} \u2013 ${selectedAirport.name}`
-            : t("nav.chooseAirport")}
-        </span>
-        {selectedAirport && (
-          <span
-            className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-tv-accent-text flex-shrink-0"
-            style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
-          >
-            {selectedAirport.icao_code}
+    <div ref={ref} className="relative w-[280px] flex-shrink-0">
+      <div className="relative flex items-center">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex w-full items-center gap-2 rounded-full px-4 h-11 text-sm font-medium
+            bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors
+            pr-10"
+          data-testid="airport-selector"
+        >
+          <span className="flex-1 text-left truncate">
+            {selectedAirport
+              ? `${selectedAirport.icao_code} \u2013 ${selectedAirport.name}`
+              : t("nav.chooseAirport")}
           </span>
-        )}
+          {selectedAirport && (
+            <span
+              className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-tv-accent-text flex-shrink-0"
+              style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
+            >
+              {selectedAirport.icao_code}
+            </span>
+          )}
+          <svg
+            className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
         {selectedAirport && (
-          <span
-            role="button"
-            tabIndex={0}
+          <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               clearAirport();
             }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); clearAirport(); }
-            }}
-            className="flex h-5 w-5 items-center justify-center rounded-full
-              bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors cursor-pointer"
+            className="absolute right-12 flex h-5 w-5 items-center justify-center rounded-full
+              bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors cursor-pointer z-10"
             aria-label="Clear airport"
           >
             <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
@@ -102,20 +112,9 @@ export default function AirportSelector() {
                 clipRule="evenodd"
               />
             </svg>
-          </span>
+          </button>
         )}
-        <svg
-          className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fillRule="evenodd"
-            d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-            clipRule="evenodd"
-          />
-        </svg>
-      </button>
+      </div>
 
       {open && (
         <div

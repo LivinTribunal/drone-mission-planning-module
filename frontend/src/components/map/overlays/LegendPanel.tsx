@@ -5,6 +5,8 @@ import type { MapLayerConfig } from "@/types/map";
 
 type SwatchType =
   | "rectangle"
+  | "runway"
+  | "taxiway"
   | "circle"
   | "circle-outline"
   | "circle-border"
@@ -28,8 +30,8 @@ interface LegendItem {
 
 // ground surfaces
 const surfaceItems: LegendItem[] = [
-  { key: "runway", i18nKey: "dashboard.runways", swatch: "rectangle", color: "#4a4a4a" },
-  { key: "taxiway", i18nKey: "dashboard.taxiways", swatch: "rectangle", color: "#3a5a3a" },
+  { key: "runway", i18nKey: "dashboard.runways", swatch: "runway", color: "#4a4a4a" },
+  { key: "taxiway", i18nKey: "dashboard.taxiways", swatch: "taxiway", color: "#c8a83c" },
 ];
 
 // safety zones - crosshatched swatches
@@ -104,6 +106,26 @@ function Swatch({ item }: { item: LegendItem }) {
         className={`inline-block ${s} rounded-sm`}
         style={{ backgroundColor: item.color }}
       />
+    );
+  }
+
+  // runway - gray rectangle with white dashed centerline
+  if (item.swatch === "runway") {
+    return (
+      <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 10 10">
+        <rect x="1" y="0" width="8" height="10" rx="1" fill={item.color} />
+        <line x1="5" y1="1" x2="5" y2="9" stroke="white" strokeWidth="0.8" strokeDasharray="1.5 1" />
+      </svg>
+    );
+  }
+
+  // taxiway - yellowish rectangle with black dashed centerline (vertical like runway)
+  if (item.swatch === "taxiway") {
+    return (
+      <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 10 10">
+        <rect x="1" y="0" width="8" height="10" rx="1" fill={item.color} />
+        <line x1="5" y1="1" x2="5" y2="9" stroke="#1a1a1a" strokeWidth="0.7" strokeDasharray="1.5 1" />
+      </svg>
     );
   }
 
