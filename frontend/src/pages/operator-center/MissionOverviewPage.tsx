@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
-import { isAxiosError } from "axios";
+import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
 import { getMission, getFlightPlan, generateTrajectory } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";

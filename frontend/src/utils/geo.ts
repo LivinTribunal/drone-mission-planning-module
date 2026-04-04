@@ -1,4 +1,5 @@
-const R = 6371000;
+export const EARTH_RADIUS = 6371000;
+const R = EARTH_RADIUS;
 
 function toRad(d: number): number {
   /** convert degrees to radians. */

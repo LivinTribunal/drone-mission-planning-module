@@ -52,7 +52,17 @@ export function bufferLineString(
     const dxM = dx * mPerDegLon;
     const dyM = dy * mPerDegLat;
     const lenM = Math.sqrt(dxM * dxM + dyM * dyM);
-    if (lenM === 0) continue;
+    if (lenM === 0) {
+      // zero-length segment - duplicate neighbor offset to keep arrays aligned
+      if (left.length > 0) {
+        left.push(left[left.length - 1]);
+        right.push(right[right.length - 1]);
+      } else {
+        left.push([lon, lat]);
+        right.push([lon, lat]);
+      }
+      continue;
+    }
 
     // perpendicular unit vector in metric space (rotated 90 degrees)
     const perpXM = -dyM / lenM;

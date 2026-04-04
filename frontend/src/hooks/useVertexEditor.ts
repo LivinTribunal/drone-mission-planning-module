@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import type maplibregl from "maplibre-gl";
 import type { MapFeature } from "@/types/map";
-import { polygonCentroid, haversineDistance, circleToPolygon, extractCenterline, computeBearing } from "@/utils/geo";
+import { polygonCentroid, haversineDistance, circleToPolygon, extractCenterline, computeBearing, EARTH_RADIUS } from "@/utils/geo";
 import { bufferLineString } from "@/components/map/layers/surfaceLayers";
 
 const SRC_NODES = "vertex-edit-nodes";
@@ -137,7 +137,7 @@ function waitForStyleLoaded(map: maplibregl.Map, callback: () => void): () => vo
 /** compute edge point for circle radius handle (east of center). */
 function radiusEdgePoint(center: [number, number], radiusMeters: number): [number, number] {
   const [lng, lat] = center;
-  const R = 6371000;
+  const R = EARTH_RADIUS;
   const dLng = (radiusMeters / (R * Math.cos((lat * Math.PI) / 180))) * (180 / Math.PI);
   return [lng + dLng, lat];
 }
