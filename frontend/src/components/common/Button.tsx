@@ -25,7 +25,7 @@ export default function Button({
   return (
     <button
       disabled={disabled}
-      className={`px-4 py-2.5 text-sm font-semibold transition-colors ${variantStyles[variant]} ${
+      className={`px-4 h-10 text-sm font-semibold transition-colors ${variantStyles[variant]} ${
         disabled ? "opacity-50 cursor-not-allowed" : ""
       } ${className}`}
       {...props}

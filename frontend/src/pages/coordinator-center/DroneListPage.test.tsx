@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -194,11 +194,9 @@ describe("DroneListPage", () => {
       expect(screen.getByText("Matrice 300")).toBeInTheDocument();
     });
 
-    // open row action menu and click delete
+    // click inline delete action button
     const row = screen.getByTestId("drone-row-d-1");
-    const menuBtn = row.querySelector("button");
-    fireEvent.click(menuBtn!);
-    const deleteAction = screen.getByText("coordinator.drones.actions.delete");
+    const deleteAction = within(row).getByTitle("coordinator.drones.actions.delete");
     fireEvent.click(deleteAction);
 
     // confirm delete
@@ -217,9 +215,7 @@ describe("DroneListPage", () => {
     });
 
     const row = screen.getByTestId("drone-row-d-1");
-    const menuBtn = row.querySelector("button");
-    fireEvent.click(menuBtn!);
-    fireEvent.click(screen.getByText("coordinator.drones.actions.delete"));
+    fireEvent.click(within(row).getByTitle("coordinator.drones.actions.delete"));
     fireEvent.click(screen.getByText("common.delete"));
     await waitFor(() => {
       expect(
@@ -236,9 +232,7 @@ describe("DroneListPage", () => {
     });
 
     const row = screen.getByTestId("drone-row-d-1");
-    const menuBtn = row.querySelector("button");
-    fireEvent.click(menuBtn!);
-    fireEvent.click(screen.getByText("coordinator.drones.actions.duplicate"));
+    fireEvent.click(within(row).getByTitle("coordinator.drones.actions.duplicate"));
     await waitFor(() => {
       expect(
         screen.getByText("coordinator.drones.duplicate.error"),

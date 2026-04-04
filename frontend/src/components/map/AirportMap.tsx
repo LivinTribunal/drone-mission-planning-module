@@ -79,6 +79,8 @@ import {
   WAYPOINT_LABEL_LAYER,
   WAYPOINT_CAMERA_LINE_LAYER,
   WAYPOINT_ARROW_LAYER,
+  SIMPLIFIED_TAKEOFF_LAYER,
+  SIMPLIFIED_LANDING_LAYER,
 } from "./layers/waypointLayers";
 import LayerPanel from "./overlays/LayerPanel";
 import LegendPanel from "./overlays/LegendPanel";
@@ -169,7 +171,7 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
   transitWaypoints: [WAYPOINT_TRANSIT_CIRCLE_LAYER],
   measurementWaypoints: [WAYPOINT_MEASUREMENT_CIRCLE_LAYER, WAYPOINT_HOVER_LAYER, WAYPOINT_LABEL_LAYER],
   path: [WAYPOINT_LINE_LAYER],
-  takeoffLanding: [WAYPOINT_TAKEOFF_LAYER, WAYPOINT_LANDING_LAYER],
+  takeoffLanding: [WAYPOINT_TAKEOFF_LAYER, WAYPOINT_LANDING_LAYER, SIMPLIFIED_TAKEOFF_LAYER, SIMPLIFIED_LANDING_LAYER],
   cameraHeading: [WAYPOINT_CAMERA_LINE_LAYER],
   pathHeading: [WAYPOINT_ARROW_LAYER],
 };

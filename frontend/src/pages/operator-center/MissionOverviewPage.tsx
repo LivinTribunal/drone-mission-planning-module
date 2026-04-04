@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
@@ -23,7 +24,7 @@ export default function MissionOverviewPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage } =
+  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage, leftPanelEl } =
     useOutletContext<MissionTabOutletContext>();
 
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
@@ -170,13 +171,10 @@ export default function MissionOverviewPage() {
   const hasTrajectory = flightPlan !== null;
 
   return (
-    <div className="flex px-4 h-[calc(100vh-12rem)]" data-testid="mission-overview-page">
-      {/* left panel - 30% */}
-      <div className="w-[30%] flex-shrink-0 flex">
-        <div
-          className="flex-1 overflow-y-auto flex flex-col gap-4"
-          style={{ scrollbarGutter: "stable" }}
-        >
+    <>
+      {/* left panel content - portaled into MissionTabNav left column */}
+      {leftPanelEl && createPortal(
+        <>
           {/* mission info */}
           <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
             <MissionInfoPanel
@@ -209,12 +207,12 @@ export default function MissionOverviewPage() {
           <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
             <WarningsPanel warnings={warnings} hasTrajectory={hasTrajectory} />
           </div>
-        </div>
-        <div className="w-6 flex-shrink-0" />
-      </div>
+        </>,
+        leftPanelEl,
+      )}
 
       {/* right panel - map */}
-      <div className="flex-1 flex flex-col gap-3 min-w-0">
+      <div className="flex flex-col h-full" data-testid="mission-overview-page">
         {airportDetail ? (
           <div className="flex-1 relative rounded-2xl overflow-hidden border border-tv-border">
             <AirportMap
@@ -295,6 +293,6 @@ export default function MissionOverviewPage() {
           {notification}
         </div>
       )}
-    </div>
+    </>
   );
 }

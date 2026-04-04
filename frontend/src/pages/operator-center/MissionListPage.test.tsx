@@ -185,13 +185,10 @@ describe("MissionListPage", () => {
       expect(screen.getByTestId("mission-row-m-1")).toBeInTheDocument();
     });
 
-    // open the row action menu for the first mission
+    // click the inline delete action button
     const row = screen.getByTestId("mission-row-m-1");
-    const trigger = within(row).getByTestId("row-action-trigger");
-    fireEvent.click(trigger);
-
-    // click delete action
-    fireEvent.click(screen.getByText("missionList.actions.delete"));
+    const deleteBtn = within(row).getByTitle("missionList.actions.delete");
+    fireEvent.click(deleteBtn);
 
     // confirmation modal should appear
     await waitFor(() => {

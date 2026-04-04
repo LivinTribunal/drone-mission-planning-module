@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, XCircle, Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, XCircle, Lightbulb, ChevronDown } from "lucide-react";
 import type { ValidationViolation, ViolationSeverity } from "@/types/flightPlan";
 import { cleanMessage } from "@/utils/violations";
 
@@ -72,11 +72,7 @@ export default function WarningsPanel({
               {violationCount}
             </span>
           )}
-          {collapsed ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronUp className="h-4 w-4" />
-          )}
+          <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`} />
         </div>
       </button>
       {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}

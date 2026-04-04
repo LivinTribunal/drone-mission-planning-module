@@ -113,7 +113,7 @@ describe("DroneEditPage", () => {
   it("renders editable fields after load", async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("edit-name")).toBeInTheDocument();
     });
     expect(screen.getByTestId("edit-name")).toBeInTheDocument();
     expect(screen.getByTestId("edit-manufacturer")).toBeInTheDocument();
@@ -170,18 +170,21 @@ describe("DroneEditPage", () => {
   it("drone selector dropdown shows all drones", async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("edit-name")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId("drone-selector"));
+    // click the selected item trigger to open dropdown
+    const names = screen.getAllByText("Matrice 300");
+    fireEvent.click(names[0]);
     expect(screen.getByText("Mavic 3E")).toBeInTheDocument();
   });
 
   it("back-to-list navigates to drone list", async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("edit-name")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId("back-to-list"));
+    // the X button in the title bar
+    fireEvent.click(screen.getByTitle("coordinator.drones.detail.backToList"));
     expect(mockNavigate).toHaveBeenCalledWith("/coordinator-center/drones");
   });
 
@@ -195,9 +198,9 @@ describe("DroneEditPage", () => {
     });
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("edit-name")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId("detail-duplicate"));
+    fireEvent.click(screen.getByTitle("coordinator.drones.detail.duplicate"));
     await waitFor(() => {
       expect(mockCreateDroneProfile).toHaveBeenCalled();
     });
@@ -210,9 +213,9 @@ describe("DroneEditPage", () => {
     mockCreateDroneProfile.mockRejectedValue(new Error("fail"));
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("edit-name")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId("detail-duplicate"));
+    fireEvent.click(screen.getByTitle("coordinator.drones.detail.duplicate"));
     await waitFor(() => {
       expect(
         screen.getByText("coordinator.drones.duplicate.error"),
@@ -224,9 +227,9 @@ describe("DroneEditPage", () => {
     mockDeleteDroneProfile.mockResolvedValue({ success: true });
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("edit-name")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId("detail-delete"));
+    fireEvent.click(screen.getByTitle("coordinator.drones.detail.delete"));
     fireEvent.click(screen.getByText("common.delete"));
     await waitFor(() => {
       expect(mockDeleteDroneProfile).toHaveBeenCalledWith("d-1");
@@ -238,9 +241,9 @@ describe("DroneEditPage", () => {
     mockDeleteDroneProfile.mockRejectedValue(new Error("fail"));
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("drone-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("edit-name")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId("detail-delete"));
+    fireEvent.click(screen.getByTitle("coordinator.drones.detail.delete"));
     fireEvent.click(screen.getByText("common.delete"));
     await waitFor(() => {
       expect(

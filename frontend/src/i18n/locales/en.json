@@ -293,6 +293,7 @@
   },
   "mission": {
     "label": "Mission",
+    "createNew": "Create New Mission",
     "overviewTab": "Overview",
     "configuration": "Configuration",
     "map": "Map",
@@ -800,7 +801,7 @@
     "inspections": {
       "title": "Inspection Templates",
       "searchPlaceholder": "Search inspection templates by name...",
-      "addNew": "Add New Inspection Template",
+      "addNew": "+ Add New Inspection Template",
       "noTemplates": "No inspection templates available",
       "noMatch": "No inspection templates match your filters",
       "loadError": "Failed to load inspection templates",
@@ -917,7 +918,8 @@
         "missions": "Missions",
         "mission": "mission",
         "missionsLabel": "missions",
-        "noMissions": "No missions use this drone profile"
+        "noMissions": "No missions use this drone profile",
+        "renameError": "Failed to rename drone profile"
       },
       "fields": {
         "name": "Drone Name",

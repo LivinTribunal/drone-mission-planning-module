@@ -108,7 +108,7 @@ export default function LayerPanel({
                   onClick={() => setTrajectoryExpanded(!trajectoryExpanded)}
                   className="p-0.5 -ml-0.5"
                 >
-                  <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${trajectoryExpanded ? "" : "-rotate-90"}`} />
+                  <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${trajectoryExpanded ? "rotate-180" : ""}`} />
                 </button>
                 <span>{t("map.trajectory")}</span>
                 <Toggle checked={layers.trajectory} onChange={() => onToggle("trajectory")} />
@@ -122,7 +122,7 @@ export default function LayerPanel({
                       onClick={() => setWaypointsExpanded(!waypointsExpanded)}
                       className="p-0.5 -ml-0.5"
                     >
-                      <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${waypointsExpanded ? "" : "-rotate-90"}`} />
+                      <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${waypointsExpanded ? "rotate-180" : ""}`} />
                     </button>
                     <span>{t("dashboard.waypoints")}</span>
                     <Toggle checked={waypointsOn} onChange={() => onToggle("waypoints")} />

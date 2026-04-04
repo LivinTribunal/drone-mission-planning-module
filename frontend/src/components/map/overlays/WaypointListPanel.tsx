@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { MapPin, ChevronDown, ChevronRight } from "lucide-react";
+import { MapPin, ChevronDown } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { WaypointResponse } from "@/types/flightPlan";
 import type { PointZ } from "@/types/common";
@@ -224,11 +224,7 @@ export default function WaypointListPanel({
                   onClick={() => toggleGroup(group.key)}
                   className="flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
                 >
-                  {isExpanded ? (
-                    <ChevronDown className="h-3 w-3 flex-shrink-0" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3 flex-shrink-0" />
-                  )}
+                  <ChevronDown className={`h-3 w-3 flex-shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
                   <MapPin
                     className={`h-3 w-3 flex-shrink-0 ${typeColors[group.type] ?? "text-tv-text-muted"}`}
                   />

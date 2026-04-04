@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Trash2, RotateCcw, Plus } from "lucide-react";
+import { Trash2, RotateCcw, Plus } from "lucide-react";
 import Input from "@/components/common/Input";
+import FeatureInfoPanel from "@/components/common/FeatureInfoPanel";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import type { MapFeature } from "@/types/map";
 import type { SurfaceResponse } from "@/types/airport";
@@ -50,22 +51,11 @@ export default function EditableFeatureInfo({
   }
 
   return (
-    <div
-      className="rounded-2xl border border-tv-border bg-tv-bg p-3"
-      data-testid="editable-feature-info"
-    >
-      <div className="flex items-center justify-between mb-2">
-        <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border text-xs font-semibold text-tv-text-primary">
-          {t("coordinator.detail.featureInfo")}
-        </span>
-        <button
-          onClick={onClose}
-          className="rounded-full p-1 text-tv-text-muted hover:text-tv-text-primary transition-colors"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
+    <div data-testid="editable-feature-info">
+      <FeatureInfoPanel
+        title={t("coordinator.detail.featureInfo")}
+        onClose={onClose}
+      >
       <div className="flex flex-col gap-1.5 [&_input]:!px-3 [&_input]:!py-1.5 [&_input]:!text-xs">
         {feature.type === "surface" && (
           <>
@@ -351,6 +341,7 @@ export default function EditableFeatureInfo({
           </button>
         )}
       </div>
+      </FeatureInfoPanel>
 
       {onDelete && (
         <ConfirmDeleteDialog

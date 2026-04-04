@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
@@ -30,7 +31,7 @@ export default function MissionValidationPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage } =
+  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage, leftPanelEl } =
     useOutletContext<MissionTabOutletContext>();
 
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
@@ -269,10 +270,7 @@ export default function MissionValidationPage() {
   }
 
   return (
-    <div
-      className="flex px-4 h-[calc(100vh-12rem)]"
-      data-testid="mission-validation-page"
-    >
+    <>
       {/* notification toast */}
       {notification && (
         <div className="fixed top-4 right-4 z-50 px-4 py-2.5 rounded-full bg-tv-error text-white text-sm font-semibold">
@@ -280,12 +278,9 @@ export default function MissionValidationPage() {
         </div>
       )}
 
-      {/* left panel - validation results */}
-      <div className="w-[30%] flex-shrink-0 flex">
-        <div
-          className="flex-1 overflow-y-auto flex flex-col gap-4"
-          style={{ scrollbarGutter: "stable" }}
-        >
+      {/* left panel content - portaled into MissionTabNav left column */}
+      {leftPanelEl && createPortal(
+        <>
           <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
             <ValidationResultsPanel
               flightPlan={flightPlan}
@@ -303,108 +298,113 @@ export default function MissionValidationPage() {
           <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
             <WarningsPanel warnings={warnings} hasTrajectory={flightPlan !== null} />
           </div>
-        </div>
-        <div className="w-6 flex-shrink-0" />
-      </div>
+        </>,
+        leftPanelEl,
+      )}
 
-      {/* center panel - map preview */}
-      <div className="flex-1 flex flex-col gap-3 min-w-0">
-        {airportDetail ? (
-          <div className="flex-1 relative rounded-2xl overflow-hidden border border-tv-border">
-            <AirportMap
-              airport={airportDetail}
-              terrainMode={terrainMode}
-              onTerrainChange={setTerrainMode}
-              showTerrainToggle={false}
-              showWaypointList={false}
-              simplifiedTrajectory={true}
-              is3D={is3D}
-              onToggle3D={setIs3D}
-              layers={{
-                simplifiedTrajectory: true,
-                trajectory: false,
-                transitWaypoints: false,
-                measurementWaypoints: false,
-                path: false,
-                takeoffLanding: false,
-                cameraHeading: false,
-                pathHeading: false,
-              }}
-              waypoints={flightPlan?.waypoints ?? []}
-              missionStatus={mission.status}
-              takeoffCoordinate={mission.takeoff_coordinate}
-              landingCoordinate={mission.landing_coordinate}
-            />
-
-            {/* bottom bar */}
-            <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">
-              <button
-                onClick={() =>
-                  navigate(`/operator-center/missions/${id}/map`)
-                }
-                className="px-4 py-2.5 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-                data-testid="open-map-btn"
-              >
-                {t("mission.validationExportPage.openMap")}
-              </button>
-              <div className="flex rounded-full border border-tv-border bg-tv-surface p-1">
-                <button
-                  onClick={() => setIs3D(false)}
-                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                    !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
-                  }`}
-                >
-                  {t("common.2d")}
-                </button>
-                <button
-                  onClick={() => setIs3D(true)}
-                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                    is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
-                  }`}
-                >
-                  {t("common.3d")}
-                </button>
-              </div>
-              <TerrainToggle
-                mode={terrainMode}
-                onToggle={setTerrainMode}
-                inline
+      {/* right content - map + export panel */}
+      <div
+        className="flex h-full gap-4"
+        data-testid="mission-validation-page"
+      >
+        {/* center panel - map preview */}
+        <div className="flex-1 flex flex-col gap-3 min-w-0">
+          {airportDetail ? (
+            <div className="flex-1 relative rounded-2xl overflow-hidden border border-tv-border">
+              <AirportMap
+                airport={airportDetail}
+                terrainMode={terrainMode}
+                onTerrainChange={setTerrainMode}
+                showTerrainToggle={false}
+                showWaypointList={false}
+                simplifiedTrajectory={true}
+                is3D={is3D}
+                onToggle3D={setIs3D}
+                layers={{
+                  simplifiedTrajectory: true,
+                  trajectory: false,
+                  transitWaypoints: false,
+                  measurementWaypoints: false,
+                  path: false,
+                  takeoffLanding: false,
+                  cameraHeading: false,
+                  pathHeading: false,
+                }}
+                waypoints={flightPlan?.waypoints ?? []}
+                missionStatus={mission.status}
+                takeoffCoordinate={mission.takeoff_coordinate}
+                landingCoordinate={mission.landing_coordinate}
               />
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center bg-tv-surface rounded-2xl border border-tv-border">
-            <Loader2 className="h-6 w-6 animate-spin text-tv-accent" />
-          </div>
-        )}
-      </div>
 
-      {/* right panel - export & lifecycle, aligned with airport selector + theme + user */}
-      <div className="w-4 flex-shrink-0" />
-      <div className="w-[540px] flex-shrink-0">
-        <div
-          className="overflow-y-auto h-full flex flex-col gap-4"
-          style={{ scrollbarGutter: "stable" }}
-        >
-          <ExportPanel
-            mission={mission}
-            onExport={handleExport}
-            onComplete={handleComplete}
-            onCancel={handleCancel}
-            onDelete={handleDelete}
-            isExporting={isExporting}
-            statsSlot={
-              <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-                <StatsPanel
-                  flightPlan={flightPlan}
-                  hasTrajectory={flightPlan !== null}
-                  droneProfile={droneProfiles.find((dp) => dp.id === mission.drone_profile_id) ?? null}
+              {/* bottom bar */}
+              <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    navigate(`/operator-center/missions/${id}/map`)
+                  }
+                  className="px-4 py-2.5 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                  data-testid="open-map-btn"
+                >
+                  {t("mission.validationExportPage.openMap")}
+                </button>
+                <div className="flex rounded-full border border-tv-border bg-tv-surface p-1">
+                  <button
+                    onClick={() => setIs3D(false)}
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                      !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
+                    }`}
+                  >
+                    {t("common.2d")}
+                  </button>
+                  <button
+                    onClick={() => setIs3D(true)}
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                      is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
+                    }`}
+                  >
+                    {t("common.3d")}
+                  </button>
+                </div>
+                <TerrainToggle
+                  mode={terrainMode}
+                  onToggle={setTerrainMode}
+                  inline
                 />
               </div>
-            }
-          />
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center bg-tv-surface rounded-2xl border border-tv-border">
+              <Loader2 className="h-6 w-6 animate-spin text-tv-accent" />
+            </div>
+          )}
+        </div>
+
+        {/* right panel - export & lifecycle */}
+        <div className="w-[540px] flex-shrink-0">
+          <div
+            className="overflow-y-auto h-full flex flex-col gap-4"
+            style={{ scrollbarGutter: "stable" }}
+          >
+            <ExportPanel
+              mission={mission}
+              onExport={handleExport}
+              onComplete={handleComplete}
+              onCancel={handleCancel}
+              onDelete={handleDelete}
+              isExporting={isExporting}
+              statsSlot={
+                <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+                  <StatsPanel
+                    flightPlan={flightPlan}
+                    hasTrajectory={flightPlan !== null}
+                    droneProfile={droneProfiles.find((dp) => dp.id === mission.drone_profile_id) ?? null}
+                  />
+                </div>
+              }
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
