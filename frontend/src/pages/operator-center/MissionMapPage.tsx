@@ -53,7 +53,7 @@ export default function MissionMapPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext, setComputeContext, refreshMissions } =
+  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage } =
     useOutletContext<MissionTabOutletContext>();
 
   // core data
@@ -216,6 +216,7 @@ export default function MissionMapPage() {
       // re-read mission status
       const fresh = await getMission(id);
       setMission(fresh);
+      updateMissionFromPage(fresh);
       refreshMissions();
       setLastSaved(new Date());
       showNotification(t("map.changesSaved"));
@@ -225,7 +226,7 @@ export default function MissionMapPage() {
     } finally {
       setSaving(false);
     }
-  }, [id, isDirty, dirtyWaypoints, clearHistory, t, refreshMissions]);
+  }, [id, isDirty, dirtyWaypoints, clearHistory, t, refreshMissions, updateMissionFromPage]);
 
   // wire save context
   useEffect(() => {
@@ -257,6 +258,7 @@ export default function MissionMapPage() {
 
       const fresh = await getMission(id);
       setMission(fresh);
+      updateMissionFromPage(fresh);
       refreshMissions();
       showNotification(t("map.changesSaved"));
     } catch (err) {
@@ -269,7 +271,7 @@ export default function MissionMapPage() {
     } finally {
       setComputing(false);
     }
-  }, [id, mission, clearHistory, t, refreshMissions]);
+  }, [id, mission, clearHistory, t, refreshMissions, updateMissionFromPage]);
 
   // compute button state
   const computeLabel = useMemo(() => {
@@ -328,6 +330,7 @@ export default function MissionMapPage() {
           });
           const fresh = await getMission(id);
           setMission(fresh);
+          updateMissionFromPage(fresh);
           refreshMissions();
         } catch (err) {
           console.error("map save error:", err instanceof Error ? err.message : String(err));
@@ -346,7 +349,7 @@ export default function MissionMapPage() {
         return;
       }
     },
-    [activeTool, id, mission, measure, refreshMissions, resetTool, t],
+    [activeTool, id, mission, measure, refreshMissions, updateMissionFromPage, resetTool, t],
   );
 
   // handle tool change

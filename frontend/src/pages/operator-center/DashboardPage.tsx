@@ -14,8 +14,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
+import { useMission } from "@/contexts/MissionContext";
 import { listAirportSummaries } from "@/api/airports";
-import { listMissions, updateMission, deleteMission } from "@/api/missions";
+import { updateMission, deleteMission } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { AirportSummaryResponse } from "@/types/airport";
 import type { MissionResponse } from "@/types/mission";
@@ -751,10 +752,13 @@ function DashboardView() {
     airportDetailError,
     refreshAirportDetail,
   } = useAirport();
+  const {
+    missions,
+    missionsLoading,
+    refreshMissions,
+  } = useMission();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
-  const [missions, setMissions] = useState<MissionResponse[]>([]);
-  const [missionsLoading, setMissionsLoading] = useState(true);
   const [missionsError, setMissionsError] = useState(false);
   const [droneProfiles, setDroneProfiles] = useState<DroneProfileResponse[]>([]);
   const [droneProfilesLoading, setDroneProfilesLoading] = useState(true);
@@ -763,18 +767,9 @@ function DashboardView() {
   const [is3D, setIs3D] = useState(false);
 
   const fetchMissions = useCallback(() => {
-    if (!selectedAirport) return;
-    setMissionsLoading(true);
     setMissionsError(false);
-    listMissions({ airport_id: selectedAirport.id })
-      .then((res) => setMissions(res.data))
-      .catch(() => setMissionsError(true))
-      .finally(() => setMissionsLoading(false));
-  }, [selectedAirport]);
-
-  useEffect(() => {
-    fetchMissions();
-  }, [fetchMissions]);
+    refreshMissions().catch(() => setMissionsError(true));
+  }, [refreshMissions]);
 
   useEffect(() => {
     setDroneProfilesLoading(true);

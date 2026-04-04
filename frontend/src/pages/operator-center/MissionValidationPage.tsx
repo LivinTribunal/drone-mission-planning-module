@@ -30,7 +30,7 @@ export default function MissionValidationPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext, setComputeContext, refreshMissions } =
+  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage } =
     useOutletContext<MissionTabOutletContext>();
 
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
@@ -95,6 +95,7 @@ export default function MissionValidationPage() {
       ]);
       setMission(missionData);
       setDroneProfiles(dpData.data);
+      updateMissionFromPage(missionData);
       refreshMissions();
 
       try {

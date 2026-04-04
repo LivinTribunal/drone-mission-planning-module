@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AirportProvider } from "@/contexts/AirportContext";
+import { MissionProvider } from "@/contexts/MissionContext";
 import DashboardPage from "./DashboardPage";
 
 // mock api modules
@@ -114,7 +115,9 @@ function renderDashboard(airport?: object) {
       <AuthProvider>
         <AirportProvider>
           <MemoryRouter>
-            <DashboardPage />
+            <MissionProvider>
+              <DashboardPage />
+            </MissionProvider>
           </MemoryRouter>
         </AirportProvider>
       </AuthProvider>

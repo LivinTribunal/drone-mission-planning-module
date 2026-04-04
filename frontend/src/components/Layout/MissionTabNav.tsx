@@ -3,9 +3,9 @@ import { createPortal } from "react-dom";
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Loader2, Pencil, X, Check, Upload } from "lucide-react";
-import { useAirport } from "@/contexts/AirportContext";
-import { listMissions, updateMission } from "@/api/missions";
-import type { MissionResponse } from "@/types/mission";
+import { useMission } from "@/contexts/MissionContext";
+import { updateMission } from "@/api/missions";
+import type { MissionResponse, MissionDetailResponse } from "@/types/mission";
 import Badge from "@/components/common/Badge";
 import type { MissionStatus } from "@/types/enums";
 
@@ -43,14 +43,22 @@ export interface ComputeContext {
 export interface MissionTabOutletContext {
   setSaveContext: (ctx: SaveContext) => void;
   setComputeContext: (ctx: ComputeContext) => void;
-  refreshMissions: () => void;
+  refreshMissions: () => Promise<void>;
+  mission: MissionDetailResponse | null;
+  updateMissionFromPage: (m: MissionResponse) => void;
 }
 
 export default function MissionTabNav() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { selectedAirport } = useAirport();
+  const {
+    missions,
+    selectedMission,
+    refreshMissions,
+    updateMissionInList,
+  } = useMission();
+
   const [saveCtx, setSaveCtx] = useState<SaveContext>({
     onSave: null,
     isDirty: false,
@@ -62,7 +70,6 @@ export default function MissionTabNav() {
     canCompute: false,
     isComputing: false,
   });
-  const [missions, setMissions] = useState<MissionResponse[]>([]);
   const [missionDropdownOpen, setMissionDropdownOpen] = useState(false);
 
   const setSaveContext = useCallback((ctx: SaveContext) => {
@@ -73,34 +80,13 @@ export default function MissionTabNav() {
     setComputeCtx(ctx);
   }, []);
 
-  const refreshMissions = useCallback(() => {
-    /** refresh the mission list for the current airport. */
-    if (!selectedAirport) return;
-    listMissions({ airport_id: selectedAirport.id, limit: 100 })
-      .then((res) => {
-        setMissions(res.data);
-      })
-      .catch(() => {
-        // ignore
-      });
-  }, [selectedAirport]);
-
-  // fetch missions for this airport
-  useEffect(() => {
-    refreshMissions();
-  }, [refreshMissions]);
-
-  // when airport changes or is cleared, deselect current mission
-  const prevAirportIdRef = useRef(selectedAirport?.id);
-  useEffect(() => {
-    const prevId = prevAirportIdRef.current;
-    const newId = selectedAirport?.id;
-    prevAirportIdRef.current = newId;
-    if (prevId && prevId !== newId && id) {
-      // airport cleared - go to dashboard; airport switched - go to mission list
-      navigate(newId ? "/operator-center/missions" : "/operator-center", { replace: true });
-    }
-  }, [selectedAirport?.id, id, navigate]);
+  // update mission in context when a page pushes a status change
+  const updateMissionFromPage = useCallback(
+    (updated: MissionResponse) => {
+      updateMissionInList(updated);
+    },
+    [updateMissionInList],
+  );
 
   const currentMission = missions.find((m) => m.id === id);
   const [renaming, setRenaming] = useState(false);
@@ -168,11 +154,7 @@ export default function MissionTabNav() {
     }
     try {
       await updateMission(id, { name: renameValue.trim() });
-      // refresh missions list
-      if (selectedAirport) {
-        const res = await listMissions({ airport_id: selectedAirport.id, limit: 100 });
-        setMissions(res.data);
-      }
+      await refreshMissions();
     } catch {
       // ignore
     }
@@ -414,7 +396,13 @@ export default function MissionTabNav() {
       <div className="py-2">
         <Outlet
           context={
-            { setSaveContext, setComputeContext, refreshMissions } satisfies MissionTabOutletContext
+            {
+              setSaveContext,
+              setComputeContext,
+              refreshMissions,
+              mission: selectedMission,
+              updateMissionFromPage,
+            } satisfies MissionTabOutletContext
           }
         />
       </div>

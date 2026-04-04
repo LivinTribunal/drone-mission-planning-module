@@ -58,7 +58,7 @@ export default function MissionConfigPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext, setComputeContext, refreshMissions } =
+  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage } =
     useOutletContext<MissionTabOutletContext>();
 
   // core data
@@ -165,13 +165,13 @@ export default function MissionConfigPage() {
       const oldIdx = STATUS_ORDER.indexOf(previousStatus);
       const newIdx = STATUS_ORDER.indexOf(fresh.status);
       if (newIdx < oldIdx) {
-        // status regressed - keep stale flight plan visible with warning
         showNotification(
           t("mission.config.statusRegressed", { status: fresh.status }),
         );
       }
     }
     setMission(fresh);
+    updateMissionFromPage(fresh);
     refreshMissions();
   }
 
