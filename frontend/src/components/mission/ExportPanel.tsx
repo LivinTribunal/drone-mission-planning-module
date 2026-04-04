@@ -21,6 +21,7 @@ const EXPORT_FORMATS = [
   { value: "KMZ", labelKey: "formatKmz", descKey: "formatKmzDesc" },
   { value: "JSON", labelKey: "formatJson", descKey: "formatJsonDesc" },
   { value: "MAVLINK", labelKey: "formatMavlink", descKey: "formatMavlinkDesc" },
+  { value: "UGCS", labelKey: "formatUgcs", descKey: "formatUgcsDesc" },
 ] as const;
 
 function canExport(status: MissionStatus): boolean {
