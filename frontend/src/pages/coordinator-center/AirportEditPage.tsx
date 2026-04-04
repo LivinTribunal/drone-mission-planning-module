@@ -12,6 +12,7 @@ import {
   updateObstacle,
   updateSafetyZone,
   updateAGL,
+  updateLHA,
   updateAirport,
 } from "@/api/airports";
 import { useAirport } from "@/contexts/AirportContext";
@@ -66,7 +67,7 @@ import type { VertexGeometryUpdate } from "@/hooks/useVertexEditor";
 import useMeasureDistance from "@/hooks/useMeasureDistance";
 import useHeadingTool from "@/hooks/useHeadingTool";
 import type maplibregl from "maplibre-gl";
-import { extractCenterline, circleToPolygon, haversineDistance } from "@/utils/geo";
+import { extractCenterline, circleToPolygon, haversineDistance, computeBearing } from "@/utils/geo";
 import type { DrawingTool } from "@/types/map";
 import { MapTool } from "@/hooks/useMapTools";
 
@@ -743,6 +744,15 @@ export default function AirportEditPage() {
                 }
                 return undefined;
               }
+              case "lha": {
+                const parentAgl = airport.surfaces
+                  .flatMap((s) => s.agls.map((a) => ({ surface: s, agl: a })))
+                  .find(({ agl }) => agl.lhas.some((l) => l.id === change.entityId));
+                if (parentAgl) {
+                  return updateLHA(id, parentAgl.surface.id, parentAgl.agl.id, change.entityId, change.data);
+                }
+                return undefined;
+              }
               case "airport":
                 return updateAirport(id, change.data);
               default:
@@ -765,6 +775,10 @@ export default function AirportEditPage() {
           freshData = freshAirport.obstacles.find((o) => o.id === fid);
         } else if (ft === "safety_zone") {
           freshData = freshAirport.safety_zones.find((z) => z.id === fid);
+        } else if (ft === "agl") {
+          freshData = freshAirport.surfaces.flatMap((s) => s.agls).find((a) => a.id === fid);
+        } else if (ft === "lha") {
+          freshData = freshAirport.surfaces.flatMap((s) => s.agls).flatMap((a) => a.lhas).find((l) => l.id === fid);
         }
         if (freshData) {
           setSelectedFeature({ type: ft, data: freshData } as MapFeature);
@@ -810,12 +824,10 @@ export default function AirportEditPage() {
       }
     }
 
-    // heading from centerline
+    // heading from centerline - use proper geographic bearing
     const centerline = extractCenterline(ring);
     if (centerline.length >= 2) {
-      const dLng = centerline[1][0] - centerline[0][0];
-      const dLat = centerline[1][1] - centerline[0][1];
-      heading = ((Math.atan2(dLng, dLat) * 180) / Math.PI + 360) % 360;
+      heading = computeBearing(centerline[0][0], centerline[0][1], centerline[1][0], centerline[1][1]);
     }
 
     // area via shoelace on projected coordinates
@@ -945,7 +957,10 @@ export default function AirportEditPage() {
                           <line x1="5" y1="1" x2="5" y2="9" stroke="white" strokeWidth="0.8" strokeDasharray="1.5 1" />
                         </>
                       ) : (
-                        <rect x="0" y="2" width="10" height="6" rx="1" fill="currentColor" />
+                        <>
+                          <rect x="1" y="0" width="8" height="10" rx="1" fill="#c8a83c" />
+                          <line x1="5" y1="1" x2="5" y2="9" stroke="#1a1a1a" strokeWidth="0.7" strokeDasharray="1.5 1" />
+                        </>
                       )}
                     </svg>
                     <div className="flex-1 min-w-0">
@@ -963,9 +978,9 @@ export default function AirportEditPage() {
                           {s.surface_type === "RUNWAY" ? t("airport.runway") : t("airport.taxiway")}
                         </span>
                       </div>
-                      {s.length != null && s.width != null && (
+                      {s.length != null && (s.width != null || s.taxiway_width != null) && (
                         <p className="text-[10px] text-tv-text-secondary mt-0.5">
-                          {s.length}m × {s.width}m
+                          {s.length}m × {s.width ?? s.taxiway_width}m
                         </p>
                       )}
                     </div>

@@ -8,6 +8,7 @@ interface LayerPanelProps {
   onToggle: (key: string) => void;
   hasWaypoints?: boolean;
   hasSimplifiedTrajectory?: boolean;
+  hasTakeoffLanding?: boolean;
   hasTakeoff?: boolean;
   hasLanding?: boolean;
   onPlaceTakeoff?: () => void;
@@ -47,6 +48,7 @@ export default function LayerPanel({
   onToggle,
   hasWaypoints,
   hasSimplifiedTrajectory,
+  hasTakeoffLanding,
   hasTakeoff,
   hasLanding,
   onPlaceTakeoff,
@@ -167,6 +169,14 @@ export default function LayerPanel({
                 </div>
               )}
             </>
+          )}
+
+          {/* standalone takeoff & landing toggle - when no trajectory but markers exist */}
+          {!hasWaypoints && hasTakeoffLanding && (
+            <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
+              <span>{t("map.takeoffLanding")}</span>
+              <Toggle checked={layers.takeoffLanding} onChange={() => onToggle("takeoffLanding")} />
+            </div>
           )}
 
           {/* placement buttons */}

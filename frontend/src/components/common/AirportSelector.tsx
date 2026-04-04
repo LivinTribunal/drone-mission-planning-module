@@ -60,7 +60,7 @@ export default function AirportSelector() {
   }, [airports, search]);
 
   return (
-    <div ref={ref} className="relative min-w-[280px]">
+    <div ref={ref} className="relative w-[280px] flex-shrink-0">
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-2 rounded-full px-4 h-11 text-sm font-medium

@@ -5,11 +5,6 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { AirportMapProps, MapFeature, MapLayerConfig } from "@/types/map";
-
-export interface AirportMapHandle {
-  /** get the underlying maplibre-gl map instance. */
-  getMap: () => maplibregl.Map | null;
-}
 import type { WaypointResponse } from "@/types/flightPlan";
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import { MapTool } from "@/hooks/useMapTools";
@@ -18,6 +13,7 @@ import {
   TOOL_CURSOR_MEASURE,
   TOOL_CURSOR_HEADING,
 } from "@/utils/cursors";
+import { computeBearing as computeBearingFn } from "@/utils/geo";
 import { registerAllMapImages } from "./layers/mapImages";
 import {
   addSurfaceLayers,
@@ -30,6 +26,7 @@ import {
   TAXIWAY_SOURCE,
   TAXIWAY_FILL_LAYER,
   TAXIWAY_STROKE_LAYER,
+  TAXIWAY_CENTERLINE_LAYER,
   TAXIWAY_LABEL_LAYER,
   TAXIWAY_POLYGON_SOURCE,
 } from "./layers/surfaceLayers";
@@ -62,6 +59,7 @@ import {
   addWaypointLayers as addWaypointLayersFn,
   removeWaypointLayers as removeWaypointLayersFn,
   addSimplifiedTrajectoryLayers,
+  removeSimplifiedTrajectoryLayers,
   updateSelectedFilter,
   getSimplifiedTrajectoryLayerIds,
   waypointsToGeoJSON,
@@ -87,6 +85,11 @@ import LegendPanel from "./overlays/LegendPanel";
 import PoiInfoPanel from "./overlays/PoiInfoPanel";
 import MapHelpPanel from "./overlays/MapHelpPanel";
 import WaypointListPanel from "./overlays/WaypointListPanel";
+
+export interface AirportMapHandle {
+  /** get the underlying maplibre-gl map instance. */
+  getMap: () => maplibregl.Map | null;
+}
 
 const ESRI_TILES =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -154,7 +157,7 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
     RUNWAY_CENTERLINE_LAYER,
     RUNWAY_LABEL_LAYER,
   ],
-  taxiways: [TAXIWAY_FILL_LAYER, TAXIWAY_STROKE_LAYER, TAXIWAY_LABEL_LAYER],
+  taxiways: [TAXIWAY_FILL_LAYER, TAXIWAY_STROKE_LAYER, TAXIWAY_CENTERLINE_LAYER, TAXIWAY_LABEL_LAYER],
   obstacles: [OBSTACLE_ICON_LAYER, OBSTACLE_RADIUS_LAYER, "obstacles-radius-outline", OBSTACLE_LABEL_LAYER],
   safetyZones: [
     SAFETY_ZONE_FILL_LAYER,
@@ -513,17 +516,6 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     const tool = activeTool ?? MapTool.SELECT;
     if (tool !== MapTool.HEADING) return;
 
-    function computeBearing(lng1: number, lat1: number, lng2: number, lat2: number): number {
-      /** geographic bearing from point 1 to point 2. */
-      const toRad = (d: number) => (d * Math.PI) / 180;
-      const toDeg = (r: number) => (r * 180) / Math.PI;
-      const dLng = toRad(lng2 - lng1);
-      const y = Math.sin(dLng) * Math.cos(toRad(lat2));
-      const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2))
-        - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
-      return (toDeg(Math.atan2(y, x)) + 360) % 360;
-    }
-
     function handleContextMenu(e: maplibregl.MapMouseEvent) {
       e.preventDefault();
       onHeadingClear?.();
@@ -534,7 +526,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       if (!isHeadingDrawingRef.current || !origin) return;
 
       const cursor: [number, number] = [e.lngLat.lng, e.lngLat.lat];
-      const bearing = Math.round(computeBearing(origin[0], origin[1], cursor[0], cursor[1]));
+      const bearing = Math.round(computeBearingFn(origin[0], origin[1], cursor[0], cursor[1]) * 100) / 100;
 
       // update sources directly - no react re-render
       if (!map!.getSource("heading-point")) return;
@@ -559,7 +551,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       const midLat = (origin[1] + cursor[1]) / 2;
       if (labelSrc) labelSrc.setData({
         type: "FeatureCollection",
-        features: [{ type: "Feature", properties: { label: `${bearing}°` }, geometry: { type: "Point", coordinates: [midLng, midLat] } }],
+        features: [{ type: "Feature", properties: { label: `${bearing.toFixed(2)}°` }, geometry: { type: "Point", coordinates: [midLng, midLat] } }],
       });
     }
 
@@ -685,89 +677,6 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       map.off("mouseup", handleMouseUp);
     };
   }, [activeTool, interactive, onWaypointDrag]);
-
-  // drag agl/lha points in select mode
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !interactive || !onInfraPointDrag) return;
-    const tool = activeTool ?? MapTool.SELECT;
-    if (tool !== MapTool.SELECT) return;
-
-    const dragState = { featureId: "", featureType: "" as "agl" | "lha", originalAlt: 0, dragging: false };
-    let rafId = 0;
-
-    const infraQueryLayers = [AGL_POINT_LAYER, LHA_POINT_LAYER];
-
-    function handleMouseDown(e: maplibregl.MapMouseEvent) {
-      if (!map) return;
-      const layers = infraQueryLayers.filter((id) => {
-        try { return map.getLayer(id); } catch { return false; }
-      });
-      if (!layers.length) return;
-      const features = map.queryRenderedFeatures(e.point, { layers });
-      if (!features.length) return;
-      const fId = String(features[0].properties?.id ?? "");
-      if (!fId) return;
-      const entityType = String(features[0].properties?.entityType ?? "") as "agl" | "lha";
-      if (entityType !== "agl" && entityType !== "lha") return;
-      const coords = features[0].geometry && "coordinates" in features[0].geometry
-        ? (features[0].geometry as GeoJSON.Point).coordinates
-        : [0, 0, 0];
-      dragState.featureId = fId;
-      dragState.featureType = entityType;
-      dragState.originalAlt = coords[2] ?? 0;
-      dragState.dragging = true;
-      map.getCanvas().style.cursor = "grabbing";
-      map.dragPan.disable();
-      e.preventDefault();
-    }
-
-    function handleMouseMove(e: maplibregl.MapMouseEvent) {
-      if (!dragState.dragging || !map) return;
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        if (!map) return;
-        const newCoords: [number, number, number] = [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt];
-        const sourceName = dragState.featureType === "agl" ? AGL_SOURCE : LHA_SOURCE;
-        const src = map.getSource(sourceName) as maplibregl.GeoJSONSource | undefined;
-        if (src) {
-          const rendered = map.querySourceFeatures(sourceName);
-          const features: GeoJSON.Feature[] = rendered.map((f) => ({
-            type: "Feature",
-            properties: f.properties,
-            geometry: f.properties?.id === dragState.featureId
-              ? { type: "Point" as const, coordinates: newCoords }
-              : f.geometry,
-          }));
-          src.setData({ type: "FeatureCollection", features });
-        }
-      });
-    }
-
-    function handleMouseUp(e: maplibregl.MapMouseEvent) {
-      if (!dragState.dragging || !map) return;
-      cancelAnimationFrame(rafId);
-      dragState.dragging = false;
-      map.getCanvas().style.cursor = "";
-      map.dragPan.enable();
-      onInfraPointDrag?.(
-        dragState.featureType,
-        dragState.featureId,
-        [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt],
-      );
-      dragState.featureId = "";
-    }
-
-    map.on("mousedown", handleMouseDown);
-    map.on("mousemove", handleMouseMove);
-    map.on("mouseup", handleMouseUp);
-    return () => {
-      cancelAnimationFrame(rafId);
-      map.off("mousedown", handleMouseDown);
-      map.off("mousemove", handleMouseMove);
-      map.off("mouseup", handleMouseUp);
-    };
-  }, [activeTool, interactive, onInfraPointDrag]);
 
   // zoom tool: click to zoom in/out, sync zoomPercent
   useEffect(() => {
@@ -1223,6 +1132,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
 
       // remove + re-add waypoint layers so they render on top of infrastructure
       removeWaypointLayersFn(map);
+      removeSimplifiedTrajectoryLayers(map);
       registerAllMapImages(map);
       addWaypointLayersFn(map, waypointsRef.current ?? [], takeoffRef.current, landingRef.current, undefined, indexMapRef.current);
       addSimplifiedTrajectoryLayers(map, waypointsRef.current ?? [], takeoffRef.current, landingRef.current);
@@ -1429,6 +1339,107 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       map.off("load", bindCursor);
     };
   }, [interactive, activeTool]);
+
+  // drag agl/lha points in select mode
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !interactive || !onInfraPointDrag) return;
+    const tool = activeTool ?? MapTool.SELECT;
+    if (tool !== MapTool.SELECT) return;
+
+    const dragState = {
+      featureId: "", featureType: "" as "agl" | "lha", originalAlt: 0, dragging: false,
+      snapshot: null as GeoJSON.Feature[] | null,
+    };
+    let rafId = 0;
+
+    const infraQueryLayers = [AGL_POINT_LAYER, LHA_POINT_LAYER];
+
+    function snapshotSource(sourceName: string): GeoJSON.Feature[] {
+      /** deduplicated snapshot of source features - querySourceFeatures can return tile-boundary dupes. */
+      const raw = map!.querySourceFeatures(sourceName);
+      const seen = new Set<string>();
+      const out: GeoJSON.Feature[] = [];
+      for (const f of raw) {
+        const id = String(f.properties?.id ?? "");
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push({ type: "Feature", properties: f.properties, geometry: f.geometry });
+      }
+      return out;
+    }
+
+    function handleMouseDown(e: maplibregl.MapMouseEvent) {
+      if (!map) return;
+      const layers = infraQueryLayers.filter((id) => {
+        try { return map.getLayer(id); } catch { return false; }
+      });
+      if (!layers.length) return;
+      const features = map.queryRenderedFeatures(e.point, { layers });
+      if (!features.length) return;
+      const fId = String(features[0].properties?.id ?? "");
+      if (!fId) return;
+      const entityType = String(features[0].properties?.entityType ?? "") as "agl" | "lha";
+      if (entityType !== "agl" && entityType !== "lha") return;
+      const coords = features[0].geometry && "coordinates" in features[0].geometry
+        ? (features[0].geometry as GeoJSON.Point).coordinates
+        : [0, 0, 0];
+      dragState.featureId = fId;
+      dragState.featureType = entityType;
+      dragState.originalAlt = coords[2] ?? 0;
+      dragState.dragging = true;
+      dragState.snapshot = snapshotSource(entityType === "agl" ? AGL_SOURCE : LHA_SOURCE);
+      map.getCanvas().style.cursor = "grabbing";
+      map.dragPan.disable();
+      e.preventDefault();
+    }
+
+    function handleMouseMove(e: maplibregl.MapMouseEvent) {
+      if (!dragState.dragging || !map || !dragState.snapshot) return;
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (!map || !dragState.snapshot) return;
+        const newCoords: [number, number, number] = [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt];
+        const sourceName = dragState.featureType === "agl" ? AGL_SOURCE : LHA_SOURCE;
+        const src = map.getSource(sourceName) as maplibregl.GeoJSONSource | undefined;
+        if (src) {
+          const features = dragState.snapshot.map((f) => ({
+            type: "Feature" as const,
+            properties: f.properties,
+            geometry: f.properties?.id === dragState.featureId
+              ? { type: "Point" as const, coordinates: newCoords }
+              : f.geometry,
+          }));
+          src.setData({ type: "FeatureCollection", features });
+        }
+      });
+    }
+
+    function handleMouseUp(e: maplibregl.MapMouseEvent) {
+      if (!dragState.dragging || !map) return;
+      cancelAnimationFrame(rafId);
+      dragState.dragging = false;
+      dragState.snapshot = null;
+      map.getCanvas().style.cursor = "";
+      map.dragPan.enable();
+      onInfraPointDrag?.(
+        dragState.featureType,
+        dragState.featureId,
+        [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt],
+      );
+      dragState.featureId = "";
+    }
+
+    map.on("mousedown", handleMouseDown);
+    map.on("mousemove", handleMouseMove);
+    map.on("mouseup", handleMouseUp);
+    return () => {
+      cancelAnimationFrame(rafId);
+      map.off("mousedown", handleMouseDown);
+      map.off("mousemove", handleMouseMove);
+      map.off("mouseup", handleMouseUp);
+    };
+  }, [activeTool, interactive, onInfraPointDrag]);
 
   // click handler
   useEffect(() => {
@@ -1845,8 +1856,9 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
             <LayerPanel
               layers={layerConfig}
               onToggle={handleLayerToggle}
-              hasWaypoints={!!(waypoints?.length || takeoffCoordinate || landingCoordinate)}
+              hasWaypoints={!!(waypoints?.length)}
               hasSimplifiedTrajectory={!!(waypoints?.length)}
+              hasTakeoffLanding={!!(takeoffCoordinate || landingCoordinate)}
               hasTakeoff={!!takeoffCoordinate}
               hasLanding={!!landingCoordinate}
               onPlaceTakeoff={onPlaceTakeoff}

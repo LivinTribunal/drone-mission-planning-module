@@ -5,6 +5,21 @@ function toRad(d: number): number {
   return (d * Math.PI) / 180;
 }
 
+export function computeBearing(
+  lng1: number,
+  lat1: number,
+  lng2: number,
+  lat2: number,
+): number {
+  /** compute geographic bearing from point 1 to point 2 in degrees. */
+  const dLng = toRad(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
+  const x =
+    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
+  return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360;
+}
+
 export function haversineDistance(
   lng1: number,
   lat1: number,

@@ -11,6 +11,7 @@ export const TAXIWAY_SOURCE = "taxiways";
 export const TAXIWAY_POLYGON_SOURCE = "taxiways-polygon";
 export const TAXIWAY_FILL_LAYER = "taxiways-fill";
 export const TAXIWAY_STROKE_LAYER = "taxiways-stroke";
+export const TAXIWAY_CENTERLINE_LAYER = "taxiways-centerline";
 export const TAXIWAY_LABEL_LAYER = "taxiways-label";
 
 // keep old names as aliases for backwards compat in layerGroupMap
@@ -221,9 +222,9 @@ export function addSurfaceLayers(
     type: "line",
     source: TAXIWAY_POLYGON_SOURCE,
     paint: {
-      "line-color": "#5a7a5a",
+      "line-color": "#b8a038",
       "line-width": 1,
-      "line-opacity": 0.4,
+      "line-opacity": 0.5,
     },
   });
 
@@ -233,8 +234,21 @@ export function addSurfaceLayers(
     type: "fill",
     source: TAXIWAY_POLYGON_SOURCE,
     paint: {
-      "fill-color": "#3a5a3a",
+      "fill-color": "#c8a83c",
       "fill-opacity": 0.35,
+    },
+  });
+
+  // taxiway centerline dashes
+  map.addLayer({
+    id: TAXIWAY_CENTERLINE_LAYER,
+    type: "line",
+    source: TAXIWAY_SOURCE,
+    paint: {
+      "line-color": "#1a1a1a",
+      "line-width": 1,
+      "line-dasharray": [6, 6],
+      "line-opacity": 0.6,
     },
   });
 
@@ -251,7 +265,7 @@ export function addSurfaceLayers(
       "text-allow-overlap": false,
     },
     paint: {
-      "text-color": "#8a8a8a",
+      "text-color": "#d4b84a",
       "text-halo-color": "#000000",
       "text-halo-width": 1,
     },
@@ -264,6 +278,7 @@ export function addSurfaceLayers(
     RUNWAY_LABEL_LAYER,
     TAXIWAY_STROKE_LAYER,
     TAXIWAY_FILL_LAYER,
+    TAXIWAY_CENTERLINE_LAYER,
     TAXIWAY_LABEL_LAYER,
   ];
 }

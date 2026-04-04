@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import type maplibregl from "maplibre-gl";
 import type { MapFeature } from "@/types/map";
-import { polygonCentroid, haversineDistance, circleToPolygon, extractCenterline } from "@/utils/geo";
+import { polygonCentroid, haversineDistance, circleToPolygon, extractCenterline, computeBearing } from "@/utils/geo";
 import { bufferLineString } from "@/components/map/layers/surfaceLayers";
 
 const SRC_NODES = "vertex-edit-nodes";
@@ -271,9 +271,9 @@ export default function useVertexEditor(
           length = d12;
         }
       }
-      const dLng = centerline[1][0] - centerline[0][0];
-      const dLat = centerline[1][1] - centerline[0][1];
-      const heading = ((Math.atan2(dLng, dLat) * 180) / Math.PI + 360) % 360;
+      const heading = computeBearing(
+        centerline[0][0], centerline[0][1], centerline[1][0], centerline[1][1],
+      );
 
       const isTaxiway = feat.data.surface_type === "TAXIWAY";
       const roundedWidth = width != null ? Math.round(width * 100) / 100 : undefined;
