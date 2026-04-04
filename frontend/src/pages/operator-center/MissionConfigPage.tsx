@@ -538,6 +538,8 @@ export default function MissionConfigPage() {
   missionDirtyRef.current = missionDirty;
   const missionRef = useRef(mission);
   missionRef.current = mission;
+  const airportDetailRef = useRef(airportDetail);
+  airportDetailRef.current = airportDetail;
 
   const handleMapClick = useCallback(
     (lngLat: { lng: number; lat: number }) => {
@@ -556,7 +558,7 @@ export default function MissionConfigPage() {
         target === "takeoff"
           ? dirty.takeoff_coordinate ?? m?.takeoff_coordinate
           : dirty.landing_coordinate ?? m?.landing_coordinate;
-      const alt = existing ? existing.coordinates[2] : (airportDetail?.elevation ?? 0);
+      const alt = existing ? existing.coordinates[2] : (airportDetailRef.current?.elevation ?? 0);
 
       handleMissionChange({
         [key]: {
@@ -691,6 +693,7 @@ export default function MissionConfigPage() {
             onChange={handleMissionChange}
             pickingCoord={pickingCoord}
             onPickCoord={setPickingCoord}
+            defaultAltitude={airportDetail?.elevation ?? 0}
           />
         </div>
 
@@ -814,6 +817,9 @@ export default function MissionConfigPage() {
         onClose={() => setPendingNav(null)}
         title={t("mission.config.unsavedChanges")}
       >
+        <p className="text-sm text-tv-text-secondary mt-2">
+          {t("mission.config.unsavedChangesBody")}
+        </p>
         <div className="flex justify-end gap-2 mt-4">
           <button
             onClick={() => setPendingNav(null)}
