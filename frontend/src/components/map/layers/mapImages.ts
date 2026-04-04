@@ -85,6 +85,64 @@ function createHoverIcon(size: number, color: string): ImageData {
   return ctx.getImageData(0, 0, size, size);
 }
 
+/** creates a circle with a play triangle for recording start. */
+function createRecordingStartIcon(size: number, color: string): ImageData {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+
+  const cx = size / 2;
+  const r = size * 0.4;
+
+  ctx.beginPath();
+  ctx.arc(cx, cx, r, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = size * 0.06;
+  ctx.stroke();
+
+  // play triangle
+  const triH = size * 0.3;
+  const triW = size * 0.25;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.moveTo(cx - triW * 0.4, cx - triH / 2);
+  ctx.lineTo(cx - triW * 0.4, cx + triH / 2);
+  ctx.lineTo(cx + triW * 0.6, cx);
+  ctx.closePath();
+  ctx.fill();
+
+  return ctx.getImageData(0, 0, size, size);
+}
+
+/** creates a circle with a stop square for recording stop. */
+function createRecordingStopIcon(size: number, color: string): ImageData {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+
+  const cx = size / 2;
+  const r = size * 0.4;
+
+  ctx.beginPath();
+  ctx.arc(cx, cx, r, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = size * 0.06;
+  ctx.stroke();
+
+  // stop square
+  const sqSize = size * 0.28;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(cx - sqSize / 2, cx - sqSize / 2, sqSize, sqSize);
+
+  return ctx.getImageData(0, 0, size, size);
+}
+
 /** creates a tower icon - bold tapered structure with platform and antenna. */
 function createTowerIcon(size: number, color: string): ImageData {
   const canvas = document.createElement("canvas");
@@ -379,6 +437,8 @@ export function registerAllMapImages(map: MaplibreMap): void {
   safeAddImage(map, "takeoff-square", createRoundedSquareIcon(iconSize, "#4595e5", "T"), { pixelRatio: 2 });
   safeAddImage(map, "landing-square", createRoundedSquareIcon(iconSize, "#e54545", "L"), { pixelRatio: 2 });
   safeAddImage(map, "hover-icon", createHoverIcon(iconSize, "#e5a545"), { pixelRatio: 2 });
+  safeAddImage(map, "recording-start-icon", createRecordingStartIcon(iconSize, "#3bbb3b"), { pixelRatio: 2 });
+  safeAddImage(map, "recording-stop-icon", createRecordingStopIcon(iconSize, "#e54545"), { pixelRatio: 2 });
   safeAddImage(map, "agl-square", createAglSquareIcon(iconSize, "#e91e90"), { pixelRatio: 2 });
   safeAddImage(map, "path-arrow", createPathArrowIcon(iconSize), { pixelRatio: 2 });
 }

@@ -290,7 +290,7 @@ describe("WaypointInfoPanel", () => {
     expect(screen.getByText("MEASUREMENT")).toBeInTheDocument();
     expect(screen.getByText("90.0°")).toBeInTheDocument();
     expect(screen.getByText("5 m/s")).toBeInTheDocument();
-    expect(screen.getByText("map.cameraActionLabel.PHOTO_CAPTURE")).toBeInTheDocument();
+    expect(screen.getByText("mission.config.captureMode.photoCapture")).toBeInTheDocument();
     expect(screen.getByText("-45.0°")).toBeInTheDocument();
   });
 });

@@ -156,10 +156,21 @@ def _format_soft_warnings(violations: list, label: str, warnings: list[str]) -> 
 
 
 def _apply_camera_actions(waypoints: list[WaypointData]):
-    """set lead-in and lead-out waypoints to NONE camera action."""
+    """set lead-in and lead-out waypoints to NONE camera action.
+
+    preserves RECORDING_START/RECORDING_STOP on video capture hover waypoints.
+    """
     if len(waypoints) >= 2:
-        waypoints[0].camera_action = CameraAction.NONE
-        waypoints[-1].camera_action = CameraAction.NONE
+        if waypoints[0].camera_action not in (
+            CameraAction.RECORDING_START,
+            CameraAction.RECORDING_STOP,
+        ):
+            waypoints[0].camera_action = CameraAction.NONE
+        if waypoints[-1].camera_action not in (
+            CameraAction.RECORDING_START,
+            CameraAction.RECORDING_STOP,
+        ):
+            waypoints[-1].camera_action = CameraAction.NONE
 
 
 def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list[str]]:
@@ -224,6 +235,16 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
         # phase 2 - resolve config and pre-checks
         config = resolve_with_defaults(inspection, template)
+
+        # inject mission-level default capture mode when neither inspection nor template set it
+        insp_cm = getattr(inspection.config, "capture_mode", None) if inspection.config else None
+        tmpl_cm = (
+            getattr(template.default_config, "capture_mode", None)
+            if template.default_config
+            else None
+        )
+        if insp_cm is None and tmpl_cm is None and mission.default_capture_mode:
+            config.capture_mode = mission.default_capture_mode
 
         # generate suggestions for fields using template defaults
         label = f"{template.name} #{inspection.sequence_order}"

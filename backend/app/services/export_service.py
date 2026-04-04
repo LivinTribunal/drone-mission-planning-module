@@ -176,9 +176,10 @@ def _deg_to_rad(degrees: float) -> float:
 def _build_ugcs_actions(wp) -> list[dict]:
     """build ugcs action list from waypoint fields.
 
-    camera actions are intentionally excluded - ugcs requires camera mode
-    configuration that depends on the vehicle profile. users should configure
-    camera settings within ugcs after route import.
+    camera actions (PHOTO_CAPTURE, RECORDING_START, RECORDING, RECORDING_STOP)
+    are intentionally excluded - ugcs requires camera mode configuration that
+    depends on the vehicle profile. users should configure camera settings
+    within ugcs after route import.
     """
     actions = []
 
@@ -269,6 +270,9 @@ def generate_ugcs(
 _MAV_CMD_NAV_WAYPOINT = 16
 _MAV_CMD_NAV_TAKEOFF = 22
 _MAV_CMD_NAV_LAND = 21
+_MAV_CMD_IMAGE_START_CAPTURE = 2000
+_MAV_CMD_VIDEO_START_CAPTURE = 2500
+_MAV_CMD_VIDEO_STOP_CAPTURE = 2501
 
 # MAV_FRAME_GLOBAL_RELATIVE_ALT
 _MAV_FRAME = 3
@@ -276,6 +280,12 @@ _MAV_FRAME = 3
 _WAYPOINT_TYPE_COMMANDS = {
     "TAKEOFF": _MAV_CMD_NAV_TAKEOFF,
     "LANDING": _MAV_CMD_NAV_LAND,
+}
+
+_CAMERA_ACTION_COMMANDS = {
+    "RECORDING_START": _MAV_CMD_VIDEO_START_CAPTURE,
+    "RECORDING_STOP": _MAV_CMD_VIDEO_STOP_CAPTURE,
+    "PHOTO_CAPTURE": _MAV_CMD_IMAGE_START_CAPTURE,
 }
 
 
@@ -288,6 +298,7 @@ def generate_mavlink(
     lines = ["QGC WPL 110"]
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
 
+    seq = 0
     for i, wp in enumerate(waypoints):
         lon, lat, alt = _extract_coords(wp.position)
         # mavlink uses relative altitude (AGL)
@@ -295,17 +306,25 @@ def generate_mavlink(
         command = _WAYPOINT_TYPE_COMMANDS.get(wp.waypoint_type, _MAV_CMD_NAV_WAYPOINT)
 
         # first waypoint is current
-        current = 1 if i == 0 else 0
+        current = 1 if seq == 0 else 0
 
         # p1 = hold time for hover waypoints
         p1 = wp.hover_duration or 0
 
         line = (
-            f"{i}\t{current}\t{_MAV_FRAME}\t{command}\t"
+            f"{seq}\t{current}\t{_MAV_FRAME}\t{command}\t"
             f"{p1}\t0\t0\t{wp.heading or 0}\t"
             f"{lat}\t{lon}\t{agl}\t1"
         )
         lines.append(line)
+        seq += 1
+
+        # camera command after navigation waypoint
+        cam_cmd = _CAMERA_ACTION_COMMANDS.get(wp.camera_action)
+        if cam_cmd:
+            cam_line = f"{seq}\t0\t0\t{cam_cmd}\t" f"0\t0\t0\t0\t0\t0\t0\t1"
+            lines.append(cam_line)
+            seq += 1
 
     return "\n".join(lines).encode("utf-8")
 

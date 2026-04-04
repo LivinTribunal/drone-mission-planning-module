@@ -156,6 +156,8 @@ export default function InspectionEditPage() {
             horizontal_distance: cfg.horizontal_distance,
             sweep_angle: cfg.sweep_angle,
             lha_ids: cfg.lha_ids,
+            capture_mode: cfg.capture_mode,
+            recording_setup_duration: cfg.recording_setup_duration,
           }
         : {
             altitude_offset: null,
@@ -167,6 +169,8 @@ export default function InspectionEditPage() {
             horizontal_distance: null,
             sweep_angle: null,
             lha_ids: null,
+            capture_mode: null,
+            recording_setup_duration: null,
           },
     );
 
