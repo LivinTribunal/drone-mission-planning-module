@@ -10,7 +10,7 @@ from app.schemas.flight_plan import (
     GenerateTrajectoryResponse,
     WaypointBatchUpdateRequest,
 )
-from app.services import flight_plan_service
+from app.services import flight_plan_service, mission_service
 from app.services.trajectory_orchestrator import generate_trajectory
 
 router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
@@ -21,7 +21,18 @@ router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
     response_model=GenerateTrajectoryResponse,
 )
 def generate(mission_id: UUID, db: Session = Depends(get_db)):
-    """run 5-phase trajectory generation pipeline"""
+    """run 5-phase trajectory generation pipeline."""
+    try:
+        mission = mission_service.get_mission(db, mission_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    if not mission.takeoff_coordinate or not mission.landing_coordinate:
+        raise HTTPException(
+            status_code=400,
+            detail="Takeoff/landing coordinates must be set.",
+        )
+
     try:
         flight_plan, _warnings = generate_trajectory(db, mission_id)
     except TrajectoryGenerationError as error:

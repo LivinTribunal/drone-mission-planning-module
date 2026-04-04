@@ -19,7 +19,6 @@ class SurfaceCreate(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
-    taxiway_width: float | None = None
 
 
 class SurfaceUpdate(BaseModel):
@@ -33,7 +32,6 @@ class SurfaceUpdate(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
-    taxiway_width: float | None = None
 
 
 class SurfaceResponse(BaseModel):
@@ -50,7 +48,6 @@ class SurfaceResponse(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
-    taxiway_width: float | None = None
     agls: list["AGLResponse"] = []
 
     model_config = {"from_attributes": True}
