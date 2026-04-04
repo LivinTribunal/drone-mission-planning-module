@@ -1,18 +1,13 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Flag } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { MapLayerConfig } from "@/types/map";
 
 interface LayerPanelProps {
   layers: MapLayerConfig;
   onToggle: (key: string) => void;
-  hasWaypoints?: boolean;
-  hasSimplifiedTrajectory?: boolean;
+  hasFlightPlan?: boolean;
   hasTakeoffLanding?: boolean;
-  hasTakeoff?: boolean;
-  hasLanding?: boolean;
-  onPlaceTakeoff?: () => void;
-  onPlaceLanding?: () => void;
 }
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
@@ -46,13 +41,8 @@ const baseLayerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
 export default function LayerPanel({
   layers,
   onToggle,
-  hasWaypoints,
-  hasSimplifiedTrajectory,
+  hasFlightPlan,
   hasTakeoffLanding,
-  hasTakeoff,
-  hasLanding,
-  onPlaceTakeoff,
-  onPlaceLanding,
 }: LayerPanelProps) {
   /** hierarchical layer visibility toggle panel. */
   const { t } = useTranslation();
@@ -94,16 +84,24 @@ export default function LayerPanel({
             </div>
           ))}
 
+          {/* takeoff & landing toggle - when placed but no flight plan yet */}
+          {hasTakeoffLanding && !hasFlightPlan && (
+            <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
+              <span>{t("map.takeoffLanding")}</span>
+              <Toggle checked={layers.takeoffLanding} onChange={() => onToggle("takeoffLanding")} />
+            </div>
+          )}
+
           {/* simplified trajectory */}
-          {hasSimplifiedTrajectory && (
+          {hasFlightPlan && (
             <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
               <span>{t("map.simplifiedTrajectory")}</span>
               <Toggle checked={layers.simplifiedTrajectory} onChange={() => onToggle("simplifiedTrajectory")} />
             </div>
           )}
 
-          {/* trajectory parent */}
-          {hasWaypoints && (
+          {/* trajectory parent - only with flight plan */}
+          {hasFlightPlan && (
             <>
               <div className="flex items-center gap-1 py-1 text-xs text-tv-text-secondary">
                 <button
@@ -169,36 +167,6 @@ export default function LayerPanel({
                 </div>
               )}
             </>
-          )}
-
-          {/* standalone takeoff & landing toggle - when no trajectory but markers exist */}
-          {!hasWaypoints && hasTakeoffLanding && (
-            <div className="flex items-center gap-2 py-1 text-xs text-tv-text-secondary">
-              <span>{t("map.takeoffLanding")}</span>
-              <Toggle checked={layers.takeoffLanding} onChange={() => onToggle("takeoffLanding")} />
-            </div>
-          )}
-
-          {/* placement buttons */}
-          {!hasTakeoff && onPlaceTakeoff && (
-            <button
-              onClick={onPlaceTakeoff}
-              className="flex items-center gap-2 w-full mt-2 rounded-full px-3 py-1.5 text-xs font-semibold bg-tv-success/10 border border-tv-success text-tv-success hover:bg-tv-success/20 transition-colors"
-              data-testid="place-takeoff-btn"
-            >
-              <Flag className="h-3.5 w-3.5" />
-              {t("map.placeTakeoff")}
-            </button>
-          )}
-          {!hasLanding && onPlaceLanding && (
-            <button
-              onClick={onPlaceLanding}
-              className="flex items-center gap-2 w-full mt-1.5 rounded-full px-3 py-1.5 text-xs font-semibold bg-tv-error/10 border border-tv-error text-tv-error hover:bg-tv-error/20 transition-colors"
-              data-testid="place-landing-btn"
-            >
-              <Flag className="h-3.5 w-3.5" />
-              {t("map.placeLanding")}
-            </button>
           )}
         </div>
       )}

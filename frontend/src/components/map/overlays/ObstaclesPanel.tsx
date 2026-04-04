@@ -1,17 +1,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { OBSTACLE_COLORS, ObstacleTypeIcon } from "@/components/map/obstacleIcons";
 import type { ObstacleResponse } from "@/types/airport";
-import type { ObstacleType } from "@/types/enums";
 import type { MapFeature, MapLayerConfig } from "@/types/map";
-
-const OBSTACLE_COLORS: Record<ObstacleType, string> = {
-  BUILDING: "#e54545",
-  TOWER: "#9b59b6",
-  ANTENNA: "#e5a545",
-  VEGETATION: "#3bbb3b",
-  OTHER: "#6b6b6b",
-};
 
 interface ObstaclesPanelProps {
   obstacles: ObstacleResponse[];
@@ -82,10 +74,7 @@ export default function ObstaclesPanel({
                 } ${idx < count - 1 ? "border-b border-tv-border" : ""}`}
                 data-testid={`obstacle-item-${obstacle.id}`}
               >
-                {/* colored triangle icon */}
-                <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 10 10">
-                  <polygon points="5,1 9,9 1,9" fill={OBSTACLE_COLORS[obstacle.type] ?? "#6b6b6b"} />
-                </svg>
+                <ObstacleTypeIcon type={obstacle.type} />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -99,7 +88,7 @@ export default function ObstaclesPanel({
                         color: OBSTACLE_COLORS[obstacle.type] ?? "#6b6b6b",
                       }}
                     >
-                      {obstacle.type}
+                      {t(`airportEdit.obstacleTypes.${obstacle.type.toLowerCase()}`)}
                     </span>
                   </div>
                   <p className="text-[10px] text-tv-text-secondary mt-0.5">

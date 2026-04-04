@@ -118,14 +118,18 @@ export default function MissionInfoPanel({
             />
           </div>
 
-          {mission.operator_notes && (
-            <div className="mt-2 p-2 rounded-xl bg-tv-bg">
-              <p className="text-xs text-tv-text-muted">{t("mission.overview.operatorNotes")}:</p>
+          <div className="mt-2 p-2 rounded-xl bg-tv-bg">
+            <p className="text-xs text-tv-text-muted">{t("mission.overview.operatorNotes")}:</p>
+            {mission.operator_notes ? (
               <p className="text-sm text-tv-text-primary mt-0.5 whitespace-pre-wrap">
                 {mission.operator_notes}
               </p>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm mt-0.5" style={{ color: "var(--tv-text-muted)" }}>
+                {t("mission.overview.noNotes")}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>
