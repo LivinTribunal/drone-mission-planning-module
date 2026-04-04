@@ -551,6 +551,16 @@ export default function AirportEditPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleToolChange, undo, redo, selectedFeature, activeTool, handleCreationCancel]);
 
+  const handleInfraPointDrag = useCallback(
+    (featureType: "agl" | "lha", featureId: string, newPosition: [number, number, number]) => {
+      /** handle agl/lha point drag - mark dirty with new position. */
+      markDirty(featureType, featureId, "update", {
+        position: { type: "Point", coordinates: newPosition },
+      });
+    },
+    [markDirty],
+  );
+
   const handleFeatureClick = useCallback((feature: MapFeature | null) => {
     /** set selected feature when clicked on map or list panel - skip during drawing. */
     if (isDrawingActive) return;
@@ -776,6 +786,64 @@ export default function AirportEditPage() {
     }
   }, [id, airport, getPendingChanges, clearAll, fetchAirport, selectedFeature]);
 
+  // pre-compute geometry-derived values for the creation form
+  const prefilledGeometry = useMemo(() => {
+    /** derive width, length, heading, area from pending geometry for form pre-fill. */
+    if (!pendingGeometry) return {};
+    const ring = pendingGeometry.coordinates[0] as [number, number][];
+    const pts = ring[ring.length - 1][0] === ring[0][0] && ring[ring.length - 1][1] === ring[0][1]
+      ? ring.slice(0, -1) : ring;
+
+    let width: number | undefined;
+    let length: number | undefined;
+    let heading: number | undefined;
+
+    if (pts.length === 4) {
+      const d01 = haversineDistance(pts[0][0], pts[0][1], pts[1][0], pts[1][1]);
+      const d12 = haversineDistance(pts[1][0], pts[1][1], pts[2][0], pts[2][1]);
+      if (d01 >= d12) {
+        length = d01;
+        width = (d12 + haversineDistance(pts[3][0], pts[3][1], pts[0][0], pts[0][1])) / 2;
+      } else {
+        length = d12;
+        width = (d01 + haversineDistance(pts[2][0], pts[2][1], pts[3][0], pts[3][1])) / 2;
+      }
+    }
+
+    // heading from centerline
+    const centerline = extractCenterline(ring);
+    if (centerline.length >= 2) {
+      const dLng = centerline[1][0] - centerline[0][0];
+      const dLat = centerline[1][1] - centerline[0][1];
+      heading = ((Math.atan2(dLng, dLat) * 180) / Math.PI + 360) % 360;
+    }
+
+    // area via shoelace on projected coordinates
+    let area: number | undefined;
+    if (pts.length >= 3) {
+      const refLat = pts[0][1];
+      const mPerDegLat = 111320;
+      const mPerDegLng = 111320 * Math.cos((refLat * Math.PI) / 180);
+      const projected = pts.map((p) => [
+        (p[0] - pts[0][0]) * mPerDegLng,
+        (p[1] - pts[0][1]) * mPerDegLat,
+      ]);
+      let sum = 0;
+      for (let i = 0; i < projected.length; i++) {
+        const j = (i + 1) % projected.length;
+        sum += projected[i][0] * projected[j][1] - projected[j][0] * projected[i][1];
+      }
+      area = Math.abs(sum) / 2;
+    }
+
+    // for circles, use pi * r^2
+    if (pendingGeometryType === "circle" && pendingCircleRadius != null) {
+      area = Math.PI * pendingCircleRadius * pendingCircleRadius;
+    }
+
+    return { width, length, heading, area };
+  }, [pendingGeometry, pendingGeometryType, pendingCircleRadius]);
+
   const surfaces = useMemo(() => airport?.surfaces ?? [], [airport]);
   const obstacles = useMemo(() => airport?.obstacles ?? [], [airport]);
   const safetyZones = useMemo(() => airport?.safety_zones ?? [], [airport]);
@@ -820,6 +888,7 @@ export default function AirportEditPage() {
           terrainMode={terrainMode}
           onTerrainChange={setTerrainMode}
           onFeatureClick={handleFeatureClick}
+          onInfraPointDrag={handleInfraPointDrag}
           onLayerChange={handleLayerChange}
           focusFeature={selectedFeature}
           pendingGeometry={pendingGeometry}
@@ -1041,6 +1110,10 @@ export default function AirportEditPage() {
                 surfaces={surfaces}
                 onCancel={handleCreationCancel}
                 onCreate={handleCreate}
+                prefilledWidth={prefilledGeometry.width}
+                prefilledLength={prefilledGeometry.length}
+                prefilledHeading={prefilledGeometry.heading}
+                prefilledArea={prefilledGeometry.area}
               />
             ) : selectedFeature && selectedFeature.type !== "waypoint" ? (
               <EditableFeatureInfo

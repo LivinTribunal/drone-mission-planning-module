@@ -29,6 +29,10 @@ interface CreationFormProps {
   surfaces: SurfaceResponse[];
   onCancel: () => void;
   onCreate: (entityType: EntityType, data: Record<string, unknown>) => Promise<void>;
+  prefilledWidth?: number;
+  prefilledLength?: number;
+  prefilledHeading?: number;
+  prefilledArea?: number;
 }
 
 const POLYGON_CATEGORIES: { value: CategoryPolygon; labelKey: string }[] = [
@@ -75,6 +79,10 @@ export default function CreationForm({
   surfaces,
   onCancel,
   onCreate,
+  prefilledWidth,
+  prefilledLength,
+  prefilledHeading,
+  prefilledArea,
 }: CreationFormProps) {
   /** creation form shown after drawing a geometry - two-tier type selection, fill fields, create entity. */
   const { t } = useTranslation();
@@ -85,9 +93,9 @@ export default function CreationForm({
 
   // form field state
   const [name, setName] = useState("");
-  const [heading, setHeading] = useState("");
-  const [length, setLength] = useState("");
-  const [width, setWidth] = useState("");
+  const [heading, setHeading] = useState(prefilledHeading != null ? String(Math.round(prefilledHeading * 10) / 10) : "");
+  const [length, setLength] = useState(prefilledLength != null ? String(Math.round(prefilledLength * 100) / 100) : "");
+  const [width, setWidth] = useState(prefilledWidth != null ? String(Math.round(prefilledWidth * 100) / 100) : "");
   const [altFloor, setAltFloor] = useState("0");
   const [altCeiling, setAltCeiling] = useState("");
   const [isActive, setIsActive] = useState(true);
@@ -381,6 +389,11 @@ export default function CreationForm({
                   />
                   {t("coordinator.creation.active")}
                 </label>
+                {prefilledArea != null && (
+                  <p className="text-[10px] text-tv-text-muted">
+                    {t("coordinator.creation.area")}: {Math.round(prefilledArea)} m²
+                  </p>
+                )}
               </>
             )}
 
@@ -408,6 +421,11 @@ export default function CreationForm({
                     {t("coordinator.creation.position")}:{" "}
                     {(circleCenter ?? pointPosition)![1].toFixed(6)},{" "}
                     {(circleCenter ?? pointPosition)![0].toFixed(6)}
+                  </p>
+                )}
+                {prefilledArea != null && (
+                  <p className="text-[10px] text-tv-text-muted">
+                    {t("coordinator.creation.area")}: {Math.round(prefilledArea)} m²
                   </p>
                 )}
               </>

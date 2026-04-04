@@ -60,6 +60,7 @@ import {
 } from "./layers/aglLayers";
 import {
   addWaypointLayers as addWaypointLayersFn,
+  removeWaypointLayers as removeWaypointLayersFn,
   addSimplifiedTrajectoryLayers,
   updateSelectedFilter,
   getSimplifiedTrajectoryLayerIds,
@@ -250,6 +251,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   headingOrigin,
   isHeadingDrawing,
   onWaypointDrag,
+  onInfraPointDrag,
   zoomPercent,
   onZoomChange,
   focusFeature,
@@ -683,6 +685,89 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       map.off("mouseup", handleMouseUp);
     };
   }, [activeTool, interactive, onWaypointDrag]);
+
+  // drag agl/lha points in select mode
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !interactive || !onInfraPointDrag) return;
+    const tool = activeTool ?? MapTool.SELECT;
+    if (tool !== MapTool.SELECT) return;
+
+    const dragState = { featureId: "", featureType: "" as "agl" | "lha", originalAlt: 0, dragging: false };
+    let rafId = 0;
+
+    const infraQueryLayers = [AGL_POINT_LAYER, LHA_POINT_LAYER];
+
+    function handleMouseDown(e: maplibregl.MapMouseEvent) {
+      if (!map) return;
+      const layers = infraQueryLayers.filter((id) => {
+        try { return map.getLayer(id); } catch { return false; }
+      });
+      if (!layers.length) return;
+      const features = map.queryRenderedFeatures(e.point, { layers });
+      if (!features.length) return;
+      const fId = String(features[0].properties?.id ?? "");
+      if (!fId) return;
+      const entityType = String(features[0].properties?.entityType ?? "") as "agl" | "lha";
+      if (entityType !== "agl" && entityType !== "lha") return;
+      const coords = features[0].geometry && "coordinates" in features[0].geometry
+        ? (features[0].geometry as GeoJSON.Point).coordinates
+        : [0, 0, 0];
+      dragState.featureId = fId;
+      dragState.featureType = entityType;
+      dragState.originalAlt = coords[2] ?? 0;
+      dragState.dragging = true;
+      map.getCanvas().style.cursor = "grabbing";
+      map.dragPan.disable();
+      e.preventDefault();
+    }
+
+    function handleMouseMove(e: maplibregl.MapMouseEvent) {
+      if (!dragState.dragging || !map) return;
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (!map) return;
+        const newCoords: [number, number, number] = [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt];
+        const sourceName = dragState.featureType === "agl" ? AGL_SOURCE : LHA_SOURCE;
+        const src = map.getSource(sourceName) as maplibregl.GeoJSONSource | undefined;
+        if (src) {
+          const rendered = map.querySourceFeatures(sourceName);
+          const features: GeoJSON.Feature[] = rendered.map((f) => ({
+            type: "Feature",
+            properties: f.properties,
+            geometry: f.properties?.id === dragState.featureId
+              ? { type: "Point" as const, coordinates: newCoords }
+              : f.geometry,
+          }));
+          src.setData({ type: "FeatureCollection", features });
+        }
+      });
+    }
+
+    function handleMouseUp(e: maplibregl.MapMouseEvent) {
+      if (!dragState.dragging || !map) return;
+      cancelAnimationFrame(rafId);
+      dragState.dragging = false;
+      map.getCanvas().style.cursor = "";
+      map.dragPan.enable();
+      onInfraPointDrag?.(
+        dragState.featureType,
+        dragState.featureId,
+        [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt],
+      );
+      dragState.featureId = "";
+    }
+
+    map.on("mousedown", handleMouseDown);
+    map.on("mousemove", handleMouseMove);
+    map.on("mouseup", handleMouseUp);
+    return () => {
+      cancelAnimationFrame(rafId);
+      map.off("mousedown", handleMouseDown);
+      map.off("mousemove", handleMouseMove);
+      map.off("mouseup", handleMouseUp);
+    };
+  }, [activeTool, interactive, onInfraPointDrag]);
 
   // zoom tool: click to zoom in/out, sync zoomPercent
   useEffect(() => {
@@ -1135,6 +1220,28 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         layersAddedRef.current = false;
       }
       addAllLayers(map);
+
+      // remove + re-add waypoint layers so they render on top of infrastructure
+      removeWaypointLayersFn(map);
+      registerAllMapImages(map);
+      addWaypointLayersFn(map, waypointsRef.current ?? [], takeoffRef.current, landingRef.current, undefined, indexMapRef.current);
+      addSimplifiedTrajectoryLayers(map, waypointsRef.current ?? [], takeoffRef.current, landingRef.current);
+
+      // restore layer toggle visibility after rebuild
+      const cfg = layerConfigRef.current;
+      for (const [key, layerIds] of Object.entries(layerGroupMap)) {
+        const visible = cfg[key as keyof MapLayerConfig];
+        if (visible === undefined) continue;
+        for (const layerId of layerIds) {
+          try {
+            if (map.getLayer(layerId)) {
+              map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+            }
+          } catch {
+            // layer may not exist
+          }
+        }
+      }
 
       // keep vertex editor overlay on top of rebuilt infra layers
       for (const lyr of ["vertex-edit-corners", "vertex-edit-center"]) {
