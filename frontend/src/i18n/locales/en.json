@@ -478,6 +478,8 @@
       "formatJsonDesc": "Machine-readable waypoint data",
       "formatMavlink": "MAVLink",
       "formatMavlinkDesc": "QGroundControl / Mission Planner",
+      "formatUgcs": "UgCS",
+      "formatUgcsDesc": "UgCS route import format",
       "downloadExport": "Download Export",
       "downloading": "Downloading...",
       "validateFirst": "Validate the plan first",

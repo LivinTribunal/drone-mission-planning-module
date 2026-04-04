@@ -19,7 +19,7 @@ export type CameraAction =
   | "RECORDING_START"
   | "RECORDING_STOP";
 
-export type ExportFormat = "MAVLINK" | "KML" | "KMZ" | "JSON";
+export type ExportFormat = "MAVLINK" | "KML" | "KMZ" | "JSON" | "UGCS";
 
 export type InspectionMethod = "VERTICAL_PROFILE" | "ANGULAR_SWEEP";
 
