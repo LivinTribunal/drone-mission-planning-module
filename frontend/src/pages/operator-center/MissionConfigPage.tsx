@@ -815,6 +815,9 @@ export default function MissionConfigPage() {
         onClose={() => setPendingNav(null)}
         title={t("mission.config.unsavedChanges")}
       >
+        <p className="text-sm text-tv-text-secondary mt-2">
+          {t("mission.config.unsavedChangesBody")}
+        </p>
         <div className="flex justify-end gap-2 mt-4">
           <button
             onClick={() => setPendingNav(null)}
