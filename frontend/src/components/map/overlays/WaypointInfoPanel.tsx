@@ -42,7 +42,9 @@ export default function WaypointInfoPanel({
     },
     {
       label: t("mission.config.cameraAction"),
-      value: waypoint.camera_action ?? "\u2014",
+      value: waypoint.camera_action
+        ? t(`map.cameraActionLabel.${waypoint.camera_action}`, { defaultValue: waypoint.camera_action })
+        : "\u2014",
     },
     {
       label: t("mission.config.gimbalPitch"),
@@ -68,6 +70,25 @@ export default function WaypointInfoPanel({
             <span className="text-tv-text-primary font-medium">{f.value}</span>
           </div>
         ))}
+        {waypoint.camera_target && (
+          <div className="text-xs">
+            <div className="text-tv-text-muted">{t("map.cameraTarget")}:</div>
+            <div className="mt-0.5 pl-2 space-y-0.5">
+              <div className="flex justify-between">
+                <span className="text-tv-text-muted">{t("map.coordinates.lat")}</span>
+                <span className="text-tv-text-primary font-medium">{waypoint.camera_target.coordinates[1].toFixed(6)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-tv-text-muted">{t("map.coordinates.lon")}</span>
+                <span className="text-tv-text-primary font-medium">{waypoint.camera_target.coordinates[0].toFixed(6)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-tv-text-muted">{t("map.coordinates.alt")}</span>
+                <span className="text-tv-text-primary font-medium">{waypoint.camera_target.coordinates[2].toFixed(1)}m</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

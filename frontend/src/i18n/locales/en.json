@@ -233,6 +233,20 @@
     "needsManualApproval": "Needs Manual Approval",
     "changesSaved": "Changes saved",
     "deleteConfirm": "Delete {{type}} point? The trajectory will be invalidated.",
+    "measureResult": "Measurement",
+    "headingResult": "Heading",
+    "segments": "Segments",
+    "bearing": "Bearing",
+    "vertices": "Vertices",
+    "centroid": "Centroid",
+    "cameraTarget": "Camera Target",
+    "insertTransit": "Insert Transit Waypoint",
+    "cameraActionLabel": {
+      "NONE": "None",
+      "PHOTO_CAPTURE": "Photo Capture",
+      "RECORDING_START": "Recording Start",
+      "RECORDING_STOP": "Recording Stop"
+    },
     "draftMoveRestriction": "Compute trajectory first",
     "inspectionMethod": {
       "VERTICAL_PROFILE": "Vertical Profile",

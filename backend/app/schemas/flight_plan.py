@@ -161,6 +161,13 @@ class WaypointBatchUpdateRequest(BaseModel):
     updates: list[WaypointPositionUpdate]
 
 
+class TransitWaypointInsertRequest(BaseModel):
+    """insert a new transit waypoint after a given sequence position."""
+
+    position: PointZ
+    after_sequence: int
+
+
 class GenerateTrajectoryResponse(BaseModel):
     """response from trajectory generation"""
 

@@ -160,3 +160,16 @@ export async function batchUpdateWaypoints(
   );
   return res.data;
 }
+
+export async function insertTransitWaypoint(
+  missionId: string,
+  position: { type: "Point"; coordinates: [number, number, number] },
+  afterSequence: number,
+): Promise<FlightPlanResponse> {
+  /** insert a new transit waypoint on the transit path. */
+  const res = await client.post(
+    `/missions/${missionId}/flight-plan/waypoints/transit`,
+    { position, after_sequence: afterSequence },
+  );
+  return res.data;
+}

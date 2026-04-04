@@ -79,6 +79,9 @@ import {
   WAYPOINT_LABEL_LAYER,
   WAYPOINT_CAMERA_LINE_LAYER,
   WAYPOINT_ARROW_LAYER,
+  WAYPOINT_TRANSIT_HIT_LAYER,
+  WAYPOINT_GHOST_TRANSIT_SOURCE,
+  WAYPOINT_CAMERA_TARGET_LAYER,
   SIMPLIFIED_TAKEOFF_LAYER,
   SIMPLIFIED_LANDING_LAYER,
 } from "./layers/waypointLayers";
@@ -172,7 +175,7 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
   measurementWaypoints: [WAYPOINT_MEASUREMENT_CIRCLE_LAYER, WAYPOINT_HOVER_LAYER, WAYPOINT_LABEL_LAYER],
   path: [WAYPOINT_LINE_LAYER],
   takeoffLanding: [WAYPOINT_TAKEOFF_LAYER, WAYPOINT_LANDING_LAYER, SIMPLIFIED_TAKEOFF_LAYER, SIMPLIFIED_LANDING_LAYER],
-  cameraHeading: [WAYPOINT_CAMERA_LINE_LAYER],
+  cameraHeading: [WAYPOINT_CAMERA_LINE_LAYER, WAYPOINT_CAMERA_TARGET_LAYER],
   pathHeading: [WAYPOINT_ARROW_LAYER],
 };
 
@@ -256,6 +259,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   headingOrigin,
   isHeadingDrawing,
   onWaypointDrag,
+  onTransitInsert,
   onInfraPointDrag,
   zoomPercent,
   onZoomChange,
@@ -679,6 +683,72 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       map.off("mouseup", handleMouseUp);
     };
   }, [activeTool, interactive, onWaypointDrag]);
+
+  // transit path hover/click: show ghost waypoint, insert on click
+  const onTransitInsertRef = useRef(onTransitInsert);
+  onTransitInsertRef.current = onTransitInsert;
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !interactive || !onTransitInsertRef.current) return;
+    const tool = activeTool ?? MapTool.SELECT;
+    if (tool !== MapTool.SELECT) return;
+
+    let ghostActive = false;
+
+    function handleMouseMove(e: maplibregl.MapMouseEvent) {
+      if (!map) return;
+      try { if (!map.getLayer(WAYPOINT_TRANSIT_HIT_LAYER)) return; } catch { return; }
+
+      const features = map.queryRenderedFeatures(e.point, { layers: [WAYPOINT_TRANSIT_HIT_LAYER] });
+      const ghostSrc = map.getSource(WAYPOINT_GHOST_TRANSIT_SOURCE) as maplibregl.GeoJSONSource | undefined;
+      if (!ghostSrc) return;
+
+      if (features.length > 0) {
+        const alt = features[0].properties?.from_alt ?? 0;
+        ghostSrc.setData({
+          type: "FeatureCollection",
+          features: [{
+            type: "Feature",
+            properties: { after_seq: features[0].properties?.from_seq ?? 0 },
+            geometry: { type: "Point", coordinates: [e.lngLat.lng, e.lngLat.lat, alt] },
+          }],
+        });
+        if (!ghostActive) {
+          map.getCanvas().style.cursor = "copy";
+          ghostActive = true;
+        }
+      } else if (ghostActive) {
+        ghostSrc.setData({ type: "FeatureCollection", features: [] });
+        map.getCanvas().style.cursor = "";
+        ghostActive = false;
+      }
+    }
+
+    function handleClick(e: maplibregl.MapMouseEvent) {
+      if (!map) return;
+      try { if (!map.getLayer(WAYPOINT_TRANSIT_HIT_LAYER)) return; } catch { return; }
+
+      const features = map.queryRenderedFeatures(e.point, { layers: [WAYPOINT_TRANSIT_HIT_LAYER] });
+      if (features.length === 0) return;
+
+      const afterSeq = features[0].properties?.from_seq ?? 0;
+      const alt = features[0].properties?.from_alt ?? 0;
+      onTransitInsertRef.current?.([e.lngLat.lng, e.lngLat.lat, alt], afterSeq);
+    }
+
+    map.on("mousemove", handleMouseMove);
+    map.on("click", handleClick);
+    return () => {
+      map.off("mousemove", handleMouseMove);
+      map.off("click", handleClick);
+      if (ghostActive) {
+        map.getCanvas().style.cursor = "";
+        const ghostSrc = map.getSource(WAYPOINT_GHOST_TRANSIT_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        if (ghostSrc) ghostSrc.setData({ type: "FeatureCollection", features: [] });
+      }
+    };
+  }, [activeTool, interactive]);
 
   // zoom tool: click to zoom in/out, sync zoomPercent
   useEffect(() => {
