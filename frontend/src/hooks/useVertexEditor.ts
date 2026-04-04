@@ -3,6 +3,7 @@ import type maplibregl from "maplibre-gl";
 import type { MapFeature } from "@/types/map";
 import { polygonCentroid, haversineDistance, circleToPolygon, extractCenterline } from "@/utils/geo";
 import { bufferLineString } from "@/components/map/layers/surfaceLayers";
+import { DEFAULT_TAXIWAY_WIDTH_M } from "@/constants/surface";
 
 const SRC_NODES = "vertex-edit-nodes";
 const LYR_CORNERS = "vertex-edit-corners";
@@ -59,7 +60,7 @@ function extractEditState(feature: MapFeature): EditState | null {
     const coords = feature.data.geometry.coordinates;
     if (!coords || coords.length < 2) return null;
     const isTaxiway = feature.data.surface_type === "TAXIWAY";
-    const width = isTaxiway ? 20 : (feature.data.width ?? 45);
+    const width = isTaxiway ? DEFAULT_TAXIWAY_WIDTH_M : (feature.data.width ?? 45);
     const ring2d = bufferLineString(coords, width);
     if (ring2d.length < 4) return null;
     const corners = ring2d.slice(0, -1).map(([lng, lat]) => [lng, lat] as [number, number]);
@@ -125,8 +126,9 @@ function removeSources(map: maplibregl.Map) {
 /** poll map.isStyleLoaded() until true, then call callback. returns cancel fn. */
 function waitForStyleLoaded(map: maplibregl.Map, callback: () => void): () => void {
   let cancelled = false;
+  let ticks = 0;
   function check() {
-    if (cancelled) return;
+    if (cancelled || ticks++ > 300) return;
     if (map.isStyleLoaded()) callback();
     else requestAnimationFrame(check);
   }

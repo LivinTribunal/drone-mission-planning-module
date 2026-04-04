@@ -120,7 +120,6 @@ export interface SurfaceCreate {
 
 export interface SurfaceUpdate {
   identifier?: string;
-  surface_type?: SurfaceType;
   geometry?: LineStringZ;
   boundary?: PolygonZ;
   heading?: number | null;
