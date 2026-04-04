@@ -110,6 +110,45 @@ def test_duplicate_mission(client):
     assert len(duplicate_detail["inspections"]) == len(original["inspections"])
 
 
+def test_duplicate_mission_preserves_lha_ids(client, airport_id):
+    """duplicate mission preserves lha_ids from inspection configs."""
+    from uuid import uuid4
+
+    # create mission with inspection that has lha_ids in config
+    template = client.post(
+        "/api/v1/inspection-templates",
+        json={"name": "LHA Dup Template", "methods": ["ANGULAR_SWEEP"]},
+    ).json()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={"name": "LHA Dup Mission", "airport_id": airport_id},
+    ).json()
+
+    lha_id_1 = str(uuid4())
+    lha_id_2 = str(uuid4())
+
+    client.post(
+        f"/api/v1/missions/{mission['id']}/inspections",
+        json={
+            "template_id": template["id"],
+            "method": "ANGULAR_SWEEP",
+            "config": {"lha_ids": [lha_id_1, lha_id_2]},
+        },
+    )
+
+    # duplicate
+    dup = client.post(f"/api/v1/missions/{mission['id']}/duplicate")
+    assert dup.status_code == 201
+
+    dup_detail = client.get(f"/api/v1/missions/{dup.json()['id']}").json()
+    assert len(dup_detail["inspections"]) == 1
+
+    dup_config = dup_detail["inspections"][0].get("config")
+    assert dup_config is not None
+    assert dup_config["lha_ids"] == [lha_id_1, lha_id_2]
+
+
 def test_delete_mission(client, airport_id):
     """test delete mission"""
     response = client.post("/api/v1/missions", json={"name": "To Delete", "airport_id": airport_id})

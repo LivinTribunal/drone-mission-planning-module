@@ -293,6 +293,7 @@ export default function MissionMapPage() {
       canCompute: canCompute && !computing,
       isComputing: computing,
       label: computeLabel,
+      ...(!hasCoordinates ? { tooltip: t("mission.config.setCoordinatesTooltip") } : {}),
     });
     return () => {
       setComputeContext({
@@ -301,7 +302,7 @@ export default function MissionMapPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext, handleCompute, canCompute, computing, computeLabel]);
+  }, [setComputeContext, handleCompute, canCompute, computing, computeLabel, hasCoordinates, t]);
 
   // handle map click based on active tool
   const handleMapClick = useCallback(

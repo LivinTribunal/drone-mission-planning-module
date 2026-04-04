@@ -95,6 +95,22 @@ def test_create_agl_and_lha(client):
     assert r.json()["unit_number"] == 1
 
 
+def test_surface_response_excludes_taxiway_width(client):
+    """surface response should not contain taxiway_width field."""
+    # create airport + surface to avoid ordering dependency
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LKTW"},
+    ).json()
+
+    client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD)
+    surfaces = client.get(f"/api/v1/airports/{apt['id']}/surfaces").json()["data"]
+    assert len(surfaces) >= 1
+
+    for surface in surfaces:
+        assert "taxiway_width" not in surface
+
+
 def test_create_airport_invalid_icao(client):
     """reject airports with invalid ICAO codes."""
     invalid_codes = ["lkpr", "LKP", "LK12", "LKPRX"]

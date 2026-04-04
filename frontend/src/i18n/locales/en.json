@@ -431,6 +431,7 @@
       "staleTrajectory": "Trajectory is outdated - recompute to update",
       "lhaSaveError": "Failed to save LHA selection - re-select manually",
       "setCoordinatesFirst": "Set Takeoff & Landing First",
+      "setCoordinatesTooltip": "Set takeoff and landing coordinates first",
       "warningsMessage": "Message",
       "warningsWaypoint": "WP"
     },

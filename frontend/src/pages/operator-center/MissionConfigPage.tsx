@@ -334,7 +334,9 @@ export default function MissionConfigPage() {
       onCompute: () => computeRef.current(),
       canCompute: isDraft && hasCoordinates,
       isComputing: computing,
-      ...(!hasCoordinates && isDraft ? { label: t("mission.config.setCoordinatesFirst") } : {}),
+      ...(!hasCoordinates && isDraft
+        ? { label: t("mission.config.setCoordinatesFirst"), tooltip: t("mission.config.setCoordinatesTooltip") }
+        : {}),
     });
 
     return () => {

@@ -64,9 +64,6 @@ class AirfieldSurface(Base):
     threshold_position = Column(Geometry("POINTZ", srid=4326))
     end_position = Column(Geometry("POINTZ", srid=4326))
 
-    # taxiway-specific column (taxiway width, separate from runway width)
-    taxiway_width = Column(Float)
-
     airport = relationship("Airport", back_populates="surfaces")
     agls = relationship("AGL", back_populates="surface", cascade="all, delete-orphan")
 

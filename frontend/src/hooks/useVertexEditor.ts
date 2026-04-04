@@ -59,7 +59,7 @@ function extractEditState(feature: MapFeature): EditState | null {
     const coords = feature.data.geometry.coordinates;
     if (!coords || coords.length < 2) return null;
     const isTaxiway = feature.data.surface_type === "TAXIWAY";
-    const width = isTaxiway ? (feature.data.taxiway_width ?? 20) : (feature.data.width ?? 45);
+    const width = isTaxiway ? 20 : (feature.data.width ?? 45);
     const ring2d = bufferLineString(coords, width);
     if (ring2d.length < 4) return null;
     const corners = ring2d.slice(0, -1).map(([lng, lat]) => [lng, lat] as [number, number]);
@@ -149,7 +149,6 @@ export interface VertexGeometryUpdate {
   position?: { type: "Point"; coordinates: [number, number, number] };
   radius?: number;
   width?: number;
-  taxiway_width?: number;
   length?: number;
   heading?: number;
 }
@@ -282,7 +281,6 @@ export default function useVertexEditor(
         boundary: boundaryGeom,
         polygon: boundaryGeom,
         width: isTaxiway ? undefined : roundedWidth,
-        taxiway_width: isTaxiway ? roundedWidth : undefined,
         length: length != null ? Math.round(length * 100) / 100 : undefined,
         heading: heading != null ? Math.round(heading * 10) / 10 : undefined,
       });

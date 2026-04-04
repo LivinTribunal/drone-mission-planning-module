@@ -185,7 +185,7 @@ export function addSurfaceLayers(
         properties: {
           id: t.id,
           identifier: t.identifier,
-          width: t.taxiway_width ?? 20,
+          width: 20,
           entityType: "surface",
         },
         geometry: t.geometry,
@@ -209,7 +209,7 @@ export function addSurfaceLayers(
           },
           geometry: t.boundary ?? {
             type: "Polygon" as const,
-            coordinates: [bufferLineString(t.geometry.coordinates, t.taxiway_width ?? 20)],
+            coordinates: [bufferLineString(t.geometry.coordinates, 20)],
           },
         })),
     },
