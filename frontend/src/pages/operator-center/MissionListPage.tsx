@@ -122,11 +122,12 @@ export default function MissionListPage() {
 
   function handleSort(key: SortKey) {
     /** toggle sort direction or switch sort column. */
+    const numeric: SortKey[] = ["inspections", "duration", "created_at", "updated_at"];
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir("asc");
+      setSortDir(numeric.includes(key) ? "desc" : "asc");
     }
   }
 

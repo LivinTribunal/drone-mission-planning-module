@@ -86,11 +86,12 @@ function AirportSelectionView() {
   }, [fetchAirports]);
 
   function handleSort(key: SortKey) {
+    const numeric: SortKey[] = ["surfaces_count", "agls_count", "missions_count"];
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir("asc");
+      setSortDir(numeric.includes(key) ? "desc" : "asc");
     }
   }
 
@@ -263,6 +264,7 @@ function MissionListSection({
   onRetry,
   onRefresh,
   droneProfiles,
+  headerRight,
 }: {
   missions: MissionResponse[];
   loading: boolean;
@@ -270,6 +272,7 @@ function MissionListSection({
   onRetry: () => void;
   onRefresh: () => void;
   droneProfiles: DroneProfileResponse[];
+  headerRight?: React.ReactNode;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -308,7 +311,7 @@ function MissionListSection({
   const isTerminal = (status: string) => status === "COMPLETED" || status === "CANCELLED";
 
   return (
-    <CollapsibleSection title={t("dashboard.missions")} count={missions.length}>
+    <CollapsibleSection title={t("dashboard.missions")} count={missions.length} headerRight={headerRight}>
       {/* search */}
       <div className="mb-3 flex items-center gap-2">
         <div className="flex items-center justify-center h-8 w-8 rounded-full bg-tv-accent flex-shrink-0">
@@ -716,15 +719,16 @@ function DashboardView() {
             onRetry={fetchMissions}
             onRefresh={fetchMissions}
             droneProfiles={droneProfiles}
+            headerRight={
+              <Button
+                onClick={() => setShowCreateDialog(true)}
+                data-testid="new-mission-btn"
+                className="!h-8 !px-3 !text-xs"
+              >
+                {t("dashboard.newMission")}
+              </Button>
+            }
           />
-
-          <Button
-            className="w-full"
-            onClick={() => setShowCreateDialog(true)}
-            data-testid="new-mission-btn"
-          >
-            {t("dashboard.newMission")}
-          </Button>
 
           <StatisticsSection missions={missions} />
           <DroneProfilesSection profiles={droneProfiles} loading={droneProfilesLoading} error={droneProfilesError} missions={missions} />

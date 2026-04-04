@@ -300,7 +300,7 @@ export default function DroneListPage() {
         <select
           value={manufacturerFilter}
           onChange={(e) => { setManufacturerFilter(e.target.value); setPage(0); }}
-          className="rounded-full border border-tv-border bg-tv-surface px-4 py-1.5 text-sm
+          className="rounded-full border border-tv-border bg-tv-surface px-4 h-10 text-sm
             text-tv-text-primary focus:outline-none focus:border-tv-accent"
           data-testid="manufacturer-filter"
         >

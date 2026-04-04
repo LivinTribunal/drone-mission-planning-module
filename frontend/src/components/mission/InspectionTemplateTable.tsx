@@ -154,7 +154,7 @@ export default function InspectionTemplateTable({
                 <tr
                   key={tpl.id}
                   onClick={() => onRowClick(tpl.id)}
-                  className="border-b border-tv-border cursor-pointer hover:bg-tv-surface-hover transition-colors"
+                  className="border-b border-tv-border last:border-b-0 cursor-pointer hover:bg-tv-surface-hover transition-colors"
                   data-testid={`template-row-${tpl.id}`}
                 >
                   <td className="py-3 px-3 text-tv-text-primary font-medium">
@@ -184,17 +184,17 @@ export default function InspectionTemplateTable({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={(e) => { e.stopPropagation(); onDuplicate(tpl.id); }}
-                        className="p-1.5 rounded-full hover:bg-tv-surface-hover transition-colors text-tv-text-secondary"
+                        className="w-8 h-8 rounded-full flex items-center justify-center transition-colors text-tv-text-secondary hover:bg-tv-text-primary/10 hover:text-tv-text-primary"
                         aria-label={t("coordinator.inspections.duplicateTemplate")}
                       >
-                        <Copy className="h-3.5 w-3.5" />
+                        <Copy className="h-4 w-4" />
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); onDelete(tpl.id); }}
-                        className="p-1.5 rounded-full hover:bg-tv-surface-hover transition-colors text-tv-error"
+                        className="w-8 h-8 rounded-full flex items-center justify-center transition-colors text-tv-text-secondary hover:bg-tv-error/15 hover:text-tv-error"
                         aria-label={t("coordinator.inspections.deleteTemplate")}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </td>

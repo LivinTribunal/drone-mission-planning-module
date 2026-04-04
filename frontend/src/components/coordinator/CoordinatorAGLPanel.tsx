@@ -77,9 +77,9 @@ export default function CoordinatorAGLPanel({
               <button
                 onClick={onAdd}
                 title={t("coordinator.detail.addAgl")}
-                className="rounded-full p-1.5 text-tv-accent hover:bg-tv-surface-hover transition-colors"
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors text-tv-accent hover:bg-tv-text-primary/10"
               >
-                <Plus className="h-3.5 w-3.5" />
+                <Plus className="h-4 w-4" />
               </button>
             )}
             <button onClick={() => setCollapsed(!collapsed)}>
@@ -155,10 +155,10 @@ export default function CoordinatorAGLPanel({
 
                       <button
                         onClick={(e) => { e.stopPropagation(); setDeleteTarget(agl); }}
-                        className="rounded-full p-1 text-tv-error hover:bg-tv-surface-hover transition-colors"
+                        className="w-8 h-8 rounded-full flex items-center justify-center transition-colors text-tv-text-secondary hover:bg-tv-error/15 hover:text-tv-error"
                         title={t("common.delete")}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
 

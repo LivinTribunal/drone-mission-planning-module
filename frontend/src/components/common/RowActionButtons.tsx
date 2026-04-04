@@ -33,7 +33,7 @@ export default function RowActionButtons({ actions }: RowActionButtonsProps) {
                 ? "opacity-40 cursor-not-allowed"
                 : isDanger
                   ? "text-tv-text-secondary hover:bg-tv-error/15 hover:text-tv-error"
-                  : "text-tv-text-secondary hover:bg-[var(--tv-surface-hover)] hover:text-tv-text-primary"
+                  : "text-tv-text-secondary hover:bg-tv-text-primary/10 hover:text-tv-text-primary"
             }`}
           >
             <Icon className="h-4 w-4" />

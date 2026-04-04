@@ -53,8 +53,14 @@ export default function MissionMapPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage } =
+  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage, setCompactLeftPanel } =
     useOutletContext<MissionTabOutletContext>();
+
+  // hide left panel column - map uses full width
+  useEffect(() => {
+    setCompactLeftPanel(true);
+    return () => setCompactLeftPanel(false);
+  }, [setCompactLeftPanel]);
 
   // core data
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
@@ -672,7 +678,7 @@ export default function MissionMapPage() {
 
   return (
     <div
-      className="relative px-4 h-[calc(100vh-12rem)]"
+      className="relative px-4 h-full"
       data-testid="mission-map-page"
     >
       {airportDetail ? (

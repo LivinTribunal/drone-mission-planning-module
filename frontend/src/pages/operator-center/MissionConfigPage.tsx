@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
 } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { isAxiosError } from "@/api/client";
@@ -58,7 +59,7 @@ export default function MissionConfigPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { airportDetail } = useAirport();
-  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage } =
+  const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage, leftPanelEl } =
     useOutletContext<MissionTabOutletContext>();
 
   // core data
@@ -648,78 +649,78 @@ export default function MissionConfigPage() {
     : mission.landing_coordinate;
 
   return (
-    <div className="flex px-4 h-[calc(100vh-12rem)]" data-testid="mission-config-page">
-      {/* left panel - 30%, mirrors NavBar left section */}
-      <div className="w-[30%] flex-shrink-0 flex">
-        <div className="flex-1 overflow-y-auto flex flex-col gap-4" style={{ scrollbarGutter: "stable" }}>
-        {/* inspection list */}
-        <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-          <InspectionList
-            inspections={mission.inspections}
-            templates={templateMap}
-            selectedId={selectedInspectionId}
-            onSelect={setSelectedInspectionId}
-            onReorder={handleReorder}
-            onAdd={() => setShowTemplatePicker(true)}
-            onRemove={handleRemoveInspection}
-            isDraft={canModify}
-            canReorder={canModify}
-            visibleIds={visibleInspectionIds}
-            onToggleVisibility={handleToggleVisibility}
-          />
-        </div>
-
-        {/* inspection config - separate container, only when selected */}
-        {selectedInspection && selectedTemplate && (
+    <>
+      {/* left panel content - portaled into MissionTabNav left column */}
+      {leftPanelEl && createPortal(
+        <>
+          {/* inspection list */}
           <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-            <InspectionConfigForm
-              inspection={selectedInspection}
-              template={selectedTemplate}
-              agls={allAgls}
-              droneProfile={selectedDroneProfile}
-              configOverride={currentInspectionConfig}
-              onChange={handleInspectionConfigChange}
-              selectedLhaIds={inspectionLhas}
-              onToggleLha={(lhaId) => {
-                if (!selectedInspectionId) return;
-                handleToggleLha(selectedInspectionId, lhaId);
-              }}
+            <InspectionList
+              inspections={mission.inspections}
+              templates={templateMap}
+              selectedId={selectedInspectionId}
+              onSelect={setSelectedInspectionId}
+              onReorder={handleReorder}
+              onAdd={() => setShowTemplatePicker(true)}
+              onRemove={handleRemoveInspection}
+              isDraft={canModify}
+              canReorder={canModify}
+              visibleIds={visibleInspectionIds}
+              onToggleVisibility={handleToggleVisibility}
             />
           </div>
-        )}
 
-        {/* mission config - always visible, separate container */}
-        <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-          <MissionConfigForm
-            mission={mission}
-            droneProfiles={droneProfiles}
-            values={missionDirty}
-            onChange={handleMissionChange}
-            pickingCoord={pickingCoord}
-            onPickCoord={setPickingCoord}
-            defaultAltitude={airportDetail?.elevation ?? 0}
-          />
-        </div>
+          {/* inspection config - only when selected */}
+          {selectedInspection && selectedTemplate && (
+            <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+              <InspectionConfigForm
+                inspection={selectedInspection}
+                template={selectedTemplate}
+                agls={allAgls}
+                droneProfile={selectedDroneProfile}
+                configOverride={currentInspectionConfig}
+                onChange={handleInspectionConfigChange}
+                selectedLhaIds={inspectionLhas}
+                onToggleLha={(lhaId) => {
+                  if (!selectedInspectionId) return;
+                  handleToggleLha(selectedInspectionId, lhaId);
+                }}
+              />
+            </div>
+          )}
 
-        {/* warnings */}
-        <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-          <WarningsPanel warnings={warnings} hasTrajectory={hasTrajectory} />
-        </div>
+          {/* mission config */}
+          <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+            <MissionConfigForm
+              mission={mission}
+              droneProfiles={droneProfiles}
+              values={missionDirty}
+              onChange={handleMissionChange}
+              pickingCoord={pickingCoord}
+              onPickCoord={setPickingCoord}
+              defaultAltitude={airportDetail?.elevation ?? 0}
+            />
+          </div>
 
-        {/* stats */}
-        <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-          <StatsPanel
-            flightPlan={flightPlan}
-            hasTrajectory={hasTrajectory}
-            droneProfile={selectedDroneProfile}
-          />
-        </div>
-        </div>
-        <div className="w-6 flex-shrink-0" />
-      </div>
+          {/* warnings */}
+          <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+            <WarningsPanel warnings={warnings} hasTrajectory={hasTrajectory} />
+          </div>
 
-      {/* right panel - map, flex-1 matches NavBar right section */}
-      <div className="flex-1 flex flex-col gap-3 min-w-0">
+          {/* stats */}
+          <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+            <StatsPanel
+              flightPlan={flightPlan}
+              hasTrajectory={hasTrajectory}
+              droneProfile={selectedDroneProfile}
+            />
+          </div>
+        </>,
+        leftPanelEl,
+      )}
+
+      {/* right panel - map */}
+      <div className="flex flex-col h-full" data-testid="mission-config-page">
         {airportDetail ? (
           <div className={`flex-1 relative rounded-2xl overflow-hidden border border-tv-border ${pickingCoord ? "cursor-crosshair" : ""}`}>
             <AirportMap
@@ -850,6 +851,6 @@ export default function MissionConfigPage() {
           {notification}
         </div>
       )}
-    </div>
+    </>
   );
 }

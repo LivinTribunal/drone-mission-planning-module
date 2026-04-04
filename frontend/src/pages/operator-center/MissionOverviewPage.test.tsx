@@ -13,12 +13,22 @@ vi.mock("react-router-dom", async () => {
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    useOutletContext: () => ({
-      setSaveContext: mockSetSaveContext,
-      setComputeContext: mockSetComputeContext,
-      refreshMissions: mockRefreshMissions,
-      updateMissionFromPage: mockUpdateMissionFromPage,
-    }),
+    useOutletContext: () => {
+      // create a portal target so portaled left panel content renders in tests
+      let el = document.getElementById("left-panel-portal");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "left-panel-portal";
+        document.body.appendChild(el);
+      }
+      return {
+        setSaveContext: mockSetSaveContext,
+        setComputeContext: mockSetComputeContext,
+        refreshMissions: mockRefreshMissions,
+        updateMissionFromPage: mockUpdateMissionFromPage,
+        leftPanelEl: el,
+      };
+    },
   };
 });
 

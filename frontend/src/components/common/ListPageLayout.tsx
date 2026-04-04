@@ -99,7 +99,7 @@ export function SearchBar({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="flex-1 rounded-full border border-tv-border bg-tv-surface px-5 py-1.5
+        className="flex-1 rounded-full border border-tv-border bg-tv-surface px-5 h-10
           text-sm text-tv-text-primary placeholder:text-tv-text-muted
           focus:outline-none focus:border-tv-accent"
         data-testid={testId}

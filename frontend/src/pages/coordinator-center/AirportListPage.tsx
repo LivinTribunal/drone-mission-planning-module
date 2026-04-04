@@ -177,7 +177,7 @@ export default function AirportListPage() {
         <select
           value={countryFilter}
           onChange={(e) => { setCountryFilter(e.target.value); setPage(0); }}
-          className="rounded-full border border-tv-border bg-tv-surface px-4 py-1.5 text-sm
+          className="rounded-full border border-tv-border bg-tv-surface px-4 h-10 text-sm
             text-tv-text-primary focus:outline-none focus:border-tv-accent"
           data-testid="country-filter"
         >
@@ -188,7 +188,7 @@ export default function AirportListPage() {
         </select>
 
         {/* has agl toggle */}
-        <label className="flex items-center gap-2 px-4 py-1.5 rounded-full text-sm border border-tv-border bg-tv-surface cursor-pointer select-none">
+        <label className="flex items-center gap-2 px-4 h-10 rounded-full text-sm border border-tv-border bg-tv-surface cursor-pointer select-none">
           <input
             type="checkbox"
             checked={hasAglFilter}

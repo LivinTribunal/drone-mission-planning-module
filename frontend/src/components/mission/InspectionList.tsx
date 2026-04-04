@@ -181,14 +181,14 @@ export default function InspectionList({
                     e.stopPropagation();
                     onToggleVisibility(insp.id);
                   }}
-                  className="p-1 rounded-full hover:bg-tv-surface-hover transition-colors"
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-tv-text-primary/10"
                   title={t("mission.config.visible")}
                   data-testid={`toggle-visibility-${insp.id}`}
                 >
                   {isVisible ? (
-                    <Eye className="h-3.5 w-3.5 text-tv-accent" />
+                    <Eye className="h-4 w-4 text-tv-accent" />
                   ) : (
-                    <EyeOff className="h-3.5 w-3.5 text-tv-text-muted" />
+                    <EyeOff className="h-4 w-4 text-tv-text-muted" />
                   )}
                 </button>
 
@@ -198,11 +198,11 @@ export default function InspectionList({
                       e.stopPropagation();
                       onRemove(insp.id);
                     }}
-                    className="p-1 rounded-full hover:bg-tv-error/10 transition-colors"
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition-colors text-tv-text-secondary hover:bg-tv-error/15 hover:text-tv-error"
                     title={t("mission.config.removeInspection")}
                     data-testid={`remove-inspection-${insp.id}`}
                   >
-                    <Trash2 className="h-3.5 w-3.5 text-tv-error" />
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 )}
               </div>

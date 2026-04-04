@@ -210,7 +210,7 @@ export default function InspectionListPage() {
           <button
             onClick={() => toggleMethod("ANGULAR_SWEEP")}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors bg-[var(--tv-method-angular-sweep-bg)] text-[var(--tv-method-angular-sweep-text)] ${
-              !methodFilter.has("ANGULAR_SWEEP") ? "opacity-40" : ""
+              methodFilter.size > 0 && !methodFilter.has("ANGULAR_SWEEP") ? "opacity-40" : ""
             }`}
           >
             {t("coordinator.inspections.angularSweep")}
@@ -218,7 +218,7 @@ export default function InspectionListPage() {
           <button
             onClick={() => toggleMethod("VERTICAL_PROFILE")}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors bg-[var(--tv-method-vertical-profile-bg)] text-[var(--tv-method-vertical-profile-text)] ${
-              !methodFilter.has("VERTICAL_PROFILE") ? "opacity-40" : ""
+              methodFilter.size > 0 && !methodFilter.has("VERTICAL_PROFILE") ? "opacity-40" : ""
             }`}
           >
             {t("coordinator.inspections.verticalProfile")}
@@ -247,7 +247,7 @@ export default function InspectionListPage() {
       </div>
 
       {/* template table */}
-      <div className="w-full max-w-6xl rounded-2xl border border-tv-border bg-tv-surface overflow-hidden p-4">
+      <div className="w-full max-w-6xl rounded-2xl border border-tv-border bg-tv-surface overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-tv-text-muted" />
