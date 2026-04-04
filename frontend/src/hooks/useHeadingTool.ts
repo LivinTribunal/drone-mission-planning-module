@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
+import { computeBearing } from "@/utils/geo";
 
 interface HeadingReturn {
   origin: [number, number] | null;
@@ -31,23 +32,6 @@ const INITIAL_STATE: HeadingState = {
   isDrawing: false,
   isLocked: false,
 };
-
-function computeBearing(
-  lng1: number,
-  lat1: number,
-  lng2: number,
-  lat2: number,
-): number {
-  /** compute geographic bearing from point 1 to point 2 in degrees. */
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const toDeg = (r: number) => (r * 180) / Math.PI;
-  const dLng = toRad(lng2 - lng1);
-  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
-  const x =
-    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
-}
 
 export default function useHeadingTool(): HeadingReturn {
   /** heading tool state - single arrow line showing geographic bearing. */
@@ -93,7 +77,7 @@ export default function useHeadingTool(): HeadingReturn {
 
   const bearing = useMemo(() => {
     if (!origin || !target) return null;
-    return Math.round(computeBearing(origin[0], origin[1], target[0], target[1]));
+    return Math.round(computeBearing(origin[0], origin[1], target[0], target[1]) * 100) / 100;
   }, [origin, target]);
 
   const pointGeoJSON = useMemo((): GeoJSON.FeatureCollection => {
@@ -134,7 +118,7 @@ export default function useHeadingTool(): HeadingReturn {
       const midLat = (origin[1] + target[1]) / 2;
       features.push({
         type: "Feature",
-        properties: { label: `${bearing}°` },
+        properties: { label: `${bearing.toFixed(2)}°` },
         geometry: { type: "Point", coordinates: [midLng, midLat] },
       });
     }

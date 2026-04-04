@@ -149,6 +149,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
+        rehydratedRef.current = false;
         localStorage.removeItem(MISSION_KEY);
       });
   }, [selectedAirport]);

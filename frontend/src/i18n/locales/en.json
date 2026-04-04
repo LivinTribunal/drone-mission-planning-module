@@ -329,6 +329,7 @@
       "created": "Created",
       "lastUpdated": "Last Updated",
       "operatorNotes": "Operator Notes",
+      "noNotes": "No notes",
       "missionName": "Mission Name",
       "status": "Status",
       "transitDistance": "Transit Distance",
@@ -384,7 +385,8 @@
       "inspectionCount": "Inspections",
       "batteryLeft": "Battery Left",
       "speedFramerateWarning": "Speed exceeds camera frame rate capability for the selected drone",
-      "unsavedChanges": "You have unsaved changes. Discard?",
+      "unsavedChanges": "Unsaved Changes",
+      "unsavedChangesBody": "You have unsaved changes that will be lost if you navigate away. Are you sure you want to discard them?",
       "discardChanges": "Discard Changes",
       "keepEditing": "Keep Editing",
       "saved": "Saved",
@@ -433,6 +435,7 @@
       "staleTrajectory": "Trajectory is outdated - recompute to update",
       "lhaSaveError": "Failed to save LHA selection - re-select manually",
       "setCoordinatesFirst": "Set Takeoff & Landing First",
+      "setCoordinatesTooltip": "Set takeoff and landing coordinates first",
       "warningsMessage": "Message",
       "warningsWaypoint": "WP"
     },
@@ -779,7 +782,8 @@
       "surface": "Ground Surface",
       "createSuccess": "Created {{type}}: {{name}}",
       "createError": "Failed to create feature",
-      "selectSurface": "Select a surface"
+      "selectSurface": "Select a surface",
+      "area": "Area"
     },
     "geoJsonEditor": {
       "title": "GeoJSON Editor",

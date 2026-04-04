@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
+import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
-import { getMission, getFlightPlan } from "@/api/missions";
+import { getMission, getFlightPlan, generateTrajectory } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -33,6 +34,37 @@ export default function MissionOverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
   const [is3D, setIs3D] = useState(false);
+  const [computing, setComputing] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
+
+  const showNotification = useCallback((msg: string) => {
+    /** show a temporary toast message. */
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 3000);
+  }, []);
+
+  const handleCompute = useCallback(async () => {
+    /** trigger trajectory generation and refresh data. */
+    if (!id || !mission) return;
+    setComputing(true);
+    try {
+      const result = await generateTrajectory(id);
+      setFlightPlan(result.flight_plan);
+      const fresh = await getMission(id);
+      setMission(fresh);
+      refreshMissions();
+      showNotification(t("map.changesSaved"));
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        showNotification(typeof detail === "string" ? detail : t("mission.config.trajectoryError"));
+      } else {
+        showNotification(t("mission.config.trajectoryError"));
+      }
+    } finally {
+      setComputing(false);
+    }
+  }, [id, mission, t, refreshMissions, showNotification]);
 
   // wire up disabled save button
   useEffect(() => {
@@ -47,19 +79,23 @@ export default function MissionOverviewPage() {
     };
   }, [setSaveContext, mission]);
 
-  // "modify parameters" button in header - navigates to configuration tab
+  // compute trajectory button in header
+  const hasCoordinates = !!(mission?.takeoff_coordinate && mission?.landing_coordinate);
+  const computeLabel = flightPlan
+    ? t("map.recomputeTrajectory")
+    : t("map.computeTrajectory");
+
   useEffect(() => {
     setComputeContext({
-      onCompute: () => navigate(`/operator-center/missions/${id}/configuration`),
-      canCompute: true,
-      isComputing: false,
-      label: t("mission.overview.modifyParameters"),
-      variant: "secondary",
+      onCompute: handleCompute,
+      canCompute: hasCoordinates && !computing,
+      isComputing: computing,
+      label: computeLabel,
     });
     return () => {
       setComputeContext({ onCompute: null, canCompute: false, isComputing: false });
     };
-  }, [setComputeContext, navigate, id, t]);
+  }, [setComputeContext, handleCompute, hasCoordinates, computing, computeLabel]);
 
   const fetchData = useCallback(async () => {
     /** load mission, drone profiles, and flight plan. */
@@ -209,6 +245,13 @@ export default function MissionOverviewPage() {
             {/* bottom bar */}
             <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">
               <button
+                onClick={() => navigate(`/operator-center/missions/${id}/configuration`)}
+                className="px-4 py-2.5 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                data-testid="modify-parameters-btn"
+              >
+                {t("mission.overview.modifyParameters")}
+              </button>
+              <button
                 onClick={() => navigate(`/operator-center/missions/${id}/map`)}
                 className="px-4 py-2.5 rounded-full text-sm font-semibold border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
                 data-testid="open-map-btn"
@@ -242,6 +285,16 @@ export default function MissionOverviewPage() {
           </div>
         )}
       </div>
+
+      {/* notification toast */}
+      {notification && (
+        <div
+          className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-tv-surface border border-tv-border text-sm text-tv-text-primary"
+          data-testid="notification-toast"
+        >
+          {notification}
+        </div>
+      )}
     </div>
   );
 }

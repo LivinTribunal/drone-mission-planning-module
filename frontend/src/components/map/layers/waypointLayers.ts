@@ -629,6 +629,17 @@ export function waypointsToSimplifiedCornersGeoJSON(
     const type = sorted[i].waypoint_type;
     if (type === "TAKEOFF" || type === "LANDING") continue;
 
+    // mark waypoint type transitions (e.g. transit -> measurement entry)
+    const prevType = sorted[i - 1].waypoint_type;
+    if (prevType !== type && type !== "TRANSIT") {
+      features.push({
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: curr },
+      });
+      continue;
+    }
+
     // check if direction changes (compare heading before and after)
     const dxA = curr[0] - prev[0];
     const dyA = curr[1] - prev[1];

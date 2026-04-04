@@ -15,6 +15,7 @@ interface MissionConfigFormProps {
   onChange: (update: Partial<MissionUpdate>) => void;
   pickingCoord?: PickTarget;
   onPickCoord?: (target: PickTarget) => void;
+  defaultAltitude?: number;
 }
 
 export default function MissionConfigForm({
@@ -24,6 +25,7 @@ export default function MissionConfigForm({
   onChange,
   pickingCoord,
   onPickCoord,
+  defaultAltitude,
 }: MissionConfigFormProps) {
   /** mission-level configuration form with coordinate pick-on-map support. */
   const { t } = useTranslation();
@@ -147,6 +149,7 @@ export default function MissionConfigForm({
         }
         picking={pickingCoord === "takeoff"}
         onPickOnMap={onPickCoord ? () => onPickCoord(pickingCoord === "takeoff" ? null : "takeoff") : undefined}
+        defaultAltitude={defaultAltitude}
       />
 
       {/* landing coordinate */}
@@ -158,6 +161,7 @@ export default function MissionConfigForm({
         }
         picking={pickingCoord === "landing"}
         onPickOnMap={onPickCoord ? () => onPickCoord(pickingCoord === "landing" ? null : "landing") : undefined}
+        defaultAltitude={defaultAltitude}
       />
 
       {/* operator notes */}

@@ -41,7 +41,6 @@ export interface SurfaceResponse {
   width: number | null;
   threshold_position: PointZ | null;
   end_position: PointZ | null;
-  taxiway_width: number | null;
   agls: AGLResponse[];
 }
 
@@ -117,12 +116,10 @@ export interface SurfaceCreate {
   width?: number | null;
   threshold_position?: PointZ | null;
   end_position?: PointZ | null;
-  taxiway_width?: number | null;
 }
 
 export interface SurfaceUpdate {
   identifier?: string;
-  surface_type?: SurfaceType;
   geometry?: LineStringZ;
   boundary?: PolygonZ;
   heading?: number | null;
@@ -130,7 +127,6 @@ export interface SurfaceUpdate {
   width?: number | null;
   threshold_position?: PointZ | null;
   end_position?: PointZ | null;
-  taxiway_width?: number | null;
 }
 
 export interface ObstacleCreate {

@@ -36,6 +36,7 @@ export interface ComputeContext {
   canCompute: boolean;
   isComputing: boolean;
   label?: string;
+  tooltip?: string;
   variant?: "primary" | "secondary";
   icon?: "upload";
 }
@@ -72,6 +73,8 @@ export default function MissionTabNav() {
     isComputing: false,
   });
   const [missionDropdownOpen, setMissionDropdownOpen] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const renameErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setSaveContext = useCallback((ctx: SaveContext) => {
     setSaveCtx(ctx);
@@ -177,7 +180,9 @@ export default function MissionTabNav() {
       await updateMission(id, { name: renameValue.trim() });
       await refreshMissions();
     } catch {
-      // ignore
+      setRenameError(t("mission.renameError"));
+      if (renameErrorTimer.current) clearTimeout(renameErrorTimer.current);
+      renameErrorTimer.current = setTimeout(() => setRenameError(null), 4000);
     }
     setRenaming(false);
   }
@@ -280,7 +285,7 @@ export default function MissionTabNav() {
           </div>
 
             {/* dropdown via portal to avoid overflow-hidden clipping */}
-            {missionDropdownOpen && missions.length > 0 && dropdownPos && createPortal(
+            {missionDropdownOpen && selectorRef.current && dropdownPos && createPortal(
               <div
                 ref={portalDropdownRef}
                 className="fixed z-50 bg-tv-surface border-2 border-tv-text-muted rounded-2xl p-2"
@@ -359,10 +364,10 @@ export default function MissionTabNav() {
               disabled={!computeCtx.canCompute || computeCtx.isComputing}
               title={
                 !computeCtx.canCompute && !computeCtx.isComputing
-                  ? t("mission.config.recomputeTooltip")
+                  ? (computeCtx.tooltip ?? t("mission.config.recomputeTooltip"))
                   : undefined
               }
-              className={`flex items-center justify-center gap-2 w-[280px] shrink h-11 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
+              className={`flex items-center justify-center gap-2 w-[280px] flex-shrink-0 h-11 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
                 computeCtx.variant === "secondary"
                   ? "border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover"
                   : computeCtx.isComputing
@@ -413,6 +418,12 @@ export default function MissionTabNav() {
           </div>
         </div>
       </div>
+
+      {renameError && (
+        <div className="mx-4 mb-2 rounded-xl bg-red-500/20 border border-red-500/40 px-4 py-2 text-sm text-red-400">
+          {renameError}
+        </div>
+      )}
 
       <div className="py-2">
         <Outlet

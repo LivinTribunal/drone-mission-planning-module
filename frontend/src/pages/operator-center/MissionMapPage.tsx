@@ -295,6 +295,7 @@ export default function MissionMapPage() {
       canCompute: canCompute && !computing,
       isComputing: computing,
       label: computeLabel,
+      ...(!hasCoordinates ? { tooltip: t("mission.config.setCoordinatesTooltip") } : {}),
     });
     return () => {
       setComputeContext({
@@ -303,7 +304,7 @@ export default function MissionMapPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext, handleCompute, canCompute, computing, computeLabel]);
+  }, [setComputeContext, handleCompute, canCompute, computing, computeLabel, hasCoordinates, t]);
 
   // handle map click based on active tool
   const handleMapClick = useCallback(
@@ -563,7 +564,8 @@ export default function MissionMapPage() {
     setTool(MapTool.PLACE_LANDING);
   }, [setTool]);
 
-  // zoom reset - placeholder until wired to map API
+
+  // zoom reset - not yet wired to map API
   const handleZoomReset = useCallback(() => {}, []);
 
   // zoom to specific percent
@@ -617,17 +619,13 @@ export default function MissionMapPage() {
         return;
       }
 
-      if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey) {
-        handleZoomReset();
-        return;
-      }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeTool, measure, resetTool, handleUndo, handleRedo, handleZoomReset]);
+  }, [activeTool, measure, resetTool, handleUndo, handleRedo]);
 
   // beforeunload for dirty state
   useEffect(() => {

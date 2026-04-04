@@ -1,5 +1,6 @@
 import type { Map as MaplibreMap } from "maplibre-gl";
 import type { SurfaceResponse } from "@/types/airport";
+import { DEFAULT_TAXIWAY_WIDTH_M } from "@/constants/surface";
 
 export const RUNWAY_SOURCE = "runways";
 export const RUNWAY_POLYGON_SOURCE = "runways-polygon";
@@ -11,6 +12,7 @@ export const TAXIWAY_SOURCE = "taxiways";
 export const TAXIWAY_POLYGON_SOURCE = "taxiways-polygon";
 export const TAXIWAY_FILL_LAYER = "taxiways-fill";
 export const TAXIWAY_STROKE_LAYER = "taxiways-stroke";
+export const TAXIWAY_CENTERLINE_LAYER = "taxiways-centerline";
 export const TAXIWAY_LABEL_LAYER = "taxiways-label";
 
 // keep old names as aliases for backwards compat in layerGroupMap
@@ -51,7 +53,18 @@ export function bufferLineString(
     const dxM = dx * mPerDegLon;
     const dyM = dy * mPerDegLat;
     const lenM = Math.sqrt(dxM * dxM + dyM * dyM);
-    if (lenM === 0) continue;
+
+    // coincident points - reuse previous offset to keep left/right arrays aligned
+    if (lenM === 0) {
+      if (left.length > 0) {
+        left.push(left[left.length - 1]);
+        right.push(right[right.length - 1]);
+      } else {
+        left.push([lon, lat]);
+        right.push([lon, lat]);
+      }
+      continue;
+    }
 
     // perpendicular unit vector in metric space (rotated 90 degrees)
     const perpXM = -dyM / lenM;
@@ -185,7 +198,7 @@ export function addSurfaceLayers(
         properties: {
           id: t.id,
           identifier: t.identifier,
-          width: t.taxiway_width ?? 20,
+          width: DEFAULT_TAXIWAY_WIDTH_M,
           entityType: "surface",
         },
         geometry: t.geometry,
@@ -209,7 +222,7 @@ export function addSurfaceLayers(
           },
           geometry: t.boundary ?? {
             type: "Polygon" as const,
-            coordinates: [bufferLineString(t.geometry.coordinates, t.taxiway_width ?? 20)],
+            coordinates: [bufferLineString(t.geometry.coordinates, DEFAULT_TAXIWAY_WIDTH_M)],
           },
         })),
     },
@@ -221,9 +234,9 @@ export function addSurfaceLayers(
     type: "line",
     source: TAXIWAY_POLYGON_SOURCE,
     paint: {
-      "line-color": "#5a7a5a",
+      "line-color": "#b8a038",
       "line-width": 1,
-      "line-opacity": 0.4,
+      "line-opacity": 0.5,
     },
   });
 
@@ -233,8 +246,21 @@ export function addSurfaceLayers(
     type: "fill",
     source: TAXIWAY_POLYGON_SOURCE,
     paint: {
-      "fill-color": "#3a5a3a",
+      "fill-color": "#c8a83c",
       "fill-opacity": 0.35,
+    },
+  });
+
+  // taxiway centerline dashes
+  map.addLayer({
+    id: TAXIWAY_CENTERLINE_LAYER,
+    type: "line",
+    source: TAXIWAY_SOURCE,
+    paint: {
+      "line-color": "#1a1a1a",
+      "line-width": 1,
+      "line-dasharray": [6, 6],
+      "line-opacity": 0.6,
     },
   });
 
@@ -251,7 +277,7 @@ export function addSurfaceLayers(
       "text-allow-overlap": false,
     },
     paint: {
-      "text-color": "#8a8a8a",
+      "text-color": "#d4b84a",
       "text-halo-color": "#000000",
       "text-halo-width": 1,
     },
@@ -264,6 +290,7 @@ export function addSurfaceLayers(
     RUNWAY_LABEL_LAYER,
     TAXIWAY_STROKE_LAYER,
     TAXIWAY_FILL_LAYER,
+    TAXIWAY_CENTERLINE_LAYER,
     TAXIWAY_LABEL_LAYER,
   ];
 }

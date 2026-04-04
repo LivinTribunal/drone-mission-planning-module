@@ -12,20 +12,13 @@ import {
   updateObstacle,
   updateSafetyZone,
   updateAGL,
+  updateLHA,
   updateAirport,
 } from "@/api/airports";
 import { useAirport } from "@/contexts/AirportContext";
+import { OBSTACLE_COLORS, ObstacleTypeIcon } from "@/components/map/obstacleIcons";
 import type { AirportDetailResponse } from "@/types/airport";
-import type { ObstacleType } from "@/types/enums";
 import type { MapFeature, MapLayerConfig } from "@/types/map";
-
-const OBSTACLE_COLORS: Record<ObstacleType, string> = {
-  BUILDING: "#e54545",
-  TOWER: "#9b59b6",
-  ANTENNA: "#e5a545",
-  VEGETATION: "#3bbb3b",
-  OTHER: "#6b6b6b",
-};
 
 const ZONE_COLORS: Record<string, string> = {
   CTR: "#4595e5",
@@ -66,7 +59,7 @@ import type { VertexGeometryUpdate } from "@/hooks/useVertexEditor";
 import useMeasureDistance from "@/hooks/useMeasureDistance";
 import useHeadingTool from "@/hooks/useHeadingTool";
 import type maplibregl from "maplibre-gl";
-import { extractCenterline, circleToPolygon, haversineDistance } from "@/utils/geo";
+import { extractCenterline, circleToPolygon, haversineDistance, computeBearing } from "@/utils/geo";
 import type { DrawingTool } from "@/types/map";
 import { MapTool } from "@/hooks/useMapTools";
 
@@ -250,7 +243,6 @@ export default function AirportEditPage() {
       if (update.position) dirtyData.position = update.position;
       if (update.radius != null) dirtyData.radius = update.radius;
       if (update.width != null) dirtyData.width = update.width;
-      if (update.taxiway_width != null) dirtyData.taxiway_width = update.taxiway_width;
       if (update.length != null) dirtyData.length = update.length;
       if (update.heading != null) dirtyData.heading = update.heading;
       markDirty(featureType, featureId, "update", dirtyData);
@@ -398,7 +390,6 @@ export default function AirportEditPage() {
           heading: drawnHeading != null ? Math.round(drawnHeading * 10) / 10 : undefined,
           length: drawnLength != null ? Math.round(drawnLength * 100) / 100 : undefined,
           width: entityType === "runway" ? computedWidth : undefined,
-          taxiway_width: entityType === "taxiway" ? computedWidth : undefined,
         });
       } else if (entityType.startsWith("safety_zone_")) {
         if (!pendingGeometry) throw new Error("missing geometry");
@@ -550,6 +541,16 @@ export default function AirportEditPage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleToolChange, undo, redo, selectedFeature, activeTool, handleCreationCancel]);
+
+  const handleInfraPointDrag = useCallback(
+    (featureType: "agl" | "lha", featureId: string, newPosition: [number, number, number]) => {
+      /** handle agl/lha point drag - mark dirty with new position. */
+      markDirty(featureType, featureId, "update", {
+        position: { type: "Point", coordinates: newPosition },
+      });
+    },
+    [markDirty],
+  );
 
   const handleFeatureClick = useCallback((feature: MapFeature | null) => {
     /** set selected feature when clicked on map or list panel - skip during drawing. */
@@ -733,6 +734,15 @@ export default function AirportEditPage() {
                 }
                 return undefined;
               }
+              case "lha": {
+                const parentAgl = airport.surfaces
+                  .flatMap((s) => s.agls.map((a) => ({ surface: s, agl: a })))
+                  .find(({ agl }) => agl.lhas.some((l) => l.id === change.entityId));
+                if (parentAgl) {
+                  return updateLHA(id, parentAgl.surface.id, parentAgl.agl.id, change.entityId, change.data);
+                }
+                return undefined;
+              }
               case "airport":
                 return updateAirport(id, change.data);
               default:
@@ -755,6 +765,10 @@ export default function AirportEditPage() {
           freshData = freshAirport.obstacles.find((o) => o.id === fid);
         } else if (ft === "safety_zone") {
           freshData = freshAirport.safety_zones.find((z) => z.id === fid);
+        } else if (ft === "agl") {
+          freshData = freshAirport.surfaces.flatMap((s) => s.agls).find((a) => a.id === fid);
+        } else if (ft === "lha") {
+          freshData = freshAirport.surfaces.flatMap((s) => s.agls).flatMap((a) => a.lhas).find((l) => l.id === fid);
         }
         if (freshData) {
           setSelectedFeature({ type: ft, data: freshData } as MapFeature);
@@ -775,6 +789,62 @@ export default function AirportEditPage() {
       setSaving(false);
     }
   }, [id, airport, getPendingChanges, clearAll, fetchAirport, selectedFeature]);
+
+  // pre-compute geometry-derived values for the creation form
+  const prefilledGeometry = useMemo(() => {
+    /** derive width, length, heading, area from pending geometry for form pre-fill. */
+    if (!pendingGeometry) return {};
+    const ring = pendingGeometry.coordinates[0] as [number, number][];
+    const pts = ring[ring.length - 1][0] === ring[0][0] && ring[ring.length - 1][1] === ring[0][1]
+      ? ring.slice(0, -1) : ring;
+
+    let width: number | undefined;
+    let length: number | undefined;
+    let heading: number | undefined;
+
+    if (pts.length === 4) {
+      const d01 = haversineDistance(pts[0][0], pts[0][1], pts[1][0], pts[1][1]);
+      const d12 = haversineDistance(pts[1][0], pts[1][1], pts[2][0], pts[2][1]);
+      if (d01 >= d12) {
+        length = d01;
+        width = (d12 + haversineDistance(pts[3][0], pts[3][1], pts[0][0], pts[0][1])) / 2;
+      } else {
+        length = d12;
+        width = (d01 + haversineDistance(pts[2][0], pts[2][1], pts[3][0], pts[3][1])) / 2;
+      }
+    }
+
+    // heading from centerline - use proper geographic bearing
+    const centerline = extractCenterline(ring);
+    if (centerline.length >= 2) {
+      heading = computeBearing(centerline[0][0], centerline[0][1], centerline[1][0], centerline[1][1]);
+    }
+
+    // area via shoelace on projected coordinates
+    let area: number | undefined;
+    if (pts.length >= 3) {
+      const refLat = pts[0][1];
+      const mPerDegLat = 111320;
+      const mPerDegLng = 111320 * Math.cos((refLat * Math.PI) / 180);
+      const projected = pts.map((p) => [
+        (p[0] - pts[0][0]) * mPerDegLng,
+        (p[1] - pts[0][1]) * mPerDegLat,
+      ]);
+      let sum = 0;
+      for (let i = 0; i < projected.length; i++) {
+        const j = (i + 1) % projected.length;
+        sum += projected[i][0] * projected[j][1] - projected[j][0] * projected[i][1];
+      }
+      area = Math.abs(sum) / 2;
+    }
+
+    // for circles, use pi * r^2
+    if (pendingGeometryType === "circle" && pendingCircleRadius != null) {
+      area = Math.PI * pendingCircleRadius * pendingCircleRadius;
+    }
+
+    return { width, length, heading, area };
+  }, [pendingGeometry, pendingGeometryType, pendingCircleRadius]);
 
   const surfaces = useMemo(() => airport?.surfaces ?? [], [airport]);
   const obstacles = useMemo(() => airport?.obstacles ?? [], [airport]);
@@ -820,6 +890,7 @@ export default function AirportEditPage() {
           terrainMode={terrainMode}
           onTerrainChange={setTerrainMode}
           onFeatureClick={handleFeatureClick}
+          onInfraPointDrag={handleInfraPointDrag}
           onLayerChange={handleLayerChange}
           focusFeature={selectedFeature}
           pendingGeometry={pendingGeometry}
@@ -876,7 +947,10 @@ export default function AirportEditPage() {
                           <line x1="5" y1="1" x2="5" y2="9" stroke="white" strokeWidth="0.8" strokeDasharray="1.5 1" />
                         </>
                       ) : (
-                        <rect x="0" y="2" width="10" height="6" rx="1" fill="currentColor" />
+                        <>
+                          <rect x="1" y="0" width="8" height="10" rx="1" fill="#c8a83c" />
+                          <line x1="5" y1="1" x2="5" y2="9" stroke="#1a1a1a" strokeWidth="0.7" strokeDasharray="1.5 1" />
+                        </>
                       )}
                     </svg>
                     <div className="flex-1 min-w-0">
@@ -917,9 +991,7 @@ export default function AirportEditPage() {
                   const color = OBSTACLE_COLORS[o.type] ?? "#6b6b6b";
                   return (
                     <div className="flex items-center gap-2">
-                      <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 10 10">
-                        <polygon points="5,1 9,9 1,9" fill={color} />
-                      </svg>
+                      <ObstacleTypeIcon type={o.type} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium text-tv-text-primary truncate">{o.name}</span>
@@ -1041,6 +1113,10 @@ export default function AirportEditPage() {
                 surfaces={surfaces}
                 onCancel={handleCreationCancel}
                 onCreate={handleCreate}
+                prefilledWidth={prefilledGeometry.width}
+                prefilledLength={prefilledGeometry.length}
+                prefilledHeading={prefilledGeometry.heading}
+                prefilledArea={prefilledGeometry.area}
               />
             ) : selectedFeature && selectedFeature.type !== "waypoint" ? (
               <EditableFeatureInfo
