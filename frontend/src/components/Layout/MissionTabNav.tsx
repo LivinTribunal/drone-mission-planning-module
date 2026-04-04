@@ -1,12 +1,14 @@
-import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
-import { createPortal } from "react-dom";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { NavLink, Outlet, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Loader2, Pencil, X, Check, Upload } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Loader2, Pencil, Plus, X, Upload, ChevronDown, Search } from "lucide-react";
 import { useMission } from "@/contexts/MissionContext";
 import { updateMission } from "@/api/missions";
 import type { MissionResponse, MissionDetailResponse } from "@/types/mission";
 import Badge from "@/components/common/Badge";
+import DetailSelector from "@/components/common/DetailSelector";
+import DetailSelectorItem from "@/components/common/DetailSelectorItem";
 import type { MissionStatus } from "@/types/enums";
 
 function formatSavedTime(date: Date, t: (key: string, opts?: Record<string, string>) => string): string {
@@ -47,6 +49,8 @@ export interface MissionTabOutletContext {
   refreshMissions: () => Promise<void>;
   mission: MissionDetailResponse | null;
   updateMissionFromPage: (m: MissionResponse) => void;
+  leftPanelEl: HTMLDivElement | null;
+  setCompactLeftPanel: (compact: boolean) => void;
 }
 
 export default function MissionTabNav() {
@@ -73,8 +77,22 @@ export default function MissionTabNav() {
     isComputing: false,
   });
   const [missionDropdownOpen, setMissionDropdownOpen] = useState(false);
+  const [missionSearch, setMissionSearch] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
   const renameErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // compact pill selector refs + portal position
+  const compactSelectorRef = useRef<HTMLDivElement>(null);
+  const compactDropdownRef = useRef<HTMLDivElement>(null);
+  const [compactDropdownPos, setCompactDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // portal target for page left panel content
+  const [leftPanelEl, setLeftPanelEl] = useState<HTMLDivElement | null>(null);
+  const [compactLeftPanel, setCompactLeftPanelState] = useState(false);
+
+  const setCompactLeftPanel = useCallback((compact: boolean) => {
+    setCompactLeftPanelState(compact);
+  }, []);
 
   const setSaveContext = useCallback((ctx: SaveContext) => {
     setSaveCtx(ctx);
@@ -95,12 +113,6 @@ export default function MissionTabNav() {
   const currentMission = missions.find((m) => m.id === id);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
-  const [missionSearch, setMissionSearch] = useState("");
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const selectorRef = useRef<HTMLDivElement>(null);
-  const portalDropdownRef = useRef<HTMLDivElement>(null);
-  const missionSearchRef = useRef<HTMLInputElement>(null);
 
   const filteredMissions = useMemo(() => {
     /** filter missions by search query. */
@@ -109,48 +121,27 @@ export default function MissionTabNav() {
     return missions.filter((m) => m.name.toLowerCase().includes(q));
   }, [missions, missionSearch]);
 
-  // compute portal dropdown position and keep it updated on scroll/resize
-  useLayoutEffect(() => {
-    if (!missionDropdownOpen || !selectorRef.current) {
-      setDropdownPos(null);
-      return;
-    }
-    function update() {
-      if (!selectorRef.current) return;
-      const rect = selectorRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-    }
-    update();
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-    };
-  }, [missionDropdownOpen]);
-
-  // focus search input when dropdown opens
+  // close compact dropdown on outside click
   useEffect(() => {
-    if (missionDropdownOpen && missionSearchRef.current) {
-      missionSearchRef.current.focus();
-    }
-  }, [missionDropdownOpen]);
-
-  // close dropdown on outside click
-  useEffect(() => {
+    if (!compactLeftPanel || !missionDropdownOpen) return;
     function handleClick(e: MouseEvent) {
-      /** close mission dropdown when clicking outside selector and portal. */
+      /** close compact dropdown on outside click. */
       const target = e.target as Node;
-      if (
-        dropdownRef.current && !dropdownRef.current.contains(target) &&
-        (!portalDropdownRef.current || !portalDropdownRef.current.contains(target))
-      ) {
-        setMissionDropdownOpen(false);
-        setMissionSearch("");
-      }
+      if (compactSelectorRef.current?.contains(target)) return;
+      if (compactDropdownRef.current?.contains(target)) return;
+      setMissionDropdownOpen(false);
+      setMissionSearch("");
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
+  }, [compactLeftPanel, missionDropdownOpen]);
+
+  /** toggle the mission selector dropdown. */
+  const handleSelectorToggle = useCallback(() => {
+    setMissionDropdownOpen((prev) => {
+      if (prev) setMissionSearch("");
+      return !prev;
+    });
   }, []);
 
   function handleMissionSwitch(missionId: string) {
@@ -197,246 +188,267 @@ export default function MissionTabNav() {
   const showSave = saveCtx.onSave !== null;
   const showCompute = computeCtx.onCompute !== null;
 
-  return (
-    <div>
-      {/* mission tab bar - mirrors NavBar column widths exactly */}
-      <div className="flex items-center px-4 py-2">
-        {/* left section - 30%, matches NavBar left */}
-        <div className="w-[30%] flex-shrink-0 flex" ref={dropdownRef}>
-          <div className="flex-1 overflow-hidden" style={{ scrollbarGutter: "stable" }}>
+  const missionSelectorBlock = (
+    <DetailSelector
+      title={t("mission.label")}
+      count={missions.length}
+      actions={[
+        { icon: Plus, onClick: () => navigate("/operator-center/missions"), title: t("mission.createNew"), variant: "accent" },
+        { icon: Pencil, onClick: startRename, title: t("common.edit") },
+        { icon: X, onClick: handleDeselect, title: t("common.close") },
+      ]}
+      renderSelected={() => (
+        <>
+          <span className="flex-1 min-w-0 truncate text-sm font-medium text-tv-text-primary">
+            {currentMission?.name ?? t("mission.config.selectMission")}
+          </span>
+          {currentMission && (
+            <Badge status={currentMission.status as MissionStatus} className="flex-shrink-0" />
+          )}
+        </>
+      )}
+      isOpen={missionDropdownOpen}
+      onToggle={handleSelectorToggle}
+      isRenaming={renaming}
+      renameValue={renameValue}
+      onRenameChange={setRenameValue}
+      onRenameFinish={confirmRename}
+      searchValue={missionSearch}
+      onSearchChange={setMissionSearch}
+      searchPlaceholder={t("mission.config.searchMissions")}
+      noResultsText={t("common.noResults")}
+      usePortal
+      renderDropdownItems={() =>
+        filteredMissions.length === 0 ? null : filteredMissions.map((m) => (
+          <DetailSelectorItem
+            key={m.id}
+            isSelected={m.id === id}
+            onClick={() => handleMissionSwitch(m.id)}
+          >
+            <div className="flex items-center justify-between">
+              <span className="truncate text-sm">{m.name}</span>
+              <Badge
+                status={m.status as MissionStatus}
+                className="ml-2 flex-shrink-0"
+              />
+            </div>
+          </DetailSelectorItem>
+        ))
+      }
+    />
+  );
+
+  const outletContext = {
+    setSaveContext,
+    setComputeContext,
+    refreshMissions,
+    mission: selectedMission,
+    updateMissionFromPage,
+    leftPanelEl,
+    setCompactLeftPanel,
+  } satisfies MissionTabOutletContext;
+
+  const tabsRow = (
+    <div className="flex-1 flex items-center gap-4 min-w-0">
+      <div
+        className="flex flex-1 items-center justify-center gap-1 rounded-full bg-tv-surface p-1 h-11"
+        data-testid="mission-tabs"
+      >
+        {tabs.map((tab) => (
+          <NavLink
+            key={tab.path}
+            to={`/operator-center/missions/${id}/${tab.path}`}
+            className={({ isActive }) =>
+              `px-5 h-9 rounded-full text-sm font-medium transition-colors flex items-center ${
+                isActive
+                  ? "bg-tv-nav-active-bg text-tv-nav-active-text"
+                  : "text-tv-text-primary hover:bg-tv-surface-hover"
+              }`
+            }
+          >
+            {tab.label}
+          </NavLink>
+        ))}
+      </div>
+
+      {showCompute && (
+        <button
+          onClick={() => computeCtx.onCompute?.()}
+          disabled={!computeCtx.canCompute || computeCtx.isComputing}
+          title={!computeCtx.canCompute && !computeCtx.isComputing ? (computeCtx.tooltip ?? t("mission.config.recomputeTooltip")) : undefined}
+          className={`flex items-center justify-center gap-2 w-[280px] flex-shrink-0 h-11 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
+            computeCtx.variant === "secondary"
+              ? "border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover"
+              : computeCtx.isComputing
+                ? "bg-tv-accent/50 text-tv-accent-text cursor-not-allowed"
+                : !computeCtx.canCompute
+                  ? "bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"
+                  : "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
+          }`}
+          data-testid="compute-trajectory-btn"
+        >
+          {computeCtx.isComputing && <Loader2 className="h-4 w-4 animate-spin" />}
+          {!computeCtx.isComputing && computeCtx.icon === "upload" && <Upload className="h-4 w-4" />}
+          {computeCtx.isComputing ? t("mission.config.computing") : computeCtx.label ?? t("mission.config.computeTrajectory")}
+        </button>
+      )}
+
+      {showSave && (
+        <button
+          onClick={() => saveCtx.onSave?.()}
+          disabled={!saveCtx.isDirty || saveCtx.isSaving}
+          className={`rounded-full px-4 h-11 min-w-[81px] flex-shrink-0 text-sm font-semibold transition-colors border ${
+            saveCtx.isDirty && !saveCtx.isSaving
+              ? "border-tv-accent bg-tv-surface text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
+              : "border-tv-border bg-tv-surface text-tv-text-muted cursor-not-allowed"
+          }`}
+          data-testid="save-button"
+        >
+          {saveCtx.isSaving ? t("mission.config.saving") : t("mission.config.save")}
+        </button>
+      )}
+
+      <div className="w-[140px] flex-shrink-0">
+        <span className="flex items-center justify-center rounded-full px-4 h-11 text-xs text-tv-text-muted whitespace-nowrap">
+          {saveCtx.lastSaved ? formatSavedTime(saveCtx.lastSaved, t) : t("mission.config.notSavedYet")}
+        </span>
+      </div>
+    </div>
+  );
+
+  // compact mode: stacked layout - full-width tab bar row above full-width content (like original main)
+  if (compactLeftPanel) {
+    return (
+      <div className="flex flex-col h-[calc(100vh-5.25rem)]">
+        {/* full-width tab bar row */}
+        <div className="flex items-center px-4 py-2 flex-shrink-0">
+          {/* pill selector - 30% */}
+          <div className="w-[30%] flex-shrink-0 flex">
+            <div className="flex-1 overflow-hidden" style={{ scrollbarGutter: "stable" }}>
               <div
-                ref={selectorRef}
-                onClick={() => { if (!renaming) setMissionDropdownOpen(!missionDropdownOpen); }}
+                ref={compactSelectorRef}
+                onClick={() => {
+                  if (!renaming) {
+                    setMissionDropdownOpen(!missionDropdownOpen);
+                    if (!missionDropdownOpen && compactSelectorRef.current) {
+                      const rect = compactSelectorRef.current.getBoundingClientRect();
+                      setCompactDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+                    }
+                  }
+                }}
                 className="flex items-center w-full px-4 h-11 rounded-full bg-tv-surface text-tv-text-primary cursor-pointer hover:bg-tv-surface-hover transition-colors"
                 data-testid="mission-selector"
               >
                 <span className="flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-tv-bg border border-tv-border text-tv-text-primary mr-2">
                   {t("mission.label")}
                 </span>
-                {renaming ? (
-                  <input
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") confirmRename();
-                      if (e.key === "Escape") setRenaming(false);
-                    }}
-                    className="flex-1 min-w-0 bg-transparent outline-none text-sm"
-                    autoFocus
-                  />
-                ) : (
-                  <span className="flex-1 min-w-0 truncate text-sm font-medium">
-                    {currentMission?.name ?? t("mission.config.selectMission")}
-                  </span>
-                )}
-
-                {currentMission && !renaming && (
+                <span className="flex-1 min-w-0 truncate text-sm font-medium">
+                  {currentMission?.name ?? t("mission.config.selectMission")}
+                </span>
+                {currentMission && (
                   <Badge status={currentMission.status as MissionStatus} className="flex-shrink-0 ml-2" />
                 )}
-
-                {/* action buttons inside the pill */}
                 <div className="flex items-center gap-0.5 ml-2 flex-shrink-0">
-                  {renaming ? (
-                    <>
-                      <button
-                        onClick={confirmRename}
-                        className="p-1.5 rounded-full hover:bg-tv-surface-hover transition-colors text-tv-accent"
-                        title={t("common.save")}
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setRenaming(false)}
-                        className="p-1.5 rounded-full hover:bg-tv-surface-hover transition-colors text-tv-text-secondary"
-                        title={t("common.cancel")}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); startRename(); }}
-                        className="p-1.5 rounded-full hover:bg-tv-surface-hover transition-colors text-tv-text-primary"
-                        title={t("common.edit")}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeselect(); }}
-                        className="flex items-center justify-center h-5 w-5 rounded-full bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors"
-                        title={t("common.close")}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setMissionDropdownOpen(!missionDropdownOpen); }}
-                        className="p-1.5 rounded-full hover:bg-tv-surface-hover transition-colors text-tv-text-primary"
-                      >
-                        <ChevronDown
-                          className={`h-3.5 w-3.5 transition-transform duration-200 ${missionDropdownOpen ? "rotate-180" : ""}`}
-                        />
-                      </button>
-                    </>
-                  )}
+                  <button onClick={(e) => { e.stopPropagation(); handleDeselect(); }} className="flex items-center justify-center h-5 w-5 rounded-full bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors" title={t("common.close")}><X className="h-3 w-3" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setMissionDropdownOpen(!missionDropdownOpen); if (!missionDropdownOpen && compactSelectorRef.current) { const rect = compactSelectorRef.current.getBoundingClientRect(); setCompactDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width }); } }} className="p-1.5 rounded-full hover:bg-tv-surface-hover transition-colors text-tv-text-primary"><ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${missionDropdownOpen ? "rotate-180" : ""}`} /></button>
                 </div>
               </div>
+            </div>
 
-          </div>
-
-            {/* dropdown via portal to avoid overflow-hidden clipping */}
-            {missionDropdownOpen && selectorRef.current && dropdownPos && createPortal(
+            {/* compact dropdown via portal */}
+            {missionDropdownOpen && compactDropdownPos && createPortal(
               <div
-                ref={portalDropdownRef}
-                className="fixed z-50 bg-tv-surface border-2 border-tv-text-muted rounded-2xl p-2"
-                style={{
-                  top: dropdownPos.top,
-                  left: dropdownPos.left,
-                  width: dropdownPos.width,
-                }}
+                ref={compactDropdownRef}
+                className="fixed z-50 rounded-2xl border border-tv-border bg-tv-surface"
+                style={{ top: compactDropdownPos.top, left: compactDropdownPos.left, width: compactDropdownPos.width }}
               >
-                <input
-                  ref={missionSearchRef}
-                  value={missionSearch}
-                  onChange={(e) => setMissionSearch(e.target.value)}
-                  placeholder={t("mission.config.searchMissions")}
-                  className="w-full rounded-full px-4 py-2 text-sm bg-tv-bg border border-tv-border text-tv-text-primary placeholder:text-tv-text-muted outline-none focus:border-tv-accent mb-2"
-                />
-                <div className="max-h-48 overflow-y-auto">
+                <div className="p-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-tv-text-muted" />
+                    <input
+                      value={missionSearch}
+                      onChange={(e) => setMissionSearch(e.target.value)}
+                      placeholder={t("mission.config.searchMissions")}
+                      className="w-full pl-8 pr-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <div className="max-h-60 overflow-y-auto">
                   {filteredMissions.length === 0 ? (
-                    <div className="px-4 py-2.5 text-sm text-tv-text-muted">
-                      {t("common.noResults")}
-                    </div>
+                    <p className="px-3 py-3 text-xs text-tv-text-muted text-center">{t("common.noResults")}</p>
                   ) : (
                     filteredMissions.map((m) => (
-                      <button
+                      <DetailSelectorItem
                         key={m.id}
+                        isSelected={m.id === id}
                         onClick={() => handleMissionSwitch(m.id)}
-                        className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-sm transition-colors ${
-                          m.id === id
-                            ? "bg-tv-nav-active-bg text-tv-nav-active-text"
-                            : "text-tv-text-primary hover:bg-tv-surface-hover"
-                        }`}
                       >
-                        <span className="truncate">{m.name}</span>
-                        <Badge
-                          status={m.status as MissionStatus}
-                          className="ml-2 flex-shrink-0"
-                        />
-                      </button>
+                        <div className="flex items-center justify-between">
+                          <span className="truncate text-sm">{m.name}</span>
+                          <Badge status={m.status as MissionStatus} className="ml-2 flex-shrink-0" />
+                        </div>
+                      </DetailSelectorItem>
                     ))
                   )}
                 </div>
               </div>,
               document.body,
             )}
-          <div className="w-6 flex-shrink-0" />
+            <div className="w-6 flex-shrink-0" />
+          </div>
+
+          {/* tabs + buttons */}
+          {tabsRow}
         </div>
 
-        {/* right section - flex-1, mirrors NavBar right */}
-        <div className="flex-1 flex items-center gap-4 min-w-0">
-          {/* tab pills - flex-1, matches main nav pills */}
-          <div
-            className="flex flex-1 items-center justify-center gap-1 rounded-full bg-tv-surface p-1 h-11"
-            data-testid="mission-tabs"
-          >
-            {tabs.map((tab) => (
-              <NavLink
-                key={tab.path}
-                to={`/operator-center/missions/${id}/${tab.path}`}
-                className={({ isActive }) =>
-                  `px-5 h-9 rounded-full text-sm font-medium transition-colors flex items-center ${
-                    isActive
-                      ? "bg-tv-nav-active-bg text-tv-nav-active-text"
-                      : "text-tv-text-primary hover:bg-tv-surface-hover"
-                  }`
-                }
-              >
-                {tab.label}
-              </NavLink>
-            ))}
+        {renameError && (
+          <div className="mx-4 mb-2 rounded-xl bg-red-500/20 border border-red-500/40 px-4 py-2 text-sm text-red-400">
+            {renameError}
           </div>
+        )}
 
-          {/* compute / action button - matches airport selector width */}
-          {showCompute && (
-            <button
-              onClick={() => computeCtx.onCompute?.()}
-              disabled={!computeCtx.canCompute || computeCtx.isComputing}
-              title={
-                !computeCtx.canCompute && !computeCtx.isComputing
-                  ? (computeCtx.tooltip ?? t("mission.config.recomputeTooltip"))
-                  : undefined
-              }
-              className={`flex items-center justify-center gap-2 w-[280px] flex-shrink-0 h-11 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
-                computeCtx.variant === "secondary"
-                  ? "border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover"
-                  : computeCtx.isComputing
-                    ? "bg-tv-accent/50 text-tv-accent-text cursor-not-allowed"
-                    : !computeCtx.canCompute
-                      ? "bg-tv-surface text-tv-text-muted opacity-50 cursor-not-allowed"
-                      : "bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover"
-              }`}
-              data-testid="compute-trajectory-btn"
-            >
-              {computeCtx.isComputing && (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              )}
-              {!computeCtx.isComputing && computeCtx.icon === "upload" && (
-                <Upload className="h-4 w-4" />
-              )}
-              {computeCtx.isComputing
-                ? t("mission.config.computing")
-                : computeCtx.label ?? t("mission.config.computeTrajectory")}
-            </button>
-          )}
-
-          {/* save button - same width as theme toggle (81px) */}
-          {showSave && (
-            <button
-              onClick={() => saveCtx.onSave?.()}
-              disabled={!saveCtx.isDirty || saveCtx.isSaving}
-              className={`rounded-full px-4 h-11 min-w-[81px] flex-shrink-0 text-sm font-semibold transition-colors border ${
-                saveCtx.isDirty && !saveCtx.isSaving
-                  ? "border-tv-accent bg-tv-surface text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
-                  : "border-tv-border bg-tv-surface text-tv-text-muted cursor-not-allowed"
-              }`}
-              data-testid="save-button"
-            >
-              {saveCtx.isSaving
-                ? t("mission.config.saving")
-                : t("mission.config.save")}
-            </button>
-          )}
-
-          {/* last saved timestamp - same width as user dropdown */}
-          <div className="w-[140px] flex-shrink-0">
-            <span className="flex items-center justify-center rounded-full px-4 h-11 text-xs text-tv-text-muted whitespace-nowrap">
-              {saveCtx.lastSaved
-                ? formatSavedTime(saveCtx.lastSaved, t)
-                : t("mission.config.notSavedYet")}
-            </span>
-          </div>
+        {/* full-width content */}
+        <div className="flex-1 min-h-0 pb-2">
+          <Outlet context={outletContext} />
         </div>
       </div>
+    );
+  }
 
-      {renameError && (
-        <div className="mx-4 mb-2 rounded-xl bg-red-500/20 border border-red-500/40 px-4 py-2 text-sm text-red-400">
-          {renameError}
+  // normal mode: two-column layout
+  return (
+    <div className="flex h-[calc(100vh-5.25rem)] px-4 pt-2">
+      {/* LEFT COLUMN */}
+      <div className="w-[30%] flex-shrink-0 flex">
+        <div className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
+          <div className="flex-shrink-0 sticky top-0 z-10 bg-tv-bg">
+            {missionSelectorBlock}
+          </div>
+
+          {renameError && (
+            <div className="mt-2 rounded-xl bg-red-500/20 border border-red-500/40 px-4 py-2 text-sm text-red-400">
+              {renameError}
+            </div>
+          )}
+
+          <div
+            ref={setLeftPanelEl}
+            className="flex flex-col gap-4 pt-4 pb-2"
+          />
         </div>
-      )}
+        <div className="w-6 flex-shrink-0" />
+      </div>
 
-      <div className="py-2">
-        <Outlet
-          context={
-            {
-              setSaveContext,
-              setComputeContext,
-              refreshMissions,
-              mission: selectedMission,
-              updateMissionFromPage,
-            } satisfies MissionTabOutletContext
-          }
-        />
+      {/* RIGHT COLUMN */}
+      <div className="flex-1 flex flex-col min-w-0 pb-2">
+        <div className="flex items-center gap-4 flex-shrink-0 pb-3">
+          {tabsRow}
+        </div>
+
+        <div className="flex-1 min-h-0">
+          <Outlet context={outletContext} />
+        </div>
       </div>
     </div>
   );

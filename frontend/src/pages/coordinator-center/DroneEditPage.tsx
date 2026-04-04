@@ -15,10 +15,12 @@ import type {
   DroneProfileUpdate,
 } from "@/types/droneProfile";
 import type { MissionResponse } from "@/types/mission";
-import { Layers, Clock, Pencil, Plus } from "lucide-react";
+import { Layers, Clock, Pencil, Plus, Copy, Trash2, X, Link } from "lucide-react";
 import Badge from "@/components/common/Badge";
 import Button from "@/components/common/Button";
 import Card from "@/components/common/Card";
+import DetailSelector from "@/components/common/DetailSelector";
+import DetailSelectorItem from "@/components/common/DetailSelectorItem";
 import Modal from "@/components/common/Modal";
 import Input from "@/components/common/Input";
 import DroneModelViewer from "@/components/drone/DroneModelViewer";
@@ -350,11 +352,10 @@ export default function DroneEditPage() {
   // drone selector
   const [showSelector, setShowSelector] = useState(false);
   const [droneSearch, setDroneSearch] = useState("");
-  const selectorRef = useRef<HTMLDivElement>(null);
-  const droneSearchRef = useRef<HTMLInputElement>(null);
 
-  // collapsible left panel
-  const [panelExpanded, setPanelExpanded] = useState(true);
+  // inline rename
+  const [isRenamingDrone, setIsRenamingDrone] = useState(false);
+  const [renameDroneValue, setRenameDroneValue] = useState("");
 
   // collapsible mission list
   const [missionsExpanded, setMissionsExpanded] = useState(true);
@@ -451,28 +452,6 @@ export default function DroneEditPage() {
     fetchDrone();
   }, [fetchDrone]);
 
-  // close selector on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (
-        selectorRef.current &&
-        !selectorRef.current.contains(e.target as Node)
-      ) {
-        setShowSelector(false);
-        setDroneSearch("");
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  // auto-focus search when dropdown opens
-  useEffect(() => {
-    if (showSelector) {
-      setTimeout(() => droneSearchRef.current?.focus(), 0);
-    }
-  }, [showSelector]);
-
   /** show a temporary toast notification. */
   function showToast(msg: string) {
     if (notificationTimer.current) clearTimeout(notificationTimer.current);
@@ -540,6 +519,37 @@ export default function DroneEditPage() {
     } catch (err) {
       console.error("duplicate failed", err);
       showToast(t("coordinator.drones.duplicate.error"));
+    }
+  }
+
+  /** toggle the drone selector dropdown. */
+  function handleSelectorToggle() {
+    setShowSelector((prev) => {
+      if (prev) setDroneSearch("");
+      return !prev;
+    });
+  }
+
+  /** start inline rename of the drone profile. */
+  function startDroneRename() {
+    if (!drone) return;
+    setRenameDroneValue(drone.name);
+    setIsRenamingDrone(true);
+  }
+
+  /** finish inline rename and persist to backend. */
+  async function finishDroneRename() {
+    setIsRenamingDrone(false);
+    if (!id || !drone || !renameDroneValue.trim() || renameDroneValue.trim() === drone.name) return;
+    try {
+      const result = await updateDroneProfile(id, { name: renameDroneValue.trim() });
+      setDrone(result);
+      droneRef.current = result;
+      const refreshed = await listDroneProfiles();
+      setAllDrones(refreshed.data);
+    } catch (err) {
+      console.error("rename failed", err);
+      showToast(t("coordinator.drones.detail.renameError") ?? "Rename failed");
     }
   }
 
@@ -680,189 +690,72 @@ export default function DroneEditPage() {
           className="flex-1 overflow-y-auto flex flex-col gap-4"
           style={{ scrollbarGutter: "stable" }}
         >
-          {/* drone selector panel */}
-          <div className="bg-tv-surface border border-tv-border rounded-2xl flex flex-col">
-            {/* collapsible header */}
-            <button
-              onClick={() => setPanelExpanded(!panelExpanded)}
-              className="flex items-center justify-between w-full px-4 py-3"
-              data-testid="panel-toggle"
-            >
-              <span className="rounded-full bg-tv-bg px-3 py-1 text-xs font-medium text-tv-text-secondary uppercase tracking-wider">
-                {t("coordinator.drones.title")}
-              </span>
-              <ChevronIcon expanded={panelExpanded} />
-            </button>
-
-            {panelExpanded && (
+          {/* drone selector */}
+          <DetailSelector
+            title={t("coordinator.drones.title")}
+            count={allDrones.length}
+            actions={[
+              { icon: Plus, onClick: () => { setShowCreateDialog(true); setCreateName(""); setCreateError(""); }, title: t("coordinator.drones.detail.addNew"), variant: "accent" },
+              { icon: Copy, onClick: handleDuplicate, title: t("coordinator.drones.detail.duplicate") },
+              { icon: Pencil, onClick: startDroneRename, title: t("coordinator.drones.detail.rename") },
+              { icon: Trash2, onClick: () => setShowDeleteDialog(true), title: t("coordinator.drones.detail.delete"), variant: "danger" },
+              { icon: X, onClick: () => navigate("/coordinator-center/drones"), title: t("coordinator.drones.detail.backToList") },
+            ]}
+            renderSelected={() => (
               <>
-                {/* drone selector */}
-                <div className="px-4 pb-3">
-                  <div className="relative" ref={selectorRef}>
-                    <button
-                      onClick={() => setShowSelector(!showSelector)}
-                      className="w-full flex items-center justify-between rounded-full px-3 py-2 text-sm
-                        font-semibold text-tv-text-primary bg-tv-bg hover:bg-tv-surface-hover transition-colors"
-                      data-testid="drone-selector"
-                    >
-                      <span className="truncate">{drone.name}</span>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {/* rename button */}
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            document
-                              .getElementById("edit-name")
-                              ?.focus();
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.stopPropagation();
-                              document
-                                .getElementById("edit-name")
-                                ?.focus();
-                            }
-                          }}
-                          className="flex h-5 w-5 items-center justify-center rounded-full
-                            bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors cursor-pointer"
-                          title={t("coordinator.drones.detail.rename")}
-                          data-testid="rename-drone"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </span>
-                        {/* deselect button */}
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate("/coordinator-center/drones");
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.stopPropagation();
-                              navigate("/coordinator-center/drones");
-                            }
-                          }}
-                          className="flex h-5 w-5 items-center justify-center rounded-full
-                            bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors cursor-pointer"
-                          title={t("coordinator.drones.detail.backToList")}
-                          data-testid="back-to-list"
-                        >
-                          <svg
-                            className="h-3 w-3"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </span>
-                        <ChevronIcon expanded={showSelector} />
-                      </div>
-                    </button>
-                    {showSelector && (
-                      <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-2xl border-2 border-tv-text-muted bg-tv-surface p-2">
-                        <input
-                          ref={droneSearchRef}
-                          value={droneSearch}
-                          onChange={(e) => setDroneSearch(e.target.value)}
-                          placeholder={t(
-                            "coordinator.drones.searchPlaceholder",
-                          )}
-                          className="w-full rounded-full px-4 py-2 text-sm bg-tv-bg border border-tv-border
-                            text-tv-text-primary placeholder:text-tv-text-muted outline-none focus:border-tv-accent mb-2"
-                        />
-                        <div className="max-h-48 overflow-y-auto">
-                          {filteredDrones.length === 0 ? (
-                            <div className="px-4 py-2.5 text-sm text-tv-text-muted">
-                              {t("coordinator.drones.noMatch")}
-                            </div>
-                          ) : (
-                            filteredDrones.map((d) => {
-                              const isSelected = d.id === id;
-                              return (
-                                <button
-                                  key={d.id}
-                                  onClick={() => handleSelectDrone(d.id)}
-                                  className={`w-full text-left rounded-xl px-3 py-2 text-sm transition-colors ${
-                                    isSelected
-                                      ? "bg-tv-nav-active-bg text-tv-nav-active-text"
-                                      : "text-tv-text-primary hover:bg-tv-surface-hover"
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="truncate font-medium">
-                                      {d.name}
-                                    </span>
-                                  </div>
-                                  <div
-                                    className={`flex items-center gap-3 text-xs mt-0.5 ${isSelected ? "text-tv-nav-active-text/70" : "text-tv-text-muted"}`}
-                                  >
-                                    <span className="flex items-center gap-1">
-                                      <Layers className="w-3 h-3" />
-                                      {isSelected
-                                        ? missions.length
-                                        : d.mission_count}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                      <Clock className="w-3 h-3" />
-                                      {isSelected && totalDuration > 0
-                                        ? formatDuration(totalDuration)
-                                        : "\u2014"}
-                                    </span>
-                                    <span className="ml-auto">
-                                      {formatDate(d.updated_at)}
-                                    </span>
-                                  </div>
-                                </button>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* action buttons */}
-                <div className="px-4 pb-3 flex flex-col gap-2">
-                  <Button
-                    className="w-full"
-                    onClick={() => {
-                      setShowCreateDialog(true);
-                      setCreateName("");
-                      setCreateError("");
-                    }}
-                    data-testid="detail-add-new"
-                  >
-                    {t("coordinator.drones.detail.addNew")}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="w-full"
-                    onClick={handleDuplicate}
-                    data-testid="detail-duplicate"
-                  >
-                    {t("coordinator.drones.detail.duplicate")}
-                  </Button>
-                  <Button
-                    variant="danger"
-                    className="w-full"
-                    onClick={() => setShowDeleteDialog(true)}
-                    data-testid="detail-delete"
-                  >
-                    {t("coordinator.drones.detail.delete")}
-                  </Button>
-                </div>
+                <span className="flex-1 text-tv-text-primary truncate font-medium">
+                  {drone.name}
+                </span>
+                {(drone.mission_count ?? 0) > 0 && (
+                  <span className="flex items-center gap-0.5 text-tv-text-secondary">
+                    <Link className="h-3 w-3" />
+                    <span className="text-xs font-medium">{drone.mission_count}</span>
+                  </span>
+                )}
               </>
             )}
-          </div>
+            isOpen={showSelector}
+            onToggle={handleSelectorToggle}
+            isRenaming={isRenamingDrone}
+            renameValue={renameDroneValue}
+            onRenameChange={setRenameDroneValue}
+            onRenameFinish={finishDroneRename}
+            searchValue={droneSearch}
+            onSearchChange={setDroneSearch}
+            searchPlaceholder={t("coordinator.drones.searchPlaceholder")}
+            noResultsText={t("coordinator.drones.noMatch")}
+            renderDropdownItems={() =>
+              filteredDrones.length === 0 ? null : filteredDrones.map((d) => {
+                const isSelected = d.id === id;
+                return (
+                  <DetailSelectorItem
+                    key={d.id}
+                    isSelected={isSelected}
+                    onClick={() => { handleSelectDrone(d.id); handleSelectorToggle(); }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-medium text-sm">
+                        {d.name}
+                      </span>
+                    </div>
+                    <div className={`flex items-center gap-3 text-xs mt-0.5 ${isSelected ? "text-tv-accent-text/70" : "text-tv-text-muted"}`}>
+                      <span className="flex items-center gap-1">
+                        <Layers className="w-3 h-3" />
+                        {isSelected ? missions.length : d.mission_count}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {isSelected && totalDuration > 0 ? formatDuration(totalDuration) : "\u2014"}
+                      </span>
+                      <span className="ml-auto">
+                        {formatDate(d.updated_at)}
+                      </span>
+                    </div>
+                  </DetailSelectorItem>
+                );
+              })
+            }
+          />
 
           {/* missions panel */}
           <div className="bg-tv-surface border border-tv-border rounded-2xl flex flex-col">

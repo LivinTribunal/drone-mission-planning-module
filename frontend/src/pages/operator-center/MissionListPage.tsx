@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { Copy, Pencil, Trash2 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { listMissions, deleteMission, duplicateMission, updateMission } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
@@ -11,8 +12,15 @@ import Badge from "@/components/common/Badge";
 import Button from "@/components/common/Button";
 import Modal from "@/components/common/Modal";
 import Input from "@/components/common/Input";
-import RowActionMenu from "@/components/common/RowActionMenu";
+import RowActionButtons from "@/components/common/RowActionButtons";
 import CreateMissionDialog from "@/components/mission/CreateMissionDialog";
+import {
+  ListPageContainer,
+  ListPageContent,
+  SearchBar,
+  Pagination,
+  SortIndicator,
+} from "@/components/common/ListPageLayout";
 
 type SortKey =
   | "name"
@@ -34,30 +42,6 @@ const ALL_STATUSES: MissionStatus[] = [
   "CANCELLED",
 ];
 
-const PAGE_SIZES = [10, 20, 50, 200] as const;
-
-/** build page indices with ellipsis when there are many pages. */
-function paginationRange(total: number, current: number): (number | "...")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
-  const pages: (number | "...")[] = [0];
-  const start = Math.max(1, current - 1);
-  const end = Math.min(total - 2, current + 1);
-  if (start > 1) pages.push("...");
-  for (let i = start; i <= end; i++) pages.push(i);
-  if (end < total - 2) pages.push("...");
-  pages.push(total - 1);
-  return pages;
-}
-
-function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
-  /** triangle indicator for sort direction. */
-  if (!active) return null;
-  return (
-    <span className="ml-1 text-tv-accent">
-      {dir === "asc" ? "\u25B2" : "\u25BC"}
-    </span>
-  );
-}
 
 export default function MissionListPage() {
   /** full-width mission list page shown when no mission is selected. */
@@ -138,11 +122,12 @@ export default function MissionListPage() {
 
   function handleSort(key: SortKey) {
     /** toggle sort direction or switch sort column. */
+    const numeric: SortKey[] = ["inspections", "duration", "created_at", "updated_at"];
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir("asc");
+      setSortDir(numeric.includes(key) ? "desc" : "asc");
     }
   }
 
@@ -202,10 +187,7 @@ export default function MissionListPage() {
   }, [filtered, sortKey, sortDir, droneMap]);
 
   // pagination
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const paged = sorted.slice(page * pageSize, (page + 1) * pageSize);
-  const showFrom = sorted.length === 0 ? 0 : page * pageSize + 1;
-  const showTo = Math.min((page + 1) * pageSize, sorted.length);
 
   async function handleDelete() {
     /** delete the targeted mission and refresh the list. */
@@ -274,235 +256,208 @@ export default function MissionListPage() {
     { key: "updated_at", label: t("missionList.columns.lastUpdated") },
   ];
 
+  function formatDuration(seconds: number | null): string {
+    /** format duration in seconds to a human-readable string. */
+    if (seconds == null) return "\u2014";
+    const mins = Math.round(seconds / 60);
+    if (mins < 60) return `${mins} min`;
+    const hrs = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+  }
+
   return (
-    <div className="flex flex-col items-center px-4 py-12">
-      {/* search bar */}
-      <div className="flex items-center gap-3 w-full max-w-5xl mb-4">
-        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-tv-accent flex-shrink-0">
-          <svg className="h-5 w-5 text-tv-accent-text" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
-        <input
-          type="text"
-          value={search}
-          onChange={handleSearchChange}
-          placeholder={t("missionList.searchPlaceholder")}
-          className="flex-1 rounded-full border border-tv-border bg-tv-surface px-5 py-2.5
-            text-sm text-tv-text-primary placeholder:text-tv-text-muted
-            focus:outline-none focus:border-tv-accent"
-          data-testid="mission-list-search"
-        />
+    <ListPageContainer>
+      <SearchBar
+        value={search}
+        onChange={handleSearchChange}
+        placeholder={t("missionList.searchPlaceholder")}
+        testId="mission-list-search"
+      >
         <Button
           onClick={() => setShowCreateDialog(true)}
           data-testid="new-mission-btn"
         >
           {t("missionList.newMission")}
         </Button>
-      </div>
+      </SearchBar>
 
       {/* filter row */}
-      <div className="flex items-center w-full max-w-5xl mb-4 rounded-full border border-tv-border bg-tv-surface px-3 py-2">
-        {/* status pills */}
-        <div className="flex items-center gap-1.5">
-          {ALL_STATUSES.map((status) => (
-            <button
-              key={status}
-              onClick={() => toggleStatus(status)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                activeStatuses.has(status)
-                  ? `bg-[var(--tv-status-${status.toLowerCase()}-bg)] text-[var(--tv-status-${status.toLowerCase()}-text)]`
-                  : "bg-tv-bg text-tv-text-muted hover:text-tv-text-secondary"
-              }`}
-              data-testid={`status-filter-${status}`}
-            >
-              {t(`missionStatus.${status}`)}
-            </button>
-          ))}
-        </div>
-
-        <div className="w-px h-6 bg-tv-border mx-3" />
-
-        {/* right-aligned filters */}
-        <div className="flex items-center gap-2 ml-auto">
-          <select
-            value={droneFilter}
-            onChange={(e) => { setDroneFilter(e.target.value); setPage(0); }}
-            className="rounded-full border border-tv-border bg-tv-bg px-3 py-1 text-xs
-              text-tv-text-primary focus:outline-none focus:border-tv-accent"
-            data-testid="drone-filter"
-          >
-            <option value="">{t("missionList.filters.allDrones")}</option>
-            {droneProfiles.map((dp) => (
-              <option key={dp.id} value={dp.id}>{dp.name}</option>
-            ))}
-          </select>
-
-          <div className="flex items-center gap-1">
-            <label className="text-xs text-tv-text-secondary">{t("missionList.filters.from")}</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
-              className="rounded-full border border-tv-border bg-tv-bg px-3 py-1 text-xs
-                text-tv-text-primary focus:outline-none focus:border-tv-accent"
-              data-testid="date-from"
-            />
-          </div>
-          <div className="flex items-center gap-1">
-            <label className="text-xs text-tv-text-secondary">{t("missionList.filters.to")}</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
-              className="rounded-full border border-tv-border bg-tv-bg px-3 py-1 text-xs
-                text-tv-text-primary focus:outline-none focus:border-tv-accent"
-              data-testid="date-to"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* mission table */}
-      <div className="w-full max-w-5xl rounded-2xl border border-tv-border bg-tv-surface overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <svg className="h-6 w-6 animate-spin text-tv-text-muted" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          </div>
-        ) : error ? (
-          <div className="px-6 py-16 text-center text-sm text-tv-error">
-            {t("missionList.loadError")}
-            <button onClick={fetchMissions} className="ml-2 underline hover:no-underline">
-              {t("common.retry")}
-            </button>
-          </div>
-        ) : sorted.length === 0 ? (
-          <div className="px-6 py-16 text-center text-sm text-tv-text-muted">
-            {missions.length === 0
-              ? t("missionList.noMissions")
-              : t("missionList.noMatch")}
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-tv-border">
-                {columns.map((col) => (
-                  <th
-                    key={col.key}
-                    onClick={() => handleSort(col.key)}
-                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider
-                      text-tv-text-secondary cursor-pointer select-none hover:text-tv-text-primary transition-colors"
-                  >
-                    {col.label}
-                    <SortIndicator active={sortKey === col.key} dir={sortDir} />
-                  </th>
-                ))}
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {paged.map((mission) => (
-                <tr
-                  key={mission.id}
-                  onClick={() => navigate(`/operator-center/missions/${mission.id}/overview`)}
-                  className="border-b border-tv-border last:border-b-0 cursor-pointer
-                    text-sm text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-                  data-testid={`mission-row-${mission.id}`}
-                >
-                  <td className="px-4 py-3 font-medium">{mission.name}</td>
-                  <td className="px-4 py-3">
-                    <Badge status={mission.status} />
-                  </td>
-                  <td className="px-4 py-3 text-tv-text-secondary">
-                    {(mission.drone_profile_id && droneMap.get(mission.drone_profile_id)) || "\u2014"}
-                  </td>
-                  <td className="px-4 py-3">{"\u2014"}</td>
-                  <td className="px-4 py-3 text-tv-text-secondary">{"\u2014"}</td>
-                  <td className="px-4 py-3 text-tv-text-secondary">
-                    {new Date(mission.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3 text-tv-text-secondary">
-                    {"\u2014"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <RowActionMenu
-                      actions={[
-                        {
-                          label: t("missionList.actions.duplicate"),
-                          onClick: () => handleDuplicate(mission),
-                        },
-                        {
-                          label: t("missionList.actions.rename"),
-                          onClick: () => {
-                            setRenameTarget(mission);
-                            setRenameValue(mission.name);
-                          },
-                        },
-                        {
-                          label: t("missionList.actions.delete"),
-                          onClick: () => setDeleteTarget(mission),
-                          variant: "danger",
-                        },
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* pagination */}
-      {!loading && !error && sorted.length > 0 && (
-        <div className="relative flex items-center justify-between w-full max-w-5xl pt-3">
-          <span className="absolute left-1/2 -translate-x-1/2 text-xs text-tv-text-secondary">
-            {t("missionList.showing", { from: showFrom, to: showTo, total: sorted.length })}
-          </span>
-          <div className="flex items-center gap-1">
-            {PAGE_SIZES.map((size) => (
+      <ListPageContent className="mb-4">
+        <div className="flex items-center rounded-full border border-tv-border bg-tv-surface px-3 py-2">
+          {/* status pills */}
+          <div className="flex items-center gap-1.5">
+            {ALL_STATUSES.map((status) => (
               <button
-                key={size}
-                onClick={() => handlePageSizeChange(size)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  pageSize === size
-                    ? "bg-tv-accent text-tv-accent-text"
-                    : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
+                key={status}
+                onClick={() => toggleStatus(status)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  activeStatuses.has(status)
+                    ? `bg-[var(--tv-status-${status.toLowerCase()}-bg)] text-[var(--tv-status-${status.toLowerCase()}-text)]`
+                    : "bg-tv-bg text-tv-text-muted hover:text-tv-text-secondary"
                 }`}
+                data-testid={`status-filter-${status}`}
               >
-                {size}
+                {t(`missionStatus.${status}`)}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1">
-            {paginationRange(totalPages, page).map((item, idx) =>
-              item === "..." ? (
-                <span key={`ellipsis-${idx}`} className="px-1 text-xs text-tv-text-muted">
-                  ...
-                </span>
-              ) : (
-                <button
-                  key={item}
-                  onClick={() => setPage(item as number)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    page === item
-                      ? "bg-tv-accent text-tv-accent-text"
-                      : "bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary"
-                  }`}
-                >
-                  {(item as number) + 1}
-                </button>
-              ),
-            )}
+
+          <div className="w-px h-6 bg-tv-border mx-3" />
+
+          {/* right-aligned filters */}
+          <div className="flex items-center gap-2 ml-auto">
+            <select
+              value={droneFilter}
+              onChange={(e) => { setDroneFilter(e.target.value); setPage(0); }}
+              className="rounded-full border border-tv-border bg-tv-bg px-3 py-1 text-xs
+                text-tv-text-primary focus:outline-none focus:border-tv-accent"
+              data-testid="drone-filter"
+            >
+              <option value="">{t("missionList.filters.allDrones")}</option>
+              {droneProfiles.map((dp) => (
+                <option key={dp.id} value={dp.id}>{dp.name}</option>
+              ))}
+            </select>
+
+            <div className="flex items-center gap-1">
+              <label className="text-xs text-tv-text-secondary">{t("missionList.filters.from")}</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
+                className="rounded-full border border-tv-border bg-tv-bg px-3 py-1 text-xs
+                  text-tv-text-primary focus:outline-none focus:border-tv-accent"
+                data-testid="date-from"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <label className="text-xs text-tv-text-secondary">{t("missionList.filters.to")}</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
+                className="rounded-full border border-tv-border bg-tv-bg px-3 py-1 text-xs
+                  text-tv-text-primary focus:outline-none focus:border-tv-accent"
+                data-testid="date-to"
+              />
+            </div>
           </div>
         </div>
+      </ListPageContent>
+
+      {/* mission table */}
+      <ListPageContent>
+        <div className="rounded-2xl border border-tv-border bg-tv-surface overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <svg className="h-6 w-6 animate-spin text-tv-text-muted" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          ) : error ? (
+            <div className="px-6 py-16 text-center text-sm text-tv-error">
+              {t("missionList.loadError")}
+              <button onClick={fetchMissions} className="ml-2 underline hover:no-underline">
+                {t("common.retry")}
+              </button>
+            </div>
+          ) : sorted.length === 0 ? (
+            <div className="px-6 py-16 text-center text-sm text-tv-text-muted">
+              {missions.length === 0
+                ? t("missionList.noMissions")
+                : t("missionList.noMatch")}
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-tv-border">
+                  {columns.map((col) => (
+                    <th
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider
+                        text-tv-text-secondary cursor-pointer select-none hover:text-tv-text-primary transition-colors"
+                    >
+                      {col.label}
+                      <SortIndicator active={sortKey === col.key} dir={sortDir} />
+                    </th>
+                  ))}
+                  <th className="w-10" />
+                </tr>
+              </thead>
+              <tbody>
+                {paged.map((mission) => (
+                  <tr
+                    key={mission.id}
+                    onClick={() => navigate(`/operator-center/missions/${mission.id}/overview`)}
+                    className="border-b border-tv-border last:border-b-0 cursor-pointer
+                      text-sm text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                    data-testid={`mission-row-${mission.id}`}
+                  >
+                    <td className="px-4 py-3 font-medium">{mission.name}</td>
+                    <td className="px-4 py-3">
+                      <Badge status={mission.status} />
+                    </td>
+                    <td className="px-4 py-3 text-tv-text-secondary">
+                      {(mission.drone_profile_id && droneMap.get(mission.drone_profile_id)) || "\u2014"}
+                    </td>
+                    <td className="px-4 py-3 text-tv-text-secondary">
+                      {mission.inspection_count || "\u2014"}
+                    </td>
+                    <td className="px-4 py-3 text-tv-text-secondary">
+                      {formatDuration(mission.estimated_duration)}
+                    </td>
+                    <td className="px-4 py-3 text-tv-text-secondary">
+                      {new Date(mission.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-tv-text-secondary">
+                      {new Date(mission.updated_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3">
+                      <RowActionButtons
+                        actions={[
+                          {
+                            icon: Copy,
+                            onClick: () => handleDuplicate(mission),
+                            title: t("missionList.actions.duplicate"),
+                          },
+                          {
+                            icon: Pencil,
+                            onClick: () => {
+                              setRenameTarget(mission);
+                              setRenameValue(mission.name);
+                            },
+                            title: t("missionList.actions.rename"),
+                          },
+                          {
+                            icon: Trash2,
+                            onClick: () => setDeleteTarget(mission),
+                            title: t("missionList.actions.delete"),
+                            variant: "danger",
+                          },
+                        ]}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </ListPageContent>
+
+      {/* pagination */}
+      {!loading && !error && sorted.length > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={sorted.length}
+          onPageChange={setPage}
+          onPageSizeChange={handlePageSizeChange}
+          showingKey="missionList.showing"
+        />
       )}
 
       {/* create mission dialog */}
@@ -560,6 +515,6 @@ export default function MissionListPage() {
           </div>
         </form>
       </Modal>
-    </div>
+    </ListPageContainer>
   );
 }

@@ -235,7 +235,8 @@ describe("MissionConfigForm", () => {
   it("displays mission values in fields", () => {
     /** verify fields are pre-populated from mission prop. */
     renderForm();
-    expect(screen.getByTestId("drone-profile-select")).toHaveValue("dp-1");
+    // custom drone dropdown shows selected drone name
+    expect(screen.getByTestId("drone-profile-select")).toHaveTextContent("DJI Matrice 300");
     expect(screen.getByTestId("default-speed-input")).toHaveValue(5);
     expect(screen.getByTestId("default-altitude-offset-input")).toHaveValue(10);
   });
@@ -270,9 +271,10 @@ describe("MissionConfigForm", () => {
   it("calls onChange when drone profile changes", () => {
     /** verify onChange fires with updated drone profile. */
     const { onChange } = renderForm();
-    fireEvent.change(screen.getByTestId("drone-profile-select"), {
-      target: { value: "" },
-    });
+    // open the custom dropdown
+    fireEvent.click(screen.getByTestId("drone-profile-select"));
+    // click the placeholder option to deselect
+    fireEvent.click(screen.getByText("mission.config.selectDrone"));
     expect(onChange).toHaveBeenCalledWith({ drone_profile_id: null });
   });
 

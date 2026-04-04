@@ -123,6 +123,23 @@ body {
   scrollbar-color: var(--tv-border) transparent;
 }
 
+*::-webkit-scrollbar {
+  width: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--tv-border);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--tv-text-muted);
+}
+
 /* maplibre navigation control - design system styling */
 .maplibregl-ctrl-group {
   border-radius: 16px !important;
