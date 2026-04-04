@@ -128,7 +128,11 @@ function waitForStyleLoaded(map: maplibregl.Map, callback: () => void): () => vo
   let cancelled = false;
   let ticks = 0;
   function check() {
-    if (cancelled || ticks++ > 300) return;
+    if (cancelled) return;
+    if (ticks++ > 300) {
+      console.warn("vertex editor: style load timed out after ~5s");
+      return;
+    }
     if (map.isStyleLoaded()) callback();
     else requestAnimationFrame(check);
   }
@@ -272,6 +276,7 @@ export default function useVertexEditor(
           length = d12;
         }
       }
+      if (centerline.length < 2) return;
       const dLng = centerline[1][0] - centerline[0][0];
       const dLat = centerline[1][1] - centerline[0][1];
       const heading = ((Math.atan2(dLng, dLat) * 180) / Math.PI + 360) % 360;

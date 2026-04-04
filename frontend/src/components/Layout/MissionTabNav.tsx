@@ -278,7 +278,7 @@ export default function MissionTabNav() {
           </div>
 
             {/* dropdown via portal to avoid overflow-hidden clipping */}
-            {missionDropdownOpen && missions.length > 0 && selectorRef.current && createPortal(
+            {missionDropdownOpen && selectorRef.current && createPortal(
               <div
                 ref={portalDropdownRef}
                 className="fixed z-50 bg-tv-surface border-2 border-tv-text-muted rounded-2xl p-2"
