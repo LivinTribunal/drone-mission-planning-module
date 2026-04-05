@@ -223,13 +223,13 @@ def update_agl(
     db: Session = Depends(get_db),
 ):
     """update AGL"""
-    return airport_service.update_agl(db, surface_id, agl_id, body)
+    return airport_service.update_agl(db, airport_id, surface_id, agl_id, body)
 
 
 @router.delete("/{airport_id}/surfaces/{surface_id}/agls/{agl_id}", response_model=DeleteResponse)
 def delete_agl(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = Depends(get_db)):
     """delete AGL"""
-    airport_service.delete_agl(db, surface_id, agl_id)
+    airport_service.delete_agl(db, airport_id, surface_id, agl_id)
 
     return DeleteResponse(deleted=True)
 
@@ -274,7 +274,7 @@ def update_lha(
     db: Session = Depends(get_db),
 ):
     """update LHA"""
-    return airport_service.update_lha(db, agl_id, lha_id, body)
+    return airport_service.update_lha(db, surface_id, agl_id, lha_id, body)
 
 
 @router.delete(
@@ -289,6 +289,6 @@ def delete_lha(
     db: Session = Depends(get_db),
 ):
     """delete LHA"""
-    airport_service.delete_lha(db, agl_id, lha_id)
+    airport_service.delete_lha(db, surface_id, agl_id, lha_id)
 
     return DeleteResponse(deleted=True)

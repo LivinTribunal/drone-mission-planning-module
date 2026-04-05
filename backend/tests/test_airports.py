@@ -239,6 +239,56 @@ def test_bulk_change_drone(client):
     assert m2["id"] in body["mission_ids"]
 
 
+def test_bulk_change_drone_skips_non_draft(client, db_engine):
+    """bulk change should not affect non-draft missions."""
+    from sqlalchemy import text
+
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZSK"},
+    ).json()
+
+    drone1 = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "Skip Drone 1"},
+    ).json()
+    drone2 = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "Skip Drone 2"},
+    ).json()
+
+    m_draft = client.post(
+        "/api/v1/missions",
+        json={"name": "SkipDraft", "airport_id": apt["id"], "drone_profile_id": drone1["id"]},
+    ).json()
+    m_planned = client.post(
+        "/api/v1/missions",
+        json={"name": "SkipPlanned", "airport_id": apt["id"], "drone_profile_id": drone1["id"]},
+    ).json()
+
+    # force one mission to PLANNED status via raw sql
+    with db_engine.connect() as conn:
+        conn.execute(
+            text("UPDATE mission SET status = 'PLANNED' WHERE id = :id"),
+            {"id": m_planned["id"]},
+        )
+        conn.commit()
+
+    r = client.post(
+        f"/api/v1/airports/{apt['id']}/bulk-change-drone",
+        json={"drone_profile_id": drone2["id"]},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["updated_count"] == 1
+    assert m_draft["id"] in body["mission_ids"]
+    assert m_planned["id"] not in body["mission_ids"]
+
+    # verify planned mission still has original drone
+    planned_detail = client.get(f"/api/v1/missions/{m_planned['id']}").json()
+    assert planned_detail["drone_profile_id"] == drone1["id"]
+
+
 def test_mission_auto_fills_default_drone(client):
     """mission creation auto-fills drone from airport default."""
     apt = client.post(

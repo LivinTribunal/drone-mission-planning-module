@@ -184,7 +184,8 @@ export default function OperatorDronesPage() {
           ? t("operatorDrones.removeDefault")
           : t("operatorDrones.defaultBadge"),
       );
-    } catch {
+    } catch (err) {
+      console.error("toggle default drone failed:", err instanceof Error ? err.message : String(err));
       showToast(t("common.error"));
     }
   }
@@ -206,7 +207,8 @@ export default function OperatorDronesPage() {
           }),
         );
       }
-    } catch {
+    } catch (err) {
+      console.error("bulk change drone failed:", err instanceof Error ? err.message : String(err));
       showToast(t("common.error"));
     } finally {
       setBulkLoading(false);

@@ -385,8 +385,18 @@ def create_agl(db: Session, airport_id: UUID, surface_id: UUID, schema: AGLCreat
     return agl
 
 
-def update_agl(db: Session, surface_id: UUID, agl_id: UUID, schema: AGLUpdate) -> AGL:
-    """update AGL, validates it belongs to surface"""
+def update_agl(
+    db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, schema: AGLUpdate
+) -> AGL:
+    """update AGL, validates surface belongs to airport and AGL belongs to surface."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
@@ -398,8 +408,16 @@ def update_agl(db: Session, surface_id: UUID, agl_id: UUID, schema: AGLUpdate) -
     return agl
 
 
-def delete_agl(db: Session, surface_id: UUID, agl_id: UUID):
-    """delete AGL, validates it belongs to surface"""
+def delete_agl(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID):
+    """delete AGL, validates surface belongs to airport and AGL belongs to surface."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
@@ -433,8 +451,12 @@ def create_lha(db: Session, surface_id: UUID, agl_id: UUID, schema: LHACreate) -
     return lha
 
 
-def update_lha(db: Session, agl_id: UUID, lha_id: UUID, schema: LHAUpdate) -> LHA:
-    """update LHA, validates it belongs to AGL"""
+def update_lha(db: Session, surface_id: UUID, agl_id: UUID, lha_id: UUID, schema: LHAUpdate) -> LHA:
+    """update LHA, validates AGL belongs to surface and LHA belongs to AGL."""
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
+    if not agl:
+        raise NotFoundError("agl not found")
+
     lha = db.query(LHA).filter(LHA.id == lha_id, LHA.agl_id == agl_id).first()
     if not lha:
         raise NotFoundError("lha not found")
@@ -446,8 +468,12 @@ def update_lha(db: Session, agl_id: UUID, lha_id: UUID, schema: LHAUpdate) -> LH
     return lha
 
 
-def delete_lha(db: Session, agl_id: UUID, lha_id: UUID):
-    """delete LHA, validates it belongs to AGL"""
+def delete_lha(db: Session, surface_id: UUID, agl_id: UUID, lha_id: UUID):
+    """delete LHA, validates AGL belongs to surface and LHA belongs to AGL."""
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
+    if not agl:
+        raise NotFoundError("agl not found")
+
     lha = db.query(LHA).filter(LHA.id == lha_id, LHA.agl_id == agl_id).first()
     if not lha:
         raise NotFoundError("lha not found")
