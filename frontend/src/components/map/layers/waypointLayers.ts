@@ -651,12 +651,9 @@ export function updateWarningHighlightFilter(
       if (!waypointIds || waypointIds.length === 0) {
         map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "id"], ""]);
       } else if (simplified) {
-        map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, [
-          "all",
-          ["in", ["get", "id"], ["literal", waypointIds]],
-          ["in", ["get", "waypoint_type"], ["literal", ["TRANSIT", "TAKEOFF", "LANDING"]]],
-        ]);
-        map.setPaintProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "circle-stroke-color", color);
+        // no circle highlights in simplified mode - measurements are lines only
+        map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "id"], ""]);
+
       } else {
         map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, [
           "in",
