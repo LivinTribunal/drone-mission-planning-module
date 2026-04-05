@@ -48,14 +48,15 @@ def persist_flight_plan(
     db: Session,
     mission: Mission,
     all_waypoints: list[WaypointData],
-    warnings: list[str],
+    warnings: list[tuple[str, list[str]]],
     total_distance: float,
     estimated_duration: float,
-    violations: list[str] | None = None,
-    suggestions: list[str] | None = None,
+    violations: list[tuple[str, list[str]]] | None = None,
+    suggestions: list[tuple[str, list[str]]] | None = None,
 ) -> FlightPlan:
     """persist flight plan with waypoints and validation result.
 
+    each warning/violation/suggestion is a (message, waypoint_ids) tuple.
     warnings are stored with category='warning'.
     violations are stored with category='violation' but don't abort generation.
     suggestions are stored with category='suggestion'.
@@ -71,6 +72,33 @@ def persist_flight_plan(
     for i, wp in enumerate(all_waypoints, start=1):
         db.add(_waypoint_to_model(wp, flight_plan.id, i))
 
+    # flush waypoints so they get UUIDs
+    db.flush()
+
+    # build index -> uuid mapping for resolving waypoint indices
+    persisted_wps = (
+        db.query(Waypoint)
+        .filter(Waypoint.flight_plan_id == flight_plan.id)
+        .order_by(Waypoint.sequence_order)
+        .all()
+    )
+    idx_to_uuid = {i: str(w.id) for i, w in enumerate(persisted_wps)}
+
+    def _resolve_ids(wp_ids: list[str]) -> list[str]:
+        """resolve index-based ids to actual UUIDs when possible."""
+        resolved = []
+        for wid in wp_ids:
+            if wid.startswith("idx:"):
+                try:
+                    idx = int(wid[4:])
+                except ValueError:
+                    continue
+                if idx in idx_to_uuid:
+                    resolved.append(idx_to_uuid[idx])
+            else:
+                resolved.append(wid)
+        return resolved
+
     # validation result - passed=False when non-aborting violations exist
     has_violations = bool(violations)
     val_result = ValidationResult(
@@ -80,30 +108,45 @@ def persist_flight_plan(
     db.add(val_result)
     db.flush()
 
-    for w in dict.fromkeys(warnings):
+    seen: set[str] = set()
+    for msg, wp_ids in warnings:
+        if msg in seen:
+            continue
+        seen.add(msg)
         db.add(
             ValidationViolation(
                 validation_result_id=val_result.id,
                 category="warning",
-                message=w,
+                message=msg,
+                waypoint_ids=_resolve_ids(wp_ids),
             )
         )
 
-    for v in dict.fromkeys(violations or []):
+    seen.clear()
+    for msg, wp_ids in violations or []:
+        if msg in seen:
+            continue
+        seen.add(msg)
         db.add(
             ValidationViolation(
                 validation_result_id=val_result.id,
                 category="violation",
-                message=v,
+                message=msg,
+                waypoint_ids=_resolve_ids(wp_ids),
             )
         )
 
-    for s in dict.fromkeys(suggestions or []):
+    seen.clear()
+    for msg, wp_ids in suggestions or []:
+        if msg in seen:
+            continue
+        seen.add(msg)
         db.add(
             ValidationViolation(
                 validation_result_id=val_result.id,
                 category="suggestion",
-                message=s,
+                message=msg,
+                waypoint_ids=_resolve_ids(wp_ids),
             )
         )
 

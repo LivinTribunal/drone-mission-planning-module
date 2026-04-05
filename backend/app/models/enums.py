@@ -31,6 +31,12 @@ class ExportFormat(str, enum.Enum):
     KML = "KML"
     KMZ = "KMZ"
     JSON = "JSON"
+    UGCS = "UGCS"
+    WPML = "WPML"
+    CSV = "CSV"
+    GPX = "GPX"
+    LITCHI = "LITCHI"
+    DRONEDEPLOY = "DRONEDEPLOY"
 
 
 class InspectionMethod(str, enum.Enum):

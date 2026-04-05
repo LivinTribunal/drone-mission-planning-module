@@ -87,6 +87,7 @@ export default function MissionConfigPage() {
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(
     null,
   );
+  const [selectedWarning, setSelectedWarning] = useState<ValidationViolation | null>(null);
 
   // terrain mode lifted from map for bottom bar toggle
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">(
@@ -704,7 +705,12 @@ export default function MissionConfigPage() {
 
           {/* warnings */}
           <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-            <WarningsPanel warnings={warnings} hasTrajectory={hasTrajectory} />
+            <WarningsPanel
+              warnings={warnings}
+              hasTrajectory={hasTrajectory}
+              onWarningClick={setSelectedWarning}
+              selectedWarningId={selectedWarning?.id}
+            />
           </div>
 
           {/* stats */}
@@ -739,6 +745,10 @@ export default function MissionConfigPage() {
               landingCoordinate={currentLanding}
               inspectionIndexMap={inspectionIndexMap}
               visibleInspectionIds={visibleInspectionIds}
+              highlightedWaypointIds={selectedWarning?.waypoint_ids}
+              highlightSeverity={selectedWarning?.severity}
+              selectedWarning={selectedWarning}
+              onWarningClose={() => setSelectedWarning(null)}
             >
               {/* pick-on-map banner */}
               {pickingCoord && (

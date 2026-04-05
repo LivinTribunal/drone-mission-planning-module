@@ -22,6 +22,11 @@ const EXPORT_FORMATS = [
   { value: "JSON", labelKey: "formatJson", descKey: "formatJsonDesc" },
   { value: "MAVLINK", labelKey: "formatMavlink", descKey: "formatMavlinkDesc" },
   { value: "UGCS", labelKey: "formatUgcs", descKey: "formatUgcsDesc" },
+  { value: "WPML", labelKey: "formatWpml", descKey: "formatWpmlDesc" },
+  { value: "CSV", labelKey: "formatCsv", descKey: "formatCsvDesc" },
+  { value: "GPX", labelKey: "formatGpx", descKey: "formatGpxDesc" },
+  { value: "LITCHI", labelKey: "formatLitchi", descKey: "formatLitchiDesc" },
+  { value: "DRONEDEPLOY", labelKey: "formatDronedeploy", descKey: "formatDronedeployDesc" },
 ] as const;
 
 function canExport(status: MissionStatus): boolean {

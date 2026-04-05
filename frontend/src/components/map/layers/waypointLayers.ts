@@ -19,6 +19,7 @@ export const WAYPOINT_CAMERA_TARGET_LAYER = "waypoints-camera-targets";
 export const WAYPOINT_TRANSIT_HIT_LAYER = "waypoints-transit-hit";
 export const WAYPOINT_GHOST_TRANSIT_SOURCE = "waypoints-ghost-transit";
 export const WAYPOINT_GHOST_TRANSIT_LAYER = "waypoints-ghost-transit-layer";
+export const WAYPOINT_WARNING_HIGHLIGHT_LAYER = "waypoints-warning-highlight";
 
 export const SIMPLIFIED_LINE_SOURCE = "simplified-trajectory-source";
 export const SIMPLIFIED_LINE_LAYER = "simplified-trajectory-line";
@@ -30,6 +31,7 @@ export const SIMPLIFIED_CORNERS_SOURCE = "simplified-corners-source";
 export const SIMPLIFIED_MEASUREMENT_SOURCE = "simplified-measurement-source";
 export const SIMPLIFIED_MEASUREMENT_LAYER = "simplified-measurement-dots";
 export const SIMPLIFIED_CORNERS_LAYER = "simplified-corners";
+export const SIMPLIFIED_WARNING_HIGHLIGHT_LAYER = "simplified-warning-highlight";
 
 const TRANSIT_PATH_COLOR = "#7eb8e5";
 const DEFAULT_MEASUREMENT_COLOR = "#3bbb3b";
@@ -578,6 +580,21 @@ export function addWaypointLayers(
     },
   });
 
+  // warning highlight ring - between base layers and selected
+  map.addLayer({
+    id: WAYPOINT_WARNING_HIGHLIGHT_LAYER,
+    type: "circle",
+    source: WAYPOINT_SOURCE,
+    filter: ["==", ["get", "id"], ""],
+    paint: {
+      "circle-radius": 16,
+      "circle-color": "transparent",
+      "circle-stroke-color": "#e54545",
+      "circle-stroke-width": 3,
+      "circle-stroke-opacity": 0.9,
+    },
+  });
+
   // selected waypoint highlight ring
   map.addLayer({
     id: WAYPOINT_SELECTED_LAYER,
@@ -612,11 +629,70 @@ export function updateSelectedFilter(
   }
 }
 
+/** severity color map for warning highlights. */
+const SEVERITY_COLORS: Record<string, string> = {
+  violation: "#e54545",
+  warning: "#e5a545",
+  suggestion: "#9ca3af",
+};
+
+/** updates the warning highlight filter and color for both full and simplified layers. */
+export function updateWarningHighlightFilter(
+  map: MaplibreMap,
+  waypointIds?: string[],
+  severity?: string,
+  simplified?: boolean,
+): void {
+  const color = SEVERITY_COLORS[severity ?? "warning"] ?? SEVERITY_COLORS.warning;
+
+  try {
+    // circle highlights - hidden entirely in simplified mode
+    if (map.getLayer(WAYPOINT_WARNING_HIGHLIGHT_LAYER)) {
+      if (simplified) {
+        map.setLayoutProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "visibility", "none");
+      } else if (!waypointIds || waypointIds.length === 0) {
+        map.setLayoutProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "visibility", "visible");
+        map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "id"], ""]);
+      } else {
+        map.setLayoutProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "visibility", "visible");
+        map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, [
+          "in",
+          ["get", "id"],
+          ["literal", waypointIds],
+        ]);
+        map.setPaintProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "circle-stroke-color", color);
+      }
+    }
+  } catch {
+    // layer may not exist
+  }
+
+  try {
+    // simplified trajectory line highlight
+    if (map.getLayer(SIMPLIFIED_WARNING_HIGHLIGHT_LAYER)) {
+      if (!waypointIds || waypointIds.length === 0) {
+        map.setFilter(SIMPLIFIED_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "fromId"], ""]);
+      } else {
+        // both endpoints must be affected to highlight the segment
+        map.setFilter(SIMPLIFIED_WARNING_HIGHLIGHT_LAYER, [
+          "all",
+          ["in", ["get", "fromId"], ["literal", waypointIds]],
+          ["in", ["get", "toId"], ["literal", waypointIds]],
+        ]);
+        map.setPaintProperty(SIMPLIFIED_WARNING_HIGHLIGHT_LAYER, "line-color", color);
+      }
+    }
+  } catch {
+    // layer may not exist
+  }
+}
+
 /** removes all waypoint layers and sources. */
 export function removeWaypointLayers(map: MaplibreMap): void {
   const layers = [
     WAYPOINT_GHOST_TRANSIT_LAYER,
     WAYPOINT_SELECTED_LAYER,
+    WAYPOINT_WARNING_HIGHLIGHT_LAYER,
     WAYPOINT_LABEL_LAYER,
     WAYPOINT_LANDING_LAYER,
     WAYPOINT_TAKEOFF_LAYER,
@@ -655,6 +731,7 @@ export function getWaypointLayerIds(): string[] {
     WAYPOINT_TAKEOFF_LAYER,
     WAYPOINT_LANDING_LAYER,
     WAYPOINT_LABEL_LAYER,
+    WAYPOINT_WARNING_HIGHLIGHT_LAYER,
     WAYPOINT_SELECTED_LAYER,
   ];
 }
@@ -663,6 +740,7 @@ export function getWaypointLayerIds(): string[] {
 export function getSimplifiedTrajectoryLayerIds(): string[] {
   return [
     SIMPLIFIED_LINE_LAYER,
+    SIMPLIFIED_WARNING_HIGHLIGHT_LAYER,
     SIMPLIFIED_CORNERS_LAYER,
     SIMPLIFIED_MEASUREMENT_LAYER,
     SIMPLIFIED_TAKEOFF_LAYER,
@@ -696,7 +774,7 @@ export function waypointsToSimplifiedLineGeoJSON(
 
     features.push({
       type: "Feature",
-      properties: { color },
+      properties: { color, fromId: from.id, toId: to.id },
       geometry: {
         type: "LineString",
         coordinates: [from.position.coordinates, to.position.coordinates],
@@ -892,6 +970,19 @@ export function addSimplifiedTrajectoryLayers(
     },
   });
 
+  // warning highlight overlay on simplified line segments
+  map.addLayer({
+    id: SIMPLIFIED_WARNING_HIGHLIGHT_LAYER,
+    type: "line",
+    source: SIMPLIFIED_LINE_SOURCE,
+    filter: ["==", ["get", "fromId"], ""],
+    paint: {
+      "line-color": "#e54545",
+      "line-width": 7,
+      "line-opacity": 0.9,
+    },
+  });
+
   // corner dots where path changes direction
   map.addLayer({
     id: SIMPLIFIED_CORNERS_LAYER,
@@ -952,6 +1043,7 @@ export function removeSimplifiedTrajectoryLayers(map: MaplibreMap): void {
     SIMPLIFIED_TAKEOFF_LAYER,
     SIMPLIFIED_MEASUREMENT_LAYER,
     SIMPLIFIED_CORNERS_LAYER,
+    SIMPLIFIED_WARNING_HIGHLIGHT_LAYER,
     SIMPLIFIED_LINE_LAYER,
   ];
   const sources = [

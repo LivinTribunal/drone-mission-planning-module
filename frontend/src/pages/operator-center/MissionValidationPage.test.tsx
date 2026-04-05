@@ -69,6 +69,7 @@ function makeFlightPlan(passed: boolean = true): FlightPlanResponse {
               constraint_name: null,
               violation_kind: "altitude",
               waypoint_ref: null,
+              waypoint_ids: [],
             },
             {
               id: "v2",
@@ -80,6 +81,7 @@ function makeFlightPlan(passed: boolean = true): FlightPlanResponse {
               constraint_name: null,
               violation_kind: "battery",
               waypoint_ref: null,
+              waypoint_ids: [],
             },
           ],
     },
