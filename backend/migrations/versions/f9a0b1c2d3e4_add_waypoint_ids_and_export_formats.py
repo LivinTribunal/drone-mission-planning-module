@@ -1,7 +1,7 @@
 """add waypoint_ids and export formats
 
-Revision ID: e7f8a9b0c1d2
-Revises: d6e7f8a9b0c1
+Revision ID: f9a0b1c2d3e4
+Revises: a2b3c4d5e6f7
 Create Date: 2026-04-05 10:00:00.000000
 
 """
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision: str = "e7f8a9b0c1d2"
-down_revision: Union[str, None] = "d6e7f8a9b0c1"
+revision: str = "f9a0b1c2d3e4"
+down_revision: Union[str, None] = "a2b3c4d5e6f7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
