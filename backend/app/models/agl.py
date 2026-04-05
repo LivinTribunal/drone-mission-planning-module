@@ -42,8 +42,8 @@ class AGL(Base):
                 coords = parse_ewkb(lha.position.data).get("coordinates")
                 if not coords or len(coords) < 3:
                     continue
-            except Exception:
-                logger.warning("failed to parse LHA position for lha %s", lha.id)
+            except Exception as e:
+                logger.warning("failed to parse LHA position for lha %s: %s", lha.id, e)
                 continue
             lons.append(coords[0])
             lats.append(coords[1])

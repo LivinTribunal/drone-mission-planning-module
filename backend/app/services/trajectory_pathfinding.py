@@ -96,8 +96,8 @@ def _collect_nearby_objects(
             obs_pos = parse_ewkb(obs.position.data).get("coordinates")
             if not obs_pos or len(obs_pos) < 2:
                 continue
-        except Exception:
-            logger.warning("failed to parse obstacle position for obstacle %s", obs.id)
+        except Exception as e:
+            logger.warning("failed to parse obstacle position for obstacle %s: %s", obs.id, e)
             continue
         if distance_between(center_lon, center_lat, obs_pos[0], obs_pos[1]) <= search_radius:
             nearby_obs.append(obs)

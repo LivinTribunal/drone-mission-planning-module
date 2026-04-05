@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import TERRAIN_DIR
 from app.core.dependencies import get_db
+from app.core.exceptions import DomainError, NotFoundError
 from app.schemas.airport import (
     AirportCreate,
     AirportDetailResponse,
@@ -152,6 +153,8 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
         TERRAIN_DIR.mkdir(parents=True, exist_ok=True)
         final_path = TERRAIN_DIR / f"{airport_id}.tif"
         shutil.move(tmp_path, str(final_path))
+
+        # tmp was moved - cleanup now targets final_path
         tmp_path = str(final_path)
 
         airport_service.upload_terrain_dem(db, airport_id, str(final_path), bounds, [res_x, res_y])
@@ -163,6 +166,10 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
 
     except HTTPException:
         raise
+    except (NotFoundError, DomainError) as e:
+        # service layer error - file is valid but db operation failed
+        logger.exception("DEM upload service error")
+        raise HTTPException(status_code=e.status_code, detail=str(e))
     except Exception as e:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)

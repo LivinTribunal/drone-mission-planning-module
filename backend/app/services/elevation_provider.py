@@ -67,8 +67,10 @@ class DEMElevationProvider(ElevationProvider):
                 if math.isnan(val):
                     return self.fallback_elevation
                 return val
-        except Exception:
-            logger.warning("DEM sample failed at lat=%.6f lon=%.6f, using fallback", lat, lon)
+        except Exception as e:
+            logger.warning(
+                "DEM sample failed at lat=%.6f lon=%.6f: %s, using fallback", lat, lon, e
+            )
 
         return self.fallback_elevation
 
@@ -89,13 +91,14 @@ class DEMElevationProvider(ElevationProvider):
                     results.append(self.fallback_elevation)
                 else:
                     results.append(val)
-        except Exception:
+        except Exception as e:
             # keep successful reads, fallback only for remaining points
             remaining = len(points) - len(results)
             logger.warning(
-                "DEM batch sample failed after %d/%d points, using fallback for rest",
+                "DEM batch sample failed after %d/%d points: %s, using fallback for rest",
                 len(results),
                 len(points),
+                e,
             )
             results.extend([self.fallback_elevation] * remaining)
 
@@ -105,6 +108,7 @@ class DEMElevationProvider(ElevationProvider):
         """close the raster dataset."""
         if hasattr(self, "_dataset") and self._dataset:
             self._dataset.close()
+            self._dataset = None
 
     def __enter__(self):
         """support use as context manager."""

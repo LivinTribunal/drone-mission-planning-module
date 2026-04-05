@@ -534,6 +534,17 @@ def _apply_terrain_delta(
         terrain_delta = elevations[i] - ground_at_center
         wp.alt += terrain_delta
 
+        # recalculate gimbal pitch - original was computed at pre-terrain altitude
+        if wp.camera_target:
+            wp.gimbal_pitch = elevation_angle(
+                wp.lon,
+                wp.lat,
+                wp.alt,
+                center.lon,
+                center.lat,
+                center.alt,
+            )
+
 
 def compute_measurement_trajectory(
     inspection,

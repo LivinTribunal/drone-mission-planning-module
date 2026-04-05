@@ -525,10 +525,11 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
     start_time = time.monotonic()
 
     try:
-        with httpx.Client(timeout=60.0) as http_client:
+        with httpx.Client() as http_client:
             for i in range(0, len(locations), batch_size):
                 elapsed = time.monotonic() - start_time
-                if elapsed > total_timeout:
+                remaining = total_timeout - elapsed
+                if remaining <= 0:
                     raise DomainError(
                         f"terrain download timed out after {elapsed:.0f}s "
                         f"({len(all_elevations)}/{len(locations)} points)",
@@ -536,9 +537,11 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
                     )
 
                 batch = locations[i : i + batch_size]
+                batch_timeout = min(60.0, remaining)
                 resp = http_client.post(
                     "https://api.open-elevation.com/api/v1/lookup",
                     json={"locations": batch},
+                    timeout=batch_timeout,
                 )
                 resp.raise_for_status()
                 results = resp.json().get("results", [])
