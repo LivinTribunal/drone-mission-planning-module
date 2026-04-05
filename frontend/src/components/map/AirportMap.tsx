@@ -291,6 +291,10 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   landingRef.current = landingCoordinate;
   const indexMapRef = useRef(inspectionIndexMap);
   indexMapRef.current = inspectionIndexMap;
+  const highlightedIdsRef = useRef(highlightedWaypointIds);
+  highlightedIdsRef.current = highlightedWaypointIds;
+  const highlightSeverityRef = useRef(highlightSeverity);
+  highlightSeverityRef.current = highlightSeverity;
 
   useImperativeHandle(ref, () => ({
     getMap: () => mapRef.current,
@@ -1270,6 +1274,14 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     // re-sync visibility and filters after layers are added
     syncLayerVisibility(map);
     syncInspectionFilters(map);
+
+    // re-apply warning highlight state after layer rebuild
+    updateWarningHighlightFilter(
+      map,
+      highlightedIdsRef.current,
+      highlightSeverityRef.current,
+      layerConfigRef.current.simplifiedTrajectory,
+    );
   }, [selectedWaypointId, syncLayerVisibility, syncInspectionFilters]);
 
   // sync waypoints ref and re-render layers when waypoints or coords change
@@ -1320,7 +1332,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    updateWarningHighlightFilter(map, highlightedWaypointIds, highlightSeverity, simplifiedTrajectory);
+    updateWarningHighlightFilter(map, highlightedWaypointIds, highlightSeverity, layerConfig.simplifiedTrajectory);
 
     // fly to highlighted waypoints
     if (!highlightedWaypointIds || highlightedWaypointIds.length === 0) return;
@@ -1339,7 +1351,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         { padding: 100, duration: 800 },
       );
     }
-  }, [highlightedWaypointIds, highlightSeverity, simplifiedTrajectory]);
+  }, [highlightedWaypointIds, highlightSeverity, layerConfig.simplifiedTrajectory]);
 
   // cursor and hover effects - only for SELECT tool
   useEffect(() => {
