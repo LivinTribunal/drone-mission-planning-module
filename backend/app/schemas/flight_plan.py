@@ -88,6 +88,7 @@ class ValidationViolationResponse(BaseModel):
     category: Literal["violation", "warning", "suggestion"]
     message: str
     constraint_id: UUID | None = None
+    waypoint_ids: list[str] = []
 
     @computed_field
     @property

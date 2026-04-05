@@ -2,7 +2,18 @@
 
 from pydantic import BaseModel, field_validator
 
-_VALID_FORMATS = {"KML", "KMZ", "JSON", "MAVLINK", "UGCS"}
+_VALID_FORMATS = {
+    "KML",
+    "KMZ",
+    "JSON",
+    "MAVLINK",
+    "UGCS",
+    "WPML",
+    "CSV",
+    "GPX",
+    "LITCHI",
+    "DRONEDEPLOY",
+}
 
 
 class ExportRequest(BaseModel):

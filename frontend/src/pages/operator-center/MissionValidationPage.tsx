@@ -47,6 +47,7 @@ export default function MissionValidationPage() {
     "satellite",
   );
   const [is3D, setIs3D] = useState(false);
+  const [selectedWarning, setSelectedWarning] = useState<ValidationViolation | null>(null);
 
   // wire up disabled save button
   useEffect(() => {
@@ -296,7 +297,12 @@ export default function MissionValidationPage() {
           </div>
 
           <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-            <WarningsPanel warnings={warnings} hasTrajectory={flightPlan !== null} />
+            <WarningsPanel
+              warnings={warnings}
+              hasTrajectory={flightPlan !== null}
+              onWarningClick={setSelectedWarning}
+              selectedWarningId={selectedWarning?.id}
+            />
           </div>
         </>,
         leftPanelEl,
@@ -317,10 +323,19 @@ export default function MissionValidationPage() {
                 onTerrainChange={setTerrainMode}
                 showTerrainToggle={false}
                 showWaypointList={false}
-                simplifiedTrajectory={true}
+                simplifiedTrajectory={!selectedWarning}
                 is3D={is3D}
                 onToggle3D={setIs3D}
-                layers={{
+                layers={selectedWarning ? {
+                  simplifiedTrajectory: false,
+                  trajectory: true,
+                  transitWaypoints: true,
+                  measurementWaypoints: true,
+                  path: true,
+                  takeoffLanding: true,
+                  cameraHeading: false,
+                  pathHeading: false,
+                } : {
                   simplifiedTrajectory: true,
                   trajectory: false,
                   transitWaypoints: false,
@@ -334,6 +349,8 @@ export default function MissionValidationPage() {
                 missionStatus={mission.status}
                 takeoffCoordinate={mission.takeoff_coordinate}
                 landingCoordinate={mission.landing_coordinate}
+                highlightedWaypointIds={selectedWarning?.waypoint_ids}
+                highlightSeverity={selectedWarning?.severity}
               />
 
               {/* bottom bar */}

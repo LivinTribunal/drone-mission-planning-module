@@ -12,7 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -135,6 +135,7 @@ class ValidationViolation(Base):
     constraint_id = Column(UUID, ForeignKey("constraint_rule.id", ondelete="SET NULL"))
     category = Column(String, nullable=False, default="violation")
     message = Column(String, nullable=False)
+    waypoint_ids = Column(JSONB, nullable=True)
 
     validation_result = relationship("ValidationResult", back_populates="violations")
     constraint = relationship("ConstraintRule")
@@ -168,7 +169,8 @@ class ExportResult(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "format IN ('MAVLINK', 'KML', 'KMZ', 'JSON', 'UGCS')",
+            "format IN ('MAVLINK', 'KML', 'KMZ', 'JSON', 'UGCS', "
+            "'WPML', 'CSV', 'GPX', 'LITCHI', 'DRONEDEPLOY')",
             name="ck_export_format",
         ),
     )

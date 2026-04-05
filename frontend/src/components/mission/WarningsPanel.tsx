@@ -7,6 +7,8 @@ import { cleanMessage } from "@/utils/violations";
 interface WarningsPanelProps {
   warnings: ValidationViolation[] | null;
   hasTrajectory: boolean;
+  onWarningClick?: (violation: ValidationViolation) => void;
+  selectedWarningId?: string | null;
 }
 
 function SeverityIcon({ severity }: { severity: ViolationSeverity }) {
@@ -35,6 +37,8 @@ function SeverityIcon({ severity }: { severity: ViolationSeverity }) {
 export default function WarningsPanel({
   warnings,
   hasTrajectory,
+  onWarningClick,
+  selectedWarningId,
 }: WarningsPanelProps) {
   /** warnings and violations table with severity, constraint, message, and waypoint columns. */
   const { t } = useTranslation();
@@ -108,25 +112,36 @@ export default function WarningsPanel({
               </div>
 
               {/* rows */}
-              {sorted.map((w, idx) => (
-                <div
-                  key={w.id}
-                  className={`grid grid-cols-[2rem_5rem_1fr_3rem] gap-2 px-3 py-2 items-start hover:bg-tv-surface-hover transition-colors ${
-                    idx < sorted.length - 1 ? "border-b border-tv-border" : ""
-                  }`}
-                >
-                  <SeverityIcon severity={w.severity} />
-                  <span className="text-xs text-tv-text-secondary truncate mt-0.5">
-                    {w.constraint_name ?? "-"}
-                  </span>
-                  <p className="text-sm text-tv-text-primary leading-relaxed">
-                    {cleanMessage(w.message)}
-                  </p>
-                  <span className="text-xs text-tv-text-secondary mt-0.5">
-                    {w.waypoint_ref ?? ""}
-                  </span>
-                </div>
-              ))}
+              {sorted.map((w, idx) => {
+                const isSelected = selectedWarningId === w.id;
+                const borderColor = w.severity === "violation"
+                  ? "border-l-tv-error"
+                  : w.severity === "warning"
+                    ? "border-l-tv-warning"
+                    : "border-l-tv-text-muted";
+                return (
+                  <div
+                    key={w.id}
+                    onClick={() => onWarningClick?.(w)}
+                    className={`grid grid-cols-[2rem_5rem_1fr_3rem] gap-2 px-3 py-2 items-start hover:bg-tv-surface-hover transition-colors ${
+                      idx < sorted.length - 1 ? "border-b border-tv-border" : ""
+                    } ${onWarningClick ? "cursor-pointer" : ""} ${
+                      isSelected ? `border-l-2 ${borderColor}` : ""
+                    }`}
+                  >
+                    <SeverityIcon severity={w.severity} />
+                    <span className="text-xs text-tv-text-secondary truncate mt-0.5">
+                      {w.constraint_name ?? "-"}
+                    </span>
+                    <p className="text-sm text-tv-text-primary leading-relaxed">
+                      {cleanMessage(w.message)}
+                    </p>
+                    <span className="text-xs text-tv-text-secondary mt-0.5">
+                      {w.waypoint_ref ?? ""}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

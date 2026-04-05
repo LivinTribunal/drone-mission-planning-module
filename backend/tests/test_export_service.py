@@ -570,3 +570,226 @@ class TestGenerateUgcs:
         for seg in data["route"]["segments"]:
             assert "cornerRadius" in seg["parameters"]
             assert seg["parameters"]["cornerRadius"] is None
+
+
+class TestGenerateCsv:
+    """tests for csv export generation."""
+
+    def test_generates_valid_csv(self):
+        """csv output contains header and correct row count."""
+        fp = _make_flight_plan(3)
+
+        result = export_service.generate_csv_export(fp, "Test", 290.0)
+        text = result.decode("utf-8")
+        lines = text.strip().split("\n")
+
+        assert lines[0].startswith("sequence")
+        assert len(lines) == 4  # header + 3 waypoints
+
+    def test_agl_altitude(self):
+        """altitude_agl equals altitude_msl minus airport_elevation."""
+        fp = _make_flight_plan(1)
+        elev = 290.0
+
+        result = export_service.generate_csv_export(fp, "", elev)
+        text = result.decode("utf-8")
+        lines = text.strip().split("\n")
+        row = lines[1].split(",")
+
+        alt_msl = float(row[3])
+        alt_agl = float(row[4])
+        assert abs(alt_agl - (alt_msl - elev)) < 0.01
+
+    def test_camera_action_in_output(self):
+        """camera action column is present."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].camera_action = "PHOTO_CAPTURE"
+
+        result = export_service.generate_csv_export(fp, "", 0)
+        text = result.decode("utf-8")
+
+        assert "PHOTO_CAPTURE" in text
+
+
+class TestGenerateGpx:
+    """tests for gpx export generation."""
+
+    def test_generates_valid_gpx(self):
+        """gpx output contains xml declaration and gpx elements."""
+        fp = _make_flight_plan(3)
+
+        result = export_service.generate_gpx(fp, "Test", 290.0)
+        text = result.decode("utf-8")
+
+        assert "<?xml" in text
+        assert "<gpx" in text
+        assert "<wpt" in text
+        assert "<trk" in text
+
+    def test_waypoint_count(self):
+        """gpx has correct number of wpt elements."""
+        fp = _make_flight_plan(5)
+
+        result = export_service.generate_gpx(fp, "", 0)
+        text = result.decode("utf-8")
+
+        assert text.count("<wpt") == 5
+
+    def test_elevation_values(self):
+        """gpx wpt elements have elevation."""
+        fp = _make_flight_plan(1)
+
+        result = export_service.generate_gpx(fp, "", 0)
+        text = result.decode("utf-8")
+
+        assert "<ele>" in text
+
+
+class TestGenerateWpml:
+    """tests for wpml (dji) export generation."""
+
+    def test_generates_valid_wpml(self):
+        """wpml output contains xml declaration and wpml elements."""
+        fp = _make_flight_plan(3)
+
+        result = export_service.generate_wpml(fp, "Test", 290.0)
+        text = result.decode("utf-8")
+
+        assert "<?xml" in text
+        assert "<wpml>" in text
+        assert "<missionConfig>" in text
+        assert "<waypoints>" in text
+
+    def test_waypoint_count(self):
+        """wpml has correct number of waypoint elements."""
+        fp = _make_flight_plan(4)
+
+        result = export_service.generate_wpml(fp, "", 0)
+        text = result.decode("utf-8")
+
+        assert text.count("<waypoint>") == 4
+
+    def test_camera_action_mapping(self):
+        """dji camera action is mapped correctly."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].camera_action = "PHOTO_CAPTURE"
+
+        result = export_service.generate_wpml(fp, "", 0)
+        text = result.decode("utf-8")
+
+        assert "takePhoto" in text
+
+    def test_agl_altitude(self):
+        """execute height is agl (msl minus elevation)."""
+        fp = _make_flight_plan(1)
+        elev = 290.0
+
+        result = export_service.generate_wpml(fp, "", elev)
+        text = result.decode("utf-8")
+
+        assert "<executeHeight>" in text
+        # 300 - 290 = 10
+        assert "10.00" in text
+
+
+class TestGenerateLitchiCsv:
+    """tests for litchi csv export generation."""
+
+    def test_generates_valid_litchi_csv(self):
+        """litchi csv output contains correct header columns."""
+        fp = _make_flight_plan(3)
+
+        result = export_service.generate_litchi_csv(fp, "Test", 290.0)
+        text = result.decode("utf-8")
+        header = text.strip().split("\n")[0]
+
+        assert "latitude" in header
+        assert "curvesize(m)" in header
+        assert "altitudemode" in header
+
+    def test_row_count(self):
+        """litchi csv has correct number of data rows."""
+        fp = _make_flight_plan(5)
+
+        result = export_service.generate_litchi_csv(fp, "", 0)
+        text = result.decode("utf-8")
+        lines = text.strip().split("\n")
+
+        assert len(lines) == 6  # header + 5 waypoints
+
+    def test_action_type_mapping(self):
+        """camera actions map to correct litchi action codes."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].camera_action = "PHOTO_CAPTURE"
+
+        result = export_service.generate_litchi_csv(fp, "", 0)
+        text = result.decode("utf-8")
+        lines = text.strip().split("\n")
+        # measurement waypoint row (index 1 -> line 2)
+        row = lines[2].split(",")
+        action_idx = 8  # actiontype1
+        assert row[action_idx] == "1"  # 1 = takePhoto
+
+    def test_hover_curvesize_zero(self):
+        """hover waypoints have curvesize 0."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].waypoint_type = "HOVER"
+
+        result = export_service.generate_litchi_csv(fp, "", 0)
+        text = result.decode("utf-8")
+        lines = text.strip().split("\n")
+        row = lines[2].split(",")
+        curvesize_idx = 4  # curvesize(m)
+        assert row[curvesize_idx] == "0"
+
+
+class TestGenerateDronedeploy:
+    """tests for dronedeploy json export generation."""
+
+    def test_generates_valid_json(self):
+        """dronedeploy output is valid json with required fields."""
+        fp = _make_flight_plan(3)
+
+        result = export_service.generate_dronedeploy(fp, "Test", 290.0)
+        data = json.loads(result)
+
+        assert data["version"] == 1
+        assert data["name"] == "Test"
+        assert len(data["waypoints"]) == 3
+
+    def test_waypoint_fields(self):
+        """dronedeploy waypoints have required fields."""
+        fp = _make_flight_plan(2)
+
+        result = export_service.generate_dronedeploy(fp, "", 0)
+        data = json.loads(result)
+
+        wp = data["waypoints"][0]
+        assert "lat" in wp
+        assert "lng" in wp
+        assert "alt" in wp
+        assert "speed" in wp
+        assert "heading" in wp
+        assert "actions" in wp
+
+    def test_camera_action_mapping(self):
+        """camera actions map to correct dronedeploy action objects."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].camera_action = "PHOTO_CAPTURE"
+
+        result = export_service.generate_dronedeploy(fp, "", 0)
+        data = json.loads(result)
+
+        assert data["waypoints"][1]["actions"] == [{"type": "photo"}]
+
+    def test_agl_altitude(self):
+        """altitude is agl (msl minus elevation)."""
+        fp = _make_flight_plan(1)
+        elev = 290.0
+
+        result = export_service.generate_dronedeploy(fp, "", elev)
+        data = json.loads(result)
+
+        wp = data["waypoints"][0]
+        # alt = 300 - 290 = 10
+        assert abs(wp["alt"] - 10.0) < 0.01

@@ -37,6 +37,7 @@ export default function MissionOverviewPage() {
   const [is3D, setIs3D] = useState(false);
   const [computing, setComputing] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+  const [selectedWarning, setSelectedWarning] = useState<ValidationViolation | null>(null);
 
   const showNotification = useCallback((msg: string) => {
     /** show a temporary toast message. */
@@ -205,7 +206,12 @@ export default function MissionOverviewPage() {
 
           {/* warnings */}
           <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-            <WarningsPanel warnings={warnings} hasTrajectory={hasTrajectory} />
+            <WarningsPanel
+              warnings={warnings}
+              hasTrajectory={hasTrajectory}
+              onWarningClick={setSelectedWarning}
+              selectedWarningId={selectedWarning?.id}
+            />
           </div>
         </>,
         leftPanelEl,
@@ -221,10 +227,19 @@ export default function MissionOverviewPage() {
               onTerrainChange={setTerrainMode}
               showTerrainToggle={false}
               showWaypointList={false}
-              simplifiedTrajectory={true}
+              simplifiedTrajectory={!selectedWarning}
               is3D={is3D}
               onToggle3D={setIs3D}
-              layers={{
+              layers={selectedWarning ? {
+                simplifiedTrajectory: false,
+                trajectory: true,
+                transitWaypoints: true,
+                measurementWaypoints: true,
+                path: true,
+                takeoffLanding: true,
+                cameraHeading: false,
+                pathHeading: false,
+              } : {
                 simplifiedTrajectory: true,
                 trajectory: false,
                 transitWaypoints: false,
@@ -238,6 +253,8 @@ export default function MissionOverviewPage() {
               missionStatus={mission.status}
               takeoffCoordinate={mission.takeoff_coordinate}
               landingCoordinate={mission.landing_coordinate}
+              highlightedWaypointIds={selectedWarning?.waypoint_ids}
+              highlightSeverity={selectedWarning?.severity}
             />
 
             {/* bottom bar */}

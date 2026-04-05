@@ -19,6 +19,7 @@ export const WAYPOINT_CAMERA_TARGET_LAYER = "waypoints-camera-targets";
 export const WAYPOINT_TRANSIT_HIT_LAYER = "waypoints-transit-hit";
 export const WAYPOINT_GHOST_TRANSIT_SOURCE = "waypoints-ghost-transit";
 export const WAYPOINT_GHOST_TRANSIT_LAYER = "waypoints-ghost-transit-layer";
+export const WAYPOINT_WARNING_HIGHLIGHT_LAYER = "waypoints-warning-highlight";
 
 export const SIMPLIFIED_LINE_SOURCE = "simplified-trajectory-source";
 export const SIMPLIFIED_LINE_LAYER = "simplified-trajectory-line";
@@ -578,6 +579,21 @@ export function addWaypointLayers(
     },
   });
 
+  // warning highlight ring - between base layers and selected
+  map.addLayer({
+    id: WAYPOINT_WARNING_HIGHLIGHT_LAYER,
+    type: "circle",
+    source: WAYPOINT_SOURCE,
+    filter: ["==", ["get", "id"], ""],
+    paint: {
+      "circle-radius": 16,
+      "circle-color": "transparent",
+      "circle-stroke-color": "#e54545",
+      "circle-stroke-width": 3,
+      "circle-stroke-opacity": 0.9,
+    },
+  });
+
   // selected waypoint highlight ring
   map.addLayer({
     id: WAYPOINT_SELECTED_LAYER,
@@ -612,11 +628,46 @@ export function updateSelectedFilter(
   }
 }
 
+/** severity color map for warning highlights. */
+const SEVERITY_COLORS: Record<string, string> = {
+  violation: "#e54545",
+  warning: "#e5a545",
+  suggestion: "#9ca3af",
+};
+
+/** updates the warning highlight filter and color. */
+export function updateWarningHighlightFilter(
+  map: MaplibreMap,
+  waypointIds?: string[],
+  severity?: string,
+): void {
+  try {
+    if (!map.getLayer(WAYPOINT_WARNING_HIGHLIGHT_LAYER)) return;
+
+    if (!waypointIds || waypointIds.length === 0) {
+      map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "id"], ""]);
+      return;
+    }
+
+    map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, [
+      "in",
+      ["get", "id"],
+      ["literal", waypointIds],
+    ]);
+
+    const color = SEVERITY_COLORS[severity ?? "warning"] ?? SEVERITY_COLORS.warning;
+    map.setPaintProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "circle-stroke-color", color);
+  } catch {
+    // layer may not exist
+  }
+}
+
 /** removes all waypoint layers and sources. */
 export function removeWaypointLayers(map: MaplibreMap): void {
   const layers = [
     WAYPOINT_GHOST_TRANSIT_LAYER,
     WAYPOINT_SELECTED_LAYER,
+    WAYPOINT_WARNING_HIGHLIGHT_LAYER,
     WAYPOINT_LABEL_LAYER,
     WAYPOINT_LANDING_LAYER,
     WAYPOINT_TAKEOFF_LAYER,
@@ -655,6 +706,7 @@ export function getWaypointLayerIds(): string[] {
     WAYPOINT_TAKEOFF_LAYER,
     WAYPOINT_LANDING_LAYER,
     WAYPOINT_LABEL_LAYER,
+    WAYPOINT_WARNING_HIGHLIGHT_LAYER,
     WAYPOINT_SELECTED_LAYER,
   ];
 }

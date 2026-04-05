@@ -87,6 +87,7 @@ export default function MissionMapPage() {
   const [zoomPercent, setZoomPercent] = useState(100);
   const [bearing, setBearing] = useState(0);
   const [bearingResetKey, setBearingResetKey] = useState(0);
+  const [selectedWarning, setSelectedWarning] = useState<ValidationViolation | null>(null);
 
   // tools
   const { activeTool, is3D, setTool, resetTool, setIs3D } = useMapTools();
@@ -819,6 +820,8 @@ export default function MissionMapPage() {
             onTransitDelete={handleTransitDelete}
             zoomPercent={zoomPercent}
             onZoomChange={setZoomPercent}
+            highlightedWaypointIds={selectedWarning?.waypoint_ids}
+            highlightSeverity={selectedWarning?.severity}
             leftPanelChildren={
               <>
                 {showPanels && mission.inspections.length > 0 && (
@@ -901,7 +904,11 @@ export default function MissionMapPage() {
               />
 
               {hasFlightPlan && violations.length > 0 && (
-                <MapWarningsPanel violations={violations} />
+                <MapWarningsPanel
+                  violations={violations}
+                  onWarningClick={setSelectedWarning}
+                  selectedWarningId={selectedWarning?.id}
+                />
               )}
 
               {hasFlightPlan && (

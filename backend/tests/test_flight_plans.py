@@ -154,11 +154,11 @@ def test_persist_creates_all_category_types(db_session, fp_airport_id):
         db_session,
         mission,
         all_waypoints=[],
-        warnings=["speed too high"],
+        warnings=[("speed too high", [])],
         total_distance=100.0,
         estimated_duration=60.0,
-        violations=["altitude exceeded"],
-        suggestions=["no density override"],
+        violations=[("altitude exceeded", [])],
+        suggestions=[("no density override", [])],
     )
 
     violations = (
@@ -202,7 +202,7 @@ def test_persist_passed_true_without_violations(db_session, fp_airport_id):
         db_session,
         mission,
         all_waypoints=[],
-        warnings=["minor warning"],
+        warnings=[("minor warning", [])],
         total_distance=50.0,
         estimated_duration=30.0,
     )

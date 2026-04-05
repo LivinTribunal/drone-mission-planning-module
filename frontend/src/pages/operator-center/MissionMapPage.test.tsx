@@ -90,8 +90,8 @@ describe("MapWarningsPanel", () => {
     render(
       <MapWarningsPanel
         violations={[
-          { id: "1", message: "Speed warning", category: "warning", is_warning: true, severity: "warning", constraint_id: null, constraint_name: null, violation_kind: "speed", waypoint_ref: null },
-          { id: "2", message: "Altitude error", category: "violation", is_warning: false, severity: "violation", constraint_id: null, constraint_name: null, violation_kind: "altitude", waypoint_ref: null },
+          { id: "1", message: "Speed warning", category: "warning", is_warning: true, severity: "warning", constraint_id: null, constraint_name: null, violation_kind: "speed", waypoint_ref: null, waypoint_ids: [] },
+          { id: "2", message: "Altitude error", category: "violation", is_warning: false, severity: "violation", constraint_id: null, constraint_name: null, violation_kind: "altitude", waypoint_ref: null, waypoint_ids: [] },
         ]}
       />,
     );

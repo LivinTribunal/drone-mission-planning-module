@@ -61,6 +61,7 @@ import {
   addSimplifiedTrajectoryLayers,
   removeSimplifiedTrajectoryLayers,
   updateSelectedFilter,
+  updateWarningHighlightFilter,
   getSimplifiedTrajectoryLayerIds,
   waypointsToGeoJSON,
   waypointsToLineGeoJSON,
@@ -269,6 +270,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   is3D: is3DProp,
   onBearingChange,
   bearingResetKey,
+  highlightedWaypointIds,
+  highlightSeverity,
   pendingGeometry,
   pendingPointPosition,
 }, ref) {
@@ -1309,6 +1312,31 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       });
     }
   }, [selectedWaypointId]);
+
+  // update warning highlight layer
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    updateWarningHighlightFilter(map, highlightedWaypointIds, highlightSeverity);
+
+    // fly to highlighted waypoints
+    if (!highlightedWaypointIds || highlightedWaypointIds.length === 0) return;
+    const wps = waypointsRef.current ?? [];
+    const highlighted = wps.filter((w) => highlightedWaypointIds.includes(w.id));
+    if (highlighted.length === 0) return;
+
+    if (highlighted.length === 1) {
+      const [lon, lat] = highlighted[0].position.coordinates;
+      map.flyTo({ center: [lon, lat], zoom: 17, duration: 800 });
+    } else {
+      const lngs = highlighted.map((w) => w.position.coordinates[0]);
+      const lats = highlighted.map((w) => w.position.coordinates[1]);
+      map.fitBounds(
+        [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+        { padding: 100, duration: 800 },
+      );
+    }
+  }, [highlightedWaypointIds, highlightSeverity]);
 
   // cursor and hover effects - only for SELECT tool
   useEffect(() => {

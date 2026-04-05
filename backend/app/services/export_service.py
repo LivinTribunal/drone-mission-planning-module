@@ -1,9 +1,11 @@
 """flight plan export file generators"""
 
+import csv
 import io
 import json
 import math
 import re
+import xml.etree.ElementTree as ET
 import zipfile
 from datetime import datetime, timezone
 from uuid import UUID
@@ -329,6 +331,269 @@ def generate_mavlink(
     return "\n".join(lines).encode("utf-8")
 
 
+def generate_csv_export(
+    flight_plan: FlightPlan,
+    mission_name: str = "",
+    airport_elevation: float = 0,
+) -> bytes:
+    """serialize flight plan to csv format."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        [
+            "sequence",
+            "latitude",
+            "longitude",
+            "altitude_msl",
+            "altitude_agl",
+            "speed",
+            "heading",
+            "camera_action",
+            "waypoint_type",
+        ]
+    )
+
+    for wp in waypoints:
+        lon, lat, alt = _extract_coords(wp.position)
+        agl = alt - airport_elevation
+        writer.writerow(
+            [
+                wp.sequence_order,
+                f"{lat:.8f}",
+                f"{lon:.8f}",
+                f"{alt:.2f}",
+                f"{agl:.2f}",
+                wp.speed or 0,
+                wp.heading or 0,
+                wp.camera_action or "NONE",
+                wp.waypoint_type,
+            ]
+        )
+
+    return buf.getvalue().encode("utf-8")
+
+
+def generate_gpx(
+    flight_plan: FlightPlan,
+    mission_name: str = "",
+    airport_elevation: float = 0,
+) -> bytes:
+    """serialize flight plan to gpx 1.1 format."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+
+    gpx = ET.Element(
+        "gpx",
+        {
+            "version": "1.1",
+            "creator": "TarmacView",
+            "xmlns": "http://www.topografix.com/GPX/1/1",
+        },
+    )
+
+    metadata = ET.SubElement(gpx, "metadata")
+    ET.SubElement(metadata, "name").text = mission_name or "Flight Plan"
+    ET.SubElement(metadata, "time").text = datetime.now(timezone.utc).isoformat()
+
+    # waypoint elements
+    for wp in waypoints:
+        lon, lat, alt = _extract_coords(wp.position)
+        wpt = ET.SubElement(gpx, "wpt", {"lat": f"{lat:.8f}", "lon": f"{lon:.8f}"})
+        ET.SubElement(wpt, "ele").text = f"{alt:.2f}"
+        ET.SubElement(wpt, "name").text = f"WP{wp.sequence_order}"
+        ET.SubElement(wpt, "desc").text = f"{wp.waypoint_type} {wp.camera_action or 'NONE'}"
+
+    # track element
+    trk = ET.SubElement(gpx, "trk")
+    ET.SubElement(trk, "name").text = mission_name or "Flight Plan"
+    trkseg = ET.SubElement(trk, "trkseg")
+
+    for wp in waypoints:
+        lon, lat, alt = _extract_coords(wp.position)
+        trkpt = ET.SubElement(trkseg, "trkpt", {"lat": f"{lat:.8f}", "lon": f"{lon:.8f}"})
+        ET.SubElement(trkpt, "ele").text = f"{alt:.2f}"
+
+    return ET.tostring(gpx, encoding="unicode", xml_declaration=True).encode("utf-8")
+
+
+# dji camera action mapping
+_DJI_CAMERA_ACTIONS = {
+    "PHOTO_CAPTURE": "takePhoto",
+    "RECORDING_START": "startRecord",
+    "RECORDING_STOP": "stopRecord",
+}
+
+
+def generate_wpml(
+    flight_plan: FlightPlan,
+    mission_name: str = "",
+    airport_elevation: float = 0,
+) -> bytes:
+    """serialize flight plan to dji wpml (waypoint mission) xml format."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+
+    wpml = ET.Element("wpml")
+
+    # mission config
+    config = ET.SubElement(wpml, "missionConfig")
+    ET.SubElement(config, "flyToWaylineMode").text = "safely"
+    ET.SubElement(config, "finishAction").text = "goHome"
+    ET.SubElement(config, "maxFlightSpeed").text = "15"
+    auto_speed = str(waypoints[0].speed or 5) if waypoints else "5"
+    ET.SubElement(config, "autoFlightSpeed").text = auto_speed
+    drone_info = ET.SubElement(config, "droneInfo")
+    ET.SubElement(drone_info, "droneEnumValue").text = "68"
+    ET.SubElement(drone_info, "droneSubEnumValue").text = "0"
+
+    folder = ET.SubElement(wpml, "folder")
+    ET.SubElement(folder, "waylineId").text = "0"
+
+    wps_elem = ET.SubElement(folder, "waypoints")
+    for wp in waypoints:
+        lon, lat, alt = _extract_coords(wp.position)
+        agl = alt - airport_elevation
+
+        point = ET.SubElement(wps_elem, "waypoint")
+        ET.SubElement(point, "index").text = str(wp.sequence_order)
+        loc = ET.SubElement(point, "point")
+        ET.SubElement(loc, "latitude").text = f"{lat:.8f}"
+        ET.SubElement(loc, "longitude").text = f"{lon:.8f}"
+        ET.SubElement(point, "executeHeight").text = f"{agl:.2f}"
+        ET.SubElement(point, "waypointSpeed").text = str(wp.speed or 0)
+
+        heading_param = ET.SubElement(point, "waypointHeadingParam")
+        ET.SubElement(heading_param, "waypointHeadingMode").text = "smoothTransition"
+        ET.SubElement(heading_param, "waypointHeadingAngle").text = str(wp.heading or 0)
+
+        dji_action = _DJI_CAMERA_ACTIONS.get(wp.camera_action)
+        if dji_action:
+            action_group = ET.SubElement(point, "actionGroup")
+            ET.SubElement(action_group, "actionGroupId").text = "0"
+            action = ET.SubElement(action_group, "action")
+            ET.SubElement(action, "actionActuatorFunc").text = dji_action
+
+    return ET.tostring(wpml, encoding="unicode", xml_declaration=True).encode("utf-8")
+
+
+# litchi camera action codes
+_LITCHI_ACTION_TYPES = {
+    "PHOTO_CAPTURE": 1,
+    "RECORDING_START": 2,
+    "RECORDING_STOP": 3,
+}
+
+
+def generate_litchi_csv(
+    flight_plan: FlightPlan,
+    mission_name: str = "",
+    airport_elevation: float = 0,
+) -> bytes:
+    """serialize flight plan to litchi mission hub csv format."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        [
+            "latitude",
+            "longitude",
+            "altitude(m)",
+            "heading(deg)",
+            "curvesize(m)",
+            "rotationdir",
+            "gimbalmode",
+            "gimbalpitchangle",
+            "actiontype1",
+            "actionparam1",
+            "altitudemode",
+            "speed(m/s)",
+            "poi_latitude",
+            "poi_longitude",
+            "poi_altitude(m)",
+            "poi_altitudemode",
+            "photo_timeinterval",
+            "photo_distinterval",
+        ]
+    )
+
+    for wp in waypoints:
+        lon, lat, alt = _extract_coords(wp.position)
+        agl = alt - airport_elevation
+        action_type = _LITCHI_ACTION_TYPES.get(wp.camera_action, -1)
+        curvesize = 0 if wp.waypoint_type == "HOVER" else 5
+        gimbal_mode = 2 if wp.gimbal_pitch is not None else 0
+
+        writer.writerow(
+            [
+                f"{lat:.8f}",
+                f"{lon:.8f}",
+                f"{agl:.2f}",
+                f"{wp.heading or 0:.1f}",
+                curvesize,
+                0,
+                gimbal_mode,
+                f"{wp.gimbal_pitch or 0:.1f}",
+                action_type,
+                0,
+                0,
+                wp.speed or 0,
+                0,
+                0,
+                0,
+                0,
+                -1,
+                -1,
+            ]
+        )
+
+    return buf.getvalue().encode("utf-8")
+
+
+def generate_dronedeploy(
+    flight_plan: FlightPlan,
+    mission_name: str = "",
+    airport_elevation: float = 0,
+) -> bytes:
+    """serialize flight plan to dronedeploy json format."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+
+    dd_action_map = {
+        "PHOTO_CAPTURE": {"type": "photo"},
+        "RECORDING_START": {"type": "videoStart"},
+        "RECORDING_STOP": {"type": "videoStop"},
+    }
+
+    wp_list = []
+    for wp in waypoints:
+        lon, lat, alt = _extract_coords(wp.position)
+        agl = alt - airport_elevation
+
+        actions = []
+        dd_action = dd_action_map.get(wp.camera_action)
+        if dd_action:
+            actions.append(dd_action)
+
+        wp_list.append(
+            {
+                "lat": lat,
+                "lng": lon,
+                "alt": agl,
+                "speed": wp.speed or 0,
+                "heading": wp.heading or 0,
+                "actions": actions,
+            }
+        )
+
+    data = {
+        "version": 1,
+        "name": mission_name or "Flight Plan",
+        "waypoints": wp_list,
+    }
+
+    return json.dumps(data, indent=2, cls=_UUIDEncoder).encode("utf-8")
+
+
 # content types for export formats
 _EXPORT_CONTENT_TYPES = {
     "KML": ("application/vnd.google-earth.kml+xml", "kml"),
@@ -336,6 +601,11 @@ _EXPORT_CONTENT_TYPES = {
     "JSON": ("application/json", "json"),
     "MAVLINK": ("text/plain", "waypoints"),
     "UGCS": ("application/json", "ugcs.json"),
+    "WPML": ("application/xml", "wpml"),
+    "CSV": ("text/csv", "csv"),
+    "GPX": ("application/gpx+xml", "gpx"),
+    "LITCHI": ("text/csv", "litchi.csv"),
+    "DRONEDEPLOY": ("application/json", "dronedeploy.json"),
 }
 
 _EXPORT_GENERATORS = {
@@ -344,6 +614,11 @@ _EXPORT_GENERATORS = {
     "JSON": generate_json,
     "MAVLINK": generate_mavlink,
     "UGCS": generate_ugcs,
+    "WPML": generate_wpml,
+    "CSV": generate_csv_export,
+    "GPX": generate_gpx,
+    "LITCHI": generate_litchi_csv,
+    "DRONEDEPLOY": generate_dronedeploy,
 }
 
 
