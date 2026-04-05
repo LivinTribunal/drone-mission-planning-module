@@ -923,7 +923,8 @@ class TestDownloadTerrainForLocation:
         result = self._run_download(mock_settings, mock_http, tmp_path)
 
         assert result["terrain_source"] == "DEM_API"
-        assert result["points_downloaded"] == 1
+        # 1 from api + 8 filled with fallback for the short batch
+        assert result["points_downloaded"] == 9
 
     def test_non_numeric_elevation_uses_fallback(self, tmp_path):
         """non-numeric elevation value from API falls back to fallback elevation."""
@@ -941,5 +942,5 @@ class TestDownloadTerrainForLocation:
 
         result = self._run_download(mock_settings, mock_http, tmp_path)
 
-        # 4 results: 1 valid + 3 fallbacks
-        assert result["points_downloaded"] == 4
+        # 4 from api (1 valid + 3 fallbacks) + 5 filled for short batch
+        assert result["points_downloaded"] == 9

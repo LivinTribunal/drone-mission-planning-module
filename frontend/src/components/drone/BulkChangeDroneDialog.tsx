@@ -40,6 +40,7 @@ export default function BulkChangeDroneDialog({
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const otherDrones = allDrones.filter((d) => d.id !== currentDroneId);
 
@@ -53,8 +54,14 @@ export default function BulkChangeDroneDialog({
       drone_profile_id: currentDroneId,
       limit: 200,
     })
-      .then((res) => setMissions(res.data))
-      .catch(() => setMissions([]))
+      .then((res) => {
+        setMissions(res.data);
+        setFetchError(null);
+      })
+      .catch(() => {
+        setMissions([]);
+        setFetchError(t("operatorDrones.fetchMissionsError", { defaultValue: "Failed to load missions" }));
+      })
       .finally(() => setLoading(false));
   }, [isOpen, airportId, currentDroneId]);
 
@@ -65,6 +72,7 @@ export default function BulkChangeDroneDialog({
       setTargetDroneId("");
       setSelectedIds(new Set());
       setError(null);
+      setFetchError(null);
     }
   }, [isOpen, fetchMissions]);
 
@@ -169,7 +177,11 @@ export default function BulkChangeDroneDialog({
 
           {tab === "SELECTED" && (
             <div className="max-h-48 overflow-y-auto mb-4 rounded-xl border border-tv-border">
-              {missions.length === 0 ? (
+              {fetchError ? (
+                <p className="px-3 py-4 text-sm text-tv-error italic text-center">
+                  {fetchError}
+                </p>
+              ) : missions.length === 0 ? (
                 <p className="px-3 py-4 text-sm text-tv-text-muted italic text-center">
                   {t("operatorDrones.noMissionsForDrone")}
                 </p>

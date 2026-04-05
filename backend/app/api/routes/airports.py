@@ -256,6 +256,10 @@ async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db))
             result["resolution"],
             terrain_source="DEM_API",
         )
+    except (NotFoundError, DomainError) as e:
+        if os.path.exists(result["file_path"]):
+            os.unlink(result["file_path"])
+        raise HTTPException(status_code=e.status_code, detail=str(e))
     except Exception:
         if os.path.exists(result["file_path"]):
             os.unlink(result["file_path"])

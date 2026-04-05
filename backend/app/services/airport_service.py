@@ -655,10 +655,14 @@ def download_terrain_for_location(
                 results = resp.json().get("results", [])
 
                 if len(results) != len(batch):
+                    missing = len(batch) - len(results)
                     logger.warning(
-                        "short batch response (%d/%d) from elevation API",
+                        "short batch response (%d/%d) from elevation API - "
+                        "filling %d missing cells with fallback_elevation=%.1f",
                         len(results),
                         len(batch),
+                        missing,
+                        fallback_elevation,
                     )
 
                 for r in results:
@@ -670,6 +674,11 @@ def download_terrain_for_location(
                             all_elevations.append(fallback_elevation)
                     else:
                         all_elevations.append(fallback_elevation)
+
+                # fill missing cells from short batch with fallback
+                short_count = len(batch) - len(results)
+                for _ in range(short_count):
+                    all_elevations.append(fallback_elevation)
     except DomainError:
         raise
     except Exception as e:

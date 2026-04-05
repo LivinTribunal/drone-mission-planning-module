@@ -36,6 +36,11 @@ def upgrade() -> None:
         "airport",
         sa.Column("terrain_source", sa.String(20), nullable=False, server_default="FLAT"),
     )
+    op.create_check_constraint(
+        "ck_airport_terrain_source",
+        "airport",
+        "terrain_source IN ('FLAT', 'DEM_UPLOAD', 'DEM_API')",
+    )
     op.add_column(
         "airport",
         sa.Column("dem_file_path", sa.String(), nullable=True),
@@ -45,6 +50,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """remove default_drone_profile_id, terrain_source, dem_file_path from airport."""
     op.drop_column("airport", "dem_file_path")
+    op.drop_check_constraint("ck_airport_terrain_source", "airport")
     op.drop_column("airport", "terrain_source")
     op.drop_constraint("fk_airport_default_drone_profile_id", "airport", type_="foreignkey")
     op.drop_column("airport", "default_drone_profile_id")
