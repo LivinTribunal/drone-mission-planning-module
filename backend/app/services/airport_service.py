@@ -1,10 +1,13 @@
 import logging
+import os
+import time
 from uuid import UUID
 
+import httpx
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.config import TERRAIN_DIR
+from app.core.config import TERRAIN_DIR, settings
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
@@ -529,8 +532,6 @@ def upload_terrain_dem(
     terrain_source: str = "DEM_UPLOAD",
 ) -> Airport:
     """set airport terrain source after file upload or API download."""
-    import os
-
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
         raise NotFoundError("airport not found")
@@ -591,8 +592,6 @@ def download_terrain_for_location(
     session-free - safe to call from a thread pool executor.
     returns file metadata dict; caller is responsible for persisting to db.
     """
-    import time
-
     try:
         import numpy as np
         import rasterio
@@ -602,10 +601,6 @@ def download_terrain_for_location(
             "rasterio/numpy not installed - terrain download not available",
             status_code=501,
         ) from e
-
-    import httpx
-
-    from app.core.config import settings
 
     delta_deg = settings.terrain_grid_delta_deg
     min_lon = apt_lon - delta_deg

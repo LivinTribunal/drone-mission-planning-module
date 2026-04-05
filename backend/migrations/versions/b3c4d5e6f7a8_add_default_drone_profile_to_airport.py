@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """add default_drone_profile_id FK column to airport table."""
+    """add default_drone_profile_id, terrain_source, dem_file_path columns to airport."""
     op.add_column(
         "airport",
         sa.Column("default_drone_profile_id", sa.UUID(), nullable=True),
@@ -32,9 +32,19 @@ def upgrade() -> None:
         ["id"],
         ondelete="SET NULL",
     )
+    op.add_column(
+        "airport",
+        sa.Column("terrain_source", sa.String(20), nullable=False, server_default="FLAT"),
+    )
+    op.add_column(
+        "airport",
+        sa.Column("dem_file_path", sa.String(), nullable=True),
+    )
 
 
 def downgrade() -> None:
-    """remove default_drone_profile_id column from airport table."""
+    """remove default_drone_profile_id, terrain_source, dem_file_path from airport."""
+    op.drop_column("airport", "dem_file_path")
+    op.drop_column("airport", "terrain_source")
     op.drop_constraint("fk_airport_default_drone_profile_id", "airport", type_="foreignkey")
     op.drop_column("airport", "default_drone_profile_id")

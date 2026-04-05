@@ -796,7 +796,7 @@ class TestDownloadTerrainForLocation:
                 sys.modules,
                 {"numpy": mock_np, "rasterio": mock_rio, "rasterio.transform": mock_rio.transform},
             ),
-            patch("app.core.config.settings", mock_settings),
+            patch("app.services.airport_service.settings", mock_settings),
             patch("httpx.Client", return_value=mock_http),
         ]
 
@@ -857,7 +857,7 @@ class TestDownloadTerrainForLocation:
                     },
                 )
             )
-            stack.enter_context(patch("app.core.config.settings", mock_settings))
+            stack.enter_context(patch("app.services.airport_service.settings", mock_settings))
             stack.enter_context(patch("httpx.Client", return_value=mock_http))
             stack.enter_context(patch("time.monotonic", side_effect=[0.0, 1.0]))
 
@@ -902,7 +902,7 @@ class TestDownloadTerrainForLocation:
                     },
                 )
             )
-            stack.enter_context(patch("app.core.config.settings", mock_settings))
+            stack.enter_context(patch("app.services.airport_service.settings", mock_settings))
             stack.enter_context(patch("httpx.Client", return_value=mock_http))
 
             from app.services.airport_service import download_terrain_for_location

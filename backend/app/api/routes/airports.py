@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import os
 import shutil
 import tempfile
+from functools import partial
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
@@ -127,7 +129,7 @@ MAX_DEM_SIZE = 500 * 1024 * 1024  # 500MB
 
 
 @router.post("/{airport_id}/terrain-dem", response_model=TerrainUploadResponse)
-async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends(get_db)):
+def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends(get_db)):
     """upload a GeoTIFF DEM file for terrain-following altitude."""
     try:
         import rasterio
@@ -146,7 +148,7 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
         tmp_path = tmp.name
         try:
             size = 0
-            while chunk := await file.read(8192):
+            while chunk := file.file.read(8192):
                 size += len(chunk)
                 if size > MAX_DEM_SIZE:
                     os.unlink(tmp_path)
@@ -224,9 +226,6 @@ def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
 @router.post("/{airport_id}/terrain-download", response_model=TerrainDownloadResponse)
 async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db)):
     """download elevation data from Open-Elevation API and cache as GeoTIFF."""
-    import asyncio
-    from functools import partial
-
     # read airport data in the async context where the session lives
     airport = airport_service.get_airport(db, airport_id)
     apt_lon, apt_lat = airport_service.get_airport_lonlat(airport)
@@ -245,7 +244,7 @@ async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db))
             ),
         )
     except DomainError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        raise HTTPException(status_code=e.status_code, detail=str(e))
 
     # persist terrain data back in the async context with the original session
     try:
@@ -258,8 +257,6 @@ async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db))
             terrain_source="DEM_API",
         )
     except Exception:
-        import os
-
         if os.path.exists(result["file_path"]):
             os.unlink(result["file_path"])
         raise
