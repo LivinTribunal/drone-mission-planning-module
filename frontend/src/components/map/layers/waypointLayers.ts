@@ -56,6 +56,13 @@ export function waypointsToGeoJSON(
   const stackable: WaypointResponse[] = [];
 
   for (const wp of sorted) {
+    // video start/stop hovers share position with measurements - skip on map,
+    // they're visible in the waypoint list panel
+    if (wp.waypoint_type === "HOVER" &&
+        (wp.camera_action === "RECORDING_START" || wp.camera_action === "RECORDING_STOP")) {
+      continue;
+    }
+
     if (NON_STACKABLE.has(wp.waypoint_type)) {
       features.push({
         type: "Feature",

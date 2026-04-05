@@ -58,8 +58,14 @@ function buildGroups(sorted: WaypointResponse[]): WaypointGroup[] {
       if (next.waypoint_type === type) {
         groupWps.push(next);
         j++;
-      } else if (type === "MEASUREMENT" && next.waypoint_type === "HOVER") {
-        // hover within measurement sequence belongs to same group
+      } else if (
+        type === "MEASUREMENT" &&
+        next.waypoint_type === "HOVER" &&
+        next.camera_action !== "RECORDING_START" &&
+        next.camera_action !== "RECORDING_STOP"
+      ) {
+        // regular hover within measurement sequence belongs to same group
+        // video start/stop hovers stay as standalone entries
         groupWps.push(next);
         j++;
       } else {
