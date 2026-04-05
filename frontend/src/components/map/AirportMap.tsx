@@ -83,6 +83,8 @@ import {
   WAYPOINT_TRANSIT_HIT_LAYER,
   WAYPOINT_GHOST_TRANSIT_SOURCE,
   WAYPOINT_CAMERA_TARGET_LAYER,
+  WAYPOINT_WARNING_HIGHLIGHT_LAYER,
+  WAYPOINT_SELECTED_LAYER,
 } from "./layers/waypointLayers";
 import LayerPanel from "./overlays/LayerPanel";
 import LegendPanel from "./overlays/LegendPanel";
@@ -177,6 +179,7 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
   takeoffLanding: [WAYPOINT_TAKEOFF_LAYER, WAYPOINT_LANDING_LAYER],
   cameraHeading: [WAYPOINT_CAMERA_LINE_LAYER, WAYPOINT_CAMERA_TARGET_LAYER],
   pathHeading: [WAYPOINT_ARROW_LAYER],
+  trajectory: [WAYPOINT_WARNING_HIGHLIGHT_LAYER, WAYPOINT_SELECTED_LAYER],
 };
 
 // all interactive layer ids for click handling
