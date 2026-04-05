@@ -117,6 +117,18 @@ class Mission(Base):
     # terminal states - no modifications allowed, user must duplicate
     _TERMINAL = {"EXPORTED", "COMPLETED", "CANCELLED"}
 
+    def regress_to_planned(self):
+        """regress VALIDATED -> PLANNED when waypoints are modified in place.
+
+        bypasses transition_to() because the state machine has no backward
+        transitions by design - this is the intentional exception for waypoint
+        edits that don't invalidate the full trajectory but do invalidate validation.
+        """
+        if self.status in self._TERMINAL:
+            raise ValueError("cannot modify mission after export - duplicate to make changes")
+        if self.status == MissionStatus.VALIDATED:
+            self.status = MissionStatus.PLANNED
+
     def invalidate_trajectory(self):
         """regress PLANNED/VALIDATED -> DRAFT when trajectory-affecting data changes.
 

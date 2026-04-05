@@ -7,6 +7,7 @@ interface HeadingReturn {
   cursorPoint: [number, number] | null;
   isDrawing: boolean;
   isLocked: boolean;
+  isComplete: boolean;
   bearing: number | null;
   pointGeoJSON: GeoJSON.FeatureCollection;
   lineGeoJSON: GeoJSON.FeatureCollection;
@@ -14,6 +15,7 @@ interface HeadingReturn {
   addPoint: (lng: number, lat: number) => void;
   setCursor: (lng: number, lat: number) => void;
   clear: () => void;
+  dismiss: () => void;
   hasPoints: boolean;
 }
 
@@ -71,6 +73,11 @@ export default function useHeadingTool(): HeadingReturn {
     /** clear all heading state. */
     setState(INITIAL_STATE);
   }, []);
+
+  const dismiss = useCallback(() => {
+    /** dismiss the completed heading info card and clear data. */
+    clear();
+  }, [clear]);
 
   const { origin, endpoint, cursorPoint, isDrawing, isLocked } = state;
   const target = endpoint ?? cursorPoint;
@@ -131,6 +138,7 @@ export default function useHeadingTool(): HeadingReturn {
     cursorPoint,
     isDrawing,
     isLocked,
+    isComplete: isLocked,
     bearing,
     pointGeoJSON,
     lineGeoJSON,
@@ -138,6 +146,7 @@ export default function useHeadingTool(): HeadingReturn {
     addPoint,
     setCursor,
     clear,
+    dismiss,
     hasPoints: origin !== null,
   };
 }

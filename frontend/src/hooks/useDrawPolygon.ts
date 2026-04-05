@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import type maplibregl from "maplibre-gl";
 import { computePolygonArea, formatArea, pixelDistance } from "@/utils/geo";
 
-const SNAP_PX = 10;
+const SNAP_PX = 15;
 const SRC_FILL = "draw-polygon-fill";
 const SRC_STROKE = "draw-polygon-stroke";
 const SRC_VERTICES = "draw-polygon-vertices";
@@ -50,10 +50,10 @@ function ensureSources(map: maplibregl.Map) {
       type: "circle",
       source: SRC_VERTICES,
       paint: {
-        "circle-radius": 4,
+        "circle-radius": ["case", ["get", "isSnapTarget"], 7, 4],
         "circle-color": "#3bbb3b",
-        "circle-stroke-color": "#ffffff",
-        "circle-stroke-width": 2,
+        "circle-stroke-color": ["case", ["get", "isSnapTarget"], "#ffffff", "#ffffff"],
+        "circle-stroke-width": ["case", ["get", "isSnapTarget"], 3, 2],
       },
     });
   }
@@ -173,14 +173,19 @@ export default function useDrawPolygon(
       strokeSrc.setData({ type: "FeatureCollection", features });
     }
 
-    // vertices
+    // vertices - check snap state for first vertex
     const vertSrc = map.getSource(SRC_VERTICES) as maplibregl.GeoJSONSource | undefined;
     if (vertSrc) {
+      let isSnapping = false;
+      if (verts.length >= 3 && cursor) {
+        const dist = pixelDistance(map, cursor, verts[0]);
+        isSnapping = dist <= SNAP_PX;
+      }
       vertSrc.setData({
         type: "FeatureCollection",
         features: verts.map((v, i) => ({
           type: "Feature" as const,
-          properties: { index: i },
+          properties: { index: i, isSnapTarget: i === 0 && isSnapping },
           geometry: { type: "Point" as const, coordinates: v },
         })),
       });

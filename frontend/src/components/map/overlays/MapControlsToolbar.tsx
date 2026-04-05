@@ -5,6 +5,7 @@ import {
   Hand,
   Move,
   Ruler,
+  Compass,
   Search,
   Maximize,
   Undo2,
@@ -43,6 +44,7 @@ const mainTools: ToolDef[] = [
   { tool: MapTool.PAN, icon: Hand, tooltipKey: "map.tools.pan" },
   { tool: MapTool.MOVE_WAYPOINT, icon: Move, tooltipKey: "map.tools.moveWaypoint" },
   { tool: MapTool.MEASURE, icon: Ruler, tooltipKey: "map.tools.measure" },
+  { tool: MapTool.HEADING, icon: Compass, tooltipKey: "map.tools.heading" },
 ];
 
 const zoomTools: ToolDef[] = [

@@ -15,6 +15,10 @@ export const WAYPOINT_LANDING_LAYER = "waypoints-landing";
 export const WAYPOINT_HOVER_LAYER = "waypoints-hover";
 export const WAYPOINT_CAMERA_LINE_LAYER = "waypoints-camera-lines";
 export const WAYPOINT_ARROW_LAYER = "waypoints-arrows";
+export const WAYPOINT_CAMERA_TARGET_LAYER = "waypoints-camera-targets";
+export const WAYPOINT_TRANSIT_HIT_LAYER = "waypoints-transit-hit";
+export const WAYPOINT_GHOST_TRANSIT_SOURCE = "waypoints-ghost-transit";
+export const WAYPOINT_GHOST_TRANSIT_LAYER = "waypoints-ghost-transit-layer";
 
 export const SIMPLIFIED_LINE_SOURCE = "simplified-trajectory-source";
 export const SIMPLIFIED_LINE_LAYER = "simplified-trajectory-line";
@@ -247,7 +251,12 @@ export function waypointsToLineGeoJSON(
 
     features.push({
       type: "Feature",
-      properties: { color, inspection_id: to.inspection_id ?? null },
+      properties: {
+        color,
+        inspection_id: to.inspection_id ?? null,
+        from_seq: from.sequence_order,
+        from_alt: from.position.coordinates[2] ?? 0,
+      },
       geometry: {
         type: "LineString",
         coordinates: coords,
@@ -275,6 +284,23 @@ export function waypointsToCameraLineGeoJSON(
             wp.camera_target.coordinates,
           ],
         },
+      });
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
+
+/** builds camera target point features for map rendering. */
+export function waypointsToCameraTargetGeoJSON(
+  waypoints: WaypointResponse[],
+): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+  for (const wp of waypoints) {
+    if (wp.camera_target) {
+      features.push({
+        type: "Feature",
+        properties: { id: wp.id, inspection_id: wp.inspection_id },
+        geometry: { type: "Point", coordinates: wp.camera_target.coordinates },
       });
     }
   }
@@ -329,6 +355,7 @@ export function addWaypointLayers(
   const pointData = waypointsToGeoJSON(waypoints, takeoff, landing, inspectionIndexMap);
   const lineData = waypointsToLineGeoJSON(waypoints);
   const cameraData = waypointsToCameraLineGeoJSON(waypoints);
+  const cameraTargetData = waypointsToCameraTargetGeoJSON(waypoints);
 
   // update existing sources if present
   const existingSource = map.getSource(WAYPOINT_SOURCE) as
@@ -344,6 +371,10 @@ export function addWaypointLayers(
       | maplibregl.GeoJSONSource
       | undefined;
     if (cameraSrc) cameraSrc.setData(cameraData);
+    const cameraTargetSrc = map.getSource("waypoints-camera-target-source") as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (cameraTargetSrc) cameraTargetSrc.setData(cameraTargetData);
 
     // update selected waypoint filter
     updateSelectedFilter(map, selectedWaypointId);
@@ -366,6 +397,40 @@ export function addWaypointLayers(
       "line-opacity": 0.9,
     },
   });
+
+  // transparent hit area for transit path insertion
+  map.addLayer({
+    id: WAYPOINT_TRANSIT_HIT_LAYER,
+    type: "line",
+    source: WAYPOINT_LINE_SOURCE,
+    filter: ["==", ["get", "color"], TRANSIT_PATH_COLOR],
+    paint: {
+      "line-color": TRANSIT_PATH_COLOR,
+      "line-width": 14,
+      "line-opacity": 0,
+    },
+  });
+
+  // ghost transit waypoint preview
+  if (!map.getSource(WAYPOINT_GHOST_TRANSIT_SOURCE)) {
+    map.addSource(WAYPOINT_GHOST_TRANSIT_SOURCE, {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    });
+    map.addLayer({
+      id: WAYPOINT_GHOST_TRANSIT_LAYER,
+      type: "circle",
+      source: WAYPOINT_GHOST_TRANSIT_SOURCE,
+      paint: {
+        "circle-radius": 6,
+        "circle-color": TRANSIT_PATH_COLOR,
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 1.5,
+        "circle-opacity": 0.6,
+        "circle-stroke-opacity": 0.6,
+      },
+    });
+  }
 
   // direction arrows along path segments
   map.addLayer({
@@ -395,6 +460,21 @@ export function addWaypointLayers(
       "line-width": 1,
       "line-opacity": 0.4,
       "line-dasharray": [3, 3],
+    },
+  });
+
+  // camera target points
+  map.addSource("waypoints-camera-target-source", { type: "geojson", data: cameraTargetData });
+  map.addLayer({
+    id: WAYPOINT_CAMERA_TARGET_LAYER,
+    type: "circle",
+    source: "waypoints-camera-target-source",
+    paint: {
+      "circle-radius": 5,
+      "circle-color": "#ffffff",
+      "circle-stroke-color": "#e5a545",
+      "circle-stroke-width": 2,
+      "circle-opacity": 0.8,
     },
   });
 
@@ -519,6 +599,7 @@ export function updateSelectedFilter(
 /** removes all waypoint layers and sources. */
 export function removeWaypointLayers(map: MaplibreMap): void {
   const layers = [
+    WAYPOINT_GHOST_TRANSIT_LAYER,
     WAYPOINT_SELECTED_LAYER,
     WAYPOINT_LABEL_LAYER,
     WAYPOINT_LANDING_LAYER,
@@ -526,11 +607,13 @@ export function removeWaypointLayers(map: MaplibreMap): void {
     WAYPOINT_HOVER_LAYER,
     WAYPOINT_TRANSIT_CIRCLE_LAYER,
     WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
+    WAYPOINT_CAMERA_TARGET_LAYER,
     WAYPOINT_CAMERA_LINE_LAYER,
     WAYPOINT_ARROW_LAYER,
+    WAYPOINT_TRANSIT_HIT_LAYER,
     WAYPOINT_LINE_LAYER,
   ];
-  const sources = [WAYPOINT_SOURCE, WAYPOINT_LINE_SOURCE, "waypoints-camera-source"];
+  const sources = [WAYPOINT_GHOST_TRANSIT_SOURCE, WAYPOINT_SOURCE, WAYPOINT_LINE_SOURCE, "waypoints-camera-source", "waypoints-camera-target-source"];
 
   try {
     for (const id of layers) {

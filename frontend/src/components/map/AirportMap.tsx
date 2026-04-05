@@ -79,8 +79,9 @@ import {
   WAYPOINT_LABEL_LAYER,
   WAYPOINT_CAMERA_LINE_LAYER,
   WAYPOINT_ARROW_LAYER,
-  SIMPLIFIED_TAKEOFF_LAYER,
-  SIMPLIFIED_LANDING_LAYER,
+  WAYPOINT_TRANSIT_HIT_LAYER,
+  WAYPOINT_GHOST_TRANSIT_SOURCE,
+  WAYPOINT_CAMERA_TARGET_LAYER,
 } from "./layers/waypointLayers";
 import LayerPanel from "./overlays/LayerPanel";
 import LegendPanel from "./overlays/LegendPanel";
@@ -171,8 +172,8 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
   transitWaypoints: [WAYPOINT_TRANSIT_CIRCLE_LAYER],
   measurementWaypoints: [WAYPOINT_MEASUREMENT_CIRCLE_LAYER, WAYPOINT_HOVER_LAYER, WAYPOINT_LABEL_LAYER],
   path: [WAYPOINT_LINE_LAYER],
-  takeoffLanding: [WAYPOINT_TAKEOFF_LAYER, WAYPOINT_LANDING_LAYER, SIMPLIFIED_TAKEOFF_LAYER, SIMPLIFIED_LANDING_LAYER],
-  cameraHeading: [WAYPOINT_CAMERA_LINE_LAYER],
+  takeoffLanding: [WAYPOINT_TAKEOFF_LAYER, WAYPOINT_LANDING_LAYER],
+  cameraHeading: [WAYPOINT_CAMERA_LINE_LAYER, WAYPOINT_CAMERA_TARGET_LAYER],
   pathHeading: [WAYPOINT_ARROW_LAYER],
 };
 
@@ -256,6 +257,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   headingOrigin,
   isHeadingDrawing,
   onWaypointDrag,
+  onTransitInsert,
+  onTransitDelete,
   onInfraPointDrag,
   zoomPercent,
   onZoomChange,
@@ -369,6 +372,11 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
             sequence_order: wp.sequence_order,
             position: { type: "Point", coordinates: [lon, lat, alt] },
             stack_count: 1,
+            heading: wp.heading ?? null,
+            speed: wp.speed ?? null,
+            camera_action: wp.camera_action ?? null,
+            camera_target: wp.camera_target ?? null,
+            gimbal_pitch: wp.gimbal_pitch ?? null,
           },
         });
       }
@@ -679,6 +687,12 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       map.off("mouseup", handleMouseUp);
     };
   }, [activeTool, interactive, onWaypointDrag]);
+
+  // transit insert/delete refs
+  const onTransitInsertRef = useRef(onTransitInsert);
+  onTransitInsertRef.current = onTransitInsert;
+  const onTransitDeleteRef = useRef(onTransitDelete);
+  onTransitDeleteRef.current = onTransitDelete;
 
   // zoom tool: click to zoom in/out, sync zoomPercent
   useEffect(() => {
@@ -1286,6 +1300,11 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
           sequence_order: wp.sequence_order,
           position: wp.position,
           stack_count: 1,
+          heading: wp.heading ?? null,
+          speed: wp.speed ?? null,
+          camera_action: wp.camera_action ?? null,
+          camera_target: wp.camera_target ?? null,
+          gimbal_pitch: wp.gimbal_pitch ?? null,
         },
       });
     }
@@ -1443,14 +1462,127 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     };
   }, [activeTool, interactive, onInfraPointDrag]);
 
-  // click handler
+  // click, hover, dblclick handler (transit insert/delete, feature selection, hover highlight)
+  const TRANSIT_HOVER_SOURCE = "transit-hover-source";
+  const TRANSIT_HOVER_LAYER = "transit-hover-ring";
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !interactive) return;
 
-    function handleClick(e: maplibregl.MapMouseEvent) {
+    const tool = activeTool ?? MapTool.SELECT;
+    let ghostActive = false;
+    let hoveredTransitId: string | null = null;
+
+    // ensure hover highlight source/layer exist (only when style is ready)
+    function ensureHoverLayer() {
+      if (!map || !map.isStyleLoaded()) return;
+      if (map.getSource(TRANSIT_HOVER_SOURCE)) return;
+      map.addSource(TRANSIT_HOVER_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: TRANSIT_HOVER_LAYER,
+        type: "circle",
+        source: TRANSIT_HOVER_SOURCE,
+        paint: {
+          "circle-radius": 12,
+          "circle-color": "transparent",
+          "circle-stroke-color": "#e54545",
+          "circle-stroke-width": 2,
+          "circle-stroke-opacity": 0.8,
+        },
+      });
+    }
+    if (map.isStyleLoaded()) {
+      ensureHoverLayer();
+    } else {
+      map.once("style.load", ensureHoverLayer);
+    }
+
+    const ALL_WP_HOVER_LAYERS = [
+      WAYPOINT_TRANSIT_CIRCLE_LAYER,
+      WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
+      WAYPOINT_TAKEOFF_LAYER,
+      WAYPOINT_LANDING_LAYER,
+      WAYPOINT_HOVER_LAYER,
+    ];
+
+    function updateWaypointHover(e: maplibregl.MapMouseEvent) {
+      if (!map) return;
+      const wpHoverLayers = ALL_WP_HOVER_LAYERS.filter((id) => {
+        try { return map.getLayer(id); } catch { return false; }
+      });
+      if (wpHoverLayers.length === 0) return;
+      // lazily create hover source if style is ready but source missing
+      if (!map.getSource(TRANSIT_HOVER_SOURCE)) {
+        try { ensureHoverLayer(); } catch { return; }
+      }
+      const hoverSrc = map.getSource(TRANSIT_HOVER_SOURCE) as maplibregl.GeoJSONSource | undefined;
+      if (!hoverSrc) return;
+
+      const hits = map.queryRenderedFeatures(e.point, { layers: wpHoverLayers });
+      if (hits.length > 0) {
+        const wpId = hits[0].properties?.id;
+        if (wpId && wpId !== hoveredTransitId) {
+          hoveredTransitId = wpId;
+          hoverSrc.setData({
+            type: "FeatureCollection",
+            features: [{ type: "Feature", properties: {}, geometry: hits[0].geometry }],
+          });
+        }
+      } else if (hoveredTransitId) {
+        hoveredTransitId = null;
+        hoverSrc.setData({ type: "FeatureCollection", features: [] });
+      }
+    }
+
+    function handleMouseMove(e: maplibregl.MapMouseEvent) {
       if (!map) return;
 
+      // transit circle hover highlight (SELECT + MOVE_WAYPOINT)
+      if (tool === MapTool.SELECT || tool === MapTool.MOVE_WAYPOINT) {
+        updateWaypointHover(e);
+      }
+
+      // ghost waypoint on transit path (SELECT only, full map page only)
+      if (tool !== MapTool.SELECT || !onTransitInsertRef.current) return;
+      try { if (!map.getLayer(WAYPOINT_TRANSIT_HIT_LAYER)) return; } catch { return; }
+
+      const features = map.queryRenderedFeatures(e.point, { layers: [WAYPOINT_TRANSIT_HIT_LAYER] });
+      const ghostSrc = map.getSource(WAYPOINT_GHOST_TRANSIT_SOURCE) as maplibregl.GeoJSONSource | undefined;
+      if (!ghostSrc) return;
+
+      // don't show ghost when hovering an existing transit circle
+      if (hoveredTransitId) {
+        if (ghostActive) {
+          ghostSrc.setData({ type: "FeatureCollection", features: [] });
+          ghostActive = false;
+        }
+        return;
+      }
+
+      if (features.length > 0) {
+        const alt = features[0].properties?.from_alt ?? 0;
+        ghostSrc.setData({
+          type: "FeatureCollection",
+          features: [{
+            type: "Feature",
+            properties: { after_seq: features[0].properties?.from_seq ?? 0 },
+            geometry: { type: "Point", coordinates: [e.lngLat.lng, e.lngLat.lat, alt] },
+          }],
+        });
+        if (!ghostActive) {
+          map.getCanvas().style.cursor = "copy";
+          ghostActive = true;
+        }
+      } else if (ghostActive) {
+        ghostSrc.setData({ type: "FeatureCollection", features: [] });
+        map.getCanvas().style.cursor = "";
+        ghostActive = false;
+      }
+    }
+
+    function handleClick(e: maplibregl.MapMouseEvent) {
+      if (!map) return;
 
       // pick mode takes priority
       if (onMapClick) {
@@ -1458,9 +1590,38 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         return;
       }
 
-      // only SELECT tool allows feature picking
-      const tool = activeTool ?? MapTool.SELECT;
+      // only SELECT tool allows feature picking and transit insertion
       if (tool !== MapTool.SELECT) return;
+
+      // skip re-selection when clicking vertex editor nodes/edges
+      const vertexLayers = ["vertex-edit-corners", "vertex-edit-center", "vertex-edit-midpoints"]
+        .filter((id) => { try { return map.getLayer(id); } catch { return false; } });
+      if (vertexLayers.length > 0) {
+        const vHits = map.queryRenderedFeatures(e.point, { layers: vertexLayers });
+        if (vHits.length > 0) return;
+      }
+
+      // transit path click to insert (full map page only)
+      try {
+        if (onTransitInsertRef.current && map.getLayer(WAYPOINT_TRANSIT_HIT_LAYER)) {
+          let onCircle = false;
+          try {
+            if (map.getLayer(WAYPOINT_TRANSIT_CIRCLE_LAYER)) {
+              onCircle = map.queryRenderedFeatures(e.point, { layers: [WAYPOINT_TRANSIT_CIRCLE_LAYER] }).length > 0;
+            }
+          } catch { /* layer not ready */ }
+
+          if (!onCircle) {
+            const hitFeatures = map.queryRenderedFeatures(e.point, { layers: [WAYPOINT_TRANSIT_HIT_LAYER] });
+            if (hitFeatures.length > 0) {
+              const afterSeq = hitFeatures[0].properties?.from_seq ?? 0;
+              const alt = hitFeatures[0].properties?.from_alt ?? 0;
+              onTransitInsertRef.current?.([e.lngLat.lng, e.lngLat.lat, alt], afterSeq);
+              return;
+            }
+          }
+        }
+      } catch { /* layer not ready */ }
 
       // query all interactive layers + waypoint layers in one pass
       const waypointQueryLayers = [
@@ -1502,6 +1663,9 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
             ? (wpHit.geometry as GeoJSON.Point).coordinates
             : [0, 0, 0];
           const stackCount = Number(wpHit.properties.stack_count ?? 1);
+          // look up full waypoint data for camera fields (stacked ids are comma-separated)
+          const firstId = wpId.includes(",") ? wpId.split(",")[0] : wpId;
+          const fullWp = waypointsRef.current?.find((w) => w.id === firstId);
           setSelectedFeature({
             type: "waypoint",
             data: {
@@ -1514,6 +1678,11 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
               seq_max: stackCount > 1 ? Number(wpHit.properties.seq_max) : undefined,
               alt_min: stackCount > 1 ? Number(wpHit.properties.alt_min) : undefined,
               alt_max: stackCount > 1 ? Number(wpHit.properties.alt_max) : undefined,
+              heading: fullWp?.heading ?? null,
+              speed: fullWp?.speed ?? null,
+              camera_action: fullWp?.camera_action ?? null,
+              camera_target: fullWp?.camera_target ?? null,
+              gimbal_pitch: fullWp?.gimbal_pitch ?? null,
             },
           });
           return;
@@ -1562,9 +1731,36 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       }
     }
 
+    function handleDblClick(e: maplibregl.MapMouseEvent) {
+      if (!map || tool !== MapTool.SELECT) return;
+      try { if (!map.getLayer(WAYPOINT_TRANSIT_CIRCLE_LAYER)) return; } catch { return; }
+
+      const features = map.queryRenderedFeatures(e.point, { layers: [WAYPOINT_TRANSIT_CIRCLE_LAYER] });
+      if (features.length === 0) return;
+
+      const wpId = features[0].properties?.id;
+      if (!wpId) return;
+
+      e.preventDefault();
+      onTransitDeleteRef.current?.(wpId);
+    }
+
+    map.on("mousemove", handleMouseMove);
     map.on("click", handleClick);
+    map.on("dblclick", handleDblClick);
     return () => {
+      map.off("mousemove", handleMouseMove);
       map.off("click", handleClick);
+      map.off("dblclick", handleDblClick);
+      try {
+        if (ghostActive) {
+          map.getCanvas().style.cursor = "";
+          const ghostSrc = map.getSource(WAYPOINT_GHOST_TRANSIT_SOURCE) as maplibregl.GeoJSONSource | undefined;
+          if (ghostSrc) ghostSrc.setData({ type: "FeatureCollection", features: [] });
+        }
+        const hoverSrc = map.getSource(TRANSIT_HOVER_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        if (hoverSrc) hoverSrc.setData({ type: "FeatureCollection", features: [] });
+      } catch { /* map already destroyed */ }
     };
   }, [airport, interactive, onFeatureClick, onWaypointClick, selectedWaypointId, onMapClick, activeTool]);
 

@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
@@ -11,7 +12,7 @@ from app.models.flight_plan import (
     Waypoint,
 )
 from app.models.mission import Mission
-from app.schemas.flight_plan import WaypointPositionUpdate
+from app.schemas.flight_plan import TransitWaypointInsertRequest, WaypointPositionUpdate
 from app.services.geometry_converter import geojson_to_ewkt
 from app.services.trajectory_types import WaypointData
 
@@ -133,23 +134,31 @@ def batch_update_waypoints(
     db: Session, mission_id: UUID, updates: list[WaypointPositionUpdate]
 ) -> FlightPlan:
     """batch update waypoint positions and camera targets."""
+    if len(updates) > 200:
+        raise DomainError("batch too large", status_code=400)
+
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         raise NotFoundError("mission not found")
 
-    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED, MissionStatus.VALIDATED):
         raise DomainError("cannot modify waypoints in current status", status_code=409)
 
     fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission_id).first()
     if not fp:
         raise NotFoundError("flight plan not found")
 
+    # load all target waypoints in one query
+    waypoint_ids = [upd.waypoint_id for upd in updates]
+    waypoints = (
+        db.query(Waypoint)
+        .filter(Waypoint.id.in_(waypoint_ids), Waypoint.flight_plan_id == fp.id)
+        .all()
+    )
+    wp_map = {wp.id: wp for wp in waypoints}
+
     for upd in updates:
-        wp = (
-            db.query(Waypoint)
-            .filter(Waypoint.id == upd.waypoint_id, Waypoint.flight_plan_id == fp.id)
-            .first()
-        )
+        wp = wp_map.get(upd.waypoint_id)
         if not wp:
             raise NotFoundError(f"waypoint {upd.waypoint_id} not found")
 
@@ -166,9 +175,110 @@ def batch_update_waypoints(
         elif wp.waypoint_type == WaypointType.LANDING:
             mission.landing_coordinate = geojson_to_ewkt({"type": "Point", "coordinates": coords})
 
-    # regress to DRAFT without nullifying flight_plan - waypoints were just updated in place
-    if mission.status == MissionStatus.PLANNED:
-        mission.status = MissionStatus.DRAFT  # arch-exempt
+    mission.regress_to_planned()
+
+    mission.has_unsaved_map_changes = True
+    db.commit()
+
+    return get_flight_plan(db, mission_id)
+
+
+def insert_transit_waypoint(
+    db: Session, mission_id: UUID, request: TransitWaypointInsertRequest
+) -> FlightPlan:
+    """insert a new transit waypoint after the given sequence position."""
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        raise NotFoundError("mission not found")
+
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED, MissionStatus.VALIDATED):
+        raise DomainError("cannot modify waypoints in current status", status_code=409)
+
+    fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission_id).first()
+    if not fp:
+        raise NotFoundError("flight plan not found")
+
+    # validate after_sequence is within range
+    max_seq = (
+        db.query(func.max(Waypoint.sequence_order))
+        .filter(Waypoint.flight_plan_id == fp.id)
+        .scalar()
+    ) or 0
+    if request.after_sequence < 0 or request.after_sequence > max_seq:
+        raise DomainError(
+            f"after_sequence must be between 0 and {max_seq}",
+            status_code=400,
+        )
+
+    # shift all waypoints after the insertion point
+    subsequent = (
+        db.query(Waypoint)
+        .filter(
+            Waypoint.flight_plan_id == fp.id,
+            Waypoint.sequence_order > request.after_sequence,
+        )
+        .all()
+    )
+    for wp in subsequent:
+        wp.sequence_order += 1
+
+    # create the new transit waypoint
+    coords = request.position.coordinates
+    new_wp = Waypoint(
+        flight_plan_id=fp.id,
+        sequence_order=request.after_sequence + 1,
+        position=geojson_to_ewkt({"type": "Point", "coordinates": coords}),
+        waypoint_type=WaypointType.TRANSIT,
+    )
+    db.add(new_wp)
+
+    mission.regress_to_planned()
+    mission.has_unsaved_map_changes = True
+    db.commit()
+
+    return get_flight_plan(db, mission_id)
+
+
+def delete_transit_waypoint(db: Session, mission_id: UUID, waypoint_id: UUID) -> FlightPlan:
+    """delete a transit waypoint and resequence remaining waypoints."""
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        raise NotFoundError("mission not found")
+
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED, MissionStatus.VALIDATED):
+        raise DomainError("cannot modify waypoints in current status", status_code=409)
+
+    fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission_id).first()
+    if not fp:
+        raise NotFoundError("flight plan not found")
+
+    wp = (
+        db.query(Waypoint)
+        .filter(Waypoint.id == waypoint_id, Waypoint.flight_plan_id == fp.id)
+        .first()
+    )
+    if not wp:
+        raise NotFoundError("waypoint not found")
+
+    if wp.waypoint_type != WaypointType.TRANSIT:
+        raise DomainError("only transit waypoints can be deleted", status_code=400)
+
+    deleted_seq = wp.sequence_order
+    db.delete(wp)
+
+    # resequence subsequent waypoints
+    subsequent = (
+        db.query(Waypoint)
+        .filter(
+            Waypoint.flight_plan_id == fp.id,
+            Waypoint.sequence_order > deleted_seq,
+        )
+        .all()
+    )
+    for w in subsequent:
+        w.sequence_order -= 1
+
+    mission.regress_to_planned()
 
     mission.has_unsaved_map_changes = True
     db.commit()

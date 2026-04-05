@@ -6,8 +6,11 @@ import { bufferLineString } from "@/components/map/layers/surfaceLayers";
 import { DEFAULT_TAXIWAY_WIDTH_M } from "@/constants/surface";
 
 const SRC_NODES = "vertex-edit-nodes";
+const SRC_MIDPOINTS = "vertex-edit-midpoints";
 const LYR_CORNERS = "vertex-edit-corners";
 const LYR_CENTER = "vertex-edit-center";
+const LYR_MIDPOINTS = "vertex-edit-midpoints";
+const EDGE_SNAP_PX = 10;
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
@@ -107,20 +110,42 @@ function ensureSources(map: maplibregl.Map) {
       "circle-stroke-width": 2,
     },
   });
+
+  // ghost midpoint for edge insertion preview
+  if (!map.getSource(SRC_MIDPOINTS)) {
+    map.addSource(SRC_MIDPOINTS, { type: "geojson", data: EMPTY_FC });
+    map.addLayer({
+      id: LYR_MIDPOINTS,
+      type: "circle",
+      source: SRC_MIDPOINTS,
+      paint: {
+        "circle-radius": 4,
+        "circle-color": "#ffffff",
+        "circle-stroke-color": "#3bbb3b",
+        "circle-stroke-width": 1.5,
+        "circle-opacity": 0.6,
+        "circle-stroke-opacity": 0.6,
+      },
+    });
+  }
 }
 
 function clearSources(map: maplibregl.Map) {
   /** clear vertex editing overlay data. */
   const s = map.getSource(SRC_NODES) as maplibregl.GeoJSONSource | undefined;
   if (s) s.setData(EMPTY_FC);
+  const m = map.getSource(SRC_MIDPOINTS) as maplibregl.GeoJSONSource | undefined;
+  if (m) m.setData(EMPTY_FC);
 }
 
 function removeSources(map: maplibregl.Map) {
   /** remove vertex editing layers and sources. */
-  for (const lyr of [LYR_CENTER, LYR_CORNERS]) {
+  for (const lyr of [LYR_MIDPOINTS, LYR_CENTER, LYR_CORNERS]) {
     try { if (map.getLayer(lyr)) map.removeLayer(lyr); } catch (e) { console.warn("vertex editor: failed to remove layer", lyr, e); }
   }
-  try { if (map.getSource(SRC_NODES)) map.removeSource(SRC_NODES); } catch (e) { console.warn("vertex editor: failed to remove source", SRC_NODES, e); }
+  for (const src of [SRC_MIDPOINTS, SRC_NODES]) {
+    try { if (map.getSource(src)) map.removeSource(src); } catch (e) { console.warn("vertex editor: failed to remove source", src, e); }
+  }
 }
 
 /** poll map.isStyleLoaded() until true, then call callback. returns cancel fn. */
@@ -138,6 +163,44 @@ function waitForStyleLoaded(map: maplibregl.Map, callback: () => void): () => vo
   }
   requestAnimationFrame(check);
   return () => { cancelled = true; };
+}
+
+/** find nearest point on a polygon edge to cursor, returns insert index and position. */
+function nearestEdgePoint(
+  map: maplibregl.Map,
+  cursor: [number, number],
+  corners: [number, number][],
+): { insertIdx: number; point: [number, number]; pixelDist: number } | null {
+  if (corners.length < 3) return null;
+  const cursorPx = map.project(cursor);
+  let bestDist = Infinity;
+  let bestPoint: [number, number] | null = null;
+  let bestIdx = -1;
+
+  for (let i = 0; i < corners.length; i++) {
+    const j = (i + 1) % corners.length;
+    const aPx = map.project(corners[i]);
+    const bPx = map.project(corners[j]);
+    const dx = bPx.x - aPx.x;
+    const dy = bPx.y - aPx.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) continue;
+    const t = Math.max(0, Math.min(1, ((cursorPx.x - aPx.x) * dx + (cursorPx.y - aPx.y) * dy) / lenSq));
+    const px = aPx.x + t * dx;
+    const py = aPx.y + t * dy;
+    const dist = Math.sqrt((cursorPx.x - px) ** 2 + (cursorPx.y - py) ** 2);
+    if (dist < bestDist) {
+      bestDist = dist;
+      const projected = map.unproject([px, py]);
+      bestPoint = [projected.lng, projected.lat];
+      bestIdx = j;
+    }
+  }
+
+  if (bestPoint && bestDist <= EDGE_SNAP_PX) {
+    return { insertIdx: bestIdx, point: bestPoint, pixelDist: bestDist };
+  }
+  return null;
 }
 
 /** compute edge point for circle radius handle (east of center). */
@@ -176,8 +239,12 @@ export default function useVertexEditor(
   onUpdateRef.current = onGeometryUpdate;
   const dragRef = useRef<{ kind: "corner" | "center" | "radius"; idx: number } | null>(null);
   const dragStartRef = useRef<[number, number] | null>(null);
+  const ghostRef = useRef<{ insertIdx: number; point: [number, number] } | null>(null);
   const featureRef = useRef(feature);
   featureRef.current = feature;
+
+  // stable identity key - only re-init when the actual feature changes
+  const featureKey = feature ? `${feature.type}:${feature.data.id}` : null;
 
   const updateOverlay = useCallback(() => {
     /** sync vertex overlay to map source. */
@@ -295,6 +362,7 @@ export default function useVertexEditor(
   }, []);
 
   useEffect(() => {
+    const feature = featureRef.current;
     if (!map || !feature || !isSelectTool) {
       if (map) clearSources(map);
       setIsEditing(false);
@@ -328,12 +396,29 @@ export default function useVertexEditor(
       // query all edit nodes
       const hits = map.queryRenderedFeatures(e.point, { layers: [LYR_CORNERS, LYR_CENTER] });
       if (hits.length > 0) {
-        const kind = hits[0].properties?.kind as "corner" | "center" | "radius";
+        const raw = hits[0].properties?.kind;
+        if (raw !== "corner" && raw !== "center" && raw !== "radius") return;
+        const kind = raw;
         const idx = hits[0].properties?.idx ?? 0;
         dragRef.current = { kind, idx };
         dragStartRef.current = [e.lngLat.lng, e.lngLat.lat];
         map.dragPan.disable();
         map.getCanvas().style.cursor = kind === "center" ? "move" : "grabbing";
+        e.preventDefault();
+        return;
+      }
+
+      // insert vertex at ghost midpoint position
+      const ghost = ghostRef.current;
+      const st = stateRef.current;
+      if (ghost && st && st.mode === "polygon") {
+        st.corners.splice(ghost.insertIdx, 0, ghost.point);
+        st.center = polygonCentroid(st.corners);
+        ghostRef.current = null;
+        const midSrc = map.getSource(SRC_MIDPOINTS) as maplibregl.GeoJSONSource | undefined;
+        if (midSrc) midSrc.setData(EMPTY_FC);
+        updateOverlay();
+        emitUpdate();
         e.preventDefault();
       }
     }
@@ -365,11 +450,35 @@ export default function useVertexEditor(
         return;
       }
 
-      // hover cursor
+      // hover cursor + ghost midpoint for edge insertion
       const hits = map.queryRenderedFeatures(e.point, { layers: [LYR_CORNERS, LYR_CENTER] });
       if (hits.length > 0) {
         const kind = hits[0].properties?.kind;
         map.getCanvas().style.cursor = kind === "center" ? "move" : "grab";
+        // clear ghost when hovering a node
+        ghostRef.current = null;
+        const midSrc = map.getSource(SRC_MIDPOINTS) as maplibregl.GeoJSONSource | undefined;
+        if (midSrc) midSrc.setData(EMPTY_FC);
+      } else if (st && st.mode === "polygon" && st.corners.length >= 3) {
+        const cursor: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+        const edge = nearestEdgePoint(map, cursor, st.corners);
+        const midSrc = map.getSource(SRC_MIDPOINTS) as maplibregl.GeoJSONSource | undefined;
+        if (edge && midSrc) {
+          ghostRef.current = { insertIdx: edge.insertIdx, point: edge.point };
+          midSrc.setData({
+            type: "FeatureCollection",
+            features: [{
+              type: "Feature",
+              properties: {},
+              geometry: { type: "Point", coordinates: edge.point },
+            }],
+          });
+          map.getCanvas().style.cursor = "copy";
+        } else {
+          ghostRef.current = null;
+          if (midSrc) midSrc.setData(EMPTY_FC);
+          map.getCanvas().style.cursor = "";
+        }
       } else {
         map.getCanvas().style.cursor = "";
       }
@@ -385,23 +494,50 @@ export default function useVertexEditor(
       }
     }
 
+    function handleDblClick(e: maplibregl.MapMouseEvent) {
+      /** delete vertex on double-click (minimum 3 for polygons). */
+      if (!map) return;
+      const st = stateRef.current;
+      if (!st || st.mode !== "polygon") return;
+
+      const hits = map.queryRenderedFeatures(e.point, { layers: [LYR_CORNERS] });
+      if (hits.length === 0) return;
+
+      const idx = hits[0].properties?.idx;
+      if (idx == null) return;
+
+      if (st.corners.length <= 3) return;
+
+      st.corners.splice(idx, 1);
+      st.center = polygonCentroid(st.corners);
+      updateOverlay();
+      emitUpdate();
+      e.preventDefault();
+    }
+
     map.on("mousedown", handleMouseDown);
     map.on("mousemove", handleMouseMove);
     map.on("mouseup", handleMouseUp);
+    map.on("dblclick", handleDblClick);
 
     // fallback: release drag if mouse leaves canvas
     document.addEventListener("mouseup", handleMouseUp);
 
     return () => {
       cancelPoll?.();
+      if (dragRef.current) {
+        map.dragPan.enable();
+        dragRef.current = null;
+      }
       map.off("mousedown", handleMouseDown);
       map.off("mousemove", handleMouseMove);
       map.off("mouseup", handleMouseUp);
+      map.off("dblclick", handleDblClick);
       document.removeEventListener("mouseup", handleMouseUp);
       clearSources(map);
-      dragRef.current = null;
+      ghostRef.current = null;
     };
-  }, [map, feature, isSelectTool, updateOverlay, emitUpdate]);
+  }, [map, featureKey, isSelectTool, updateOverlay, emitUpdate]);
 
   useEffect(() => {
     return () => { if (map) removeSources(map); };

@@ -8,6 +8,7 @@ from app.core.exceptions import DomainError, NotFoundError, TrajectoryGeneration
 from app.schemas.flight_plan import (
     FlightPlanResponse,
     GenerateTrajectoryResponse,
+    TransitWaypointInsertRequest,
     WaypointBatchUpdateRequest,
 )
 from app.services import flight_plan_service, mission_service
@@ -73,6 +74,42 @@ def batch_update_waypoints(
     """batch update waypoint positions and camera targets."""
     try:
         return flight_plan_service.batch_update_waypoints(db, mission_id, payload.updates)
+    except NotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except DomainError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@router.post(
+    "/{mission_id}/flight-plan/waypoints/transit",
+    response_model=FlightPlanResponse,
+)
+def insert_transit_waypoint(
+    mission_id: UUID,
+    payload: TransitWaypointInsertRequest,
+    db: Session = Depends(get_db),
+):
+    """insert a new transit waypoint at a position on the transit path."""
+    try:
+        return flight_plan_service.insert_transit_waypoint(db, mission_id, payload)
+    except NotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except DomainError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@router.delete(
+    "/{mission_id}/flight-plan/waypoints/{waypoint_id}",
+    response_model=FlightPlanResponse,
+)
+def delete_transit_waypoint(
+    mission_id: UUID,
+    waypoint_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """delete a transit waypoint from the flight plan."""
+    try:
+        return flight_plan_service.delete_transit_waypoint(db, mission_id, waypoint_id)
     except NotFoundError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     except DomainError as e:
