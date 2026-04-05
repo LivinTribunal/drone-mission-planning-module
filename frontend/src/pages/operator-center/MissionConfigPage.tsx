@@ -38,7 +38,6 @@ import TemplatePicker from "@/components/mission/TemplatePicker";
 import MissionConfigForm from "@/components/mission/MissionConfigForm";
 import InspectionConfigForm from "@/components/mission/InspectionConfigForm";
 import WarningsPanel from "@/components/mission/WarningsPanel";
-import WarningInfoPanel from "@/components/map/overlays/WarningInfoPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
 import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
@@ -714,15 +713,6 @@ export default function MissionConfigPage() {
             />
           </div>
 
-          {selectedWarning && (
-            <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
-              <WarningInfoPanel
-                violation={selectedWarning}
-                onClose={() => setSelectedWarning(null)}
-              />
-            </div>
-          )}
-
           {/* stats */}
           <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
             <StatsPanel
@@ -757,6 +747,8 @@ export default function MissionConfigPage() {
               visibleInspectionIds={visibleInspectionIds}
               highlightedWaypointIds={selectedWarning?.waypoint_ids}
               highlightSeverity={selectedWarning?.severity}
+              selectedWarning={selectedWarning}
+              onWarningClose={() => setSelectedWarning(null)}
             >
               {/* pick-on-map banner */}
               {pickingCoord && (

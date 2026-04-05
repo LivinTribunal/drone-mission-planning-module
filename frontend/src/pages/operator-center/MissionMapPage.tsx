@@ -37,7 +37,6 @@ import PoiInfoPanel from "@/components/map/overlays/PoiInfoPanel";
 import InspectionListPanel from "@/components/map/overlays/InspectionListPanel";
 import MapControlsToolbar from "@/components/map/overlays/MapControlsToolbar";
 import MapWarningsPanel from "@/components/map/overlays/MapWarningsPanel";
-import WarningInfoPanel from "@/components/map/overlays/WarningInfoPanel";
 import MapStatsPanel from "@/components/map/overlays/MapStatsPanel";
 import useMapTools, { MapTool } from "@/hooks/useMapTools";
 import useUndoRedo from "@/hooks/useUndoRedo";
@@ -823,6 +822,8 @@ export default function MissionMapPage() {
             onZoomChange={setZoomPercent}
             highlightedWaypointIds={selectedWarning?.waypoint_ids}
             highlightSeverity={selectedWarning?.severity}
+            selectedWarning={selectedWarning}
+            onWarningClose={() => setSelectedWarning(null)}
             leftPanelChildren={
               <>
                 {showPanels && mission.inspections.length > 0 && (
@@ -909,13 +910,6 @@ export default function MissionMapPage() {
                   violations={violations}
                   onWarningClick={setSelectedWarning}
                   selectedWarningId={selectedWarning?.id}
-                />
-              )}
-
-              {selectedWarning && (
-                <WarningInfoPanel
-                  violation={selectedWarning}
-                  onClose={() => setSelectedWarning(null)}
                 />
               )}
 

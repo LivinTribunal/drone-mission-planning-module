@@ -31,6 +31,7 @@ export const SIMPLIFIED_CORNERS_SOURCE = "simplified-corners-source";
 export const SIMPLIFIED_MEASUREMENT_SOURCE = "simplified-measurement-source";
 export const SIMPLIFIED_MEASUREMENT_LAYER = "simplified-measurement-dots";
 export const SIMPLIFIED_CORNERS_LAYER = "simplified-corners";
+export const SIMPLIFIED_WARNING_HIGHLIGHT_LAYER = "simplified-warning-highlight";
 
 const TRANSIT_PATH_COLOR = "#7eb8e5";
 const DEFAULT_MEASUREMENT_COLOR = "#3bbb3b";
@@ -635,28 +636,46 @@ const SEVERITY_COLORS: Record<string, string> = {
   suggestion: "#9ca3af",
 };
 
-/** updates the warning highlight filter and color. */
+/** updates the warning highlight filter and color for both full and simplified layers. */
 export function updateWarningHighlightFilter(
   map: MaplibreMap,
   waypointIds?: string[],
   severity?: string,
 ): void {
+  const color = SEVERITY_COLORS[severity ?? "warning"] ?? SEVERITY_COLORS.warning;
+
   try {
-    if (!map.getLayer(WAYPOINT_WARNING_HIGHLIGHT_LAYER)) return;
-
-    if (!waypointIds || waypointIds.length === 0) {
-      map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "id"], ""]);
-      return;
+    // full waypoint circle highlight
+    if (map.getLayer(WAYPOINT_WARNING_HIGHLIGHT_LAYER)) {
+      if (!waypointIds || waypointIds.length === 0) {
+        map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "id"], ""]);
+      } else {
+        map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, [
+          "in",
+          ["get", "id"],
+          ["literal", waypointIds],
+        ]);
+        map.setPaintProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "circle-stroke-color", color);
+      }
     }
+  } catch {
+    // layer may not exist
+  }
 
-    map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, [
-      "in",
-      ["get", "id"],
-      ["literal", waypointIds],
-    ]);
-
-    const color = SEVERITY_COLORS[severity ?? "warning"] ?? SEVERITY_COLORS.warning;
-    map.setPaintProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "circle-stroke-color", color);
+  try {
+    // simplified trajectory line highlight
+    if (map.getLayer(SIMPLIFIED_WARNING_HIGHLIGHT_LAYER)) {
+      if (!waypointIds || waypointIds.length === 0) {
+        map.setFilter(SIMPLIFIED_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "fromId"], ""]);
+      } else {
+        map.setFilter(SIMPLIFIED_WARNING_HIGHLIGHT_LAYER, [
+          "any",
+          ["in", ["get", "fromId"], ["literal", waypointIds]],
+          ["in", ["get", "toId"], ["literal", waypointIds]],
+        ]);
+        map.setPaintProperty(SIMPLIFIED_WARNING_HIGHLIGHT_LAYER, "line-color", color);
+      }
+    }
   } catch {
     // layer may not exist
   }
@@ -715,6 +734,7 @@ export function getWaypointLayerIds(): string[] {
 export function getSimplifiedTrajectoryLayerIds(): string[] {
   return [
     SIMPLIFIED_LINE_LAYER,
+    SIMPLIFIED_WARNING_HIGHLIGHT_LAYER,
     SIMPLIFIED_CORNERS_LAYER,
     SIMPLIFIED_MEASUREMENT_LAYER,
     SIMPLIFIED_TAKEOFF_LAYER,
@@ -748,7 +768,7 @@ export function waypointsToSimplifiedLineGeoJSON(
 
     features.push({
       type: "Feature",
-      properties: { color },
+      properties: { color, fromId: from.id, toId: to.id },
       geometry: {
         type: "LineString",
         coordinates: [from.position.coordinates, to.position.coordinates],
@@ -944,6 +964,19 @@ export function addSimplifiedTrajectoryLayers(
     },
   });
 
+  // warning highlight overlay on simplified line segments
+  map.addLayer({
+    id: SIMPLIFIED_WARNING_HIGHLIGHT_LAYER,
+    type: "line",
+    source: SIMPLIFIED_LINE_SOURCE,
+    filter: ["==", ["get", "fromId"], ""],
+    paint: {
+      "line-color": "#e54545",
+      "line-width": 7,
+      "line-opacity": 0.9,
+    },
+  });
+
   // corner dots where path changes direction
   map.addLayer({
     id: SIMPLIFIED_CORNERS_LAYER,
@@ -1004,6 +1037,7 @@ export function removeSimplifiedTrajectoryLayers(map: MaplibreMap): void {
     SIMPLIFIED_TAKEOFF_LAYER,
     SIMPLIFIED_MEASUREMENT_LAYER,
     SIMPLIFIED_CORNERS_LAYER,
+    SIMPLIFIED_WARNING_HIGHLIGHT_LAYER,
     SIMPLIFIED_LINE_LAYER,
   ];
   const sources = [

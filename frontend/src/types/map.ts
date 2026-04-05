@@ -148,6 +148,8 @@ export interface AirportMapProps {
   showHelpPanel?: boolean;
   highlightedWaypointIds?: string[];
   highlightSeverity?: string;
+  selectedWarning?: import("./flightPlan").ValidationViolation | null;
+  onWarningClose?: () => void;
 }
 
 export type DrawingTool =

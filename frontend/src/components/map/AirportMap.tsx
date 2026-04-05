@@ -87,6 +87,7 @@ import {
 import LayerPanel from "./overlays/LayerPanel";
 import LegendPanel from "./overlays/LegendPanel";
 import PoiInfoPanel from "./overlays/PoiInfoPanel";
+import WarningInfoPanel from "./overlays/WarningInfoPanel";
 import MapHelpPanel from "./overlays/MapHelpPanel";
 import WaypointListPanel from "./overlays/WaypointListPanel";
 
@@ -272,6 +273,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   bearingResetKey,
   highlightedWaypointIds,
   highlightSeverity,
+  selectedWarning,
+  onWarningClose,
   pendingGeometry,
   pendingPointPosition,
 }, ref) {
@@ -2101,6 +2104,12 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
             <PoiInfoPanel
               feature={selectedFeature}
               onClose={() => setSelectedFeature(null)}
+            />
+          )}
+          {selectedWarning && onWarningClose && (
+            <WarningInfoPanel
+              violation={selectedWarning}
+              onClose={onWarningClose}
             />
           )}
 
