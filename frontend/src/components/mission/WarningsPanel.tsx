@@ -7,7 +7,7 @@ import { cleanMessage } from "@/utils/violations";
 interface WarningsPanelProps {
   warnings: ValidationViolation[] | null;
   hasTrajectory: boolean;
-  onWarningClick?: (violation: ValidationViolation) => void;
+  onWarningClick?: (violation: ValidationViolation | null) => void;
   selectedWarningId?: string | null;
 }
 
@@ -122,7 +122,7 @@ export default function WarningsPanel({
                 return (
                   <div
                     key={w.id}
-                    onClick={() => onWarningClick?.(w)}
+                    onClick={() => onWarningClick?.(selectedWarningId === w.id ? null : w)}
                     className={`grid grid-cols-[2rem_5rem_1fr_3rem] gap-2 px-3 py-2 items-start hover:bg-tv-surface-hover transition-colors ${
                       idx < sorted.length - 1 ? "border-b border-tv-border" : ""
                     } ${onWarningClick ? "cursor-pointer" : ""} ${

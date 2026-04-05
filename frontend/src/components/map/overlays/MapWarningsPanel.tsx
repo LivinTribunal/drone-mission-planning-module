@@ -6,7 +6,7 @@ import { cleanMessage } from "@/utils/violations";
 
 interface MapWarningsPanelProps {
   violations: ValidationViolation[];
-  onWarningClick?: (violation: ValidationViolation) => void;
+  onWarningClick?: (violation: ValidationViolation | null) => void;
   selectedWarningId?: string | null;
 }
 
@@ -103,7 +103,7 @@ export default function MapWarningsPanel({
             return (
               <div
                 key={v.id}
-                onClick={() => onWarningClick?.(v)}
+                onClick={() => onWarningClick?.(selectedWarningId === v.id ? null : v)}
                 className={`grid grid-cols-[1rem_3.5rem_1fr_2rem] gap-1 px-2 py-1 items-start hover:bg-tv-surface-hover transition-colors ${
                   idx < sorted.length - 1 ? "border-b border-tv-border" : ""
                 } ${onWarningClick ? "cursor-pointer" : ""} ${

@@ -185,7 +185,9 @@ def _apply_camera_actions(waypoints: list[WaypointData]):
             waypoints[-1].camera_action = CameraAction.NONE
 
 
-def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list[str]]:
+def generate_trajectory(
+    db: Session, mission_id: UUID
+) -> tuple[FlightPlan, list[tuple[str, list[str]]]]:
     """five-phase trajectory generation pipeline.
 
     phase 1: load all data
@@ -237,6 +239,8 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         warnings.append(("constraints were reset - re-attach after generation", []))
 
     inspection_passes: list[InspectionPass] = []
+    # deferred per-pass data for formatting after phase 5 assembly
+    deferred_pass_data: list[tuple[str, list, list[int]]] = []
     cumulative_distance = 0.0
     cumulative_duration = 0.0
 
@@ -393,35 +397,21 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 ],
             )
 
-        # group soft warnings by message, show affected waypoint range
+        # defer soft warning formatting until after phase 5 assembly,
+        # when global waypoint offsets are known
         label = f"{template.name} #{inspection.sequence_order}"
-        _format_soft_warnings(violations, label, warnings)
 
         # phase 4 - post-inspection processing
         _apply_camera_actions(pass_wps)
 
         # check camera line-of-sight to PAPI for each measurement waypoint
-        obstructed_wps = []
+        obstructed_wps: list[int] = []
         for wp_idx, wp in enumerate(pass_wps):
             if wp.waypoint_type not in (WaypointType.MEASUREMENT, WaypointType.HOVER):
                 continue
             wp_pt = Point3D(lon=wp.lon, lat=wp.lat, alt=wp.alt)
             if not has_line_of_sight(db, wp_pt, center, data.obstacles, data.safety_zones):
-                obstructed_wps.append(wp_idx + 1)
-
-        if obstructed_wps:
-            if len(obstructed_wps) <= 3:
-                wp_str = ", ".join(str(i) for i in obstructed_wps)
-            else:
-                wp_str = f"{min(obstructed_wps)}-{max(obstructed_wps)}"
-            # obstructed_wps are 1-based pass-local indices
-            wp_ids = [f"idx:{(i - 1)}" for i in obstructed_wps]
-            non_aborting_violations.append(
-                (
-                    f"{label} (wp {wp_str}): camera view to PAPI obstructed",
-                    wp_ids,
-                )
-            )
+                obstructed_wps.append(wp_idx)
 
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
@@ -455,6 +445,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 )
             )
 
+        deferred_pass_data.append((label, violations, obstructed_wps))
         inspection_passes.append(InspectionPass(waypoints=pass_wps, inspection_id=inspection.id))
 
     if not inspection_passes:
@@ -573,6 +564,25 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 if k < len(all_waypoints):
                     wp_inspection_seq[k] = i + 1
             idx = pass_start + len(ipass.waypoints)
+
+        # format deferred per-pass warnings now that global offsets are known
+        if pass_start is not None and i < len(deferred_pass_data):
+            d_label, d_violations, d_obstructed = deferred_pass_data[i]
+            _format_soft_warnings(d_violations, d_label, warnings, wp_offset=pass_start)
+
+            if d_obstructed:
+                display_wps = [wi + 1 for wi in d_obstructed]
+                if len(display_wps) <= 3:
+                    wp_str = ", ".join(str(w) for w in display_wps)
+                else:
+                    wp_str = f"{min(display_wps)}-{max(display_wps)}"
+                wp_ids = [f"idx:{wi + pass_start}" for wi in d_obstructed]
+                non_aborting_violations.append(
+                    (
+                        f"{d_label} (wp {wp_str}): camera view to PAPI obstructed",
+                        wp_ids,
+                    )
+                )
 
     # check for runway/taxiway crossings and add grouped warnings
     # measurement crossings grouped by (inspection_seq, surface) -> one warning

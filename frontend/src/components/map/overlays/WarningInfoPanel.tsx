@@ -13,11 +13,12 @@ interface WarningInfoPanelProps {
 
 function SeverityBadge({ severity }: { severity: string }) {
   /** severity badge with icon and color. */
+  const { t } = useTranslation();
   if (severity === "violation") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-tv-error/20 text-tv-error">
         <XCircle className="h-3 w-3" />
-        Violation
+        {t("map.severityViolation")}
       </span>
     );
   }
@@ -25,14 +26,14 @@ function SeverityBadge({ severity }: { severity: string }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-tv-text-muted/20 text-tv-text-muted">
         <Lightbulb className="h-3 w-3" />
-        Suggestion
+        {t("map.severitySuggestion")}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-tv-warning/20 text-tv-warning">
       <AlertTriangle className="h-3 w-3" />
-      Warning
+      {t("map.severityWarning")}
     </span>
   );
 }
