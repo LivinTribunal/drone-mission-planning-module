@@ -93,8 +93,8 @@ class ValidationViolationResponse(BaseModel):
     @field_validator("waypoint_ids", mode="before")
     @classmethod
     def _coerce_none_to_list(cls, v: list[str] | None) -> list[str]:
-        """convert null waypoint_ids from db to empty list."""
-        return v or []
+        """coerce null waypoint_ids from db to empty list."""
+        return v if v else []
 
     @computed_field
     @property
