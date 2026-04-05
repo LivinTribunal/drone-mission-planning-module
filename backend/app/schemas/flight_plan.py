@@ -45,6 +45,9 @@ _VIOLATION_KIND_RULES: list[tuple[str, list[str], list[str]]] = [
 
 def _classify_violation(message: str) -> str | None:
     """derive violation kind from message content."""
+    # rules are ordered specific-to-general - excludes skip a generic rule so
+    # a more specific one (listed earlier) can match instead, e.g. "speed" is
+    # skipped when "framerate" is present so the speed_framerate rule wins
     msg = message.lower()
     for kind, keywords, excludes in _VIOLATION_KIND_RULES:
         if any(kw in msg for kw in excludes):

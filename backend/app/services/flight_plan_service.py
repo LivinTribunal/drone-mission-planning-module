@@ -133,11 +133,14 @@ def batch_update_waypoints(
     db: Session, mission_id: UUID, updates: list[WaypointPositionUpdate]
 ) -> FlightPlan:
     """batch update waypoint positions and camera targets."""
+    if len(updates) > 200:
+        raise DomainError("batch too large", status_code=400)
+
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         raise NotFoundError("mission not found")
 
-    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED, MissionStatus.VALIDATED):
         raise DomainError("cannot modify waypoints in current status", status_code=409)
 
     fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission_id).first()
@@ -166,9 +169,9 @@ def batch_update_waypoints(
         elif wp.waypoint_type == WaypointType.LANDING:
             mission.landing_coordinate = geojson_to_ewkt({"type": "Point", "coordinates": coords})
 
-    # regress to DRAFT without nullifying flight_plan - waypoints were just updated in place
-    if mission.status == MissionStatus.PLANNED:
-        mission.status = MissionStatus.DRAFT  # arch-exempt
+    # regress validated -> planned, keep planned as-is (waypoints modified in place)
+    if mission.status == MissionStatus.VALIDATED:
+        mission.status = MissionStatus.PLANNED  # arch-exempt
 
     mission.has_unsaved_map_changes = True
     db.commit()
@@ -184,7 +187,7 @@ def insert_transit_waypoint(
     if not mission:
         raise NotFoundError("mission not found")
 
-    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED):
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED, MissionStatus.VALIDATED):
         raise DomainError("cannot modify waypoints in current status", status_code=409)
 
     fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission_id).first()
@@ -213,9 +216,58 @@ def insert_transit_waypoint(
     )
     db.add(new_wp)
 
-    # regress to draft
-    if mission.status == MissionStatus.PLANNED:
-        mission.status = MissionStatus.DRAFT  # arch-exempt
+    # regress validated -> planned, keep planned as-is (waypoints modified in place)
+    if mission.status == MissionStatus.VALIDATED:
+        mission.status = MissionStatus.PLANNED  # arch-exempt
+
+    mission.has_unsaved_map_changes = True
+    db.commit()
+
+    return get_flight_plan(db, mission_id)
+
+
+def delete_transit_waypoint(db: Session, mission_id: UUID, waypoint_id: UUID) -> FlightPlan:
+    """delete a transit waypoint and resequence remaining waypoints."""
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        raise NotFoundError("mission not found")
+
+    if mission.status not in (MissionStatus.DRAFT, MissionStatus.PLANNED, MissionStatus.VALIDATED):
+        raise DomainError("cannot modify waypoints in current status", status_code=409)
+
+    fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission_id).first()
+    if not fp:
+        raise NotFoundError("flight plan not found")
+
+    wp = (
+        db.query(Waypoint)
+        .filter(Waypoint.id == waypoint_id, Waypoint.flight_plan_id == fp.id)
+        .first()
+    )
+    if not wp:
+        raise NotFoundError("waypoint not found")
+
+    if wp.waypoint_type != WaypointType.TRANSIT:
+        raise DomainError("only transit waypoints can be deleted", status_code=400)
+
+    deleted_seq = wp.sequence_order
+    db.delete(wp)
+
+    # resequence subsequent waypoints
+    subsequent = (
+        db.query(Waypoint)
+        .filter(
+            Waypoint.flight_plan_id == fp.id,
+            Waypoint.sequence_order > deleted_seq,
+        )
+        .all()
+    )
+    for w in subsequent:
+        w.sequence_order -= 1
+
+    # regress validated -> planned, keep planned as-is
+    if mission.status == MissionStatus.VALIDATED:
+        mission.status = MissionStatus.PLANNED  # arch-exempt
 
     mission.has_unsaved_map_changes = True
     db.commit()

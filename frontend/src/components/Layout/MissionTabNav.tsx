@@ -422,7 +422,7 @@ export default function MissionTabNav() {
       {/* LEFT COLUMN */}
       <div className="w-[30%] flex-shrink-0 flex">
         <div className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
-          <div className="flex-shrink-0 sticky top-0 z-10 bg-tv-bg">
+          <div className="flex-shrink-0">
             {missionSelectorBlock}
           </div>
 

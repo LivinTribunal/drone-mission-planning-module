@@ -72,8 +72,11 @@ export interface MapFeatureWaypoint {
     seq_max?: number;
     alt_min?: number;
     alt_max?: number;
+    heading?: number | null;
+    speed?: number | null;
     camera_action?: string | null;
     camera_target?: PointZ | null;
+    gimbal_pitch?: number | null;
   };
 }
 
@@ -131,6 +134,7 @@ export interface AirportMapProps {
   isHeadingDrawing?: boolean;
   onWaypointDrag?: (waypointId: string, newPosition: [number, number, number]) => void;
   onTransitInsert?: (position: [number, number, number], afterSequence: number) => void;
+  onTransitDelete?: (waypointId: string) => void;
   onInfraPointDrag?: (featureType: "agl" | "lha", featureId: string, newPosition: [number, number, number]) => void;
   zoomPercent?: number;
   onZoomChange?: (percent: number) => void;

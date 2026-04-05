@@ -52,6 +52,9 @@ export default function useMapTools(): MapToolsReturn {
         case "m":
           setActiveTool(MapTool.MEASURE);
           break;
+        case "h":
+          setActiveTool(MapTool.HEADING);
+          break;
         case "z":
           if (!e.ctrlKey && !e.metaKey) setActiveTool(MapTool.ZOOM);
           break;

@@ -173,3 +173,14 @@ export async function insertTransitWaypoint(
   );
   return res.data;
 }
+
+export async function deleteTransitWaypoint(
+  missionId: string,
+  waypointId: string,
+): Promise<FlightPlanResponse> {
+  /** delete a transit waypoint from the flight plan. */
+  const res = await client.delete(
+    `/missions/${missionId}/flight-plan/waypoints/${waypointId}`,
+  );
+  return res.data;
+}

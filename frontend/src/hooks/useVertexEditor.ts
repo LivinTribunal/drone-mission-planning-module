@@ -243,6 +243,9 @@ export default function useVertexEditor(
   const featureRef = useRef(feature);
   featureRef.current = feature;
 
+  // stable identity key - only re-init when the actual feature changes
+  const featureKey = feature ? `${feature.type}:${feature.data.id}` : null;
+
   const updateOverlay = useCallback(() => {
     /** sync vertex overlay to map source. */
     if (!map) return;
@@ -359,6 +362,7 @@ export default function useVertexEditor(
   }, []);
 
   useEffect(() => {
+    const feature = featureRef.current;
     if (!map || !feature || !isSelectTool) {
       if (map) clearSources(map);
       setIsEditing(false);
@@ -519,16 +523,20 @@ export default function useVertexEditor(
 
     return () => {
       cancelPoll?.();
+      if (dragRef.current) {
+        map.dragPan.enable();
+        dragRef.current = null;
+      }
       map.off("mousedown", handleMouseDown);
       map.off("mousemove", handleMouseMove);
       map.off("mouseup", handleMouseUp);
       map.off("dblclick", handleDblClick);
       document.removeEventListener("mouseup", handleMouseUp);
       clearSources(map);
-      dragRef.current = null;
       ghostRef.current = null;
     };
-  }, [map, feature, isSelectTool, updateOverlay, emitUpdate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, featureKey, isSelectTool, updateOverlay, emitUpdate]);
 
   useEffect(() => {
     return () => { if (map) removeSources(map); };

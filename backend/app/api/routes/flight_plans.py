@@ -98,5 +98,23 @@ def insert_transit_waypoint(
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
 
+@router.delete(
+    "/{mission_id}/flight-plan/waypoints/{waypoint_id}",
+    response_model=FlightPlanResponse,
+)
+def delete_transit_waypoint(
+    mission_id: UUID,
+    waypoint_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """delete a transit waypoint from the flight plan."""
+    try:
+        return flight_plan_service.delete_transit_waypoint(db, mission_id, waypoint_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except DomainError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
 # flight plans cascade-delete with the mission (FK ondelete=CASCADE)
 # and are replaced by the orchestrator on regeneration

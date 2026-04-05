@@ -122,6 +122,24 @@ export default function PoiInfoPanel({
                 />
               )}
               <CoordRows position={w.position} label={t("dashboard.poiCoordinates")} />
+              {w.heading != null && (
+                <InfoRow label={t("mission.config.heading")} value={`${w.heading.toFixed(1)}\u00B0`} />
+              )}
+              {w.speed != null && (
+                <InfoRow label={t("mission.config.speed")} value={`${w.speed} m/s`} />
+              )}
+              <InfoRow
+                label={t("mission.config.cameraAction")}
+                value={w.camera_action
+                  ? t(`map.cameraActionLabel.${w.camera_action}`, { defaultValue: w.camera_action })
+                  : "\u2014"}
+              />
+              {w.gimbal_pitch != null && (
+                <InfoRow label={t("mission.config.gimbalPitch")} value={`${w.gimbal_pitch.toFixed(1)}\u00B0`} />
+              )}
+              {w.camera_target && (
+                <CoordRows position={w.camera_target} label={t("map.cameraTarget")} />
+              )}
             </>
           );
         }
@@ -139,11 +157,20 @@ export default function PoiInfoPanel({
             ) : (
               <CoordRows position={w.position} label={t("dashboard.poiCoordinates")} />
             )}
-            {w.camera_action && (
-              <InfoRow
-                label={t("mission.config.cameraAction")}
-                value={t(`map.cameraActionLabel.${w.camera_action}`, { defaultValue: w.camera_action })}
-              />
+            {w.heading != null && (
+              <InfoRow label={t("mission.config.heading")} value={`${w.heading.toFixed(1)}\u00B0`} />
+            )}
+            {w.speed != null && (
+              <InfoRow label={t("mission.config.speed")} value={`${w.speed} m/s`} />
+            )}
+            <InfoRow
+              label={t("mission.config.cameraAction")}
+              value={w.camera_action
+                ? t(`map.cameraActionLabel.${w.camera_action}`, { defaultValue: w.camera_action })
+                : "\u2014"}
+            />
+            {w.gimbal_pitch != null && (
+              <InfoRow label={t("mission.config.gimbalPitch")} value={`${w.gimbal_pitch.toFixed(1)}\u00B0`} />
             )}
             {w.camera_target && (
               <CoordRows position={w.camera_target} label={t("map.cameraTarget")} />

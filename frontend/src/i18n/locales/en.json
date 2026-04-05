@@ -241,6 +241,7 @@
     "centroid": "Centroid",
     "cameraTarget": "Camera Target",
     "insertTransit": "Insert Transit Waypoint",
+    "deleteTransit": "Transit waypoint deleted",
     "cameraActionLabel": {
       "NONE": "None",
       "PHOTO_CAPTURE": "Photo Capture",
@@ -272,6 +273,7 @@
       "pan": "Pan the map (P)",
       "moveWaypoint": "Drag waypoints to new positions (W)",
       "measure": "Measure distances between points (M)",
+      "heading": "Measure heading between two points (H)",
       "zoom": "Left click zoom in, right click zoom out (Z)",
       "zoomReset": "Fit all waypoints in view (R)",
       "2d": "Flat map view",
