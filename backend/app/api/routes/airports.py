@@ -152,6 +152,7 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
         TERRAIN_DIR.mkdir(parents=True, exist_ok=True)
         final_path = TERRAIN_DIR / f"{airport_id}.tif"
         shutil.move(tmp_path, str(final_path))
+        tmp_path = str(final_path)
 
         airport_service.upload_terrain_dem(db, airport_id, str(final_path), bounds, [res_x, res_y])
 

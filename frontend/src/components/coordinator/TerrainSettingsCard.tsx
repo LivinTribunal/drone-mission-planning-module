@@ -92,13 +92,14 @@ export default function TerrainSettingsCard({
     }
   }
 
-  function handleRadioChange(source: TerrainSource) {
+  async function handleRadioChange(source: TerrainSource) {
     /** handle radio selection change. */
-    setSelected(source);
     setError(null);
 
     if (source === "FLAT" && airport.terrain_source === "DEM") {
-      handleRemove();
+      await handleRemove();
+    } else {
+      setSelected(source);
     }
   }
 

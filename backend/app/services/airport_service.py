@@ -459,9 +459,14 @@ def _get_airport_lonlat(airport: Airport) -> tuple[float, float]:
 
         parsed = parse_ewkb(loc.data)
         coords = parsed.get("coordinates", [])
+        if len(coords) < 2:
+            raise DomainError("airport location is missing coordinates", status_code=400)
         return coords[0], coords[1]
 
-    return loc.get("coordinates", [0, 0])[0], loc.get("coordinates", [0, 0])[1]
+    coords = loc.get("coordinates", [])
+    if len(coords) < 2:
+        raise DomainError("airport location is missing coordinates", status_code=400)
+    return coords[0], coords[1]
 
 
 def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
@@ -537,7 +542,10 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
                 )
                 resp.raise_for_status()
                 results = resp.json().get("results", [])
-                all_elevations.extend(r.get("elevation", 0) for r in results)
+                all_elevations.extend(
+                    r.get("elevation") if r.get("elevation") is not None else airport.elevation
+                    for r in results
+                )
     except DomainError:
         raise
     except Exception as e:
