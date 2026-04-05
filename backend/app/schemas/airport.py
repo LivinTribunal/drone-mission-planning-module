@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, computed_field
@@ -66,7 +67,7 @@ class BulkChangeDroneRequest(BaseModel):
 
     drone_profile_id: UUID
     from_drone_id: UUID | None = None
-    scope: str = "ALL_DRAFT"
+    scope: Literal["ALL_DRAFT", "SELECTED"] = "ALL_DRAFT"
     mission_ids: list[UUID] = []
 
 

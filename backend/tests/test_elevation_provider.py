@@ -775,28 +775,15 @@ def _make_mock_http(response_data=None, side_effect=None):
     return mock_http
 
 
-class TestDownloadTerrainFromApi:
-    """tests for download_terrain_from_api with mocked HTTP and rasterio."""
+class TestDownloadTerrainForLocation:
+    """tests for download_terrain_for_location with mocked HTTP and rasterio."""
 
-    def _make_mock_airport(self):
-        """create a mock airport with location dict."""
-        airport = MagicMock()
-        airport.id = "test-airport-id"
-        airport.elevation = 300.0
-        airport.terrain_source = "FLAT"
-        airport.dem_file_path = None
-        airport.location = {"type": "Point", "coordinates": [14.26, 50.1, 300.0]}
-        return airport
-
-    def _run_download(self, mock_settings, mock_http, airport, mock_upload=None, tmp_path=None):
-        """run download_terrain_from_api with all necessary mocks."""
+    def _run_download(self, mock_settings, mock_http, tmp_path=None, fallback_elevation=300.0):
+        """run download_terrain_for_location with all necessary mocks."""
         import sys
 
         mock_np = _mock_numpy()
         mock_rio = _mock_rasterio()
-
-        mock_db = MagicMock()
-        mock_db.expunge = MagicMock()
 
         mock_terrain_dir = MagicMock()
         if tmp_path:
@@ -804,8 +791,6 @@ class TestDownloadTerrainFromApi:
         mock_terrain_dir.mkdir = MagicMock()
 
         patches = [
-            patch("app.services.airport_service.get_airport", return_value=airport),
-            patch("app.services.airport_service.get_airport_lonlat", return_value=(14.26, 50.1)),
             patch("app.services.airport_service.TERRAIN_DIR", mock_terrain_dir),
             patch.dict(
                 sys.modules,
@@ -814,8 +799,6 @@ class TestDownloadTerrainFromApi:
             patch("app.core.config.settings", mock_settings),
             patch("httpx.Client", return_value=mock_http),
         ]
-        if mock_upload is not None:
-            patches.append(patch("app.services.airport_service.upload_terrain_dem", mock_upload))
 
         from contextlib import ExitStack
 
@@ -823,24 +806,26 @@ class TestDownloadTerrainFromApi:
             for p in patches:
                 stack.enter_context(p)
 
-            from app.services.airport_service import download_terrain_from_api
+            from app.services.airport_service import download_terrain_for_location
 
-            return download_terrain_from_api(mock_db, "test-airport-id")
+            return download_terrain_for_location(
+                airport_id="test-airport-id",
+                apt_lon=14.26,
+                apt_lat=50.1,
+                fallback_elevation=fallback_elevation,
+            )
 
-    @patch("app.services.airport_service.upload_terrain_dem")
-    def test_successful_download(self, mock_upload, tmp_path):
-        """successful API download creates GeoTIFF and calls upload_terrain_dem."""
-        airport = self._make_mock_airport()
+    def test_successful_download(self, tmp_path):
+        """successful API download creates GeoTIFF and returns file metadata."""
         mock_settings = _make_download_settings()
         mock_http = _make_mock_http({"results": [{"elevation": 310.0} for _ in range(9)]})
 
-        result = self._run_download(mock_settings, mock_http, airport, mock_upload, tmp_path)
+        result = self._run_download(mock_settings, mock_http, tmp_path)
 
         assert result["terrain_source"] == "DEM_API"
         assert result["points_downloaded"] > 0
         assert len(result["bounds"]) == 4
-        mock_upload.assert_called_once()
-        assert mock_upload.call_args.kwargs["terrain_source"] == "DEM_API"
+        assert "file_path" in result
 
     def test_timeout_raises_domain_error(self, tmp_path):
         """download that exceeds timeout raises DomainError with 504."""
@@ -850,11 +835,8 @@ class TestDownloadTerrainFromApi:
 
         from app.core.exceptions import DomainError
 
-        airport = self._make_mock_airport()
         mock_settings = _make_download_settings(timeout=0.0)
         mock_http = _make_mock_http()
-        mock_db = MagicMock()
-        mock_db.expunge = MagicMock()
 
         mock_np = _mock_numpy()
         mock_rio = _mock_rasterio()
@@ -864,12 +846,6 @@ class TestDownloadTerrainFromApi:
         from contextlib import ExitStack
 
         with ExitStack() as stack:
-            stack.enter_context(
-                patch("app.services.airport_service.get_airport", return_value=airport)
-            )
-            stack.enter_context(
-                patch("app.services.airport_service.get_airport_lonlat", return_value=(14.26, 50.1))
-            )
             stack.enter_context(patch("app.services.airport_service.TERRAIN_DIR", mock_terrain_dir))
             stack.enter_context(
                 patch.dict(
@@ -885,10 +861,15 @@ class TestDownloadTerrainFromApi:
             stack.enter_context(patch("httpx.Client", return_value=mock_http))
             stack.enter_context(patch("time.monotonic", side_effect=[0.0, 1.0]))
 
-            from app.services.airport_service import download_terrain_from_api
+            from app.services.airport_service import download_terrain_for_location
 
             with pytest.raises(DomainError, match="timed out"):
-                download_terrain_from_api(mock_db, "test-airport-id")
+                download_terrain_for_location(
+                    airport_id="test-airport-id",
+                    apt_lon=14.26,
+                    apt_lat=50.1,
+                    fallback_elevation=300.0,
+                )
 
     def test_http_error_raises_domain_error(self, tmp_path):
         """HTTP error from API raises DomainError with 502."""
@@ -899,11 +880,8 @@ class TestDownloadTerrainFromApi:
 
         from app.core.exceptions import DomainError
 
-        airport = self._make_mock_airport()
         mock_settings = _make_download_settings()
         mock_http = _make_mock_http(side_effect=httpx.ConnectError("connection refused"))
-        mock_db = MagicMock()
-        mock_db.expunge = MagicMock()
 
         mock_np = _mock_numpy()
         mock_rio = _mock_rasterio()
@@ -913,12 +891,6 @@ class TestDownloadTerrainFromApi:
         from contextlib import ExitStack
 
         with ExitStack() as stack:
-            stack.enter_context(
-                patch("app.services.airport_service.get_airport", return_value=airport)
-            )
-            stack.enter_context(
-                patch("app.services.airport_service.get_airport_lonlat", return_value=(14.26, 50.1))
-            )
             stack.enter_context(patch("app.services.airport_service.TERRAIN_DIR", mock_terrain_dir))
             stack.enter_context(
                 patch.dict(
@@ -933,27 +905,28 @@ class TestDownloadTerrainFromApi:
             stack.enter_context(patch("app.core.config.settings", mock_settings))
             stack.enter_context(patch("httpx.Client", return_value=mock_http))
 
-            from app.services.airport_service import download_terrain_from_api
+            from app.services.airport_service import download_terrain_for_location
 
             with pytest.raises(DomainError, match="API request failed"):
-                download_terrain_from_api(mock_db, "test-airport-id")
+                download_terrain_for_location(
+                    airport_id="test-airport-id",
+                    apt_lon=14.26,
+                    apt_lat=50.1,
+                    fallback_elevation=300.0,
+                )
 
-    @patch("app.services.airport_service.upload_terrain_dem")
-    def test_short_batch_response_still_succeeds(self, mock_upload, tmp_path):
+    def test_short_batch_response_still_succeeds(self, tmp_path):
         """short batch response logs warning but doesn't fail."""
-        airport = self._make_mock_airport()
         mock_settings = _make_download_settings()
         mock_http = _make_mock_http({"results": [{"elevation": 300.0}]})
 
-        result = self._run_download(mock_settings, mock_http, airport, mock_upload, tmp_path)
+        result = self._run_download(mock_settings, mock_http, tmp_path)
 
         assert result["terrain_source"] == "DEM_API"
         assert result["points_downloaded"] == 1
 
-    @patch("app.services.airport_service.upload_terrain_dem")
-    def test_non_numeric_elevation_uses_fallback(self, mock_upload, tmp_path):
-        """non-numeric elevation value from API falls back to airport elevation."""
-        airport = self._make_mock_airport()
+    def test_non_numeric_elevation_uses_fallback(self, tmp_path):
+        """non-numeric elevation value from API falls back to fallback elevation."""
         mock_settings = _make_download_settings()
         mock_http = _make_mock_http(
             {
@@ -966,7 +939,7 @@ class TestDownloadTerrainFromApi:
             }
         )
 
-        result = self._run_download(mock_settings, mock_http, airport, mock_upload, tmp_path)
+        result = self._run_download(mock_settings, mock_http, tmp_path)
 
         # 4 results: 1 valid + 3 fallbacks
         assert result["points_downloaded"] == 4

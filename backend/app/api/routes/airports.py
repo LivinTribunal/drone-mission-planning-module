@@ -225,15 +225,44 @@ def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
 async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db)):
     """download elevation data from Open-Elevation API and cache as GeoTIFF."""
     import asyncio
+    from functools import partial
+
+    # read airport data in the async context where the session lives
+    airport = airport_service.get_airport(db, airport_id)
+    apt_lon, apt_lat = airport_service.get_airport_lonlat(airport)
 
     loop = asyncio.get_running_loop()
 
     try:
         result = await loop.run_in_executor(
-            None, airport_service.download_terrain_from_api, db, airport_id
+            None,
+            partial(
+                airport_service.download_terrain_for_location,
+                airport_id=airport_id,
+                apt_lon=apt_lon,
+                apt_lat=apt_lat,
+                fallback_elevation=airport.elevation,
+            ),
         )
     except DomainError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    # persist terrain data back in the async context with the original session
+    try:
+        airport_service.upload_terrain_dem(
+            db,
+            airport_id,
+            result["file_path"],
+            result["bounds"],
+            result["resolution"],
+            terrain_source="DEM_API",
+        )
+    except Exception:
+        import os
+
+        if os.path.exists(result["file_path"]):
+            os.unlink(result["file_path"])
+        raise
 
     return TerrainDownloadResponse(
         terrain_source=result["terrain_source"],

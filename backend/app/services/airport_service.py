@@ -214,7 +214,7 @@ def bulk_change_drone(
             query = query.filter(Mission.drone_profile_id == from_drone_id)
         draft_missions = query.all()
         for mission in draft_missions:
-            mission.drone_profile_id = drone_profile_id
+            mission.change_drone_profile(drone_profile_id)
             updated_ids.append(mission.id)
 
     db.commit()
@@ -580,8 +580,17 @@ def get_airport_lonlat(airport: Airport) -> tuple[float, float]:
     return coords[0], coords[1]
 
 
-def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
-    """download elevation data from open-elevation API and cache as geotiff."""
+def download_terrain_for_location(
+    airport_id: UUID,
+    apt_lon: float,
+    apt_lat: float,
+    fallback_elevation: float,
+) -> dict:
+    """download elevation data from open-elevation API and cache as geotiff.
+
+    session-free - safe to call from a thread pool executor.
+    returns file metadata dict; caller is responsible for persisting to db.
+    """
     import time
 
     try:
@@ -597,11 +606,6 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
     import httpx
 
     from app.core.config import settings
-
-    # fetch airport data then release from session before long HTTP calls
-    airport = get_airport(db, airport_id)
-    apt_lon, apt_lat = get_airport_lonlat(airport)
-    db.expunge(airport)
 
     delta_deg = settings.terrain_grid_delta_deg
     min_lon = apt_lon - delta_deg
@@ -668,9 +672,9 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
                         try:
                             all_elevations.append(float(raw))
                         except (TypeError, ValueError):
-                            all_elevations.append(airport.elevation)
+                            all_elevations.append(fallback_elevation)
                     else:
-                        all_elevations.append(airport.elevation)
+                        all_elevations.append(fallback_elevation)
     except DomainError:
         raise
     except Exception as e:
@@ -709,23 +713,10 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
     ) as dst:
         dst.write(data, 1)
 
-    try:
-        upload_terrain_dem(
-            db,
-            airport_id,
-            str(final_path),
-            [min_lon, min_lat, max_lon, max_lat],
-            [step, step],
-            terrain_source="DEM_API",
-        )
-    except Exception:
-        if final_path.exists():
-            final_path.unlink()
-        raise
-
     return {
         "terrain_source": "DEM_API",
         "points_downloaded": len(all_elevations),
         "bounds": [min_lon, min_lat, max_lon, max_lat],
         "resolution": [step, step],
+        "file_path": str(final_path),
     }
