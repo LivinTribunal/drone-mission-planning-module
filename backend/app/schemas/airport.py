@@ -30,6 +30,7 @@ class AirportUpdate(BaseModel):
     country: str | None = None
     elevation: float | None = None
     location: PointZ | None = None
+    default_drone_profile_id: str | None = None
 
 
 class AirportResponse(BaseModel):
@@ -42,8 +43,28 @@ class AirportResponse(BaseModel):
     country: str | None = None
     elevation: float
     location: PointZ
+    default_drone_profile_id: UUID | None = None
 
     model_config = {"from_attributes": True}
+
+
+class SetDefaultDroneRequest(BaseModel):
+    """request to set or clear the default drone for an airport."""
+
+    drone_profile_id: str | None = None
+
+
+class BulkChangeDroneRequest(BaseModel):
+    """request to bulk-change drone profile on draft missions."""
+
+    drone_profile_id: str
+
+
+class BulkChangeDroneResponse(BaseModel):
+    """response for bulk drone change operation."""
+
+    updated_count: int
+    mission_ids: list[str]
 
 
 class AirportDetailResponse(AirportResponse):

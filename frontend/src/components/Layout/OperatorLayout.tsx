@@ -11,6 +11,7 @@ export default function OperatorLayout() {
     { label: t("nav.dashboard"), to: "/operator-center/dashboard" },
     { label: t("nav.missions"), to: "/operator-center/missions" },
     { label: t("nav.airport"), to: "/operator-center/airport" },
+    { label: t("nav.drones"), to: "/operator-center/drones" },
     { label: t("nav.results"), to: "#", disabled: true },
   ];
 

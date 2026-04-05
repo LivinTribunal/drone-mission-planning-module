@@ -14,7 +14,7 @@ export interface NavItem {
 
 interface NavBarProps {
   items: NavItem[];
-  role: "operator" | "coordinator";
+  role: "operator" | "coordinator" | "admin";
 }
 
 export default function NavBar({ items, role }: NavBarProps) {
@@ -47,7 +47,7 @@ export default function NavBar({ items, role }: NavBarProps) {
 
   return (
     <nav
-      className="flex items-center px-4 py-5 bg-tv-bg"
+      className={`flex items-center px-4 py-5 bg-tv-bg nav-role-${role}`}
       data-testid="navbar"
     >
       {/* left section - 30% */}
@@ -55,9 +55,11 @@ export default function NavBar({ items, role }: NavBarProps) {
         <div className="flex-1 overflow-hidden" style={{ scrollbarGutter: "stable" }}>
           <NavLink
             to={
-              role === "operator"
-                ? "/operator-center/dashboard"
-                : "/coordinator-center/airports"
+              role === "admin"
+                ? "/super-admin/users"
+                : role === "operator"
+                  ? "/operator-center/dashboard"
+                  : "/coordinator-center/airports"
             }
             className="flex w-full items-center justify-center gap-2 rounded-full bg-tv-surface px-4 h-11"
           >
@@ -69,7 +71,13 @@ export default function NavBar({ items, role }: NavBarProps) {
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
             <span className="text-sm font-semibold text-tv-text-primary">
-              {t(role === "coordinator" ? "common.appTitleCoordinator" : "common.appTitle")}
+              {t(
+                role === "admin"
+                  ? "common.appTitleAdmin"
+                  : role === "coordinator"
+                    ? "common.appTitleCoordinator"
+                    : "common.appTitle",
+              )}
             </span>
           </NavLink>
         </div>
@@ -103,8 +111,8 @@ export default function NavBar({ items, role }: NavBarProps) {
           })}
         </div>
 
-        {/* airport selector */}
-        <AirportSelector />
+        {/* airport selector - hidden for admin */}
+        {role !== "admin" && <AirportSelector />}
 
         {/* theme toggle */}
         <div className="flex items-center gap-1 rounded-full bg-tv-surface p-1 h-11">
@@ -188,6 +196,30 @@ export default function NavBar({ items, role }: NavBarProps) {
                 </button>
               )}
               {role === "coordinator" && (
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate("/operator-center/dashboard");
+                  }}
+                  className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
+                    text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                >
+                  {t("nav.missionCenter")}
+                </button>
+              )}
+              {role !== "admin" && hasCoordinatorRole && (
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate("/super-admin/users");
+                  }}
+                  className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
+                    text-tv-error hover:bg-tv-surface-hover transition-colors"
+                >
+                  {t("nav.superAdmin")}
+                </button>
+              )}
+              {role === "admin" && (
                 <button
                   onClick={() => {
                     setUserMenuOpen(false);

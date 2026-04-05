@@ -20,7 +20,11 @@ class Airport(Base):
     country = Column(String(100))
     elevation = Column(Float, nullable=False)
     location = Column(Geometry("POINTZ", srid=4326), nullable=False)
+    default_drone_profile_id = Column(
+        UUID, ForeignKey("drone_profile.id", ondelete="SET NULL"), nullable=True
+    )
 
+    default_drone_profile = relationship("DroneProfile", foreign_keys=[default_drone_profile_id])
     surfaces = relationship(
         "AirfieldSurface", back_populates="airport", cascade="all, delete-orphan"
     )

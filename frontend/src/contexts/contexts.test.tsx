@@ -33,6 +33,7 @@ const MOCK_AIRPORT = {
   country: null,
   elevation: 133,
   location: { type: "Point" as const, coordinates: [17.21, 48.17, 133] as [number, number, number] },
+  default_drone_profile_id: null,
 };
 
 beforeEach(() => {

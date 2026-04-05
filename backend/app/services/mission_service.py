@@ -103,7 +103,13 @@ def create_mission(db: Session, schema: MissionCreate) -> Mission:
         if not drone:
             raise DomainError("drone profile not found")
 
-    mission = Mission(**schema_to_model_data(schema))
+    data = schema_to_model_data(schema)
+
+    # auto-fill from airport default when no drone specified
+    if not data.get("drone_profile_id") and airport.default_drone_profile_id:
+        data["drone_profile_id"] = airport.default_drone_profile_id
+
+    mission = Mission(**data)
     db.add(mission)
     db.commit()
     db.refresh(mission)

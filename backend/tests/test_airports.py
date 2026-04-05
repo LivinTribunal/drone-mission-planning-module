@@ -8,6 +8,7 @@ from tests.data.airports import (
     SURFACE_PAYLOAD,
     THROWAWAY_AIRPORT_PAYLOAD,
 )
+from tests.data.drones import DRONE_PAYLOAD
 
 
 # Tests
@@ -153,3 +154,113 @@ def test_delete_airport(client):
 
     r = client.get(f"/api/v1/airports/{airport_id}")
     assert r.status_code == 404
+
+
+def test_set_default_drone(client):
+    """set and clear default drone on an airport."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZDD"},
+    ).json()
+
+    drone = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "Default Drone Test"},
+    ).json()
+
+    # set default
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/default-drone",
+        json={"drone_profile_id": drone["id"]},
+    )
+    assert r.status_code == 200
+    assert r.json()["default_drone_profile_id"] == drone["id"]
+
+    # verify on detail
+    detail = client.get(f"/api/v1/airports/{apt['id']}").json()
+    assert detail["default_drone_profile_id"] == drone["id"]
+
+    # clear default
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/default-drone",
+        json={"drone_profile_id": None},
+    )
+    assert r.status_code == 200
+    assert r.json()["default_drone_profile_id"] is None
+
+
+def test_set_default_drone_invalid_profile(client):
+    """setting a nonexistent drone profile returns 400."""
+    airports = client.get("/api/v1/airports").json()["data"]
+    airport_id = airports[0]["id"]
+
+    r = client.put(
+        f"/api/v1/airports/{airport_id}/default-drone",
+        json={"drone_profile_id": "00000000-0000-0000-0000-000000000000"},
+    )
+    assert r.status_code == 400
+
+
+def test_bulk_change_drone(client):
+    """bulk change drone on draft missions at an airport."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZBC"},
+    ).json()
+
+    drone1 = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "Bulk Drone 1"},
+    ).json()
+    drone2 = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "Bulk Drone 2"},
+    ).json()
+
+    # create two draft missions
+    m1 = client.post(
+        "/api/v1/missions",
+        json={"name": "BulkTest1", "airport_id": apt["id"], "drone_profile_id": drone1["id"]},
+    ).json()
+    m2 = client.post(
+        "/api/v1/missions",
+        json={"name": "BulkTest2", "airport_id": apt["id"], "drone_profile_id": drone1["id"]},
+    ).json()
+
+    # bulk change to drone2
+    r = client.post(
+        f"/api/v1/airports/{apt['id']}/bulk-change-drone",
+        json={"drone_profile_id": drone2["id"]},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["updated_count"] == 2
+    assert m1["id"] in body["mission_ids"]
+    assert m2["id"] in body["mission_ids"]
+
+
+def test_mission_auto_fills_default_drone(client):
+    """mission creation auto-fills drone from airport default."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZAF"},
+    ).json()
+
+    drone = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "AutoFill Drone"},
+    ).json()
+
+    # set default drone
+    client.put(
+        f"/api/v1/airports/{apt['id']}/default-drone",
+        json={"drone_profile_id": drone["id"]},
+    )
+
+    # create mission without specifying drone
+    r = client.post(
+        "/api/v1/missions",
+        json={"name": "AutoFillTest", "airport_id": apt["id"]},
+    )
+    assert r.status_code == 201
+    assert r.json()["drone_profile_id"] == drone["id"]

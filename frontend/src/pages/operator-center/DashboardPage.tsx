@@ -801,6 +801,7 @@ function DashboardView() {
         isOpen={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
         airportId={selectedAirport.id}
+        defaultDroneProfileId={selectedAirport.default_drone_profile_id}
       />
     </div>
   );

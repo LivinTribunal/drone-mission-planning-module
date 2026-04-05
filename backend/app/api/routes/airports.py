@@ -11,6 +11,9 @@ from app.schemas.airport import (
     AirportResponse,
     AirportSummaryListResponse,
     AirportUpdate,
+    BulkChangeDroneRequest,
+    BulkChangeDroneResponse,
+    SetDefaultDroneRequest,
 )
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.infrastructure import (
@@ -81,6 +84,24 @@ def delete_airport(airport_id: UUID, db: Session = Depends(get_db)):
     airport_service.delete_airport(db, airport_id)
 
     return DeleteResponse(deleted=True)
+
+
+@router.put("/{airport_id}/default-drone", response_model=AirportResponse)
+def set_default_drone(
+    airport_id: UUID, body: SetDefaultDroneRequest, db: Session = Depends(get_db)
+):
+    """set or clear the default drone profile for an airport."""
+    return airport_service.set_default_drone(db, airport_id, body.drone_profile_id)
+
+
+@router.post("/{airport_id}/bulk-change-drone", response_model=BulkChangeDroneResponse)
+def bulk_change_drone(
+    airport_id: UUID, body: BulkChangeDroneRequest, db: Session = Depends(get_db)
+):
+    """change drone profile on all draft missions at an airport."""
+    count, ids = airport_service.bulk_change_drone(db, airport_id, body.drone_profile_id)
+
+    return BulkChangeDroneResponse(updated_count=count, mission_ids=ids)
 
 
 # ground surfaces

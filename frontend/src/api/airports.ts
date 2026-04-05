@@ -5,6 +5,7 @@ import type {
   AirportDetailResponse,
   AirportCreate,
   AirportUpdate,
+  BulkChangeDroneResponse,
   SurfaceResponse,
   SurfaceCreate,
   SurfaceUpdate,
@@ -61,6 +62,26 @@ export async function updateAirport(
 
 export async function deleteAirport(id: string): Promise<DeleteResponse> {
   const res = await client.delete(`/airports/${id}`);
+  return res.data;
+}
+
+export async function setDefaultDrone(
+  airportId: string,
+  droneProfileId: string | null,
+): Promise<AirportResponse> {
+  const res = await client.put(`/airports/${airportId}/default-drone`, {
+    drone_profile_id: droneProfileId,
+  });
+  return res.data;
+}
+
+export async function bulkChangeDrone(
+  airportId: string,
+  droneProfileId: string,
+): Promise<BulkChangeDroneResponse> {
+  const res = await client.post(`/airports/${airportId}/bulk-change-drone`, {
+    drone_profile_id: droneProfileId,
+  });
   return res.data;
 }
 

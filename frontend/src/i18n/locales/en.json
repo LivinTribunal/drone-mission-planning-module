@@ -2,6 +2,7 @@
   "common": {
     "appTitle": "TarmacView Mission Control Center",
     "appTitleCoordinator": "TarmacView Coordinator Center",
+    "appTitleAdmin": "TarmacView Super Admin",
     "loading": "Loading...",
     "noResults": "No results found",
     "retry": "Retry",
@@ -33,6 +34,9 @@
     "airports": "Airports",
     "inspections": "Inspections",
     "drones": "Drones",
+    "superAdmin": "Super Admin",
+    "users": "Users",
+    "system": "System",
     "chooseAirport": "Choose a airport",
     "searchAirports": "Search airports...",
     "selectAirport": "Select an airport to get started"
@@ -1010,6 +1014,23 @@
     "invalidFileType": "Only .glb and .gltf files are supported",
     "addModel": "Add model",
     "noModelAssigned": "No model"
+  },
+  "operatorDrones": {
+    "title": "Drone Profiles",
+    "setDefault": "Set as Default",
+    "removeDefault": "Remove Default",
+    "defaultBadge": "Default",
+    "bulkChange": "Bulk Change Drone",
+    "bulkChangeConfirm": "Change drone for draft missions at {{airport}}?",
+    "bulkChangeSuccess": "Updated {{count}} missions",
+    "noMissions": "No draft missions to update",
+    "viewMissions": "View Missions",
+    "missionsUsing": "{{count}} missions using this drone"
+  },
+  "superAdmin": {
+    "usersPlaceholder": "User management will be available here",
+    "airportsPlaceholder": "Airport assignment will be available here",
+    "systemPlaceholder": "System settings will be available here"
   },
   "languages": {
     "en": "English"

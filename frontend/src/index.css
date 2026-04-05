@@ -176,6 +176,19 @@ body {
   margin-right: 14px;
 }
 
+/* role-based nav accent colors */
+.nav-role-operator {
+  --tv-nav-active-bg: var(--tv-accent);
+}
+
+.nav-role-coordinator {
+  --tv-nav-active-bg: var(--tv-warning);
+}
+
+.nav-role-admin {
+  --tv-nav-active-bg: var(--tv-error);
+}
+
 @keyframes pulse-ring {
   0% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.5); }

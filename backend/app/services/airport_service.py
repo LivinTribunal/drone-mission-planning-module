@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
-from app.models.mission import Mission
+from app.models.mission import DroneProfile, Mission
 from app.models.value_objects import IcaoCode
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
 from app.schemas.infrastructure import (
@@ -139,6 +139,50 @@ def delete_airport(db: Session, airport_id: UUID):
 
     db.delete(airport)
     db.commit()
+
+
+def set_default_drone(db: Session, airport_id: UUID, drone_profile_id: str | None) -> Airport:
+    """set or clear the default drone profile for an airport."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
+    if drone_profile_id:
+        drone = db.query(DroneProfile).filter(DroneProfile.id == drone_profile_id).first()
+        if not drone:
+            raise DomainError("drone profile not found")
+
+    airport.default_drone_profile_id = drone_profile_id
+    db.commit()
+    db.refresh(airport)
+
+    return airport
+
+
+def bulk_change_drone(
+    db: Session, airport_id: UUID, drone_profile_id: str
+) -> tuple[int, list[str]]:
+    """change drone profile on all draft missions at an airport."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
+    drone = db.query(DroneProfile).filter(DroneProfile.id == drone_profile_id).first()
+    if not drone:
+        raise DomainError("drone profile not found")
+
+    draft_missions = (
+        db.query(Mission).filter(Mission.airport_id == airport_id, Mission.status == "DRAFT").all()
+    )
+
+    mission_ids = []
+    for mission in draft_missions:
+        mission.drone_profile_id = drone_profile_id
+        mission_ids.append(str(mission.id))
+
+    db.commit()
+
+    return len(mission_ids), mission_ids
 
 
 # surfaces

@@ -15,6 +15,7 @@ export interface AirportResponse {
   country: string | null;
   elevation: number;
   location: PointZ;
+  default_drone_profile_id: string | null;
 }
 
 export interface AirportSummaryResponse extends AirportResponse {
@@ -104,6 +105,12 @@ export interface AirportUpdate {
   country?: string | null;
   elevation?: number;
   location?: PointZ;
+  default_drone_profile_id?: string | null;
+}
+
+export interface BulkChangeDroneResponse {
+  updated_count: number;
+  mission_ids: string[];
 }
 
 export interface SurfaceCreate {
