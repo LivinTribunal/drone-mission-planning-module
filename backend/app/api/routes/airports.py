@@ -116,13 +116,19 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
     # save to temp file first for validation
     with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as tmp:
         tmp_path = tmp.name
-        size = 0
-        while chunk := await file.read(8192):
-            size += len(chunk)
-            if size > MAX_DEM_SIZE:
-                os.unlink(tmp_path)
-                raise HTTPException(status_code=400, detail="file exceeds 500MB limit")
-            tmp.write(chunk)
+        try:
+            size = 0
+            while chunk := await file.read(8192):
+                size += len(chunk)
+                if size > MAX_DEM_SIZE:
+                    os.unlink(tmp_path)
+                    raise HTTPException(status_code=400, detail="file exceeds 500MB limit")
+                tmp.write(chunk)
+        except HTTPException:
+            raise
+        except Exception:
+            os.unlink(tmp_path)
+            raise HTTPException(status_code=400, detail="upload stream interrupted")
 
     try:
         # validate with rasterio
@@ -133,16 +139,7 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
 
             # validate coverage of airport location
             airport = airport_service.get_airport(db, airport_id)
-            loc = airport.location
-            if hasattr(loc, "data"):
-                from app.schemas.geometry import parse_ewkb
-
-                parsed = parse_ewkb(loc.data)
-                coords = parsed.get("coordinates", [])
-                apt_lon, apt_lat = coords[0], coords[1]
-            else:
-                apt_lon = loc.get("coordinates", [0, 0])[0]
-                apt_lat = loc.get("coordinates", [0, 0])[1]
+            apt_lon, apt_lat = airport_service.get_airport_lonlat(airport)
 
             # check if airport point is within DEM bounds
             if not (bounds[0] <= apt_lon <= bounds[2] and bounds[1] <= apt_lat <= bounds[3]):
@@ -195,12 +192,16 @@ def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{airport_id}/terrain-download", response_model=TerrainDownloadResponse)
-def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db)):
+async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db)):
     """download elevation data from Open-Elevation API and cache as GeoTIFF."""
-    from app.core.exceptions import DomainError
+    import asyncio
+
+    loop = asyncio.get_event_loop()
 
     try:
-        result = airport_service.download_terrain_from_api(db, airport_id)
+        result = await loop.run_in_executor(
+            None, airport_service.download_terrain_from_api, db, airport_id
+        )
     except DomainError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 

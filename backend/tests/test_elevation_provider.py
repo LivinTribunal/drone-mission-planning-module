@@ -581,6 +581,92 @@ class TestCreateElevationProviderDEM:
             assert provider.elevation == 300.0
 
 
+class TestDEMCloseIdempotency:
+    """tests for close() being safe to call multiple times."""
+
+    def test_double_close_no_error(self):
+        """calling close() twice does not raise."""
+        mock_dataset = MagicMock()
+        provider = _make_dem_provider(mock_dataset)
+
+        provider.close()
+        provider.close()
+
+        # dataset.close() called only once - second call sees _dataset=None
+        mock_dataset.close.assert_called_once()
+
+    def test_close_sets_dataset_none(self):
+        """close() sets _dataset to None."""
+        mock_dataset = MagicMock()
+        provider = _make_dem_provider(mock_dataset)
+
+        provider.close()
+        assert provider._dataset is None
+
+    def test_context_manager_then_explicit_close(self):
+        """context manager close followed by explicit close is safe."""
+        mock_dataset = MagicMock()
+        provider = _make_dem_provider(mock_dataset)
+
+        with provider:
+            pass
+
+        # explicit close after context manager should not raise
+        provider.close()
+        mock_dataset.close.assert_called_once()
+
+    def test_close_without_dataset_attr(self):
+        """close() handles missing _dataset attribute gracefully."""
+        provider = object.__new__(DEMElevationProvider)
+        provider.fallback_elevation = 0.0
+        provider.file_path = "/fake/path.tif"
+        # _dataset never set - simulates __init__ failure
+
+        # should not raise
+        provider.close()
+
+
+class TestGetAirportLonlat:
+    """tests for airport location extraction helper."""
+
+    def test_extracts_from_dict_location(self):
+        """extracts lon, lat from dict-style location."""
+        from app.services.airport_service import get_airport_lonlat
+
+        airport = MagicMock()
+        airport.location = {"type": "Point", "coordinates": [14.26, 50.1, 300.0]}
+
+        lon, lat = get_airport_lonlat(airport)
+        assert lon == 14.26
+        assert lat == 50.1
+
+    def test_raises_on_empty_coordinates(self):
+        """raises DomainError when coordinates list is empty."""
+        import pytest
+
+        from app.core.exceptions import DomainError
+        from app.services.airport_service import get_airport_lonlat
+
+        airport = MagicMock()
+        airport.location = {"type": "Point", "coordinates": []}
+
+        with pytest.raises(DomainError, match="missing coordinates"):
+            get_airport_lonlat(airport)
+
+    def test_raises_on_single_coordinate(self):
+        """raises DomainError when only one coordinate is present."""
+        import pytest
+
+        from app.core.exceptions import DomainError
+        from app.services.airport_service import get_airport_lonlat
+
+        airport = MagicMock()
+        airport.location = {"type": "Point", "coordinates": [14.26]}
+
+        with pytest.raises(DomainError, match="missing coordinates"):
+            get_airport_lonlat(airport)
+
+
 class TestAirportTerrainFields:
     """tests for airport terrain source and DEM path fields."""
 

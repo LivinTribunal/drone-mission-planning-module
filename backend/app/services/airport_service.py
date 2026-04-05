@@ -451,7 +451,7 @@ def delete_terrain_dem(db: Session, airport_id: UUID) -> Airport:
     return airport
 
 
-def _get_airport_lonlat(airport: Airport) -> tuple[float, float]:
+def get_airport_lonlat(airport: Airport) -> tuple[float, float]:
     """extract lon, lat from airport location geometry."""
     loc = airport.location
     if hasattr(loc, "data"):
@@ -489,7 +489,7 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
 
     # fetch airport data then release from session before long HTTP calls
     airport = get_airport(db, airport_id)
-    apt_lon, apt_lat = _get_airport_lonlat(airport)
+    apt_lon, apt_lat = get_airport_lonlat(airport)
     db.expunge(airport)
 
     # 5km bounding box around airport (~0.045 degrees)

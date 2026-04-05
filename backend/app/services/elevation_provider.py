@@ -113,10 +113,6 @@ class DEMElevationProvider(ElevationProvider):
         self.close()
         return False
 
-    def __del__(self):
-        """cleanup on garbage collection."""
-        self.close()
-
 
 def create_elevation_provider(airport) -> ElevationProvider:
     """select provider based on airport terrain source config."""
