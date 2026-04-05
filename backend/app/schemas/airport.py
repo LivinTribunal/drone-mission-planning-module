@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
@@ -45,7 +45,13 @@ class AirportResponse(BaseModel):
     elevation: float
     location: PointZ
     terrain_source: str = "FLAT"
-    dem_file_path: str | None = None
+    dem_file_path: str | None = Field(default=None, exclude=True)
+
+    @computed_field
+    @property
+    def has_dem(self) -> bool:
+        """whether the airport has a DEM file configured."""
+        return self.dem_file_path is not None
 
     model_config = {"from_attributes": True}
 

@@ -97,6 +97,15 @@ class DEMElevationProvider(ElevationProvider):
         if hasattr(self, "_dataset") and self._dataset:
             self._dataset.close()
 
+    def __enter__(self):
+        """support use as context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """close dataset on context exit."""
+        self.close()
+        return False
+
     def __del__(self):
         """cleanup on garbage collection."""
         self.close()

@@ -94,7 +94,7 @@ def delete_airport(airport_id: UUID, db: Session = Depends(get_db)):
 
 
 # terrain DEM
-TERRAIN_DIR = Path("data/terrain")
+TERRAIN_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "terrain"
 MAX_DEM_SIZE = 500 * 1024 * 1024  # 500MB
 
 
@@ -186,121 +186,19 @@ def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
 @router.post("/{airport_id}/terrain-download", response_model=TerrainDownloadResponse)
 def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db)):
     """download elevation data from Open-Elevation API and cache as GeoTIFF."""
-    try:
-        import numpy as np
-        import rasterio
-        from rasterio.transform import from_bounds
-    except ImportError:
-        raise HTTPException(
-            status_code=501,
-            detail="rasterio/numpy not installed - terrain download not available",
-        )
-
-    import httpx
-
-    airport = airport_service.get_airport(db, airport_id)
-    loc = airport.location
-    if hasattr(loc, "data"):
-        from app.schemas.geometry import parse_ewkb
-
-        parsed = parse_ewkb(loc.data)
-        coords = parsed.get("coordinates", [])
-        apt_lon, apt_lat = coords[0], coords[1]
-    else:
-        apt_lon = loc.get("coordinates", [0, 0])[0]
-        apt_lat = loc.get("coordinates", [0, 0])[1]
-
-    # 5km bounding box around airport (~0.045 degrees)
-    delta_deg = 0.045
-    min_lon = apt_lon - delta_deg
-    max_lon = apt_lon + delta_deg
-    min_lat = apt_lat - delta_deg
-    max_lat = apt_lat + delta_deg
-
-    # grid at ~30m spacing (~0.00027 degrees)
-    step = 0.00027
-    lats = []
-    lons = []
-    lat = min_lat
-    while lat <= max_lat:
-        lats.append(lat)
-        lat += step
-    lon = min_lon
-    while lon <= max_lon:
-        lons.append(lon)
-        lon += step
-
-    # build locations for API query
-    locations = []
-    for la in lats:
-        for lo in lons:
-            locations.append({"latitude": round(la, 6), "longitude": round(lo, 6)})
-
-    # batch query Open-Elevation API
-    batch_size = 2000
-    all_elevations = []
+    from app.core.exceptions import DomainError
 
     try:
-        with httpx.Client(timeout=60.0) as http_client:
-            for i in range(0, len(locations), batch_size):
-                batch = locations[i : i + batch_size]
-                resp = http_client.post(
-                    "https://api.open-elevation.com/api/v1/lookup",
-                    json={"locations": batch},
-                )
-                resp.raise_for_status()
-                results = resp.json().get("results", [])
-                all_elevations.extend(r.get("elevation", 0) for r in results)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Open-Elevation API request failed: {e}")
-
-    # build GeoTIFF raster
-    height = len(lats)
-    width = len(lons)
-    data = np.full((height, width), -9999, dtype=np.float32)
-
-    idx = 0
-    for row in range(height):
-        for col in range(width):
-            if idx < len(all_elevations):
-                data[row][col] = all_elevations[idx]
-            idx += 1
-
-    # flip rows - raster origin is top-left
-    data = np.flipud(data)
-
-    TERRAIN_DIR.mkdir(parents=True, exist_ok=True)
-    final_path = TERRAIN_DIR / f"{airport_id}_api_cache.tif"
-
-    transform = from_bounds(min_lon, min_lat, max_lon, max_lat, width, height)
-    with rasterio.open(
-        str(final_path),
-        "w",
-        driver="GTiff",
-        height=height,
-        width=width,
-        count=1,
-        dtype="float32",
-        crs="EPSG:4326",
-        transform=transform,
-        nodata=-9999,
-    ) as dst:
-        dst.write(data, 1)
-
-    airport_service.upload_terrain_dem(
-        db,
-        airport_id,
-        str(final_path),
-        [min_lon, min_lat, max_lon, max_lat],
-        [step, step],
-    )
+        result = airport_service.download_terrain_from_api(db, airport_id)
+    except DomainError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
 
     return TerrainDownloadResponse(
-        terrain_source="DEM",
-        points_downloaded=len(all_elevations),
+        terrain_source=result["terrain_source"],
+        points_downloaded=result["points_downloaded"],
         coverage=TerrainCoverage(
-            bounds=[min_lon, min_lat, max_lon, max_lat],
-            resolution=[step, step],
+            bounds=result["bounds"],
+            resolution=result["resolution"],
         ),
     )
 

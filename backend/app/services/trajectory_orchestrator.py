@@ -190,6 +190,17 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
 
     # phase 1 - load all data
     data = _load_mission_data(db, mission_id)
+    provider = data.elevation_provider
+
+    try:
+        return _generate_trajectory_inner(db, data)
+    finally:
+        if hasattr(provider, "close"):
+            provider.close()
+
+
+def _generate_trajectory_inner(db: Session, data: MissionData) -> tuple[FlightPlan, list[str]]:
+    """inner trajectory generation - separated for resource cleanup."""
     mission = data.mission
     drone = data.drone
     default_speed = data.default_speed

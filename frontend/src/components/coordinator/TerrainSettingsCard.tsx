@@ -24,17 +24,14 @@ export default function TerrainSettingsCard({
   const [collapsed, setCollapsed] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coverage, setCoverage] = useState<TerrainCoverage | null>(null);
   const [pointsDownloaded, setPointsDownloaded] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentSource: TerrainSource =
-    airport.terrain_source === "DEM"
-      ? airport.dem_file_path?.includes("api_cache")
-        ? "DEM_DOWNLOAD"
-        : "DEM_UPLOAD"
-      : "FLAT";
+    airport.terrain_source === "DEM" && airport.has_dem ? "DEM_UPLOAD" : "FLAT";
 
   const [selected, setSelected] = useState<TerrainSource>(currentSource);
 
@@ -69,7 +66,7 @@ export default function TerrainSettingsCard({
       onUpdate();
     } catch (e: unknown) {
       const msg =
-        e instanceof Error ? e.message : t("coordinator.terrain.downloadSuccess");
+        e instanceof Error ? e.message : t("coordinator.terrain.downloadFailed");
       setError(msg);
     } finally {
       setDownloading(false);
@@ -78,6 +75,8 @@ export default function TerrainSettingsCard({
 
   async function handleRemove() {
     /** remove DEM and revert to flat terrain. */
+    if (removing) return;
+    setRemoving(true);
     setError(null);
     try {
       await deleteTerrainDEM(airport.id);
@@ -86,8 +85,10 @@ export default function TerrainSettingsCard({
       setSelected("FLAT");
       onUpdate();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to remove terrain data";
+      const msg = e instanceof Error ? e.message : t("coordinator.terrain.removeFailed");
       setError(msg);
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -180,8 +181,7 @@ export default function TerrainSettingsCard({
                   if (file) handleFileUpload(file);
                 }}
               />
-              {airport.terrain_source === "DEM" &&
-              !airport.dem_file_path?.includes("api_cache") ? (
+              {airport.terrain_source === "DEM" && airport.has_dem ? (
                 <button
                   onClick={handleRemove}
                   className="flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-medium text-tv-error border border-tv-error/30 hover:bg-tv-error/10"
@@ -228,8 +228,7 @@ export default function TerrainSettingsCard({
 
           {selected === "DEM_DOWNLOAD" && (
             <div className="ml-5 flex flex-col gap-1.5">
-              {airport.terrain_source === "DEM" &&
-              airport.dem_file_path?.includes("api_cache") ? (
+              {airport.terrain_source === "DEM" && airport.has_dem ? (
                 <button
                   onClick={handleRemove}
                   className="flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-medium text-tv-error border border-tv-error/30 hover:bg-tv-error/10"

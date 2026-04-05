@@ -34,7 +34,7 @@ const MOCK_AIRPORT = {
   elevation: 133,
   location: { type: "Point" as const, coordinates: [17.21, 48.17, 133] as [number, number, number] },
   terrain_source: "FLAT",
-  dem_file_path: null,
+  has_dem: false,
 };
 
 beforeEach(() => {

@@ -290,7 +290,7 @@ class TestAirportTerrainFields:
     """tests for airport terrain source and DEM path fields."""
 
     def test_airport_response_includes_terrain_fields(self, client):
-        """airport response includes terrain_source and dem_file_path."""
+        """airport response includes terrain_source and has_dem."""
         from tests.data.airports import AIRPORT_PAYLOAD
 
         r = client.post(
@@ -300,7 +300,8 @@ class TestAirportTerrainFields:
         assert r.status_code == 201
         data = r.json()
         assert data["terrain_source"] == "FLAT"
-        assert data["dem_file_path"] is None
+        assert data["has_dem"] is False
+        assert "dem_file_path" not in data
 
     def test_airport_detail_includes_terrain_fields(self, client):
         """airport detail includes terrain fields."""
@@ -312,7 +313,8 @@ class TestAirportTerrainFields:
         assert r.status_code == 200
         data = r.json()
         assert "terrain_source" in data
-        assert "dem_file_path" in data
+        assert "has_dem" in data
+        assert "dem_file_path" not in data
 
     def test_delete_terrain_dem_resets_to_flat(self, client):
         """delete terrain DEM resets airport to flat."""
@@ -330,4 +332,4 @@ class TestAirportTerrainFields:
 
         r = client.get(f"/api/v1/airports/{airport_id}")
         assert r.json()["terrain_source"] == "FLAT"
-        assert r.json()["dem_file_path"] is None
+        assert r.json()["has_dem"] is False

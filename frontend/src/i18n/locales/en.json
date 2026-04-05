@@ -607,6 +607,8 @@
       "invalidFile": "Invalid GeoTIFF file",
       "uploadSuccess": "DEM uploaded successfully",
       "downloadSuccess": "Elevation data downloaded successfully",
+      "downloadFailed": "Failed to download elevation data",
+      "removeFailed": "Failed to remove terrain data",
       "coverageWarning": "DEM does not cover airport location"
     },
     "inspectionTemplates": "Inspection Templates",

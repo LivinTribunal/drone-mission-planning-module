@@ -16,7 +16,7 @@ export interface AirportResponse {
   elevation: number;
   location: PointZ;
   terrain_source: string;
-  dem_file_path: string | null;
+  has_dem: boolean;
 }
 
 export interface AirportSummaryResponse extends AirportResponse {
