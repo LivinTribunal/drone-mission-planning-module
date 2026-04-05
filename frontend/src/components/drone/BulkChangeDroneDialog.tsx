@@ -39,6 +39,7 @@ export default function BulkChangeDroneDialog({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const otherDrones = allDrones.filter((d) => d.id !== currentDroneId);
 
@@ -63,6 +64,7 @@ export default function BulkChangeDroneDialog({
       setTab("ALL_DRAFT");
       setTargetDroneId("");
       setSelectedIds(new Set());
+      setError(null);
     }
   }, [isOpen, fetchMissions]);
 
@@ -80,6 +82,7 @@ export default function BulkChangeDroneDialog({
   async function handleSubmit() {
     if (!targetDroneId) return;
     setSubmitting(true);
+    setError(null);
     try {
       const result = await bulkChangeDrone(airportId, targetDroneId, {
         fromDroneId: currentDroneId,
@@ -89,10 +92,9 @@ export default function BulkChangeDroneDialog({
       onSuccess(result.updated_count, result.regressed_count);
       onClose();
     } catch (err) {
-      console.error(
-        "bulk change failed:",
-        err instanceof Error ? err.message : String(err),
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("bulk change failed:", msg);
+      setError(t("operatorDrones.bulkChangeError", { defaultValue: msg }));
     } finally {
       setSubmitting(false);
     }
@@ -241,6 +243,10 @@ export default function BulkChangeDroneDialog({
                 to: targetDroneName,
               })}
             </p>
+          )}
+
+          {error && (
+            <p className="text-sm text-tv-error mb-4">{error}</p>
           )}
 
           {/* actions */}

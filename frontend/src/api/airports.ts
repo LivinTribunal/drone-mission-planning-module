@@ -106,7 +106,6 @@ export async function uploadTerrainDEM(
   const res = await client.post(
     `/airports/${airportId}/terrain-dem`,
     formData,
-    { headers: { "Content-Type": "multipart/form-data" } },
   );
   return res.data;
 }

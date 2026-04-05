@@ -44,7 +44,7 @@ class AirportResponse(BaseModel):
     elevation: float
     location: PointZ
     default_drone_profile_id: UUID | None = None
-    terrain_source: str = "FLAT"  # FLAT | DEM_UPLOAD | DEM_API
+    terrain_source: Literal["FLAT", "DEM_UPLOAD", "DEM_API"] = "FLAT"
     dem_file_path: str | None = Field(default=None, exclude=True)
 
     @computed_field
@@ -112,20 +112,20 @@ class AirportSummaryListResponse(BaseModel):
 class TerrainCoverage(BaseModel):
     """terrain DEM coverage info."""
 
-    bounds: list[float]
-    resolution: list[float]
+    bounds: tuple[float, float, float, float]
+    resolution: tuple[float, float]
 
 
 class TerrainUploadResponse(BaseModel):
     """response after uploading a DEM file."""
 
-    terrain_source: str
+    terrain_source: Literal["FLAT", "DEM_UPLOAD", "DEM_API"]
     coverage: TerrainCoverage
 
 
 class TerrainDownloadResponse(BaseModel):
     """response after downloading elevation data from API."""
 
-    terrain_source: str
+    terrain_source: Literal["FLAT", "DEM_UPLOAD", "DEM_API"]
     points_downloaded: int
     coverage: TerrainCoverage

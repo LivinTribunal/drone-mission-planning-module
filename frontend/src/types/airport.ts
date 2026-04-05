@@ -16,7 +16,7 @@ export interface AirportResponse {
   elevation: number;
   location: PointZ;
   default_drone_profile_id: string | null;
-  terrain_source: string;
+  terrain_source: "FLAT" | "DEM_UPLOAD" | "DEM_API";
   has_dem: boolean;
 }
 
@@ -116,17 +116,17 @@ export interface BulkChangeDroneResponse {
 }
 
 export interface TerrainCoverage {
-  bounds: number[];
-  resolution: number[];
+  bounds: [number, number, number, number];
+  resolution: [number, number];
 }
 
 export interface TerrainUploadResponse {
-  terrain_source: string;
+  terrain_source: "FLAT" | "DEM_UPLOAD" | "DEM_API";
   coverage: TerrainCoverage;
 }
 
 export interface TerrainDownloadResponse {
-  terrain_source: string;
+  terrain_source: "FLAT" | "DEM_UPLOAD" | "DEM_API";
   points_downloaded: number;
   coverage: TerrainCoverage;
 }

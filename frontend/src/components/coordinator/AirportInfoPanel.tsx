@@ -95,7 +95,14 @@ export default function AirportInfoPanel({
             label={t("coordinator.detail.airportElevation")}
             type="number"
             value={String(form.elevation)}
-            onChange={(e) => handleChange("elevation", e.target.value === "" ? null : parseFloat(e.target.value))}
+            onChange={(e) => {
+              if (e.target.value === "") {
+                handleChange("elevation", null);
+              } else {
+                const parsed = parseFloat(e.target.value);
+                if (!isNaN(parsed)) handleChange("elevation", parsed);
+              }
+            }}
             className="!px-3 !py-1.5 !text-xs"
           />
         </div>

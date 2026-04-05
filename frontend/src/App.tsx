@@ -76,7 +76,7 @@ function App() {
         </Route>
 
         {/* super admin */}
-        <Route element={<ProtectedRoute requiredRole="COORDINATOR" />}>
+        <Route element={<ProtectedRoute requiredRole="SUPER_ADMIN" />}>
           <Route element={<SuperAdminLayout />}>
             <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
             <Route path="/super-admin/airports" element={<SuperAdminAirportsPage />} />

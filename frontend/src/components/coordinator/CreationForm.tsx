@@ -180,7 +180,7 @@ export default function CreationForm({
         if (obstacleHeight) data.height = parseFloat(obstacleHeight);
         data.radius = bufferRadius ? parseFloat(bufferRadius) : 0;
         if (circleCenter) data.center = circleCenter;
-        if (pointPosition) data.center = pointPosition;
+        else if (pointPosition) data.center = pointPosition;
       }
 
       if (effectiveEntityType === "agl") {
