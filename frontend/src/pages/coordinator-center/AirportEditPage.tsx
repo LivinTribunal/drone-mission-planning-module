@@ -33,6 +33,7 @@ import LegendPanel from "@/components/map/overlays/LegendPanel";
 import InfrastructureListPanel from "@/components/coordinator/InfrastructureListPanel";
 import CoordinatorAGLPanel from "@/components/coordinator/CoordinatorAGLPanel";
 import AirportInfoPanel from "@/components/coordinator/AirportInfoPanel";
+import TerrainSettingsCard from "@/components/coordinator/TerrainSettingsCard";
 import EditableFeatureInfo from "@/components/coordinator/EditableFeatureInfo";
 import CreationForm from "@/components/coordinator/CreationForm";
 import type { PendingGeometryType } from "@/components/coordinator/CreationForm";
@@ -1112,6 +1113,10 @@ export default function AirportEditPage() {
             <AirportInfoPanel
               airport={airport}
               onUpdate={handleAirportUpdate}
+            />
+            <TerrainSettingsCard
+              airport={airport}
+              onUpdate={() => fetchAirport()}
             />
             {/* creation form or feature editor */}
             {(pendingGeometry || pendingPointPosition) ? (

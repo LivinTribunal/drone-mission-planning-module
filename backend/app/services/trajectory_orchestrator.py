@@ -13,6 +13,7 @@ from app.models.inspection import Inspection, InspectionTemplate
 from app.models.mission import Mission
 from app.models.value_objects import Coordinate
 from app.schemas.geometry import parse_ewkb
+from app.services.elevation_provider import create_elevation_provider
 from app.services.flight_plan_service import persist_flight_plan
 from app.services.safety_validator import (
     check_battery,
@@ -43,6 +44,7 @@ from app.services.trajectory_types import (
     DEFAULT_SPEED,
     MIN_ARC_RADIUS,
     MIN_SPEED_FLOOR,
+    MINIMUM_AGL_ALTITUDE,
     VERTICAL_POSITION_TOLERANCE_DEG,
     InspectionPass,
     MissionData,
@@ -118,6 +120,8 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     # operator must re-attach constraints after regeneration if needed
     constraints: list[ConstraintRule] = []
 
+    provider = create_elevation_provider(airport)
+
     return MissionData(
         mission=mission,
         airport=airport,
@@ -127,6 +131,7 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
         surfaces=surfaces,
         constraints=constraints,
         default_speed=mission.default_speed or DEFAULT_SPEED,
+        elevation_provider=provider,
     )
 
 
@@ -199,6 +204,17 @@ def generate_trajectory(
 
     # phase 1 - load all data
     data = _load_mission_data(db, mission_id)
+    provider = data.elevation_provider
+
+    try:
+        return _generate_trajectory_inner(db, data)
+    finally:
+        if hasattr(provider, "close"):
+            provider.close()
+
+
+def _generate_trajectory_inner(db: Session, data: MissionData) -> tuple[FlightPlan, list[str]]:
+    """inner trajectory generation - separated for resource cleanup."""
     mission = data.mission
     drone = data.drone
     default_speed = data.default_speed
@@ -352,14 +368,28 @@ def generate_trajectory(
         # phase 3 - compute waypoints
         try:
             pass_wps = compute_measurement_trajectory(
-                inspection, config, center, rwy_heading, glide_slope, speed, setting_angles
+                inspection,
+                config,
+                center,
+                rwy_heading,
+                glide_slope,
+                speed,
+                setting_angles,
+                elevation_provider=data.elevation_provider,
             )
         except ValueError as e:
             raise TrajectoryGenerationError(str(e))
 
         # phase 3 - validate and reroute
         violations = validate_inspection_pass(
-            db, pass_wps, drone, data.constraints, data.obstacles, data.safety_zones, data.surfaces
+            db,
+            pass_wps,
+            drone,
+            data.constraints,
+            data.obstacles,
+            data.safety_zones,
+            data.surfaces,
+            elevation_provider=data.elevation_provider,
         )
 
         obstacle_violations = [
@@ -380,6 +410,7 @@ def generate_trajectory(
                 data.obstacles,
                 data.safety_zones,
                 data.surfaces,
+                elevation_provider=data.elevation_provider,
             )
 
         hard = [v for v in violations if not v.is_warning]
@@ -460,17 +491,27 @@ def generate_trajectory(
     # phase 5 - final assembly with A* transit
     all_waypoints: list[WaypointData] = []
 
+    # terrain helper
+    provider = data.elevation_provider
+
     # takeoff + climb to safe altitude before transit
     if mission.takeoff_coordinate:
         tc = _parse_coordinate(mission.takeoff_coordinate.data, "takeoff")
         if not inspection_passes[0].waypoints:
             raise TrajectoryGenerationError("first inspection produced no waypoints")
         first_wp = inspection_passes[0].waypoints[0]
+
+        # clamp takeoff alt to terrain + minimum AGL
+        takeoff_alt = tc[2]
+        if provider:
+            ground = provider.get_elevation(tc[1], tc[0])
+            takeoff_alt = max(takeoff_alt, ground + MINIMUM_AGL_ALTITUDE)
+
         all_waypoints.append(
             WaypointData(
                 lon=tc[0],
                 lat=tc[1],
-                alt=tc[2],
+                alt=takeoff_alt,
                 heading=bearing_between(tc[0], tc[1], first_wp.lon, first_wp.lat),
                 speed=default_speed,
                 waypoint_type=WaypointType.TAKEOFF,
@@ -478,7 +519,7 @@ def generate_trajectory(
             )
         )
 
-        safe_alt = tc[2] + settings.takeoff_safe_altitude
+        safe_alt = takeoff_alt + settings.takeoff_safe_altitude
         all_waypoints.append(
             WaypointData(
                 lon=tc[0],
@@ -507,6 +548,7 @@ def generate_trajectory(
                 data.safety_zones,
                 default_speed,
                 data.surfaces,
+                elevation_provider=provider,
             )
             all_waypoints.extend(transit_wps)
 
@@ -516,7 +558,13 @@ def generate_trajectory(
     if mission.landing_coordinate:
         lc = _parse_coordinate(mission.landing_coordinate.data, "landing")
 
-        safe_alt = lc[2] + settings.landing_safe_altitude
+        # clamp landing alt to terrain + minimum AGL
+        landing_alt = lc[2]
+        if provider:
+            ground = provider.get_elevation(lc[1], lc[0])
+            landing_alt = max(landing_alt, ground + MINIMUM_AGL_ALTITUDE)
+
+        safe_alt = landing_alt + settings.landing_safe_altitude
         last = all_waypoints[-1]
         from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)
         above_landing = Point3D(lon=lc[0], lat=lc[1], alt=safe_alt)
@@ -530,6 +578,7 @@ def generate_trajectory(
             data.safety_zones,
             default_speed,
             data.surfaces,
+            elevation_provider=provider,
         )
         all_waypoints.extend(landing_transit)
 
@@ -538,7 +587,7 @@ def generate_trajectory(
             WaypointData(
                 lon=lc[0],
                 lat=lc[1],
-                alt=lc[2],
+                alt=landing_alt,
                 heading=all_waypoints[-1].heading,
                 speed=default_speed,
                 waypoint_type=WaypointType.LANDING,
@@ -641,6 +690,7 @@ def generate_trajectory(
         data.obstacles,
         data.safety_zones,
         data.surfaces,
+        elevation_provider=provider,
     )
     final_hard = [v for v in final_violations if not v.is_warning]
     if final_hard:

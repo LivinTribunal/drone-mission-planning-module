@@ -1,8 +1,10 @@
+import logging
 from uuid import UUID
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import TERRAIN_DIR
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
@@ -22,6 +24,8 @@ from app.schemas.infrastructure import (
     SurfaceUpdate,
 )
 from app.services.geometry_converter import apply_schema_update, schema_to_model_data
+
+logger = logging.getLogger(__name__)
 
 
 # airports
@@ -513,3 +517,215 @@ def delete_lha(db: Session, surface_id: UUID, agl_id: UUID, lha_id: UUID):
 
     db.delete(lha)
     db.commit()
+
+
+# terrain
+def upload_terrain_dem(
+    db: Session,
+    airport_id: UUID,
+    file_path: str,
+    coverage_bounds: list[float],
+    coverage_resolution: list[float],
+    terrain_source: str = "DEM_UPLOAD",
+) -> Airport:
+    """set airport terrain source after file upload or API download."""
+    import os
+
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
+    # clean up old DEM file if switching to a different path
+    old_path = airport.dem_file_path
+    if old_path and old_path != file_path and os.path.exists(old_path):
+        os.unlink(old_path)
+
+    airport.terrain_source = terrain_source
+    airport.dem_file_path = file_path
+    db.commit()
+    db.refresh(airport)
+
+    return airport
+
+
+def delete_terrain_dem(db: Session, airport_id: UUID) -> Airport:
+    """reset airport terrain source to FLAT and remove DEM path."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
+    airport.terrain_source = "FLAT"
+    airport.dem_file_path = None
+    db.commit()
+    db.refresh(airport)
+
+    return airport
+
+
+def get_airport_lonlat(airport: Airport) -> tuple[float, float]:
+    """extract lon, lat from airport location geometry."""
+    loc = airport.location
+    if hasattr(loc, "data"):
+        from app.schemas.geometry import parse_ewkb
+
+        parsed = parse_ewkb(loc.data)
+        coords = parsed.get("coordinates", [])
+        if len(coords) < 2:
+            raise DomainError("airport location is missing coordinates", status_code=400)
+        return coords[0], coords[1]
+
+    coords = loc.get("coordinates", [])
+    if len(coords) < 2:
+        raise DomainError("airport location is missing coordinates", status_code=400)
+    return coords[0], coords[1]
+
+
+def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
+    """download elevation data from open-elevation API and cache as geotiff."""
+    import time
+
+    try:
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_bounds
+    except ImportError as e:
+        raise DomainError(
+            "rasterio/numpy not installed - terrain download not available",
+            status_code=501,
+        ) from e
+
+    import httpx
+
+    from app.core.config import settings
+
+    # fetch airport data then release from session before long HTTP calls
+    airport = get_airport(db, airport_id)
+    apt_lon, apt_lat = get_airport_lonlat(airport)
+    db.expunge(airport)
+
+    delta_deg = settings.terrain_grid_delta_deg
+    min_lon = apt_lon - delta_deg
+    max_lon = apt_lon + delta_deg
+    min_lat = apt_lat - delta_deg
+    max_lat = apt_lat + delta_deg
+
+    step = settings.terrain_grid_step_deg
+    lats = []
+    lons = []
+    lat = min_lat
+    while lat <= max_lat:
+        lats.append(lat)
+        lat += step
+    lon = min_lon
+    while lon <= max_lon:
+        lons.append(lon)
+        lon += step
+
+    # build locations for API query
+    locations = []
+    for la in lats:
+        for lo in lons:
+            locations.append({"latitude": round(la, 6), "longitude": round(lo, 6)})
+
+    # batch query open-elevation API
+    batch_size = settings.terrain_api_batch_size
+    all_elevations = []
+    total_timeout = settings.terrain_download_timeout
+    start_time = time.monotonic()
+
+    try:
+        with httpx.Client() as http_client:
+            for i in range(0, len(locations), batch_size):
+                elapsed = time.monotonic() - start_time
+                remaining = total_timeout - elapsed
+                if remaining <= 0:
+                    raise DomainError(
+                        f"terrain download timed out after {elapsed:.0f}s "
+                        f"({len(all_elevations)}/{len(locations)} points)",
+                        status_code=504,
+                    )
+
+                batch = locations[i : i + batch_size]
+                batch_timeout = min(60.0, remaining)
+                resp = http_client.post(
+                    settings.open_elevation_url,
+                    json={"locations": batch},
+                    timeout=batch_timeout,
+                )
+                resp.raise_for_status()
+                results = resp.json().get("results", [])
+
+                if len(results) != len(batch):
+                    logger.warning(
+                        "short batch response (%d/%d) from elevation API",
+                        len(results),
+                        len(batch),
+                    )
+
+                for r in results:
+                    raw = r.get("elevation")
+                    if raw is not None:
+                        try:
+                            all_elevations.append(float(raw))
+                        except (TypeError, ValueError):
+                            all_elevations.append(airport.elevation)
+                    else:
+                        all_elevations.append(airport.elevation)
+    except DomainError:
+        raise
+    except Exception as e:
+        raise DomainError(f"Open-Elevation API request failed: {e}", status_code=502) from e
+
+    # build geotiff raster
+    height = len(lats)
+    width = len(lons)
+    data = np.full((height, width), -9999, dtype=np.float32)
+
+    idx = 0
+    for row in range(height):
+        for col in range(width):
+            if idx < len(all_elevations):
+                data[row][col] = all_elevations[idx]
+            idx += 1
+
+    # flip rows - raster origin is top-left
+    data = np.flipud(data)
+
+    TERRAIN_DIR.mkdir(parents=True, exist_ok=True)
+    final_path = TERRAIN_DIR / f"{airport_id}_api_cache.tif"
+
+    transform = from_bounds(min_lon, min_lat, max_lon, max_lat, width, height)
+    with rasterio.open(
+        str(final_path),
+        "w",
+        driver="GTiff",
+        height=height,
+        width=width,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=-9999,
+    ) as dst:
+        dst.write(data, 1)
+
+    try:
+        upload_terrain_dem(
+            db,
+            airport_id,
+            str(final_path),
+            [min_lon, min_lat, max_lon, max_lat],
+            [step, step],
+            terrain_source="DEM_API",
+        )
+    except Exception:
+        if final_path.exists():
+            final_path.unlink()
+        raise
+
+    return {
+        "terrain_source": "DEM_API",
+        "points_downloaded": len(all_elevations),
+        "bounds": [min_lon, min_lat, max_lon, max_lat],
+        "resolution": [step, step],
+    }

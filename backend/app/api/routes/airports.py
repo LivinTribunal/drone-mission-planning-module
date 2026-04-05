@@ -1,9 +1,15 @@
+import logging
+import os
+import shutil
+import tempfile
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from app.core.config import TERRAIN_DIR
 from app.core.dependencies import get_db
+from app.core.exceptions import DomainError, NotFoundError
 from app.schemas.airport import (
     AirportCreate,
     AirportDetailResponse,
@@ -14,6 +20,9 @@ from app.schemas.airport import (
     BulkChangeDroneRequest,
     BulkChangeDroneResponse,
     SetDefaultDroneRequest,
+    TerrainCoverage,
+    TerrainDownloadResponse,
+    TerrainUploadResponse,
 )
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.infrastructure import (
@@ -39,6 +48,8 @@ from app.schemas.infrastructure import (
     SurfaceUpdate,
 )
 from app.services import airport_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/airports", tags=["airports"])
 
@@ -108,8 +119,129 @@ def bulk_change_drone(
         mission_ids=body.mission_ids,
     )
 
-    return BulkChangeDroneResponse(
-        updated_count=count, regressed_count=regressed, mission_ids=ids
+    return BulkChangeDroneResponse(updated_count=count, regressed_count=regressed, mission_ids=ids)
+
+
+# terrain DEM
+MAX_DEM_SIZE = 500 * 1024 * 1024  # 500MB
+
+
+@router.post("/{airport_id}/terrain-dem", response_model=TerrainUploadResponse)
+async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends(get_db)):
+    """upload a GeoTIFF DEM file for terrain-following altitude."""
+    try:
+        import rasterio
+    except ImportError:
+        raise HTTPException(
+            status_code=501,
+            detail="rasterio not installed - DEM upload not available",
+        )
+
+    # validate file extension
+    if not file.filename or not file.filename.lower().endswith((".tif", ".tiff")):
+        raise HTTPException(status_code=400, detail="file must be a GeoTIFF (.tif/.tiff)")
+
+    # save to temp file first for validation
+    with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as tmp:
+        tmp_path = tmp.name
+        try:
+            size = 0
+            while chunk := await file.read(8192):
+                size += len(chunk)
+                if size > MAX_DEM_SIZE:
+                    os.unlink(tmp_path)
+                    raise HTTPException(status_code=400, detail="file exceeds 500MB limit")
+                tmp.write(chunk)
+        except HTTPException:
+            raise
+        except Exception:
+            os.unlink(tmp_path)
+            raise HTTPException(status_code=400, detail="upload stream interrupted")
+
+    try:
+        # validate with rasterio
+        with rasterio.open(tmp_path) as dataset:
+            bounds = list(dataset.bounds)
+            res_x = abs(dataset.transform.a)
+            res_y = abs(dataset.transform.e)
+
+            # validate coverage of airport location
+            airport = airport_service.get_airport(db, airport_id)
+            apt_lon, apt_lat = airport_service.get_airport_lonlat(airport)
+
+            # check if airport point is within DEM bounds
+            if not (bounds[0] <= apt_lon <= bounds[2] and bounds[1] <= apt_lat <= bounds[3]):
+                os.unlink(tmp_path)
+                raise HTTPException(status_code=400, detail="DEM does not cover airport location")
+
+        # move to final location
+        TERRAIN_DIR.mkdir(parents=True, exist_ok=True)
+        final_path = TERRAIN_DIR / f"{airport_id}.tif"
+        shutil.move(tmp_path, str(final_path))
+
+        # tmp was moved - cleanup now targets final_path
+        tmp_path = str(final_path)
+
+        airport_service.upload_terrain_dem(
+            db, airport_id, str(final_path), bounds, [res_x, res_y], terrain_source="DEM_UPLOAD"
+        )
+
+        return TerrainUploadResponse(
+            terrain_source="DEM_UPLOAD",
+            coverage=TerrainCoverage(bounds=bounds, resolution=[res_x, res_y]),
+        )
+
+    except HTTPException:
+        raise
+    except (NotFoundError, DomainError) as e:
+        # service layer error - file is valid but db operation failed
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        logger.exception("DEM upload service error")
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        logger.exception("DEM upload failed")
+        raise HTTPException(status_code=400, detail=f"invalid GeoTIFF file: {e}")
+
+
+@router.delete("/{airport_id}/terrain-dem", response_model=DeleteResponse)
+def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
+    """remove DEM file and revert airport to flat terrain."""
+    airport = airport_service.get_airport(db, airport_id)
+    old_dem_path = airport.dem_file_path
+
+    # db first - only delete file after commit succeeds
+    airport_service.delete_terrain_dem(db, airport_id)
+
+    if old_dem_path and os.path.exists(old_dem_path):
+        os.unlink(old_dem_path)
+
+    return DeleteResponse(deleted=True)
+
+
+@router.post("/{airport_id}/terrain-download", response_model=TerrainDownloadResponse)
+async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db)):
+    """download elevation data from Open-Elevation API and cache as GeoTIFF."""
+    import asyncio
+
+    loop = asyncio.get_running_loop()
+
+    try:
+        result = await loop.run_in_executor(
+            None, airport_service.download_terrain_from_api, db, airport_id
+        )
+    except DomainError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    return TerrainDownloadResponse(
+        terrain_source=result["terrain_source"],
+        points_downloaded=result["points_downloaded"],
+        coverage=TerrainCoverage(
+            bounds=result["bounds"],
+            resolution=result["resolution"],
+        ),
     )
 
 

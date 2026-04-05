@@ -16,6 +16,8 @@ export interface AirportResponse {
   elevation: number;
   location: PointZ;
   default_drone_profile_id: string | null;
+  terrain_source: string;
+  has_dem: boolean;
 }
 
 export interface AirportSummaryResponse extends AirportResponse {
@@ -111,6 +113,22 @@ export interface BulkChangeDroneResponse {
   updated_count: number;
   regressed_count: number;
   mission_ids: string[];
+}
+
+export interface TerrainCoverage {
+  bounds: number[];
+  resolution: number[];
+}
+
+export interface TerrainUploadResponse {
+  terrain_source: string;
+  coverage: TerrainCoverage;
+}
+
+export interface TerrainDownloadResponse {
+  terrain_source: string;
+  points_downloaded: number;
+  coverage: TerrainCoverage;
 }
 
 export interface SurfaceCreate {

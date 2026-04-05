@@ -21,6 +21,8 @@ import type {
   LHAResponse,
   LHACreate,
   LHAUpdate,
+  TerrainUploadResponse,
+  TerrainDownloadResponse,
 } from "@/types/airport";
 import client from "./client";
 
@@ -90,6 +92,36 @@ export async function bulkChangeDrone(
     scope: options?.scope ?? "ALL_DRAFT",
     mission_ids: options?.missionIds ?? [],
   });
+  return res.data;
+}
+
+// terrain
+
+export async function uploadTerrainDEM(
+  airportId: string,
+  file: File,
+): Promise<TerrainUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await client.post(
+    `/airports/${airportId}/terrain-dem`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return res.data;
+}
+
+export async function deleteTerrainDEM(
+  airportId: string,
+): Promise<DeleteResponse> {
+  const res = await client.delete(`/airports/${airportId}/terrain-dem`);
+  return res.data;
+}
+
+export async function downloadTerrainData(
+  airportId: string,
+): Promise<TerrainDownloadResponse> {
+  const res = await client.post(`/airports/${airportId}/terrain-download`);
   return res.data;
 }
 

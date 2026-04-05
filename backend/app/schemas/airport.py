@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
@@ -43,6 +43,14 @@ class AirportResponse(BaseModel):
     elevation: float
     location: PointZ
     default_drone_profile_id: UUID | None = None
+    terrain_source: str = "FLAT"  # FLAT | DEM_UPLOAD | DEM_API
+    dem_file_path: str | None = Field(default=None, exclude=True)
+
+    @computed_field
+    @property
+    def has_dem(self) -> bool:
+        """whether the airport has a DEM file configured."""
+        return self.dem_file_path is not None
 
     model_config = {"from_attributes": True}
 
@@ -98,3 +106,25 @@ class AirportSummaryListResponse(BaseModel):
 
     data: list[AirportSummaryResponse]
     meta: ListMeta
+
+
+class TerrainCoverage(BaseModel):
+    """terrain DEM coverage info."""
+
+    bounds: list[float]
+    resolution: list[float]
+
+
+class TerrainUploadResponse(BaseModel):
+    """response after uploading a DEM file."""
+
+    terrain_source: str
+    coverage: TerrainCoverage
+
+
+class TerrainDownloadResponse(BaseModel):
+    """response after downloading elevation data from API."""
+
+    terrain_source: str
+    points_downloaded: int
+    coverage: TerrainCoverage
