@@ -21,6 +21,10 @@ class Airport(Base):
     elevation = Column(Float, nullable=False)
     location = Column(Geometry("POINTZ", srid=4326), nullable=False)
 
+    # terrain source config
+    terrain_source = Column(String(20), nullable=False, default="FLAT")
+    dem_file_path = Column(String, nullable=True)
+
     surfaces = relationship(
         "AirfieldSurface", back_populates="airport", cascade="all, delete-orphan"
     )
