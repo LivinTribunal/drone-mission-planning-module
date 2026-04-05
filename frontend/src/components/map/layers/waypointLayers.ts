@@ -641,14 +641,22 @@ export function updateWarningHighlightFilter(
   map: MaplibreMap,
   waypointIds?: string[],
   severity?: string,
+  simplified?: boolean,
 ): void {
   const color = SEVERITY_COLORS[severity ?? "warning"] ?? SEVERITY_COLORS.warning;
 
   try {
-    // full waypoint circle highlight
+    // full waypoint circle highlight - in simplified mode only show on transit points
     if (map.getLayer(WAYPOINT_WARNING_HIGHLIGHT_LAYER)) {
       if (!waypointIds || waypointIds.length === 0) {
         map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "id"], ""]);
+      } else if (simplified) {
+        map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, [
+          "all",
+          ["in", ["get", "id"], ["literal", waypointIds]],
+          ["in", ["get", "waypoint_type"], ["literal", ["TRANSIT", "TAKEOFF", "LANDING"]]],
+        ]);
+        map.setPaintProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "circle-stroke-color", color);
       } else {
         map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, [
           "in",
@@ -668,8 +676,9 @@ export function updateWarningHighlightFilter(
       if (!waypointIds || waypointIds.length === 0) {
         map.setFilter(SIMPLIFIED_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "fromId"], ""]);
       } else {
+        // both endpoints must be affected to highlight the segment
         map.setFilter(SIMPLIFIED_WARNING_HIGHLIGHT_LAYER, [
-          "any",
+          "all",
           ["in", ["get", "fromId"], ["literal", waypointIds]],
           ["in", ["get", "toId"], ["literal", waypointIds]],
         ]);

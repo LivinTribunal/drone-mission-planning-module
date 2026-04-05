@@ -1320,7 +1320,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    updateWarningHighlightFilter(map, highlightedWaypointIds, highlightSeverity);
+    updateWarningHighlightFilter(map, highlightedWaypointIds, highlightSeverity, simplifiedTrajectory);
 
     // fly to highlighted waypoints
     if (!highlightedWaypointIds || highlightedWaypointIds.length === 0) return;
@@ -1339,7 +1339,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         { padding: 100, duration: 800 },
       );
     }
-  }, [highlightedWaypointIds, highlightSeverity]);
+  }, [highlightedWaypointIds, highlightSeverity, simplifiedTrajectory]);
 
   // cursor and hover effects - only for SELECT tool
   useEffect(() => {
