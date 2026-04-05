@@ -39,6 +39,7 @@ TRAJECTORY_FIELDS = {
     "default_altitude_offset",
     "takeoff_coordinate",
     "landing_coordinate",
+    "default_capture_mode",
 }
 
 

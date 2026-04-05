@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { MapPin, ChevronDown, ChevronRight, Play, Square } from "lucide-react";
+import { MapPin, ChevronDown, Play, Square } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { WaypointResponse } from "@/types/flightPlan";
 import type { PointZ } from "@/types/common";
