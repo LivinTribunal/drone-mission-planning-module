@@ -118,7 +118,7 @@ def create_elevation_provider(airport) -> ElevationProvider:
     """select provider based on airport terrain source config."""
     terrain_source = getattr(airport, "terrain_source", "FLAT") or "FLAT"
 
-    if terrain_source == "DEM":
+    if terrain_source in ("DEM", "DEM_UPLOAD", "DEM_API"):
         dem_path = getattr(airport, "dem_file_path", None)
         if dem_path:
             try:

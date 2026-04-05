@@ -154,10 +154,12 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
         # tmp was moved - cleanup now targets final_path
         tmp_path = str(final_path)
 
-        airport_service.upload_terrain_dem(db, airport_id, str(final_path), bounds, [res_x, res_y])
+        airport_service.upload_terrain_dem(
+            db, airport_id, str(final_path), bounds, [res_x, res_y], terrain_source="DEM_UPLOAD"
+        )
 
         return TerrainUploadResponse(
-            terrain_source="DEM",
+            terrain_source="DEM_UPLOAD",
             coverage=TerrainCoverage(bounds=bounds, resolution=[res_x, res_y]),
         )
 
@@ -196,7 +198,7 @@ async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db))
     """download elevation data from Open-Elevation API and cache as GeoTIFF."""
     import asyncio
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     try:
         result = await loop.run_in_executor(

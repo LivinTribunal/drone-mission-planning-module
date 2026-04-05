@@ -31,7 +31,11 @@ export default function TerrainSettingsCard({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentSource: TerrainSource =
-    airport.terrain_source === "DEM" && airport.has_dem ? "DEM_UPLOAD" : "FLAT";
+    airport.terrain_source === "DEM_API"
+      ? "DEM_DOWNLOAD"
+      : airport.terrain_source === "DEM_UPLOAD" && airport.has_dem
+        ? "DEM_UPLOAD"
+        : "FLAT";
 
   const [selected, setSelected] = useState<TerrainSource>(currentSource);
 
@@ -102,7 +106,7 @@ export default function TerrainSettingsCard({
     /** handle radio selection change. */
     setError(null);
 
-    if (source === "FLAT" && airport.terrain_source === "DEM") {
+    if (source === "FLAT" && airport.has_dem) {
       await handleRemove();
     } else {
       setSelected(source);
@@ -188,7 +192,7 @@ export default function TerrainSettingsCard({
                   if (file) handleFileUpload(file);
                 }}
               />
-              {airport.terrain_source === "DEM" && airport.has_dem ? (
+              {airport.has_dem ? (
                 <button
                   onClick={handleRemove}
                   className="flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-medium text-tv-error border border-tv-error/30 hover:bg-tv-error/10"
@@ -235,7 +239,7 @@ export default function TerrainSettingsCard({
 
           {selected === "DEM_DOWNLOAD" && (
             <div className="ml-5 flex flex-col gap-1.5">
-              {airport.terrain_source === "DEM" && airport.has_dem ? (
+              {airport.has_dem ? (
                 <button
                   onClick={handleRemove}
                   className="flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-medium text-tv-error border border-tv-error/30 hover:bg-tv-error/10"

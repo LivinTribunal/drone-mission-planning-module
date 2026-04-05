@@ -423,13 +423,21 @@ def upload_terrain_dem(
     file_path: str,
     coverage_bounds: list[float],
     coverage_resolution: list[float],
+    terrain_source: str = "DEM_UPLOAD",
 ) -> Airport:
-    """set airport terrain source to DEM after file upload."""
+    """set airport terrain source after file upload or API download."""
+    import os
+
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
         raise NotFoundError("airport not found")
 
-    airport.terrain_source = "DEM"
+    # clean up old DEM file if switching to a different path
+    old_path = airport.dem_file_path
+    if old_path and old_path != file_path and os.path.exists(old_path):
+        os.unlink(old_path)
+
+    airport.terrain_source = terrain_source
     airport.dem_file_path = file_path
     db.commit()
     db.refresh(airport)
@@ -492,15 +500,13 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
     apt_lon, apt_lat = get_airport_lonlat(airport)
     db.expunge(airport)
 
-    # 5km bounding box around airport (~0.045 degrees)
-    delta_deg = 0.045
+    delta_deg = settings.terrain_grid_delta_deg
     min_lon = apt_lon - delta_deg
     max_lon = apt_lon + delta_deg
     min_lat = apt_lat - delta_deg
     max_lat = apt_lat + delta_deg
 
-    # grid at ~30m spacing (~0.00027 degrees)
-    step = 0.00027
+    step = settings.terrain_grid_step_deg
     lats = []
     lons = []
     lat = min_lat
@@ -519,7 +525,7 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
             locations.append({"latitude": round(la, 6), "longitude": round(lo, 6)})
 
     # batch query open-elevation API
-    batch_size = 2000
+    batch_size = settings.terrain_api_batch_size
     all_elevations = []
     total_timeout = settings.terrain_download_timeout
     start_time = time.monotonic()
@@ -553,10 +559,15 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
                         len(batch),
                     )
 
-                all_elevations.extend(
-                    r.get("elevation") if r.get("elevation") is not None else airport.elevation
-                    for r in results
-                )
+                for r in results:
+                    raw = r.get("elevation")
+                    if raw is not None:
+                        try:
+                            all_elevations.append(float(raw))
+                        except (TypeError, ValueError):
+                            all_elevations.append(airport.elevation)
+                    else:
+                        all_elevations.append(airport.elevation)
     except DomainError:
         raise
     except Exception as e:
@@ -602,6 +613,7 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
             str(final_path),
             [min_lon, min_lat, max_lon, max_lat],
             [step, step],
+            terrain_source="DEM_API",
         )
     except Exception:
         if final_path.exists():
@@ -609,7 +621,7 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
         raise
 
     return {
-        "terrain_source": "DEM",
+        "terrain_source": "DEM_API",
         "points_downloaded": len(all_elevations),
         "bounds": [min_lon, min_lat, max_lon, max_lat],
         "resolution": [step, step],

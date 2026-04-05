@@ -42,7 +42,7 @@ class AirportResponse(BaseModel):
     country: str | None = None
     elevation: float
     location: PointZ
-    terrain_source: str = "FLAT"
+    terrain_source: str = "FLAT"  # FLAT | DEM_UPLOAD | DEM_API
     dem_file_path: str | None = Field(default=None, exclude=True)
 
     @computed_field
