@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import FeatureInfoPanel from "@/components/common/FeatureInfoPanel";
+import { ChevronDown } from "lucide-react";
 import type { MapFeature } from "@/types/map";
-import type { PointZ } from "@/types/common";
+import type { PointZ, PolygonZ } from "@/types/common";
 
 interface PoiInfoPanelProps {
   feature: MapFeature | null;
@@ -42,6 +43,9 @@ export default function PoiInfoPanel({
                 value={`${s.length}m x ${s.width}m`}
               />
             )}
+            {s.boundary && (
+              <PolygonCoordRows polygon={s.boundary} label={t("dashboard.poiCoordinates")} />
+            )}
           </>
         );
       }
@@ -70,6 +74,7 @@ export default function PoiInfoPanel({
             {z.altitude_ceiling != null && (
               <InfoRow label={t("dashboard.poiCeiling")} value={`${z.altitude_ceiling}m`} />
             )}
+            <PolygonCoordRows polygon={z.geometry} label={t("dashboard.poiCoordinates")} />
           </>
         );
       }
@@ -117,6 +122,24 @@ export default function PoiInfoPanel({
                 />
               )}
               <CoordRows position={w.position} label={t("dashboard.poiCoordinates")} />
+              {w.heading != null && (
+                <InfoRow label={t("mission.config.heading")} value={`${w.heading.toFixed(1)}\u00B0`} />
+              )}
+              {w.speed != null && (
+                <InfoRow label={t("mission.config.speed")} value={`${w.speed} m/s`} />
+              )}
+              <InfoRow
+                label={t("mission.config.cameraAction")}
+                value={w.camera_action
+                  ? t(`map.cameraActionLabel.${w.camera_action}`, { defaultValue: w.camera_action })
+                  : "\u2014"}
+              />
+              {w.gimbal_pitch != null && (
+                <InfoRow label={t("mission.config.gimbalPitch")} value={`${w.gimbal_pitch.toFixed(1)}\u00B0`} />
+              )}
+              {w.camera_target && (
+                <CoordRows position={w.camera_target} label={t("map.cameraTarget")} />
+              )}
             </>
           );
         }
@@ -133,6 +156,24 @@ export default function PoiInfoPanel({
               />
             ) : (
               <CoordRows position={w.position} label={t("dashboard.poiCoordinates")} />
+            )}
+            {w.heading != null && (
+              <InfoRow label={t("mission.config.heading")} value={`${w.heading.toFixed(1)}\u00B0`} />
+            )}
+            {w.speed != null && (
+              <InfoRow label={t("mission.config.speed")} value={`${w.speed} m/s`} />
+            )}
+            <InfoRow
+              label={t("mission.config.cameraAction")}
+              value={w.camera_action
+                ? t(`map.cameraActionLabel.${w.camera_action}`, { defaultValue: w.camera_action })
+                : "\u2014"}
+            />
+            {w.gimbal_pitch != null && (
+              <InfoRow label={t("mission.config.gimbalPitch")} value={`${w.gimbal_pitch.toFixed(1)}\u00B0`} />
+            )}
+            {w.camera_target && (
+              <CoordRows position={w.camera_target} label={t("map.cameraTarget")} />
             )}
             {editable && canDelete && onDeleteTakeoffLanding && (
               <DeleteButton
@@ -190,6 +231,58 @@ function CoordRows({ position, label }: { position: PointZ; label: string }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function PolygonCoordRows({ polygon, label }: { polygon: PolygonZ; label: string }) {
+  /** polygon centroid + expandable vertex list. */
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const ring = polygon.coordinates[0];
+  if (!ring || ring.length < 3) return null;
+
+  // skip closing vertex if it matches the first
+  const vertices = ring[ring.length - 1][0] === ring[0][0] && ring[ring.length - 1][1] === ring[0][1]
+    ? ring.slice(0, -1)
+    : ring;
+
+  const centLon = vertices.reduce((s, v) => s + v[0], 0) / vertices.length;
+  const centLat = vertices.reduce((s, v) => s + v[1], 0) / vertices.length;
+
+  return (
+    <div className="text-xs">
+      <div className="text-tv-text-muted">{label}:</div>
+      <div className="mt-0.5 pl-2 space-y-0.5">
+        <div className="text-tv-text-muted text-[10px]">{t("map.centroid")}</div>
+        <div className="flex justify-between">
+          <span className="text-tv-text-muted">{t("map.coordinates.lat")}</span>
+          <span className="text-tv-text-primary font-medium">{centLat.toFixed(6)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-tv-text-muted">{t("map.coordinates.lon")}</span>
+          <span className="text-tv-text-primary font-medium">{centLon.toFixed(6)}</span>
+        </div>
+      </div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="mt-1 flex items-center gap-1 text-tv-text-muted hover:text-tv-text-secondary transition-colors"
+      >
+        <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "" : "-rotate-90"}`} />
+        <span>{t("map.vertices")} ({vertices.length})</span>
+      </button>
+      {expanded && (
+        <div className="pl-2 mt-0.5 space-y-1 max-h-32 overflow-y-auto">
+          {vertices.map((v, i) => (
+            <div key={i} className="flex justify-between gap-2">
+              <span className="text-tv-text-muted">#{i + 1}</span>
+              <span className="text-tv-text-primary font-medium">
+                {v[1].toFixed(6)}, {v[0].toFixed(6)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -16,6 +16,8 @@ import {
   getFlightPlan,
   batchUpdateWaypoints,
   generateTrajectory,
+  insertTransitWaypoint,
+  deleteTransitWaypoint,
 } from "@/api/missions";
 import { getDroneProfile } from "@/api/droneProfiles";
 import type { MissionDetailResponse } from "@/types/mission";
@@ -39,6 +41,9 @@ import MapStatsPanel from "@/components/map/overlays/MapStatsPanel";
 import useMapTools, { MapTool } from "@/hooks/useMapTools";
 import useUndoRedo from "@/hooks/useUndoRedo";
 import useMeasureDistance from "@/hooks/useMeasureDistance";
+import useHeadingTool from "@/hooks/useHeadingTool";
+import MeasureInfoCard from "@/components/map/overlays/MeasureInfoCard";
+import HeadingInfoCard from "@/components/map/overlays/HeadingInfoCard";
 
 interface WaypointMoveAction {
   waypointId: string;
@@ -94,6 +99,7 @@ export default function MissionMapPage() {
     canRedo,
   } = useUndoRedo<WaypointMoveAction>(10);
   const measure = useMeasureDistance();
+  const heading = useHeadingTool();
 
   // dirty waypoint modifications
   const [dirtyWaypoints, setDirtyWaypoints] = useState<
@@ -148,7 +154,8 @@ export default function MissionMapPage() {
           setEnduranceMinutes(null);
         }
       }
-    } catch {
+    } catch (err) {
+      console.error("mission load failed:", err instanceof Error ? err.message : String(err));
       setError(t("mission.config.loadError"));
     } finally {
       setLoading(false);
@@ -351,12 +358,17 @@ export default function MissionMapPage() {
         return;
       }
 
+      if (activeTool === MapTool.HEADING) {
+        heading.addPoint(lngLat.lng, lngLat.lat);
+        return;
+      }
+
       if (activeTool === MapTool.ZOOM) {
         // zoom click handled by map natively, this is a fallback
         return;
       }
     },
-    [activeTool, id, mission, measure, refreshMissions, updateMissionFromPage, resetTool, t, airportDetail],
+    [activeTool, id, mission, measure, heading, refreshMissions, updateMissionFromPage, resetTool, t, airportDetail],
   );
 
   // handle tool change
@@ -366,13 +378,17 @@ export default function MissionMapPage() {
         // handled by zoom reset callback
         return;
       }
-      // clear measure when switching away
+      // dismiss measure when switching away
       if (activeTool === MapTool.MEASURE && tool !== MapTool.MEASURE) {
-        measure.clear();
+        measure.dismiss();
+      }
+      // dismiss heading when switching away
+      if (activeTool === MapTool.HEADING && tool !== MapTool.HEADING) {
+        heading.dismiss();
       }
       setTool(tool);
     },
-    [activeTool, measure, setTool],
+    [activeTool, measure, heading, setTool],
   );
 
   // handle undo
@@ -464,6 +480,11 @@ export default function MissionMapPage() {
             sequence_order: wp.sequence_order,
             position: { type: "Point", coordinates: [lon, lat, alt] },
             stack_count: 1,
+            heading: wp.heading ?? null,
+            speed: wp.speed ?? null,
+            camera_action: wp.camera_action ?? null,
+            camera_target: wp.camera_target ?? null,
+            gimbal_pitch: wp.gimbal_pitch ?? null,
           },
         });
       }
@@ -555,6 +576,11 @@ export default function MissionMapPage() {
           sequence_order: wp.sequence_order,
           position: newPosition,
           stack_count: 1,
+          heading: wp.heading ?? null,
+          speed: wp.speed ?? null,
+          camera_action: wp.camera_action ?? null,
+          camera_target: wp.camera_target ?? null,
+          gimbal_pitch: wp.gimbal_pitch ?? null,
         },
       });
     },
@@ -598,6 +624,54 @@ export default function MissionMapPage() {
     [effectiveWaypoints, pushUndo],
   );
 
+  // handle transit waypoint insertion from map click on transit path
+  const handleTransitInsert = useCallback(
+    async (position: [number, number, number], afterSequence: number) => {
+      if (!id) return;
+      try {
+        const updatedFp = await insertTransitWaypoint(
+          id,
+          { type: "Point", coordinates: position },
+          afterSequence,
+        );
+        setFlightPlan(updatedFp);
+        setDirtyWaypoints({});
+        clearHistory();
+        const fresh = await getMission(id);
+        setMission(fresh);
+        updateMissionFromPage(fresh);
+        refreshMissions();
+        showNotification(t("map.insertTransit"));
+      } catch (err) {
+        console.error("transit insert error:", err instanceof Error ? err.message : String(err));
+        showNotification(t("map.saveError"));
+      }
+    },
+    [id, clearHistory, t, refreshMissions, updateMissionFromPage],
+  );
+
+  // handle transit waypoint deletion from double-click
+  const handleTransitDelete = useCallback(
+    async (waypointId: string) => {
+      if (!id) return;
+      try {
+        const updatedFp = await deleteTransitWaypoint(id, waypointId);
+        setFlightPlan(updatedFp);
+        setDirtyWaypoints({});
+        clearHistory();
+        const fresh = await getMission(id);
+        setMission(fresh);
+        updateMissionFromPage(fresh);
+        refreshMissions();
+        showNotification(t("map.deleteTransit"));
+      } catch (err) {
+        console.error("transit delete error:", err instanceof Error ? err.message : String(err));
+        showNotification(t("map.saveError"));
+      }
+    },
+    [id, clearHistory, t, refreshMissions, updateMissionFromPage],
+  );
+
   // ESC key handler - clear measure, reset tool
   // Ctrl+Z / Ctrl+Shift+Z for undo/redo
   useEffect(() => {
@@ -606,8 +680,19 @@ export default function MissionMapPage() {
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
       if (e.key === "Escape") {
+        if (measure.isComplete) {
+          measure.dismiss();
+          return;
+        }
+        if (heading.isComplete) {
+          heading.dismiss();
+          return;
+        }
         if (activeTool === MapTool.MEASURE) {
           measure.clear();
+        }
+        if (activeTool === MapTool.HEADING) {
+          heading.clear();
         }
         resetTool();
         return;
@@ -631,7 +716,7 @@ export default function MissionMapPage() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeTool, measure, resetTool, handleUndo, handleRedo]);
+  }, [activeTool, measure, heading, resetTool, handleUndo, handleRedo]);
 
   // beforeunload for dirty state
   useEffect(() => {
@@ -671,7 +756,8 @@ export default function MissionMapPage() {
   const mapClickActive =
     activeTool === MapTool.PLACE_TAKEOFF ||
     activeTool === MapTool.PLACE_LANDING ||
-    activeTool === MapTool.MEASURE;
+    activeTool === MapTool.MEASURE ||
+    activeTool === MapTool.HEADING;
 
   const hasTakeoffOrLanding = !!(mission?.takeoff_coordinate || mission?.landing_coordinate);
   const showPanels = !isDraft || hasFlightPlan || hasTakeoffOrLanding;
@@ -720,7 +806,17 @@ export default function MissionMapPage() {
             onMeasureFinish={measure.finishDrawing}
             onMeasureMouseMove={measure.setCursor}
             isMeasureDrawing={measure.isDrawing}
+            headingData={{
+              point: heading.pointGeoJSON,
+              line: heading.lineGeoJSON,
+              label: heading.labelGeoJSON,
+            }}
+            onHeadingClear={heading.clear}
+            headingOrigin={heading.origin}
+            isHeadingDrawing={heading.isDrawing}
             onWaypointDrag={handleWaypointDrag}
+            onTransitInsert={handleTransitInsert}
+            onTransitDelete={handleTransitDelete}
             zoomPercent={zoomPercent}
             onZoomChange={setZoomPercent}
             leftPanelChildren={
@@ -743,6 +839,19 @@ export default function MissionMapPage() {
                     takeoffCoordinate={selectedInspectionId ? null : mission.takeoff_coordinate}
                     landingCoordinate={selectedInspectionId ? null : mission.landing_coordinate}
                     visibleInspectionIds={visibleInspectionIds}
+                  />
+                )}
+                {measure.isComplete && (
+                  <MeasureInfoCard
+                    totalDistance={measure.totalDistance}
+                    segmentCount={measure.segments.length}
+                    onClose={measure.dismiss}
+                  />
+                )}
+                {heading.isComplete && (
+                  <HeadingInfoCard
+                    bearing={heading.bearing ?? 0}
+                    onClose={heading.dismiss}
                   />
                 )}
                 {selectedFeature && (

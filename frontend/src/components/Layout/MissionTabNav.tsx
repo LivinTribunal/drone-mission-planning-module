@@ -170,7 +170,8 @@ export default function MissionTabNav() {
     try {
       await updateMission(id, { name: renameValue.trim() });
       await refreshMissions();
-    } catch {
+    } catch (e) {
+      console.error("rename failed", e instanceof Error ? e.message : String(e));
       setRenameError(t("mission.renameError"));
       if (renameErrorTimer.current) clearTimeout(renameErrorTimer.current);
       renameErrorTimer.current = setTimeout(() => setRenameError(null), 4000);
@@ -422,7 +423,7 @@ export default function MissionTabNav() {
       {/* LEFT COLUMN */}
       <div className="w-[30%] flex-shrink-0 flex">
         <div className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
-          <div className="flex-shrink-0 sticky top-0 z-10 bg-tv-bg">
+          <div className="flex-shrink-0">
             {missionSelectorBlock}
           </div>
 

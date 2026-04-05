@@ -16,6 +16,7 @@ interface MeasureReturn {
   totalDistance: number;
   cursorPoint: [number, number] | null;
   isDrawing: boolean;
+  isComplete: boolean;
   pointsGeoJSON: GeoJSON.FeatureCollection;
   linesGeoJSON: GeoJSON.FeatureCollection;
   labelsGeoJSON: GeoJSON.FeatureCollection;
@@ -24,6 +25,7 @@ interface MeasureReturn {
   clearCursor: () => void;
   clear: () => void;
   finishDrawing: () => void;
+  dismiss: () => void;
   hasPoints: boolean;
 }
 
@@ -31,6 +33,7 @@ export default function useMeasureDistance(): MeasureReturn {
   const [points, setPoints] = useState<[number, number][]>([]);
   const [cursorPoint, setCursorPoint] = useState<[number, number] | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
 
   const addPoint = useCallback((lng: number, lat: number) => {
     setPoints((prev) => {
@@ -53,20 +56,29 @@ export default function useMeasureDistance(): MeasureReturn {
     setPoints((prev) => {
       if (prev.length < 2) {
         setIsDrawing(false);
+        setIsComplete(false);
         setCursorPoint(null);
         return [];
       }
       setIsDrawing(false);
+      setIsComplete(true);
       setCursorPoint(null);
       return prev;
     });
   }, []);
 
   const clear = useCallback(() => {
+    /** clear all measurement state. */
     setPoints([]);
     setCursorPoint(null);
     setIsDrawing(false);
+    setIsComplete(false);
   }, []);
+
+  const dismiss = useCallback(() => {
+    /** dismiss the completed measurement info card and clear data. */
+    clear();
+  }, [clear]);
 
   const segments = useMemo((): MeasureSegment[] => {
     const segs: MeasureSegment[] = [];
@@ -174,6 +186,7 @@ export default function useMeasureDistance(): MeasureReturn {
     totalDistance,
     cursorPoint,
     isDrawing,
+    isComplete,
     pointsGeoJSON,
     linesGeoJSON,
     labelsGeoJSON,
@@ -182,6 +195,7 @@ export default function useMeasureDistance(): MeasureReturn {
     clearCursor,
     clear,
     finishDrawing,
+    dismiss,
     hasPoints: points.length > 0,
   };
 }

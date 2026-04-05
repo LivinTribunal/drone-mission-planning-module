@@ -58,6 +58,8 @@ import useVertexEditor from "@/hooks/useVertexEditor";
 import type { VertexGeometryUpdate } from "@/hooks/useVertexEditor";
 import useMeasureDistance from "@/hooks/useMeasureDistance";
 import useHeadingTool from "@/hooks/useHeadingTool";
+import MeasureInfoCard from "@/components/map/overlays/MeasureInfoCard";
+import HeadingInfoCard from "@/components/map/overlays/HeadingInfoCard";
 import type maplibregl from "maplibre-gl";
 import { extractCenterline, circleToPolygon, haversineDistance, computeBearing } from "@/utils/geo";
 import type { DrawingTool } from "@/types/map";
@@ -312,10 +314,10 @@ export default function AirportEditPage() {
     /** handle toolbar tool change, cancelling pending creation if needed. */
     setActiveTool(tool);
 
-    // clear heading when switching away from heading
-    if (tool !== "heading") headingRef.current.clear();
-    // clear measurement when switching away from measurement
-    if (tool !== "measurement") measureRef.current.clear();
+    // dismiss heading when switching away from heading
+    if (tool !== "heading") headingRef.current.dismiss();
+    // dismiss measurement when switching away from measurement
+    if (tool !== "measurement") measureRef.current.dismiss();
 
     if (SAFE_TOOLS.includes(tool)) return;
     if (!(pendingGeometry || pendingPointPosition)) return;
@@ -493,6 +495,14 @@ export default function AirportEditPage() {
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
       if (e.key === "Escape") {
+        if (measureRef.current.isComplete) {
+          measureRef.current.dismiss();
+          return;
+        }
+        if (headingRef.current.isComplete) {
+          headingRef.current.dismiss();
+          return;
+        }
         handleCreationCancel();
         setActiveTool("select");
         setSelectedFeature(null);
@@ -1117,6 +1127,17 @@ export default function AirportEditPage() {
                 prefilledLength={prefilledGeometry.length}
                 prefilledHeading={prefilledGeometry.heading}
                 prefilledArea={prefilledGeometry.area}
+              />
+            ) : measure.isComplete ? (
+              <MeasureInfoCard
+                totalDistance={measure.totalDistance}
+                segmentCount={measure.segments.length}
+                onClose={measure.dismiss}
+              />
+            ) : heading.isComplete && heading.bearing !== null ? (
+              <HeadingInfoCard
+                bearing={heading.bearing}
+                onClose={heading.dismiss}
               />
             ) : selectedFeature && selectedFeature.type !== "waypoint" ? (
               <EditableFeatureInfo
