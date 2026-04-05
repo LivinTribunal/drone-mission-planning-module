@@ -212,6 +212,47 @@ def test_persist_passed_true_without_violations(db_session, fp_airport_id):
     db_session.rollback()
 
 
+def test_violation_response_null_waypoint_ids(db_session, fp_airport_id):
+    """validation violation with NULL waypoint_ids serializes without error."""
+    from app.models.flight_plan import ValidationViolation
+    from app.models.mission import Mission
+    from app.schemas.flight_plan import ValidationViolationResponse
+    from app.services.flight_plan_service import persist_flight_plan
+
+    mission = Mission(
+        id=uuid4(),
+        name="null waypoint_ids test",
+        airport_id=fp_airport_id,
+        status="DRAFT",
+    )
+    db_session.add(mission)
+    db_session.flush()
+
+    fp = persist_flight_plan(
+        db_session,
+        mission,
+        all_waypoints=[],
+        warnings=[("speed too high", [])],
+        total_distance=100.0,
+        estimated_duration=60.0,
+    )
+
+    # simulate a pre-migration row with NULL waypoint_ids
+    violation = (
+        db_session.query(ValidationViolation)
+        .filter(ValidationViolation.validation_result_id == fp.validation_result.id)
+        .first()
+    )
+    violation.waypoint_ids = None
+    db_session.flush()
+
+    # this would raise ValidationError before the fix
+    resp = ValidationViolationResponse.model_validate(violation)
+    assert resp.waypoint_ids == []
+
+    db_session.rollback()
+
+
 # batch_update_waypoints service tests
 
 

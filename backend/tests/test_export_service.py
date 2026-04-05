@@ -644,6 +644,16 @@ class TestGenerateGpx:
 
         assert "<ele>" in text
 
+    def test_xml_encoding_declaration_utf8(self):
+        """gpx xml declaration specifies utf-8 encoding."""
+        fp = _make_flight_plan(1)
+
+        result = export_service.generate_gpx(fp, "Letisko Žilina", 0)
+        text = result.decode("utf-8")
+
+        assert "encoding='utf-8'" in text.lower() or 'encoding="utf-8"' in text.lower()
+        assert "Letisko Žilina" in text
+
 
 class TestGenerateWpml:
     """tests for wpml (dji) export generation."""
@@ -690,6 +700,15 @@ class TestGenerateWpml:
         assert "<executeHeight>" in text
         # 300 - 290 = 10
         assert "10.00" in text
+
+    def test_xml_encoding_declaration_utf8(self):
+        """wpml xml declaration specifies utf-8 encoding."""
+        fp = _make_flight_plan(1)
+
+        result = export_service.generate_wpml(fp, "Letisko Žilina", 0)
+        text = result.decode("utf-8")
+
+        assert "encoding='utf-8'" in text.lower() or 'encoding="utf-8"' in text.lower()
 
 
 class TestGenerateLitchiCsv:

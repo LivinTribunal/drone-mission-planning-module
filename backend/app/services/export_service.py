@@ -414,7 +414,7 @@ def generate_gpx(
         trkpt = ET.SubElement(trkseg, "trkpt", {"lat": f"{lat:.8f}", "lon": f"{lon:.8f}"})
         ET.SubElement(trkpt, "ele").text = f"{alt:.2f}"
 
-    return ET.tostring(gpx, encoding="unicode", xml_declaration=True).encode("utf-8")
+    return ET.tostring(gpx, encoding="utf-8", xml_declaration=True)
 
 
 # dji camera action mapping
@@ -473,7 +473,7 @@ def generate_wpml(
             action = ET.SubElement(action_group, "action")
             ET.SubElement(action, "actionActuatorFunc").text = dji_action
 
-    return ET.tostring(wpml, encoding="unicode", xml_declaration=True).encode("utf-8")
+    return ET.tostring(wpml, encoding="utf-8", xml_declaration=True)
 
 
 # litchi camera action codes

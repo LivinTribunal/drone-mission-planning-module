@@ -89,7 +89,10 @@ def persist_flight_plan(
         resolved = []
         for wid in wp_ids:
             if wid.startswith("idx:"):
-                idx = int(wid[4:])
+                try:
+                    idx = int(wid[4:])
+                except ValueError:
+                    continue
                 if idx in idx_to_uuid:
                     resolved.append(idx_to_uuid[idx])
             else:
