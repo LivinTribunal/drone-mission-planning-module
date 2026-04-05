@@ -130,8 +130,17 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     )
 
 
-def _format_soft_warnings(violations: list, label: str, warnings: list[str]) -> None:
-    """group soft violations by message and append formatted warnings."""
+def _format_soft_warnings(
+    violations: list,
+    label: str,
+    warnings: list[tuple[str, list[str]]],
+    wp_offset: int = 0,
+) -> None:
+    """group soft violations by message and append formatted warnings.
+
+    wp_offset is added to each waypoint_index to convert pass-local indices
+    to global all_waypoints indices for later UUID resolution.
+    """
     groups: dict[str, list[int]] = {}
     for v in violations:
         if not v.is_warning:
@@ -141,6 +150,7 @@ def _format_soft_warnings(violations: list, label: str, warnings: list[str]) -> 
         if v.waypoint_index is not None:
             indices.append(v.waypoint_index + 1)
 
+    seen_msgs = {msg for msg, _ in warnings}
     for msg, indices in groups.items():
         if indices:
             if len(indices) <= 3:
@@ -151,8 +161,10 @@ def _format_soft_warnings(violations: list, label: str, warnings: list[str]) -> 
         else:
             full = f"{label}: {msg}"
 
-        if full not in warnings:
-            warnings.append(full)
+        if full not in seen_msgs:
+            # build idx: references for waypoint id resolution
+            wp_ids = [f"idx:{(i - 1) + wp_offset}" for i in indices]
+            warnings.append((full, wp_ids))
 
 
 def _apply_camera_actions(waypoints: list[WaypointData]):
@@ -173,7 +185,9 @@ def _apply_camera_actions(waypoints: list[WaypointData]):
             waypoints[-1].camera_action = CameraAction.NONE
 
 
-def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list[str]]:
+def generate_trajectory(
+    db: Session, mission_id: UUID
+) -> tuple[FlightPlan, list[tuple[str, list[str]]]]:
     """five-phase trajectory generation pipeline.
 
     phase 1: load all data
@@ -218,13 +232,15 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             f"cannot generate trajectory for mission in {mission.status} status"
         )
 
-    warnings: list[str] = []
-    suggestions: list[str] = []
-    non_aborting_violations: list[str] = []
+    warnings: list[tuple[str, list[str]]] = []
+    suggestions: list[tuple[str, list[str]]] = []
+    non_aborting_violations: list[tuple[str, list[str]]] = []
     if had_constraints:
-        warnings.append("constraints were reset - re-attach after generation")
+        warnings.append(("constraints were reset - re-attach after generation", []))
 
     inspection_passes: list[InspectionPass] = []
+    # deferred per-pass data for formatting after phase 5 assembly
+    deferred_pass_data: list[tuple[str, list, list[int]]] = []
     cumulative_distance = 0.0
     cumulative_duration = 0.0
 
@@ -255,7 +271,10 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 else default_speed
             )
             suggestions.append(
-                f"{label}: no speed override - using default ({default_spd:.1f} m/s)"
+                (
+                    f"{label}: no speed override - using default ({default_spd:.1f} m/s)",
+                    [],
+                )
             )
         if not inspection.config or inspection.config.measurement_density is None:
             default_density = (
@@ -265,13 +284,21 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             )
             if default_density:
                 suggestions.append(
-                    f"{label}: no density override - using default ({default_density} pts)"
+                    (
+                        f"{label}: no density override - using default ({default_density} pts)",
+                        [],
+                    )
                 )
 
         lha_ids = inspection.lha_ids
         lha_positions = get_lha_positions(template, lha_ids)
         if not lha_positions:
-            warnings.append(f"{template.name} #{inspection.sequence_order}: no LHA positions")
+            warnings.append(
+                (
+                    f"{template.name} #{inspection.sequence_order}: no LHA positions",
+                    [],
+                )
+            )
             continue
 
         center = Point3D.center(lha_positions)
@@ -283,7 +310,12 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
         density, density_warning = resolve_density(inspection.method, setting_angles, config)
         if density_warning:
             config.measurement_density = density
-            suggestions.append(f"{template.name} #{inspection.sequence_order}: {density_warning}")
+            suggestions.append(
+                (
+                    f"{template.name} #{inspection.sequence_order}: {density_warning}",
+                    [],
+                )
+            )
 
         # compute optimal speed from path geometry and camera frame rate
         start_pos = determine_start_position(
@@ -298,19 +330,24 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
             config, path_dist, config.measurement_density, drone, default_speed
         )
         if speed_warning:
-            warnings.append(f"{template.name} #{inspection.sequence_order}: {speed_warning}")
+            warnings.append(
+                (
+                    f"{template.name} #{inspection.sequence_order}: {speed_warning}",
+                    [],
+                )
+            )
 
         if drone:
             warning = check_speed_framerate(speed, drone, optimal_speed)
             if warning:
-                warnings.append(warning)
+                warnings.append((warning, []))
 
         if drone:
             fov_distance = config.horizontal_distance or MIN_ARC_RADIUS
             approach = (rwy_heading + 180) % 360
             warning = check_sensor_fov(drone, lha_positions, fov_distance, approach)
             if warning:
-                warnings.append(warning)
+                warnings.append((warning, []))
 
         # phase 3 - compute waypoints
         try:
@@ -360,28 +397,21 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 ],
             )
 
-        # group soft warnings by message, show affected waypoint range
+        # defer soft warning formatting until after phase 5 assembly,
+        # when global waypoint offsets are known
         label = f"{template.name} #{inspection.sequence_order}"
-        _format_soft_warnings(violations, label, warnings)
 
         # phase 4 - post-inspection processing
         _apply_camera_actions(pass_wps)
 
         # check camera line-of-sight to PAPI for each measurement waypoint
-        obstructed_wps = []
+        obstructed_wps: list[int] = []
         for wp_idx, wp in enumerate(pass_wps):
             if wp.waypoint_type not in (WaypointType.MEASUREMENT, WaypointType.HOVER):
                 continue
             wp_pt = Point3D(lon=wp.lon, lat=wp.lat, alt=wp.alt)
             if not has_line_of_sight(db, wp_pt, center, data.obstacles, data.safety_zones):
-                obstructed_wps.append(wp_idx + 1)
-
-        if obstructed_wps:
-            if len(obstructed_wps) <= 3:
-                wp_str = ", ".join(str(i) for i in obstructed_wps)
-            else:
-                wp_str = f"{min(obstructed_wps)}-{max(obstructed_wps)}"
-            non_aborting_violations.append(f"{label} (wp {wp_str}): camera view to PAPI obstructed")
+                obstructed_wps.append(wp_idx)
 
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
@@ -415,6 +445,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 )
             )
 
+        deferred_pass_data.append((label, violations, obstructed_wps))
         inspection_passes.append(InspectionPass(waypoints=pass_wps, inspection_id=inspection.id))
 
     if not inspection_passes:
@@ -424,7 +455,7 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
     if drone:
         bw = check_battery(cumulative_duration, drone, DEFAULT_RESERVE_MARGIN)
         if bw:
-            warnings.append(bw.message)
+            warnings.append((bw.message, []))
 
     # phase 5 - final assembly with A* transit
     all_waypoints: list[WaypointData] = []
@@ -534,10 +565,29 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                     wp_inspection_seq[k] = i + 1
             idx = pass_start + len(ipass.waypoints)
 
+        # format deferred per-pass warnings now that global offsets are known
+        if pass_start is not None and i < len(deferred_pass_data):
+            d_label, d_violations, d_obstructed = deferred_pass_data[i]
+            _format_soft_warnings(d_violations, d_label, warnings, wp_offset=pass_start)
+
+            if d_obstructed:
+                display_wps = [wi + 1 for wi in d_obstructed]
+                if len(display_wps) <= 3:
+                    wp_str = ", ".join(str(w) for w in display_wps)
+                else:
+                    wp_str = f"{min(display_wps)}-{max(display_wps)}"
+                wp_ids = [f"idx:{wi + pass_start}" for wi in d_obstructed]
+                non_aborting_violations.append(
+                    (
+                        f"{d_label} (wp {wp_str}): camera view to PAPI obstructed",
+                        wp_ids,
+                    )
+                )
+
     # check for runway/taxiway crossings and add grouped warnings
     # measurement crossings grouped by (inspection_seq, surface) -> one warning
     # transit/other crossings kept individually
-    measurement_crossings: dict[tuple[int, str], int] = {}
+    measurement_crossings: dict[tuple[int, str], list[int]] = {}
     for j in range(1, len(all_waypoints)):
         prev_wp = all_waypoints[j - 1]
         cur_wp = all_waypoints[j]
@@ -555,19 +605,32 @@ def generate_trajectory(db: Session, mission_id: UUID) -> tuple[FlightPlan, list
                 if wp_type == WaypointType.MEASUREMENT:
                     seq = wp_inspection_seq.get(j, 0)
                     key = (seq, f"{surface.surface_type} {surface.identifier}")
-                    measurement_crossings[key] = measurement_crossings.get(key, 0) + 1
+                    measurement_crossings.setdefault(key, []).append(j)
                 else:
                     msg = (
                         f"wp {j}-{j + 1} ({wp_type}): crosses "
                         f"{surface.surface_type} {surface.identifier} "
                         f"({crossing:.0f}m)"
                     )
-                    if msg not in non_aborting_violations:
-                        non_aborting_violations.append(msg)
+                    seen_msgs = {m for m, _ in non_aborting_violations}
+                    if msg not in seen_msgs:
+                        wp_ids = [f"idx:{j - 1}", f"idx:{j}"]
+                        non_aborting_violations.append((msg, wp_ids))
 
-    for (seq, surface_label), count in measurement_crossings.items():
+    for (seq, surface_label), indices in measurement_crossings.items():
+        count = len(indices)
         msg = f"inspection {seq} crosses {surface_label} during measurement ({count} segments)"
-        non_aborting_violations.append(msg)
+        wp_ids = []
+        for idx in indices:
+            wp_ids.extend([f"idx:{idx - 1}", f"idx:{idx}"])
+        # deduplicate while preserving order
+        seen: set[str] = set()
+        unique_ids: list[str] = []
+        for wid in wp_ids:
+            if wid not in seen:
+                seen.add(wid)
+                unique_ids.append(wid)
+        non_aborting_violations.append((msg, unique_ids))
 
     # final validation of assembled path
     final_violations = validate_inspection_pass(

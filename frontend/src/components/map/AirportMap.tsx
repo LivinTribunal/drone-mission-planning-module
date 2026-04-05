@@ -61,6 +61,7 @@ import {
   addSimplifiedTrajectoryLayers,
   removeSimplifiedTrajectoryLayers,
   updateSelectedFilter,
+  updateWarningHighlightFilter,
   getSimplifiedTrajectoryLayerIds,
   waypointsToGeoJSON,
   waypointsToLineGeoJSON,
@@ -82,10 +83,13 @@ import {
   WAYPOINT_TRANSIT_HIT_LAYER,
   WAYPOINT_GHOST_TRANSIT_SOURCE,
   WAYPOINT_CAMERA_TARGET_LAYER,
+  WAYPOINT_WARNING_HIGHLIGHT_LAYER,
+  WAYPOINT_SELECTED_LAYER,
 } from "./layers/waypointLayers";
 import LayerPanel from "./overlays/LayerPanel";
 import LegendPanel from "./overlays/LegendPanel";
 import PoiInfoPanel from "./overlays/PoiInfoPanel";
+import WarningInfoPanel from "./overlays/WarningInfoPanel";
 import MapHelpPanel from "./overlays/MapHelpPanel";
 import WaypointListPanel from "./overlays/WaypointListPanel";
 
@@ -175,6 +179,7 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
   takeoffLanding: [WAYPOINT_TAKEOFF_LAYER, WAYPOINT_LANDING_LAYER],
   cameraHeading: [WAYPOINT_CAMERA_LINE_LAYER, WAYPOINT_CAMERA_TARGET_LAYER],
   pathHeading: [WAYPOINT_ARROW_LAYER],
+  trajectory: [WAYPOINT_WARNING_HIGHLIGHT_LAYER, WAYPOINT_SELECTED_LAYER],
 };
 
 // all interactive layer ids for click handling
@@ -269,6 +274,10 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   is3D: is3DProp,
   onBearingChange,
   bearingResetKey,
+  highlightedWaypointIds,
+  highlightSeverity,
+  selectedWarning,
+  onWarningClose,
   pendingGeometry,
   pendingPointPosition,
 }, ref) {
@@ -285,6 +294,10 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   landingRef.current = landingCoordinate;
   const indexMapRef = useRef(inspectionIndexMap);
   indexMapRef.current = inspectionIndexMap;
+  const highlightedIdsRef = useRef(highlightedWaypointIds);
+  highlightedIdsRef.current = highlightedWaypointIds;
+  const highlightSeverityRef = useRef(highlightSeverity);
+  highlightSeverityRef.current = highlightSeverity;
 
   useImperativeHandle(ref, () => ({
     getMap: () => mapRef.current,
@@ -1264,6 +1277,14 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     // re-sync visibility and filters after layers are added
     syncLayerVisibility(map);
     syncInspectionFilters(map);
+
+    // re-apply warning highlight state after layer rebuild
+    updateWarningHighlightFilter(
+      map,
+      highlightedIdsRef.current,
+      highlightSeverityRef.current,
+      layerConfigRef.current.simplifiedTrajectory,
+    );
   }, [selectedWaypointId, syncLayerVisibility, syncInspectionFilters]);
 
   // sync waypoints ref and re-render layers when waypoints or coords change
@@ -1309,6 +1330,31 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       });
     }
   }, [selectedWaypointId]);
+
+  // update warning highlight layer
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    updateWarningHighlightFilter(map, highlightedWaypointIds, highlightSeverity, layerConfig.simplifiedTrajectory);
+
+    // fly to highlighted waypoints
+    if (!highlightedWaypointIds || highlightedWaypointIds.length === 0) return;
+    const wps = waypointsRef.current ?? [];
+    const highlighted = wps.filter((w) => highlightedWaypointIds.includes(w.id));
+    if (highlighted.length === 0) return;
+
+    if (highlighted.length === 1) {
+      const [lon, lat] = highlighted[0].position.coordinates;
+      map.flyTo({ center: [lon, lat], zoom: 17, duration: 800 });
+    } else {
+      const lngs = highlighted.map((w) => w.position.coordinates[0]);
+      const lats = highlighted.map((w) => w.position.coordinates[1]);
+      map.fitBounds(
+        [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+        { padding: 100, duration: 800 },
+      );
+    }
+  }, [highlightedWaypointIds, highlightSeverity, layerConfig.simplifiedTrajectory]);
 
   // cursor and hover effects - only for SELECT tool
   useEffect(() => {
@@ -2073,6 +2119,12 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
             <PoiInfoPanel
               feature={selectedFeature}
               onClose={() => setSelectedFeature(null)}
+            />
+          )}
+          {selectedWarning && onWarningClose && (
+            <WarningInfoPanel
+              violation={selectedWarning}
+              onClose={onWarningClose}
             />
           )}
 

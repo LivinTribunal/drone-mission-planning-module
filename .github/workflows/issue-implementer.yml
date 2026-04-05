@@ -281,7 +281,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.rf-prompt.outputs.prompt }}
-          claude_args: '--model claude-opus-4-6 --max-turns 100 --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
+          claude_args: '--model claude-opus-4-6 --max-turns 200 --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
           allowed_bots: 'github-actions'
 
       - name: Check for review-fix changes
@@ -768,7 +768,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.build-prompt.outputs.prompt }}
-          claude_args: '--model claude-opus-4-6 --max-turns 100 --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
+          claude_args: '--model claude-opus-4-6 --max-turns 200 --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
           allowed_bots: 'github-actions'
 
       - name: Check for file changes

@@ -134,6 +134,7 @@ describe("MapWarningsPanel", () => {
         constraint_name: null,
         violation_kind: "speed",
         waypoint_ref: null,
+        waypoint_ids: [],
       },
     ];
     render(<MapWarningsPanel violations={violations} />);
