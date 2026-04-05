@@ -105,7 +105,6 @@ export interface AirportUpdate {
   country?: string | null;
   elevation?: number;
   location?: PointZ;
-  default_drone_profile_id?: string | null;
 }
 
 export interface BulkChangeDroneResponse {

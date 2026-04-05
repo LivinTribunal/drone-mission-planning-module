@@ -141,7 +141,7 @@ def delete_airport(db: Session, airport_id: UUID):
     db.commit()
 
 
-def set_default_drone(db: Session, airport_id: UUID, drone_profile_id: str | None) -> Airport:
+def set_default_drone(db: Session, airport_id: UUID, drone_profile_id: UUID | None) -> Airport:
     """set or clear the default drone profile for an airport."""
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
@@ -160,8 +160,8 @@ def set_default_drone(db: Session, airport_id: UUID, drone_profile_id: str | Non
 
 
 def bulk_change_drone(
-    db: Session, airport_id: UUID, drone_profile_id: str
-) -> tuple[int, list[str]]:
+    db: Session, airport_id: UUID, drone_profile_id: UUID
+) -> tuple[int, list[UUID]]:
     """change drone profile on all draft missions at an airport."""
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
@@ -178,7 +178,7 @@ def bulk_change_drone(
     mission_ids = []
     for mission in draft_missions:
         mission.drone_profile_id = drone_profile_id
-        mission_ids.append(str(mission.id))
+        mission_ids.append(mission.id)
 
     db.commit()
 
