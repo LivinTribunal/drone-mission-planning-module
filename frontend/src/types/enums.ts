@@ -17,7 +17,10 @@ export type CameraAction =
   | "NONE"
   | "PHOTO_CAPTURE"
   | "RECORDING_START"
+  | "RECORDING"
   | "RECORDING_STOP";
+
+export type CaptureMode = "VIDEO_CAPTURE" | "PHOTO_CAPTURE";
 
 export type ExportFormat = "MAVLINK" | "KML" | "KMZ" | "JSON" | "UGCS";
 

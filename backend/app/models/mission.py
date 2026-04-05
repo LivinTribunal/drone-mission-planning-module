@@ -39,6 +39,7 @@ TRAJECTORY_FIELDS = {
     "default_altitude_offset",
     "takeoff_coordinate",
     "landing_coordinate",
+    "default_capture_mode",
 }
 
 
@@ -91,6 +92,7 @@ class Mission(Base):
     default_altitude_offset = Column(Float)
     takeoff_coordinate = Column(Geometry("POINTZ", srid=4326))
     landing_coordinate = Column(Geometry("POINTZ", srid=4326))
+    default_capture_mode = Column(String(20), nullable=True, default="VIDEO_CAPTURE")
     has_unsaved_map_changes = Column(Boolean, nullable=False, default=False, server_default="false")
 
     airport = relationship("Airport")

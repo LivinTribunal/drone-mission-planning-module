@@ -18,6 +18,8 @@ class InspectionConfigCreate(BaseModel):
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
     lha_ids: list[UUID] | None = None
+    capture_mode: str | None = None
+    recording_setup_duration: float | None = None
 
 
 class InspectionConfigResponse(BaseModel):
@@ -33,6 +35,8 @@ class InspectionConfigResponse(BaseModel):
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
     lha_ids: list[UUID] | None = None
+    capture_mode: str | None = None
+    recording_setup_duration: float | None = None
 
     model_config = {"from_attributes": True}
 

@@ -112,6 +112,8 @@ class ResolvedConfig:
     hover_duration: Seconds | None = None
     horizontal_distance: Meters | None = None
     sweep_angle: Degrees | None = None
+    capture_mode: str = "VIDEO_CAPTURE"
+    recording_setup_duration: Seconds = 5.0
 
 
 @dataclass
