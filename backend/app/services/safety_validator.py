@@ -14,6 +14,7 @@ from app.services.geometry_converter import geojson_to_ewkt
 from app.services.trajectory_types import (
     DEFAULT_RUNWAY_BUFFER,
     HARD_ZONE_TYPES,
+    MINIMUM_AGL_ALTITUDE,
     Violation,
     WaypointData,
 )
@@ -35,11 +36,13 @@ def validate_inspection_pass(
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface],
+    elevation_provider=None,
 ) -> list[Violation]:
     """validate all waypoints in an inspection pass.
 
     drone and constraint checks run per-waypoint (no spatial queries).
     obstacle and zone checks use batched spatial queries - one query each.
+    AGL altitude check uses elevation provider for terrain-aware validation.
     """
     violations = []
 
@@ -58,6 +61,10 @@ def validate_inspection_pass(
 
     violations.extend(_batch_check_obstacles(db, waypoints, obstacles))
     violations.extend(_batch_check_zones(db, waypoints, zones))
+
+    # AGL altitude check against terrain
+    if elevation_provider:
+        violations.extend(_batch_check_minimum_agl(waypoints, elevation_provider))
 
     return violations
 
@@ -196,6 +203,37 @@ def _batch_check_zones(
                 waypoint_index=wp_idx,
             )
         )
+
+    return violations
+
+
+def _batch_check_minimum_agl(
+    waypoints: list[WaypointData],
+    elevation_provider,
+    min_agl: float = MINIMUM_AGL_ALTITUDE,
+) -> list[Violation]:
+    """check all waypoints maintain minimum height above ground level."""
+    if not waypoints:
+        return []
+
+    points = [(wp.lat, wp.lon) for wp in waypoints]
+    elevations = elevation_provider.get_elevations_batch(points)
+
+    violations = []
+    for i, (wp, ground) in enumerate(zip(waypoints, elevations)):
+        agl = wp.alt - ground
+        if agl < min_agl:
+            violations.append(
+                Violation(
+                    is_warning=True,
+                    violation_kind="altitude",
+                    message=(
+                        f"altitude {wp.alt:.0f}m is only {agl:.1f}m AGL "
+                        f"at this point (min {min_agl:.0f}m)"
+                    ),
+                    waypoint_index=i,
+                )
+            )
 
     return violations
 

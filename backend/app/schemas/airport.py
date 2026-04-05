@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -30,6 +31,7 @@ class AirportUpdate(BaseModel):
     country: str | None = None
     elevation: float | None = None
     location: PointZ | None = None
+    terrain_source: Literal["FLAT", "DEM"] | None = None
 
 
 class AirportResponse(BaseModel):
@@ -42,6 +44,8 @@ class AirportResponse(BaseModel):
     country: str | None = None
     elevation: float
     location: PointZ
+    terrain_source: str = "FLAT"
+    dem_file_path: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -74,3 +78,25 @@ class AirportSummaryListResponse(BaseModel):
 
     data: list[AirportSummaryResponse]
     meta: ListMeta
+
+
+class TerrainCoverage(BaseModel):
+    """terrain DEM coverage info."""
+
+    bounds: list[float]
+    resolution: list[float]
+
+
+class TerrainUploadResponse(BaseModel):
+    """response after uploading a DEM file."""
+
+    terrain_source: str
+    coverage: TerrainCoverage
+
+
+class TerrainDownloadResponse(BaseModel):
+    """response after downloading elevation data from API."""
+
+    terrain_source: str
+    points_downloaded: int
+    coverage: TerrainCoverage

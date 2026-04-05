@@ -410,3 +410,38 @@ def delete_lha(db: Session, agl_id: UUID, lha_id: UUID):
 
     db.delete(lha)
     db.commit()
+
+
+# terrain
+def upload_terrain_dem(
+    db: Session,
+    airport_id: UUID,
+    file_path: str,
+    coverage_bounds: list[float],
+    coverage_resolution: list[float],
+) -> Airport:
+    """set airport terrain source to DEM after file upload."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
+    airport.terrain_source = "DEM"
+    airport.dem_file_path = file_path
+    db.commit()
+    db.refresh(airport)
+
+    return airport
+
+
+def delete_terrain_dem(db: Session, airport_id: UUID) -> Airport:
+    """reset airport terrain source to FLAT and remove DEM path."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
+    airport.terrain_source = "FLAT"
+    airport.dem_file_path = None
+    db.commit()
+    db.refresh(airport)
+
+    return airport

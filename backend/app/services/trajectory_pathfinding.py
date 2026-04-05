@@ -18,6 +18,7 @@ from app.services.trajectory_types import (
     HARD_ZONE_TYPES,
     MAX_REROUTE_DEVIATION,
     MAX_TURN_ANGLE,
+    MINIMUM_AGL_ALTITUDE,
     REROUTE_SEARCH_RADIUS_MULTIPLIER,
     RUNWAY_CROSSING_PENALTY_PER_METER,
     SURFACE_NODE_SPACING,
@@ -443,6 +444,21 @@ def resolve_inspection_collisions(
     return result
 
 
+def _adjust_transit_altitude_for_terrain(
+    waypoints: list[WaypointData],
+    elevation_provider,
+) -> None:
+    """clamp transit waypoint altitudes to maintain minimum AGL above terrain."""
+    if not elevation_provider or not waypoints:
+        return
+
+    points = [(wp.lat, wp.lon) for wp in waypoints]
+    elevations = elevation_provider.get_elevations_batch(points)
+
+    for wp, ground in zip(waypoints, elevations):
+        wp.alt = max(wp.alt, ground + MINIMUM_AGL_ALTITUDE)
+
+
 def compute_transit_path(
     db: Session,
     from_point: Point3D,
@@ -451,6 +467,7 @@ def compute_transit_path(
     zones: list[SafetyZone],
     speed: MetersPerSecond,
     surfaces: list[AirfieldSurface] | None = None,
+    elevation_provider=None,
 ) -> list[WaypointData]:
     """compute A* transit path - shortest obstacle-free route with runway crossing penalties."""
     # straight-line if path is clear and doesn't cross runway
@@ -472,7 +489,7 @@ def compute_transit_path(
 
         # if direct path crosses runway, still use A* to find a better route
         if not crosses_runway:
-            return [
+            wps = [
                 WaypointData(
                     lon=to_point.lon,
                     lat=to_point.lat,
@@ -485,6 +502,8 @@ def compute_transit_path(
                     camera_action=CameraAction.NONE,
                 )
             ]
+            _adjust_transit_altitude_for_terrain(wps, elevation_provider)
+            return wps
 
     # A* through visibility graph with runway penalties
     path = _run_astar(db, from_point, to_point, obstacles, zones, surfaces)
@@ -509,5 +528,7 @@ def compute_transit_path(
                 camera_action=CameraAction.NONE,
             )
         )
+
+    _adjust_transit_altitude_for_terrain(transit_wps, elevation_provider)
 
     return transit_wps

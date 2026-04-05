@@ -15,6 +15,8 @@ export interface AirportResponse {
   country: string | null;
   elevation: number;
   location: PointZ;
+  terrain_source: string;
+  dem_file_path: string | null;
 }
 
 export interface AirportSummaryResponse extends AirportResponse {
@@ -104,6 +106,23 @@ export interface AirportUpdate {
   country?: string | null;
   elevation?: number;
   location?: PointZ;
+  terrain_source?: string;
+}
+
+export interface TerrainCoverage {
+  bounds: number[];
+  resolution: number[];
+}
+
+export interface TerrainUploadResponse {
+  terrain_source: string;
+  coverage: TerrainCoverage;
+}
+
+export interface TerrainDownloadResponse {
+  terrain_source: string;
+  points_downloaded: number;
+  coverage: TerrainCoverage;
 }
 
 export interface SurfaceCreate {

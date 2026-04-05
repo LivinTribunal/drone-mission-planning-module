@@ -511,6 +511,30 @@ def _insert_video_hover_waypoints(
     return [start_hover, *waypoints, stop_hover]
 
 
+def _apply_terrain_delta(
+    waypoints: list[WaypointData],
+    center: Point3D,
+    elevation_provider,
+) -> None:
+    """shift waypoint altitudes by terrain difference from center point.
+
+    preserves geometric relationships (glide slope) while following terrain.
+    uses batch query for performance.
+    """
+    if not elevation_provider or not waypoints:
+        return
+
+    # batch query all waypoint positions + center
+    points = [(wp.lat, wp.lon) for wp in waypoints]
+    points.append((center.lat, center.lon))
+    elevations = elevation_provider.get_elevations_batch(points)
+
+    ground_at_center = elevations[-1]
+    for i, wp in enumerate(waypoints):
+        terrain_delta = elevations[i] - ground_at_center
+        wp.alt += terrain_delta
+
+
 def compute_measurement_trajectory(
     inspection,
     config: ResolvedConfig,
@@ -519,6 +543,7 @@ def compute_measurement_trajectory(
     glide_slope: Degrees,
     speed: MetersPerSecond,
     setting_angles: list[Degrees],
+    elevation_provider=None,
 ) -> list[WaypointData]:
     """dispatch to arc or vertical path computation based on inspection method."""
     if inspection.method == InspectionMethod.ANGULAR_SWEEP:
@@ -531,6 +556,9 @@ def compute_measurement_trajectory(
         )
     else:
         raise ValueError(f"unsupported inspection method: {inspection.method}")
+
+    # terrain correction before video wrapper
+    _apply_terrain_delta(waypoints, center, elevation_provider)
 
     # video mode - wrap with recording start/stop hover waypoints
     if config.capture_mode == "VIDEO_CAPTURE":
