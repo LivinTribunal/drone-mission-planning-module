@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, computed_field, field_validator
 
 from app.schemas.geometry import PointZ
 
@@ -88,6 +88,13 @@ class ValidationViolationResponse(BaseModel):
     category: Literal["violation", "warning", "suggestion"]
     message: str
     constraint_id: UUID | None = None
+    waypoint_ids: list[str] = []
+
+    @field_validator("waypoint_ids", mode="before")
+    @classmethod
+    def _coerce_none_to_list(cls, v: list[str] | None) -> list[str]:
+        """coerce null waypoint_ids from db to empty list."""
+        return v if v else []
 
     @computed_field
     @property

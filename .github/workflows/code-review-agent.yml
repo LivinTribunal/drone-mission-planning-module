@@ -505,14 +505,6 @@ jobs:
             });
             const prLabels = pr.labels.map(l => l.name);
 
-            // Only auto-fix agent-created PRs
-            if (!prLabels.includes('agent-pr')) {
-              core.info('PR does not have agent-pr label — skipping review-fix dispatch.');
-              core.setOutput('eligible', 'false');
-              core.setOutput('reason', 'Not an agent-created PR');
-              return;
-            }
-
             // Skip if already escalated
             if (prLabels.includes('agent:needs-judgment')) {
               core.info('PR already has agent:needs-judgment label — skipping.');

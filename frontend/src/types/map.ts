@@ -146,6 +146,10 @@ export interface AirportMapProps {
   onBearingChange?: (bearing: number) => void;
   bearingResetKey?: number;
   showHelpPanel?: boolean;
+  highlightedWaypointIds?: string[];
+  highlightSeverity?: string;
+  selectedWarning?: import("./flightPlan").ValidationViolation | null;
+  onWarningClose?: () => void;
 }
 
 export type DrawingTool =

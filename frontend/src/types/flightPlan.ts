@@ -29,6 +29,7 @@ export interface ValidationViolation {
   severity: ViolationSeverity;
   constraint_name: string | null;
   waypoint_ref: string | null;
+  waypoint_ids: string[];
 }
 
 export interface ValidationResultResponse {

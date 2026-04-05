@@ -6,6 +6,8 @@ import { cleanMessage } from "@/utils/violations";
 
 interface MapWarningsPanelProps {
   violations: ValidationViolation[];
+  onWarningClick?: (violation: ValidationViolation | null) => void;
+  selectedWarningId?: string | null;
 }
 
 function SeverityDot({ severity }: { severity: ViolationSeverity }) {
@@ -21,6 +23,8 @@ function SeverityDot({ severity }: { severity: ViolationSeverity }) {
 
 export default function MapWarningsPanel({
   violations,
+  onWarningClick,
+  selectedWarningId,
 }: MapWarningsPanelProps) {
   /** compact warnings table for map overlay with scrollable content. */
   const { t } = useTranslation();
@@ -89,25 +93,36 @@ export default function MapWarningsPanel({
             </span>
           </div>
 
-          {sorted.map((v, idx) => (
-            <div
-              key={v.id}
-              className={`grid grid-cols-[1rem_3.5rem_1fr_2rem] gap-1 px-2 py-1 items-start hover:bg-tv-surface-hover transition-colors ${
-                idx < sorted.length - 1 ? "border-b border-tv-border" : ""
-              }`}
-            >
-              <SeverityDot severity={v.severity} />
-              <span className="text-[10px] text-tv-text-secondary truncate mt-0.5">
-                {v.constraint_name ?? "-"}
-              </span>
-              <span className="text-xs text-tv-text-primary">
-                {cleanMessage(v.message)}
-              </span>
-              <span className="text-[10px] text-tv-text-secondary mt-0.5">
-                {v.waypoint_ref ?? ""}
-              </span>
-            </div>
-          ))}
+          {sorted.map((v, idx) => {
+            const isSelected = selectedWarningId === v.id;
+            const borderColor = v.severity === "violation"
+              ? "border-l-tv-error"
+              : v.severity === "warning"
+                ? "border-l-tv-warning"
+                : "border-l-tv-text-muted";
+            return (
+              <div
+                key={v.id}
+                onClick={() => onWarningClick?.(selectedWarningId === v.id ? null : v)}
+                className={`grid grid-cols-[1rem_3.5rem_1fr_2rem] gap-1 px-2 py-1 items-start hover:bg-tv-surface-hover transition-colors ${
+                  idx < sorted.length - 1 ? "border-b border-tv-border" : ""
+                } ${onWarningClick ? "cursor-pointer" : ""} ${
+                  isSelected ? `border-l-2 ${borderColor}` : ""
+                }`}
+              >
+                <SeverityDot severity={v.severity} />
+                <span className="text-[10px] text-tv-text-secondary truncate mt-0.5">
+                  {v.constraint_name ?? "-"}
+                </span>
+                <span className="text-xs text-tv-text-primary">
+                  {cleanMessage(v.message)}
+                </span>
+                <span className="text-[10px] text-tv-text-secondary mt-0.5">
+                  {v.waypoint_ref ?? ""}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
