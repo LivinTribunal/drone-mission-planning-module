@@ -2,8 +2,8 @@
 
 tracks when the template was last modified.
 
-Revision ID: c9d0e1f2a3b4
-Revises: b8c9d0e1f2a3
+Revision ID: c9d0e1f2a3b5
+Revises: c9d0e1f2a3b4
 Create Date: 2026-03-28 10:00:00.000000
 
 """
@@ -13,8 +13,8 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = "c9d0e1f2a3b4"
-down_revision: Union[str, None] = "b8c9d0e1f2a3"
+revision: str = "c9d0e1f2a3b5"
+down_revision: Union[str, None] = "c9d0e1f2a3b4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

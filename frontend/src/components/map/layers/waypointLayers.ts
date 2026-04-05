@@ -56,6 +56,13 @@ export function waypointsToGeoJSON(
   const stackable: WaypointResponse[] = [];
 
   for (const wp of sorted) {
+    // video start/stop hovers share position with measurements - skip on map,
+    // they're visible in the waypoint list panel
+    if (wp.waypoint_type === "HOVER" &&
+        (wp.camera_action === "RECORDING_START" || wp.camera_action === "RECORDING_STOP")) {
+      continue;
+    }
+
     if (NON_STACKABLE.has(wp.waypoint_type)) {
       features.push({
         type: "Feature",
@@ -63,6 +70,7 @@ export function waypointsToGeoJSON(
           id: wp.id,
           sequence_order: wp.sequence_order,
           waypoint_type: wp.waypoint_type,
+          camera_action: wp.camera_action ?? "NONE",
           inspection_id: wp.inspection_id,
           label: resolveLabel(wp.waypoint_type, wp.inspection_id, inspectionIndexMap),
           color: resolveWaypointColor(wp.waypoint_type),
@@ -98,6 +106,7 @@ export function waypointsToGeoJSON(
           id: wp.id,
           sequence_order: wp.sequence_order,
           waypoint_type: wp.waypoint_type,
+          camera_action: wp.camera_action ?? "NONE",
           inspection_id: wp.inspection_id,
           label: resolveLabel(wp.waypoint_type, wp.inspection_id, inspectionIndexMap),
           color: resolveWaypointColor(wp.waypoint_type),
@@ -118,6 +127,7 @@ export function waypointsToGeoJSON(
           id: ids,
           sequence_order: Math.min(...seqs),
           waypoint_type: first.waypoint_type,
+          camera_action: first.camera_action ?? "NONE",
           inspection_id: first.inspection_id,
           label: resolveLabel(first.waypoint_type, first.inspection_id, inspectionIndexMap),
           color: resolveWaypointColor(first.waypoint_type),
@@ -506,14 +516,20 @@ export function addWaypointLayers(
     },
   });
 
-  // hover waypoints
+  // hover waypoints - icon varies by camera action
   map.addLayer({
     id: WAYPOINT_HOVER_LAYER,
     type: "symbol",
     source: WAYPOINT_SOURCE,
     filter: ["==", ["get", "waypoint_type"], "HOVER"],
     layout: {
-      "icon-image": "hover-icon",
+      "icon-image": [
+        "match",
+        ["get", "camera_action"],
+        "RECORDING_START", "recording-start-icon",
+        "RECORDING_STOP", "recording-stop-icon",
+        "hover-icon",
+      ],
       "icon-size": 1,
       "icon-allow-overlap": true,
     },

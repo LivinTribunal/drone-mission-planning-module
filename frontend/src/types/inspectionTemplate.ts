@@ -1,4 +1,4 @@
-import type { InspectionMethod } from "./enums";
+import type { CaptureMode, InspectionMethod } from "./enums";
 
 export interface InspectionConfigResponse {
   id: string;
@@ -11,6 +11,8 @@ export interface InspectionConfigResponse {
   horizontal_distance: number | null;
   sweep_angle: number | null;
   lha_ids: string[] | null;
+  capture_mode: CaptureMode | null;
+  recording_setup_duration: number | null;
 }
 
 export interface InspectionTemplateResponse {

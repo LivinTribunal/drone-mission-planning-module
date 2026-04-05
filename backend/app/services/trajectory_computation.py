@@ -43,6 +43,8 @@ CONFIG_FIELDS = (
     "hover_duration",
     "horizontal_distance",
     "sweep_angle",
+    "capture_mode",
+    "recording_setup_duration",
 )
 
 
@@ -375,6 +377,12 @@ def calculate_arc_path(
         # gimbal pitch = elevation angle from drone to LHA center
         pitch = elevation_angle(lon, lat, arc_alt, center.lon, center.lat, center.alt)
 
+        cam_action = (
+            CameraAction.RECORDING
+            if config.capture_mode == "VIDEO_CAPTURE"
+            else CameraAction.PHOTO_CAPTURE
+        )
+
         waypoints.append(
             WaypointData(
                 lon=lon,
@@ -383,7 +391,7 @@ def calculate_arc_path(
                 heading=heading_to_center,
                 speed=speed,
                 waypoint_type=WaypointType.MEASUREMENT,
-                camera_action=CameraAction.PHOTO_CAPTURE,
+                camera_action=cam_action,
                 camera_target=center,
                 inspection_id=inspection_id,
                 gimbal_pitch=pitch,
@@ -435,6 +443,12 @@ def calculate_vertical_path(
         wp_type = WaypointType.HOVER if is_transition else WaypointType.MEASUREMENT
         wp_hover = hover_duration if is_transition else None
 
+        cam_action = (
+            CameraAction.RECORDING
+            if config.capture_mode == "VIDEO_CAPTURE"
+            else CameraAction.PHOTO_CAPTURE
+        )
+
         waypoints.append(
             WaypointData(
                 lon=lon,
@@ -443,7 +457,7 @@ def calculate_vertical_path(
                 heading=heading_to_center,
                 speed=speed,
                 waypoint_type=wp_type,
-                camera_action=CameraAction.PHOTO_CAPTURE,
+                camera_action=cam_action,
                 camera_target=center,
                 inspection_id=inspection_id,
                 hover_duration=wp_hover,
@@ -452,6 +466,49 @@ def calculate_vertical_path(
         )
 
     return waypoints
+
+
+def _insert_video_hover_waypoints(
+    waypoints: list[WaypointData],
+    config: ResolvedConfig,
+) -> list[WaypointData]:
+    """wrap measurement waypoints with recording start/stop hover waypoints for video mode."""
+    if not waypoints:
+        return waypoints
+
+    first = waypoints[0]
+    last = waypoints[-1]
+    setup_dur = config.recording_setup_duration
+
+    start_hover = WaypointData(
+        lon=first.lon,
+        lat=first.lat,
+        alt=first.alt,
+        heading=first.heading,
+        speed=first.speed,
+        waypoint_type=WaypointType.HOVER,
+        camera_action=CameraAction.RECORDING_START,
+        camera_target=first.camera_target,
+        inspection_id=first.inspection_id,
+        hover_duration=setup_dur,
+        gimbal_pitch=first.gimbal_pitch,
+    )
+
+    stop_hover = WaypointData(
+        lon=last.lon,
+        lat=last.lat,
+        alt=last.alt,
+        heading=last.heading,
+        speed=last.speed,
+        waypoint_type=WaypointType.HOVER,
+        camera_action=CameraAction.RECORDING_STOP,
+        camera_target=last.camera_target,
+        inspection_id=last.inspection_id,
+        hover_duration=setup_dur,
+        gimbal_pitch=last.gimbal_pitch,
+    )
+
+    return [start_hover, *waypoints, stop_hover]
 
 
 def compute_measurement_trajectory(
@@ -465,11 +522,18 @@ def compute_measurement_trajectory(
 ) -> list[WaypointData]:
     """dispatch to arc or vertical path computation based on inspection method."""
     if inspection.method == InspectionMethod.ANGULAR_SWEEP:
-        return calculate_arc_path(center, runway_heading, glide_slope, config, inspection.id, speed)
-
-    if inspection.method == InspectionMethod.VERTICAL_PROFILE:
-        return calculate_vertical_path(
+        waypoints = calculate_arc_path(
+            center, runway_heading, glide_slope, config, inspection.id, speed
+        )
+    elif inspection.method == InspectionMethod.VERTICAL_PROFILE:
+        waypoints = calculate_vertical_path(
             center, runway_heading, config, inspection.id, speed, setting_angles
         )
+    else:
+        raise ValueError(f"unsupported inspection method: {inspection.method}")
 
-    raise ValueError(f"unsupported inspection method: {inspection.method}")
+    # video mode - wrap with recording start/stop hover waypoints
+    if config.capture_mode == "VIDEO_CAPTURE":
+        waypoints = _insert_video_hover_waypoints(waypoints, config)
+
+    return waypoints

@@ -93,7 +93,9 @@ class Waypoint(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "camera_action IN ('NONE', 'PHOTO_CAPTURE', 'RECORDING_START', 'RECORDING_STOP')",
+            "camera_action IN ("
+            "'NONE', 'PHOTO_CAPTURE', 'RECORDING_START', "
+            "'RECORDING', 'RECORDING_STOP')",
             name="ck_waypoint_camera_action",
         ),
         CheckConstraint(

@@ -442,6 +442,18 @@
       "settingAngle": "Angle",
       "selectMission": "Select a mission",
       "recomputeTooltip": "Modify configuration to recompute",
+      "captureMode": {
+        "title": "Capture Mode",
+        "defaultTitle": "Default Capture Mode",
+        "video": "Video",
+        "photo": "Photo",
+        "useMissionDefault": "Use Mission Default",
+        "recordingSetupDuration": "Recording Setup Duration (s)",
+        "recordingStart": "Video Start (setup)",
+        "recording": "Recording",
+        "recordingStop": "Video Stop (teardown)",
+        "photoCapture": "Photo Capture"
+      },
       "savedToday": "Saved today {{time}}",
       "savedYesterday": "Saved yesterday {{time}}",
       "savedOn": "Saved {{date}} {{time}}",

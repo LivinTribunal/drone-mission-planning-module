@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { MapPin, ChevronDown } from "lucide-react";
+import { MapPin, ChevronDown, Play, Square } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { WaypointResponse } from "@/types/flightPlan";
 import type { PointZ } from "@/types/common";
@@ -58,8 +58,14 @@ function buildGroups(sorted: WaypointResponse[]): WaypointGroup[] {
       if (next.waypoint_type === type) {
         groupWps.push(next);
         j++;
-      } else if (type === "MEASUREMENT" && next.waypoint_type === "HOVER") {
-        // hover within measurement sequence belongs to same group
+      } else if (
+        type === "MEASUREMENT" &&
+        next.waypoint_type === "HOVER" &&
+        next.camera_action !== "RECORDING_START" &&
+        next.camera_action !== "RECORDING_STOP"
+      ) {
+        // regular hover within measurement sequence belongs to same group
+        // video start/stop hovers stay as standalone entries
         groupWps.push(next);
         j++;
       } else {
@@ -124,6 +130,23 @@ export default function WaypointListPanel({
   }
 
   function renderWaypointRow(wp: WaypointResponse) {
+    // video start/stop hover waypoints get distinct icons and labels
+    const isRecordingStart = wp.waypoint_type === "HOVER" && wp.camera_action === "RECORDING_START";
+    const isRecordingStop = wp.waypoint_type === "HOVER" && wp.camera_action === "RECORDING_STOP";
+
+    let icon: React.ReactNode;
+    let label: string;
+    if (isRecordingStart) {
+      icon = <Play className="h-3 w-3 flex-shrink-0 text-tv-success" />;
+      label = t("mission.config.captureMode.recordingStart");
+    } else if (isRecordingStop) {
+      icon = <Square className="h-3 w-3 flex-shrink-0 text-tv-warning" />;
+      label = t("mission.config.captureMode.recordingStop");
+    } else {
+      icon = <MapPin className={`h-3 w-3 flex-shrink-0 ${typeColors[wp.waypoint_type] ?? "text-tv-text-muted"}`} />;
+      label = t(`map.waypointTypes.${wp.waypoint_type}`, { defaultValue: wp.waypoint_type.replace(/_/g, " ") });
+    }
+
     return (
       <button
         key={wp.id}
@@ -135,13 +158,9 @@ export default function WaypointListPanel({
         }`}
         data-testid={`waypoint-item-${wp.id}`}
       >
-        <MapPin
-          className={`h-3 w-3 flex-shrink-0 ${typeColors[wp.waypoint_type] ?? "text-tv-text-muted"}`}
-        />
+        {icon}
         <span className="font-medium w-6">{wp.sequence_order}</span>
-        <span className="flex-1 truncate">
-          {t(`map.waypointTypes.${wp.waypoint_type}`, { defaultValue: wp.waypoint_type.replace(/_/g, " ") })}
-        </span>
+        <span className="flex-1 truncate">{label}</span>
       </button>
     );
   }

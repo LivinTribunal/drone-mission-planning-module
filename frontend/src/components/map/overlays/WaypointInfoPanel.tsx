@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
+import { Play, Circle, Square, Camera } from "lucide-react";
 import type { WaypointResponse } from "@/types/flightPlan";
+import type { CameraAction } from "@/types/enums";
 
 interface WaypointInfoPanelProps {
   waypoint: WaypointResponse | null;
@@ -25,6 +27,17 @@ export default function WaypointInfoPanel({
 
   const [lon, lat, alt] = waypoint.position.coordinates;
 
+  const cameraActionLabels: Record<string, { label: string; icon: React.ReactNode }> = {
+    RECORDING_START: { label: t("mission.config.captureMode.recordingStart"), icon: <Play className="h-3 w-3 text-tv-success inline" /> },
+    RECORDING: { label: t("mission.config.captureMode.recording"), icon: <Circle className="h-3 w-3 text-tv-error inline" /> },
+    RECORDING_STOP: { label: t("mission.config.captureMode.recordingStop"), icon: <Square className="h-3 w-3 text-tv-warning inline" /> },
+    PHOTO_CAPTURE: { label: t("mission.config.captureMode.photoCapture"), icon: <Camera className="h-3 w-3 text-tv-accent inline" /> },
+    NONE: { label: "\u2014", icon: null },
+  };
+
+  const camAction = waypoint.camera_action as CameraAction | null;
+  const camInfo = camAction ? cameraActionLabels[camAction] : null;
+
   const fields = [
     { label: t("mission.config.sequence"), value: waypoint.sequence_order },
     { label: t("mission.config.type"), value: waypoint.waypoint_type.replace(/_/g, " ") },
@@ -42,9 +55,9 @@ export default function WaypointInfoPanel({
     },
     {
       label: t("mission.config.cameraAction"),
-      value: waypoint.camera_action
-        ? t(`map.cameraActionLabel.${waypoint.camera_action}`, { defaultValue: waypoint.camera_action })
-        : "\u2014",
+      value: camInfo ? (
+        <span className="inline-flex items-center gap-1">{camInfo.icon}{camInfo.label}</span>
+      ) : "\u2014",
     },
     {
       label: t("mission.config.gimbalPitch"),

@@ -1,5 +1,5 @@
 import type { PointZ } from "./common";
-import type { InspectionMethod, MissionStatus } from "./enums";
+import type { CaptureMode, InspectionMethod, MissionStatus } from "./enums";
 
 export interface MissionResponse {
   id: string;
@@ -15,6 +15,7 @@ export interface MissionResponse {
   default_altitude_offset: number | null;
   takeoff_coordinate: PointZ | null;
   landing_coordinate: PointZ | null;
+  default_capture_mode: CaptureMode | null;
   has_unsaved_map_changes: boolean;
   inspection_count: number;
   estimated_duration: number | null;
@@ -34,6 +35,8 @@ export interface InspectionConfigResponse {
   horizontal_distance: number | null;
   sweep_angle: number | null;
   lha_ids: string[] | null;
+  capture_mode: CaptureMode | null;
+  recording_setup_duration: number | null;
 }
 
 export interface InspectionResponse {
@@ -57,6 +60,8 @@ export interface InspectionConfigOverride {
   horizontal_distance?: number | null;
   sweep_angle?: number | null;
   lha_ids?: string[] | null;
+  capture_mode?: CaptureMode | null;
+  recording_setup_duration?: number | null;
 }
 
 export interface MissionCreate {
@@ -69,6 +74,7 @@ export interface MissionCreate {
   default_altitude_offset?: number | null;
   takeoff_coordinate?: PointZ | null;
   landing_coordinate?: PointZ | null;
+  default_capture_mode?: CaptureMode | null;
 }
 
 export interface MissionUpdate {
@@ -80,6 +86,7 @@ export interface MissionUpdate {
   default_altitude_offset?: number | null;
   takeoff_coordinate?: PointZ | null;
   landing_coordinate?: PointZ | null;
+  default_capture_mode?: CaptureMode | null;
 }
 
 export interface InspectionCreate {
