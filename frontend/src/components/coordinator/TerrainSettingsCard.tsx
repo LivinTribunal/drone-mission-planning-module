@@ -37,6 +37,12 @@ export default function TerrainSettingsCard({
 
   async function handleFileUpload(file: File) {
     /** upload DEM file and refresh airport data. */
+    const MAX_FILE_SIZE = 500 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      setError(t("coordinator.terrain.maxFileSize"));
+      return;
+    }
+
     setUploading(true);
     setError(null);
     try {

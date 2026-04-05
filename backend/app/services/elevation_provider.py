@@ -42,13 +42,7 @@ class DEMElevationProvider(ElevationProvider):
 
     def __init__(self, file_path: str, fallback_elevation: float):
         """open raster dataset and cache handle."""
-        try:
-            import rasterio  # noqa: F401
-        except ImportError as e:
-            raise ImportError(
-                "rasterio is required for DEM elevation provider - "
-                "install it with: pip install rasterio"
-            ) from e
+        import rasterio
 
         self.fallback_elevation = fallback_elevation
         self.file_path = file_path
@@ -133,6 +127,8 @@ def create_elevation_provider(airport) -> ElevationProvider:
         if dem_path:
             try:
                 return DEMElevationProvider(dem_path, airport.elevation)
+            except ImportError:
+                logger.warning("rasterio not installed, falling back to flat elevation")
             except Exception as e:
                 logger.warning("failed to create DEM provider: %s, falling back to flat", e)
 

@@ -539,12 +539,20 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
                 batch = locations[i : i + batch_size]
                 batch_timeout = min(60.0, remaining)
                 resp = http_client.post(
-                    "https://api.open-elevation.com/api/v1/lookup",
+                    settings.open_elevation_url,
                     json={"locations": batch},
                     timeout=batch_timeout,
                 )
                 resp.raise_for_status()
                 results = resp.json().get("results", [])
+
+                if len(results) != len(batch):
+                    logger.warning(
+                        "short batch response (%d/%d) from elevation API",
+                        len(results),
+                        len(batch),
+                    )
+
                 all_elevations.extend(
                     r.get("elevation") if r.get("elevation") is not None else airport.elevation
                     for r in results
@@ -587,13 +595,18 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
     ) as dst:
         dst.write(data, 1)
 
-    upload_terrain_dem(
-        db,
-        airport_id,
-        str(final_path),
-        [min_lon, min_lat, max_lon, max_lat],
-        [step, step],
-    )
+    try:
+        upload_terrain_dem(
+            db,
+            airport_id,
+            str(final_path),
+            [min_lon, min_lat, max_lon, max_lat],
+            [step, step],
+        )
+    except Exception:
+        if final_path.exists():
+            final_path.unlink()
+        raise
 
     return {
         "terrain_source": "DEM",

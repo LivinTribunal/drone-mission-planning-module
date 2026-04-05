@@ -168,6 +168,8 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
         raise
     except (NotFoundError, DomainError) as e:
         # service layer error - file is valid but db operation failed
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
         logger.exception("DEM upload service error")
         raise HTTPException(status_code=e.status_code, detail=str(e))
     except Exception as e:

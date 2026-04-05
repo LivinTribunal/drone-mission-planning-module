@@ -115,9 +115,14 @@ def upload_drone_model(db: Session, drone_id: UUID, file_content: bytes, filenam
     dest = CUSTOM_MODELS_DIR / safe_name
     dest.write_bytes(file_content)
 
-    drone.model_identifier = safe_name
-    db.commit()
-    db.refresh(drone)
+    try:
+        drone.model_identifier = safe_name
+        db.commit()
+        db.refresh(drone)
+    except Exception:
+        if dest.exists():
+            dest.unlink()
+        raise
 
     return safe_name
 

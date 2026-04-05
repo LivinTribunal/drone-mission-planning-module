@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     # terrain download limits
     terrain_download_timeout: float = 300.0  # 5 min total wall-clock limit
+    open_elevation_url: str = "https://api.open-elevation.com/api/v1/lookup"
 
     class Config:
         env_file = ".env"
