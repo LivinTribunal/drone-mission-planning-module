@@ -646,15 +646,15 @@ export function updateWarningHighlightFilter(
   const color = SEVERITY_COLORS[severity ?? "warning"] ?? SEVERITY_COLORS.warning;
 
   try {
-    // full waypoint circle highlight - in simplified mode only show on transit points
+    // circle highlights - hidden entirely in simplified mode
     if (map.getLayer(WAYPOINT_WARNING_HIGHLIGHT_LAYER)) {
-      if (!waypointIds || waypointIds.length === 0) {
+      if (simplified) {
+        map.setLayoutProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "visibility", "none");
+      } else if (!waypointIds || waypointIds.length === 0) {
+        map.setLayoutProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "visibility", "visible");
         map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "id"], ""]);
-      } else if (simplified) {
-        // no circle highlights in simplified mode - measurements are lines only
-        map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, ["==", ["get", "id"], ""]);
-
       } else {
+        map.setLayoutProperty(WAYPOINT_WARNING_HIGHLIGHT_LAYER, "visibility", "visible");
         map.setFilter(WAYPOINT_WARNING_HIGHLIGHT_LAYER, [
           "in",
           ["get", "id"],
