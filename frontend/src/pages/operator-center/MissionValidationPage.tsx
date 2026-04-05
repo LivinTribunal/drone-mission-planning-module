@@ -21,6 +21,7 @@ import type { DroneProfileResponse } from "@/types/droneProfile";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import ValidationResultsPanel from "@/components/mission/ValidationResultsPanel";
 import WarningsPanel from "@/components/mission/WarningsPanel";
+import WarningInfoPanel from "@/components/map/overlays/WarningInfoPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
 import ExportPanel from "@/components/mission/ExportPanel";
 import AirportMap from "@/components/map/AirportMap";
@@ -304,6 +305,15 @@ export default function MissionValidationPage() {
               selectedWarningId={selectedWarning?.id}
             />
           </div>
+
+          {selectedWarning && (
+            <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+              <WarningInfoPanel
+                violation={selectedWarning}
+                onClose={() => setSelectedWarning(null)}
+              />
+            </div>
+          )}
         </>,
         leftPanelEl,
       )}

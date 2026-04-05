@@ -13,6 +13,7 @@ import type { FlightPlanResponse, ValidationViolation } from "@/types/flightPlan
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
 import MissionInfoPanel from "@/components/mission/MissionInfoPanel";
 import WarningsPanel from "@/components/mission/WarningsPanel";
+import WarningInfoPanel from "@/components/map/overlays/WarningInfoPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
 import ValidationStatusPanel from "@/components/mission/ValidationStatusPanel";
 import AirportMap from "@/components/map/AirportMap";
@@ -213,6 +214,15 @@ export default function MissionOverviewPage() {
               selectedWarningId={selectedWarning?.id}
             />
           </div>
+
+          {selectedWarning && (
+            <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+              <WarningInfoPanel
+                violation={selectedWarning}
+                onClose={() => setSelectedWarning(null)}
+              />
+            </div>
+          )}
         </>,
         leftPanelEl,
       )}
