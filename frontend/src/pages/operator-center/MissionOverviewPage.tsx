@@ -228,19 +228,10 @@ export default function MissionOverviewPage() {
               onTerrainChange={setTerrainMode}
               showTerrainToggle={false}
               showWaypointList={false}
-              simplifiedTrajectory={!selectedWarning}
+              simplifiedTrajectory
               is3D={is3D}
               onToggle3D={setIs3D}
-              layers={selectedWarning ? {
-                simplifiedTrajectory: false,
-                trajectory: true,
-                transitWaypoints: true,
-                measurementWaypoints: true,
-                path: true,
-                takeoffLanding: true,
-                cameraHeading: false,
-                pathHeading: false,
-              } : {
+              layers={{
                 simplifiedTrajectory: true,
                 trajectory: false,
                 transitWaypoints: false,
