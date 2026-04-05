@@ -482,8 +482,10 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
 
     from app.core.config import settings
 
+    # fetch airport data then release from session before long HTTP calls
     airport = get_airport(db, airport_id)
     apt_lon, apt_lat = _get_airport_lonlat(airport)
+    db.expunge(airport)
 
     # 5km bounding box around airport (~0.045 degrees)
     delta_deg = 0.045

@@ -106,7 +106,6 @@ export interface AirportUpdate {
   country?: string | null;
   elevation?: number;
   location?: PointZ;
-  terrain_source?: string;
 }
 
 export interface TerrainCoverage {

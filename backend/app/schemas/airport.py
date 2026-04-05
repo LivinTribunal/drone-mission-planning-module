@@ -1,4 +1,3 @@
-from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, computed_field
@@ -31,7 +30,6 @@ class AirportUpdate(BaseModel):
     country: str | None = None
     elevation: float | None = None
     location: PointZ | None = None
-    terrain_source: Literal["FLAT", "DEM"] | None = None
 
 
 class AirportResponse(BaseModel):

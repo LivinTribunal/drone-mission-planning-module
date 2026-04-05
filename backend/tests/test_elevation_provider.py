@@ -429,6 +429,41 @@ class TestDEMElevationProvider:
 
         assert result == [100.0, 250.0, 300.0]
 
+    def test_get_elevation_nan_returns_fallback(self):
+        """NaN value in raster returns fallback - e.g. nodata=None in file metadata."""
+        mock_dataset = MagicMock()
+        mock_dataset.sample.return_value = iter([[float("nan")]])
+        mock_dataset.nodata = None
+
+        provider = _make_dem_provider(mock_dataset, fallback=300.0)
+        result = provider.get_elevation(50.0, 14.0)
+
+        assert result == 300.0
+
+    def test_get_elevation_nan_with_nodata_set(self):
+        """NaN value caught even when nodata is set to a different value."""
+        mock_dataset = MagicMock()
+        mock_dataset.sample.return_value = iter([[float("nan")]])
+        mock_dataset.nodata = -9999.0
+
+        provider = _make_dem_provider(mock_dataset, fallback=200.0)
+        result = provider.get_elevation(50.0, 14.0)
+
+        assert result == 200.0
+
+    def test_get_elevations_batch_nan_mixed(self):
+        """batch with NaN values returns fallback for those points."""
+        mock_dataset = MagicMock()
+        mock_dataset.nodata = None
+        mock_dataset.sample.return_value = iter([[100.0], [float("nan")], [300.0], [float("nan")]])
+
+        provider = _make_dem_provider(mock_dataset, fallback=500.0)
+        result = provider.get_elevations_batch(
+            [(50.0, 14.0), (51.0, 15.0), (52.0, 16.0), (53.0, 17.0)]
+        )
+
+        assert result == [100.0, 500.0, 300.0, 500.0]
+
 
 class TestAglViolationSeverity:
     """tests for AGL violation message includes waypoint type."""

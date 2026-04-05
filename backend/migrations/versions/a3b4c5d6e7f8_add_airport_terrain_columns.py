@@ -23,8 +23,14 @@ def upgrade() -> None:
         sa.Column("terrain_source", sa.String(20), nullable=False, server_default="FLAT"),
     )
     op.add_column("airport", sa.Column("dem_file_path", sa.String(), nullable=True))
+    op.create_check_constraint(
+        "ck_airport_terrain_source",
+        "airport",
+        "terrain_source IN ('FLAT', 'DEM')",
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint("ck_airport_terrain_source", "airport", type_="check")
     op.drop_column("airport", "dem_file_path")
     op.drop_column("airport", "terrain_source")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
@@ -59,9 +60,11 @@ class DEMElevationProvider(ElevationProvider):
             values = list(self._dataset.sample([(lon, lat)]))
             if values and len(values[0]) > 0:
                 val = float(values[0][0])
-                # check for nodata
+                # check for nodata or NaN
                 nodata = self._dataset.nodata
                 if nodata is not None and val == nodata:
+                    return self.fallback_elevation
+                if math.isnan(val):
                     return self.fallback_elevation
                 return val
         except Exception:
@@ -82,7 +85,7 @@ class DEMElevationProvider(ElevationProvider):
             nodata = self._dataset.nodata
             for val_array in self._dataset.sample(coords):
                 val = float(val_array[0])
-                if nodata is not None and val == nodata:
+                if (nodata is not None and val == nodata) or math.isnan(val):
                     results.append(self.fallback_elevation)
                 else:
                     results.append(val)
