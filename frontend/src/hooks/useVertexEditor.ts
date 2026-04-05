@@ -396,7 +396,9 @@ export default function useVertexEditor(
       // query all edit nodes
       const hits = map.queryRenderedFeatures(e.point, { layers: [LYR_CORNERS, LYR_CENTER] });
       if (hits.length > 0) {
-        const kind = hits[0].properties?.kind as "corner" | "center" | "radius";
+        const raw = hits[0].properties?.kind;
+        if (raw !== "corner" && raw !== "center" && raw !== "radius") return;
+        const kind = raw;
         const idx = hits[0].properties?.idx ?? 0;
         dragRef.current = { kind, idx };
         dragStartRef.current = [e.lngLat.lng, e.lngLat.lat];

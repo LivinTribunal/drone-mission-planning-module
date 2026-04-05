@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
@@ -147,12 +148,17 @@ def batch_update_waypoints(
     if not fp:
         raise NotFoundError("flight plan not found")
 
+    # load all target waypoints in one query
+    waypoint_ids = [upd.waypoint_id for upd in updates]
+    waypoints = (
+        db.query(Waypoint)
+        .filter(Waypoint.id.in_(waypoint_ids), Waypoint.flight_plan_id == fp.id)
+        .all()
+    )
+    wp_map = {wp.id: wp for wp in waypoints}
+
     for upd in updates:
-        wp = (
-            db.query(Waypoint)
-            .filter(Waypoint.id == upd.waypoint_id, Waypoint.flight_plan_id == fp.id)
-            .first()
-        )
+        wp = wp_map.get(upd.waypoint_id)
         if not wp:
             raise NotFoundError(f"waypoint {upd.waypoint_id} not found")
 
@@ -169,9 +175,7 @@ def batch_update_waypoints(
         elif wp.waypoint_type == WaypointType.LANDING:
             mission.landing_coordinate = geojson_to_ewkt({"type": "Point", "coordinates": coords})
 
-    # regress validated -> planned, keep planned as-is (waypoints modified in place)
-    if mission.status == MissionStatus.VALIDATED:
-        mission.status = MissionStatus.PLANNED  # arch-exempt
+    mission.regress_to_planned()
 
     mission.has_unsaved_map_changes = True
     db.commit()
@@ -193,6 +197,18 @@ def insert_transit_waypoint(
     fp = db.query(FlightPlan).filter(FlightPlan.mission_id == mission_id).first()
     if not fp:
         raise NotFoundError("flight plan not found")
+
+    # validate after_sequence is within range
+    max_seq = (
+        db.query(func.max(Waypoint.sequence_order))
+        .filter(Waypoint.flight_plan_id == fp.id)
+        .scalar()
+    ) or 0
+    if request.after_sequence < 0 or request.after_sequence > max_seq:
+        raise DomainError(
+            f"after_sequence must be between 0 and {max_seq}",
+            status_code=400,
+        )
 
     # shift all waypoints after the insertion point
     subsequent = (
@@ -216,10 +232,7 @@ def insert_transit_waypoint(
     )
     db.add(new_wp)
 
-    # regress validated -> planned, keep planned as-is (waypoints modified in place)
-    if mission.status == MissionStatus.VALIDATED:
-        mission.status = MissionStatus.PLANNED  # arch-exempt
-
+    mission.regress_to_planned()
     mission.has_unsaved_map_changes = True
     db.commit()
 
@@ -265,9 +278,7 @@ def delete_transit_waypoint(db: Session, mission_id: UUID, waypoint_id: UUID) ->
     for w in subsequent:
         w.sequence_order -= 1
 
-    # regress validated -> planned, keep planned as-is
-    if mission.status == MissionStatus.VALIDATED:
-        mission.status = MissionStatus.PLANNED  # arch-exempt
+    mission.regress_to_planned()
 
     mission.has_unsaved_map_changes = True
     db.commit()

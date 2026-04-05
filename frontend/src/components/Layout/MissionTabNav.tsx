@@ -170,7 +170,8 @@ export default function MissionTabNav() {
     try {
       await updateMission(id, { name: renameValue.trim() });
       await refreshMissions();
-    } catch {
+    } catch (e) {
+      console.error("rename failed", e instanceof Error ? e.message : String(e));
       setRenameError(t("mission.renameError"));
       if (renameErrorTimer.current) clearTimeout(renameErrorTimer.current);
       renameErrorTimer.current = setTimeout(() => setRenameError(null), 4000);
