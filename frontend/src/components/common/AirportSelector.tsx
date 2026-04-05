@@ -93,7 +93,7 @@ export default function AirportSelector() {
               }}
               className="flex h-5 w-5 items-center justify-center rounded-full
                 bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors cursor-pointer pointer-events-auto"
-              aria-label="Clear airport"
+              aria-label={t("nav.clearAirport")}
             >
               <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                 <path

@@ -11,6 +11,7 @@ from app.core.config import TERRAIN_DIR, settings
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
+from app.models.enums import MissionStatus
 from app.models.mission import DroneProfile, Mission
 from app.models.value_objects import IcaoCode
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
@@ -198,12 +199,12 @@ def bulk_change_drone(
             .filter(
                 Mission.airport_id == airport_id,
                 Mission.id.in_(mission_ids),
-                Mission.status.in_(["DRAFT", "PLANNED"]),
+                Mission.status.in_([MissionStatus.DRAFT, MissionStatus.PLANNED]),
             )
             .all()
         )
         for mission in missions:
-            was_planned = mission.status == "PLANNED"
+            was_planned = mission.status == MissionStatus.PLANNED
             mission.change_drone_profile(drone_profile_id)
             updated_ids.append(mission.id)
             if was_planned:
@@ -211,7 +212,7 @@ def bulk_change_drone(
     else:
         # ALL_DRAFT
         query = db.query(Mission).filter(
-            Mission.airport_id == airport_id, Mission.status == "DRAFT"
+            Mission.airport_id == airport_id, Mission.status == MissionStatus.DRAFT
         )
         if from_drone_id:
             query = query.filter(Mission.drone_profile_id == from_drone_id)
@@ -527,8 +528,6 @@ def upload_terrain_dem(
     db: Session,
     airport_id: UUID,
     file_path: str,
-    coverage_bounds: list[float],
-    coverage_resolution: list[float],
     terrain_source: str = "DEM_UPLOAD",
 ) -> Airport:
     """set airport terrain source after file upload or API download."""
@@ -547,6 +546,14 @@ def upload_terrain_dem(
     db.refresh(airport)
 
     return airport
+
+
+def get_dem_file_path(db: Session, airport_id: UUID) -> str | None:
+    """get dem_file_path for an airport without eager-loading infrastructure."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+    return airport.dem_file_path
 
 
 def delete_terrain_dem(db: Session, airport_id: UUID) -> Airport:

@@ -39,7 +39,8 @@
     "system": "System",
     "chooseAirport": "Choose a airport",
     "searchAirports": "Search airports...",
-    "selectAirport": "Select an airport to get started"
+    "selectAirport": "Select an airport to get started",
+    "clearAirport": "Clear airport"
   },
   "auth": {
     "loginTitle": "Login to TarmacView",

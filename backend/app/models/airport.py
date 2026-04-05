@@ -30,6 +30,13 @@ class Airport(Base):
     terrain_source = Column(String(20), nullable=False, default="FLAT")
     dem_file_path = Column(String, nullable=True)
 
+    __table_args__ = (
+        CheckConstraint(
+            "terrain_source IN ('FLAT', 'DEM_UPLOAD', 'DEM_API')",
+            name="ck_airport_terrain_source",
+        ),
+    )
+
     surfaces = relationship(
         "AirfieldSurface", back_populates="airport", cascade="all, delete-orphan"
     )

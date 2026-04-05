@@ -163,6 +163,10 @@ def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends
     try:
         # validate with rasterio
         with rasterio.open(tmp_path) as dataset:
+            if dataset.crs is None or dataset.crs.to_epsg() != 4326:
+                os.unlink(tmp_path)
+                raise HTTPException(status_code=400, detail="DEM must be in WGS84 (EPSG:4326)")
+
             bounds = list(dataset.bounds)
             res_x = abs(dataset.transform.a)
             res_y = abs(dataset.transform.e)
@@ -171,7 +175,6 @@ def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends
             airport = airport_service.get_airport(db, airport_id)
             apt_lon, apt_lat = airport_service.get_airport_lonlat(airport)
 
-            # check if airport point is within DEM bounds
             if not (bounds[0] <= apt_lon <= bounds[2] and bounds[1] <= apt_lat <= bounds[3]):
                 os.unlink(tmp_path)
                 raise HTTPException(status_code=400, detail="DEM does not cover airport location")
@@ -185,7 +188,7 @@ def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends
         tmp_path = str(final_path)
 
         airport_service.upload_terrain_dem(
-            db, airport_id, str(final_path), bounds, [res_x, res_y], terrain_source="DEM_UPLOAD"
+            db, airport_id, str(final_path), terrain_source="DEM_UPLOAD"
         )
 
         return TerrainUploadResponse(
@@ -211,10 +214,8 @@ def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends
 @router.delete("/{airport_id}/terrain-dem", response_model=DeleteResponse)
 def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
     """remove DEM file and revert airport to flat terrain."""
-    airport = airport_service.get_airport(db, airport_id)
-    old_dem_path = airport.dem_file_path
+    old_dem_path = airport_service.get_dem_file_path(db, airport_id)
 
-    # db first - only delete file after commit succeeds
     airport_service.delete_terrain_dem(db, airport_id)
 
     if old_dem_path and os.path.exists(old_dem_path):
@@ -252,8 +253,6 @@ async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db))
             db,
             airport_id,
             result["file_path"],
-            result["bounds"],
-            result["resolution"],
             terrain_source="DEM_API",
         )
     except (NotFoundError, DomainError) as e:
