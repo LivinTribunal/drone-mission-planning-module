@@ -322,7 +322,7 @@ def generate_mavlink(
         # camera command after navigation waypoint
         cam_cmd = _CAMERA_ACTION_COMMANDS.get(wp.camera_action)
         if cam_cmd:
-            cam_line = f"{seq}\t0\t0\t{cam_cmd}\t" f"0\t0\t0\t0\t0\t0\t0\t1"
+            cam_line = f"{seq}\t0\t0\t{cam_cmd}\t0\t0\t0\t0\t0\t0\t0\t1"
             lines.append(cam_line)
             seq += 1
 
