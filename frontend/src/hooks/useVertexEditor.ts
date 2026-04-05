@@ -535,7 +535,6 @@ export default function useVertexEditor(
       clearSources(map);
       ghostRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, featureKey, isSelectTool, updateOverlay, emitUpdate]);
 
   useEffect(() => {
