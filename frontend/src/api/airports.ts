@@ -78,9 +78,17 @@ export async function setDefaultDrone(
 export async function bulkChangeDrone(
   airportId: string,
   droneProfileId: string,
+  options?: {
+    fromDroneId?: string;
+    scope?: "ALL_DRAFT" | "SELECTED";
+    missionIds?: string[];
+  },
 ): Promise<BulkChangeDroneResponse> {
   const res = await client.post(`/airports/${airportId}/bulk-change-drone`, {
     drone_profile_id: droneProfileId,
+    from_drone_id: options?.fromDroneId ?? null,
+    scope: options?.scope ?? "ALL_DRAFT",
+    mission_ids: options?.missionIds ?? [],
   });
   return res.data;
 }

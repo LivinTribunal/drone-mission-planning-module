@@ -160,9 +160,18 @@ def set_default_drone(db: Session, airport_id: UUID, drone_profile_id: UUID | No
 
 
 def bulk_change_drone(
-    db: Session, airport_id: UUID, drone_profile_id: UUID
-) -> tuple[int, list[UUID]]:
-    """change drone profile on all draft missions at an airport."""
+    db: Session,
+    airport_id: UUID,
+    drone_profile_id: UUID,
+    from_drone_id: UUID | None = None,
+    scope: str = "ALL_DRAFT",
+    mission_ids: list[UUID] | None = None,
+) -> tuple[int, int, list[UUID]]:
+    """change drone profile on missions at an airport.
+
+    scope ALL_DRAFT updates all draft missions (optionally filtered by from_drone_id).
+    scope SELECTED updates only the listed mission_ids (draft + planned allowed).
+    """
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
         raise NotFoundError("airport not found")
@@ -171,18 +180,42 @@ def bulk_change_drone(
     if not drone:
         raise DomainError("drone profile not found")
 
-    draft_missions = (
-        db.query(Mission).filter(Mission.airport_id == airport_id, Mission.status == "DRAFT").all()
-    )
+    updated_ids: list[UUID] = []
+    regressed_count = 0
 
-    mission_ids = []
-    for mission in draft_missions:
-        mission.drone_profile_id = drone_profile_id
-        mission_ids.append(mission.id)
+    if scope == "SELECTED":
+        if not mission_ids:
+            return 0, 0, []
+        missions = (
+            db.query(Mission)
+            .filter(
+                Mission.airport_id == airport_id,
+                Mission.id.in_(mission_ids),
+                Mission.status.in_(["DRAFT", "PLANNED"]),
+            )
+            .all()
+        )
+        for mission in missions:
+            was_planned = mission.status == "PLANNED"
+            mission.change_drone_profile(drone_profile_id)
+            updated_ids.append(mission.id)
+            if was_planned:
+                regressed_count += 1
+    else:
+        # ALL_DRAFT
+        query = db.query(Mission).filter(
+            Mission.airport_id == airport_id, Mission.status == "DRAFT"
+        )
+        if from_drone_id:
+            query = query.filter(Mission.drone_profile_id == from_drone_id)
+        draft_missions = query.all()
+        for mission in draft_missions:
+            mission.drone_profile_id = drone_profile_id
+            updated_ids.append(mission.id)
 
     db.commit()
 
-    return len(mission_ids), mission_ids
+    return len(updated_ids), regressed_count, updated_ids
 
 
 # surfaces

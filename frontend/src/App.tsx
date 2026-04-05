@@ -14,6 +14,7 @@ import MissionMapPage from "@/pages/operator-center/MissionMapPage";
 import MissionValidationPage from "@/pages/operator-center/MissionValidationPage";
 import AirportPage from "@/pages/operator-center/AirportPage";
 import OperatorDronesPage from "@/pages/operator-center/OperatorDronesPage";
+import OperatorDroneDetailPage from "@/pages/operator-center/OperatorDroneDetailPage";
 import AirportListPage from "@/pages/coordinator-center/AirportListPage";
 import AirportEditPage from "@/pages/coordinator-center/AirportEditPage";
 import InspectionListPage from "@/pages/coordinator-center/InspectionListPage";
@@ -58,6 +59,7 @@ function App() {
             </Route>
             <Route path="airport" element={<AirportPage />} />
             <Route path="drones" element={<OperatorDronesPage />} />
+            <Route path="drones/:id" element={<OperatorDroneDetailPage />} />
           </Route>
         </Route>
 

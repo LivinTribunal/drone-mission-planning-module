@@ -176,17 +176,17 @@ body {
   margin-right: 14px;
 }
 
-/* role-based nav accent colors */
-.nav-role-operator {
-  --tv-nav-active-bg: var(--tv-accent);
+/* role-based accent color overrides */
+.role-coordinator {
+  --tv-accent: #e5a545;
+  --tv-accent-hover: #d4942e;
+  --tv-nav-active-bg: #e5a545;
 }
 
-.nav-role-coordinator {
-  --tv-nav-active-bg: var(--tv-warning);
-}
-
-.nav-role-admin {
-  --tv-nav-active-bg: var(--tv-error);
+.role-admin {
+  --tv-accent: #e54545;
+  --tv-accent-hover: #d43030;
+  --tv-nav-active-bg: #e54545;
 }
 
 @keyframes pulse-ring {

@@ -109,6 +109,7 @@ export interface AirportUpdate {
 
 export interface BulkChangeDroneResponse {
   updated_count: number;
+  regressed_count: number;
   mission_ids: string[];
 }
 

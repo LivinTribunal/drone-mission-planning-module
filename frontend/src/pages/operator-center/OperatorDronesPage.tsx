@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Eye } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Star, ArrowLeftRight } from "lucide-react";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import { setDefaultDrone, bulkChangeDrone } from "@/api/airports";
 import { useAirport } from "@/contexts/AirportContext";
@@ -30,6 +31,7 @@ type SortDir = "asc" | "desc";
 
 export default function OperatorDronesPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { selectedAirport, refreshAirportDetail } = useAirport();
 
   const [drones, setDrones] = useState<DroneProfileResponse[]>([]);
@@ -333,7 +335,8 @@ export default function OperatorDronesPage() {
                 return (
                   <tr
                     key={drone.id}
-                    className="border-b border-tv-border last:border-b-0
+                    onClick={() => navigate(`/operator-center/drones/${drone.id}`)}
+                    className="border-b border-tv-border last:border-b-0 cursor-pointer
                       text-sm text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
                     data-testid={`drone-row-${drone.id}`}
                   >
@@ -377,11 +380,22 @@ export default function OperatorDronesPage() {
                       <RowActionButtons
                         actions={[
                           {
-                            icon: isDefault ? Check : Eye,
+                            icon: Star,
                             onClick: () => handleToggleDefault(drone.id),
                             title: isDefault
                               ? t("operatorDrones.removeDefault")
                               : t("operatorDrones.setDefault"),
+                            className: isDefault
+                              ? "text-tv-accent"
+                              : undefined,
+                            filled: isDefault,
+                          },
+                          {
+                            icon: ArrowLeftRight,
+                            onClick: () => {
+                              setShowBulkDialog(true);
+                            },
+                            title: t("operatorDrones.bulkChange"),
                           },
                         ]}
                       />

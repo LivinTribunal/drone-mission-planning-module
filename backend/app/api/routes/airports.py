@@ -98,10 +98,19 @@ def set_default_drone(
 def bulk_change_drone(
     airport_id: UUID, body: BulkChangeDroneRequest, db: Session = Depends(get_db)
 ):
-    """change drone profile on all draft missions at an airport."""
-    count, ids = airport_service.bulk_change_drone(db, airport_id, body.drone_profile_id)
+    """change drone profile on missions at an airport."""
+    count, regressed, ids = airport_service.bulk_change_drone(
+        db,
+        airport_id,
+        body.drone_profile_id,
+        from_drone_id=body.from_drone_id,
+        scope=body.scope,
+        mission_ids=body.mission_ids,
+    )
 
-    return BulkChangeDroneResponse(updated_count=count, mission_ids=ids)
+    return BulkChangeDroneResponse(
+        updated_count=count, regressed_count=regressed, mission_ids=ids
+    )
 
 
 # ground surfaces

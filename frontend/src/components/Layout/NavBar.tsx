@@ -47,7 +47,7 @@ export default function NavBar({ items, role }: NavBarProps) {
 
   return (
     <nav
-      className={`flex items-center px-4 py-5 bg-tv-bg nav-role-${role}`}
+      className="flex items-center px-4 py-5 bg-tv-bg"
       data-testid="navbar"
     >
       {/* left section - 30% */}
@@ -190,7 +190,7 @@ export default function NavBar({ items, role }: NavBarProps) {
                     navigate("/coordinator-center/airports");
                   }}
                   className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
-                    text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                    text-tv-warning hover:bg-tv-surface-hover transition-colors"
                 >
                   {t("nav.configuratorCenter")}
                 </button>
@@ -202,7 +202,7 @@ export default function NavBar({ items, role }: NavBarProps) {
                     navigate("/operator-center/dashboard");
                   }}
                   className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
-                    text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                    text-tv-success hover:bg-tv-surface-hover transition-colors"
                 >
                   {t("nav.missionCenter")}
                 </button>
@@ -220,16 +220,28 @@ export default function NavBar({ items, role }: NavBarProps) {
                 </button>
               )}
               {role === "admin" && (
-                <button
-                  onClick={() => {
-                    setUserMenuOpen(false);
-                    navigate("/operator-center/dashboard");
-                  }}
-                  className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
-                    text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-                >
-                  {t("nav.missionCenter")}
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      navigate("/operator-center/dashboard");
+                    }}
+                    className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
+                      text-tv-success hover:bg-tv-surface-hover transition-colors"
+                  >
+                    {t("nav.missionCenter")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      navigate("/coordinator-center/airports");
+                    }}
+                    className="block w-full text-left rounded-xl px-4 py-2.5 text-sm
+                      text-tv-warning hover:bg-tv-surface-hover transition-colors"
+                  >
+                    {t("nav.configuratorCenter")}
+                  </button>
+                </>
               )}
 
               {/* language selector */}

@@ -49,8 +49,7 @@ export default function SafetyZonesPanel({
         </span>
         <div className="flex items-center gap-2">
           <span
-            className="flex items-center justify-center min-w-[1.25rem] h-5 rounded-full px-1.5 text-[10px] font-semibold text-tv-accent-text"
-            style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
+            className="flex items-center justify-center min-w-[1.25rem] h-5 rounded-full px-1.5 text-[10px] font-semibold bg-tv-accent text-tv-accent-text"
           >
             {count}
           </span>
@@ -106,7 +105,7 @@ export default function SafetyZonesPanel({
                     <span className="flex items-center gap-1 text-[10px]">
                       <span
                         className="inline-block h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: zone.is_active ? "#3bbb3b" : "#6b6b6b" }}
+                        style={{ backgroundColor: zone.is_active ? "var(--tv-success)" : "#6b6b6b" }}
                       />
                       <span className="text-tv-text-muted">
                         {zone.is_active ? t("airport.active") : t("airport.inactive")}

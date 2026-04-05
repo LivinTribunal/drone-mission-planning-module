@@ -13,7 +13,7 @@ export default function SuperAdminLayout() {
   ];
 
   return (
-    <div className="flex flex-col h-screen bg-tv-bg text-tv-text-primary">
+    <div className="flex flex-col h-screen bg-tv-bg text-tv-text-primary role-admin">
       <NavBar items={adminItems} role="admin" />
       <main className="flex-1 min-h-0 overflow-auto">
         <Outlet />

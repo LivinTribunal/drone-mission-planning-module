@@ -54,15 +54,19 @@ class SetDefaultDroneRequest(BaseModel):
 
 
 class BulkChangeDroneRequest(BaseModel):
-    """request to bulk-change drone profile on draft missions."""
+    """request to bulk-change drone profile on missions."""
 
     drone_profile_id: UUID
+    from_drone_id: UUID | None = None
+    scope: str = "ALL_DRAFT"
+    mission_ids: list[UUID] = []
 
 
 class BulkChangeDroneResponse(BaseModel):
     """response for bulk drone change operation."""
 
     updated_count: int
+    regressed_count: int = 0
     mission_ids: list[UUID]
 
 
