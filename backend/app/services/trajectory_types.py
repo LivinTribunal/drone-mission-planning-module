@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.enums import CameraAction, SafetyZoneType, WaypointType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile, Mission
+
+if TYPE_CHECKING:
+    from app.services.elevation_provider import ElevationProvider
 
 # type aliases for domain-specific floats
 Degrees = float
@@ -53,6 +57,9 @@ RUNWAY_CROSSING_PENALTY_PER_METER = 10.0
 
 # vertical profile descent detection - ~11m at equator
 VERTICAL_POSITION_TOLERANCE_DEG: Degrees = 0.0001
+
+# terrain following
+MINIMUM_AGL_ALTITUDE: Meters = 30.0
 
 # safety validation
 DEFAULT_RUNWAY_BUFFER: Meters = 100.0
@@ -155,3 +162,4 @@ class MissionData:
     surfaces: list[AirfieldSurface]
     constraints: list[ConstraintRule]
     default_speed: MetersPerSecond
+    elevation_provider: ElevationProvider | None = None
