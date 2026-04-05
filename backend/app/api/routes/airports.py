@@ -2,12 +2,12 @@ import logging
 import os
 import shutil
 import tempfile
-from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from app.core.config import TERRAIN_DIR
 from app.core.dependencies import get_db
 from app.schemas.airport import (
     AirportCreate,
@@ -94,7 +94,6 @@ def delete_airport(airport_id: UUID, db: Session = Depends(get_db)):
 
 
 # terrain DEM
-TERRAIN_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "terrain"
 MAX_DEM_SIZE = 500 * 1024 * 1024  # 500MB
 
 
@@ -174,11 +173,13 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
 def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
     """remove DEM file and revert airport to flat terrain."""
     airport = airport_service.get_airport(db, airport_id)
+    old_dem_path = airport.dem_file_path
 
-    if airport.dem_file_path and os.path.exists(airport.dem_file_path):
-        os.unlink(airport.dem_file_path)
-
+    # db first - only delete file after commit succeeds
     airport_service.delete_terrain_dem(db, airport_id)
+
+    if old_dem_path and os.path.exists(old_dem_path):
+        os.unlink(old_dem_path)
 
     return DeleteResponse(deleted=True)
 

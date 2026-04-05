@@ -1,10 +1,10 @@
 import logging
-from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import TERRAIN_DIR
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
@@ -26,8 +26,6 @@ from app.schemas.infrastructure import (
 from app.services.geometry_converter import apply_schema_update, schema_to_model_data
 
 logger = logging.getLogger(__name__)
-
-TERRAIN_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "terrain"
 
 
 # airports
@@ -468,6 +466,8 @@ def _get_airport_lonlat(airport: Airport) -> tuple[float, float]:
 
 def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
     """download elevation data from open-elevation API and cache as geotiff."""
+    import time
+
     try:
         import numpy as np
         import rasterio
@@ -479,6 +479,8 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
         ) from e
 
     import httpx
+
+    from app.core.config import settings
 
     airport = get_airport(db, airport_id)
     apt_lon, apt_lat = _get_airport_lonlat(airport)
@@ -512,10 +514,20 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
     # batch query open-elevation API
     batch_size = 2000
     all_elevations = []
+    total_timeout = settings.terrain_download_timeout
+    start_time = time.monotonic()
 
     try:
         with httpx.Client(timeout=60.0) as http_client:
             for i in range(0, len(locations), batch_size):
+                elapsed = time.monotonic() - start_time
+                if elapsed > total_timeout:
+                    raise DomainError(
+                        f"terrain download timed out after {elapsed:.0f}s "
+                        f"({len(all_elevations)}/{len(locations)} points)",
+                        status_code=504,
+                    )
+
                 batch = locations[i : i + batch_size]
                 resp = http_client.post(
                     "https://api.open-elevation.com/api/v1/lookup",
@@ -524,6 +536,8 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
                 resp.raise_for_status()
                 results = resp.json().get("results", [])
                 all_elevations.extend(r.get("elevation", 0) for r in results)
+    except DomainError:
+        raise
     except Exception as e:
         raise DomainError(f"Open-Elevation API request failed: {e}", status_code=502) from e
 

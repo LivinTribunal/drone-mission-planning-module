@@ -76,7 +76,7 @@ class DEMElevationProvider(ElevationProvider):
 
         # rasterio.sample expects (x, y) = (lon, lat)
         coords = [(lon, lat) for lat, lon in points]
-        results = []
+        results: list[float] = []
 
         try:
             nodata = self._dataset.nodata
@@ -87,8 +87,14 @@ class DEMElevationProvider(ElevationProvider):
                 else:
                     results.append(val)
         except Exception:
-            logger.warning("DEM batch sample failed, using fallback for all points")
-            return [self.fallback_elevation] * len(points)
+            # keep successful reads, fallback only for remaining points
+            remaining = len(points) - len(results)
+            logger.warning(
+                "DEM batch sample failed after %d/%d points, using fallback for rest",
+                len(results),
+                len(points),
+            )
+            results.extend([self.fallback_elevation] * remaining)
 
         return results
 
@@ -120,7 +126,7 @@ def create_elevation_provider(airport) -> ElevationProvider:
         if dem_path:
             try:
                 return DEMElevationProvider(dem_path, airport.elevation)
-            except (ImportError, Exception) as e:
+            except Exception as e:
                 logger.warning("failed to create DEM provider: %s, falling back to flat", e)
 
     return FlatElevationProvider(airport.elevation)

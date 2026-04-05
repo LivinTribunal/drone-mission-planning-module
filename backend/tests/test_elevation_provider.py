@@ -2,7 +2,9 @@
 
 from unittest.mock import MagicMock, patch
 
+from app.models.enums import WaypointType
 from app.services.elevation_provider import (
+    DEMElevationProvider,
     FlatElevationProvider,
     create_elevation_provider,
 )
@@ -243,7 +245,12 @@ class TestSafetyValidatorAglCheck:
 
         provider = FlatElevationProvider(300.0)
         waypoints = [
-            WaypointData(lon=14.0, lat=50.0, alt=310.0),  # only 10m AGL
+            WaypointData(
+                lon=14.0,
+                lat=50.0,
+                alt=310.0,
+                waypoint_type=WaypointType.MEASUREMENT,
+            ),
         ]
 
         violations = _batch_check_minimum_agl(waypoints, provider)
@@ -251,6 +258,7 @@ class TestSafetyValidatorAglCheck:
         assert violations[0].violation_kind == "altitude"
         assert "10.0m AGL" in violations[0].message
         assert violations[0].waypoint_index == 0
+        assert violations[0].is_warning is True
 
     def test_batch_check_minimum_agl_exactly_at_limit(self):
         """waypoint exactly at minimum AGL - no violation."""
@@ -272,18 +280,270 @@ class TestSafetyValidatorAglCheck:
         assert _batch_check_minimum_agl([], provider) == []
 
     def test_validate_inspection_pass_with_elevation_provider(self):
-        """validate_inspection_pass uses elevation provider for AGL checks."""
+        """waypoint below AGL produces soft warning with waypoint type in message."""
         from app.services.safety_validator import _batch_check_minimum_agl
 
         provider = MagicMock()
         provider.get_elevations_batch.return_value = [400.0]
 
-        waypoints = [WaypointData(lon=14.0, lat=50.0, alt=410.0)]
+        waypoints = [
+            WaypointData(
+                lon=14.0,
+                lat=50.0,
+                alt=410.0,
+                waypoint_type=WaypointType.MEASUREMENT,
+            ),
+        ]
         violations = _batch_check_minimum_agl(waypoints, provider)
 
         assert len(violations) == 1
         assert violations[0].violation_kind == "altitude"
         assert violations[0].is_warning is True
+        assert "MEASUREMENT" in violations[0].message
+
+
+def _make_dem_provider(mock_dataset, fallback=0.0):
+    """create a DEMElevationProvider with a pre-mocked dataset, bypassing __init__."""
+    provider = object.__new__(DEMElevationProvider)
+    provider.fallback_elevation = fallback
+    provider.file_path = "/fake/path.tif"
+    provider._dataset = mock_dataset
+    return provider
+
+
+class TestDEMElevationProvider:
+    """tests for DEM elevation provider with mocked rasterio."""
+
+    def test_get_elevation_samples_raster(self):
+        """single point query samples raster dataset."""
+        mock_dataset = MagicMock()
+        mock_dataset.sample.return_value = iter([[250.0]])
+        mock_dataset.nodata = -9999
+
+        provider = _make_dem_provider(mock_dataset, fallback=100.0)
+        result = provider.get_elevation(50.0, 14.0)
+
+        assert result == 250.0
+        mock_dataset.sample.assert_called_once_with([(14.0, 50.0)])
+
+    def test_get_elevation_nodata_returns_fallback(self):
+        """nodata value in raster returns fallback elevation."""
+        mock_dataset = MagicMock()
+        mock_dataset.sample.return_value = iter([[-9999.0]])
+        mock_dataset.nodata = -9999.0
+
+        provider = _make_dem_provider(mock_dataset, fallback=300.0)
+        result = provider.get_elevation(50.0, 14.0)
+
+        assert result == 300.0
+
+    def test_get_elevation_exception_returns_fallback(self):
+        """exception during sampling returns fallback."""
+        mock_dataset = MagicMock()
+        mock_dataset.sample.side_effect = RuntimeError("read error")
+
+        provider = _make_dem_provider(mock_dataset, fallback=200.0)
+        result = provider.get_elevation(50.0, 14.0)
+
+        assert result == 200.0
+
+    def test_get_elevations_batch_samples_all(self):
+        """batch query returns elevations for all points."""
+        mock_dataset = MagicMock()
+        mock_dataset.sample.return_value = iter([[100.0], [200.0], [300.0]])
+        mock_dataset.nodata = None
+
+        provider = _make_dem_provider(mock_dataset)
+        result = provider.get_elevations_batch([(50.0, 14.0), (51.0, 15.0), (52.0, 16.0)])
+
+        assert result == [100.0, 200.0, 300.0]
+
+    def test_get_elevations_batch_empty(self):
+        """batch query with empty list returns empty list."""
+        provider = _make_dem_provider(MagicMock())
+        assert provider.get_elevations_batch([]) == []
+
+    def test_get_elevations_batch_partial_failure(self):
+        """partial batch failure keeps successful reads, falls back for rest."""
+        mock_dataset = MagicMock()
+        mock_dataset.nodata = None
+
+        def partial_sample(coords):
+            """yield some values then fail."""
+            yield [100.0]
+            yield [200.0]
+            raise RuntimeError("disk error mid-read")
+
+        mock_dataset.sample.side_effect = partial_sample
+
+        provider = _make_dem_provider(mock_dataset, fallback=999.0)
+        result = provider.get_elevations_batch(
+            [
+                (50.0, 14.0),
+                (51.0, 15.0),
+                (52.0, 16.0),
+                (53.0, 17.0),
+            ]
+        )
+
+        # first two succeeded, last two get fallback
+        assert result == [100.0, 200.0, 999.0, 999.0]
+
+    def test_get_elevations_batch_total_failure(self):
+        """complete batch failure returns all fallbacks."""
+        mock_dataset = MagicMock()
+        mock_dataset.nodata = None
+        mock_dataset.sample.side_effect = RuntimeError("total failure")
+
+        provider = _make_dem_provider(mock_dataset, fallback=500.0)
+        result = provider.get_elevations_batch([(50.0, 14.0), (51.0, 15.0)])
+
+        assert result == [500.0, 500.0]
+
+    def test_context_manager_closes_dataset(self):
+        """context manager closes the raster dataset."""
+        mock_dataset = MagicMock()
+        provider = _make_dem_provider(mock_dataset)
+
+        with provider:
+            pass
+
+        mock_dataset.close.assert_called()
+
+    def test_close_called_explicitly(self):
+        """explicit close() closes the raster dataset."""
+        mock_dataset = MagicMock()
+        provider = _make_dem_provider(mock_dataset)
+        provider.close()
+
+        mock_dataset.close.assert_called_once()
+
+    def test_get_elevations_batch_with_nodata_mixed(self):
+        """batch with mix of valid and nodata values."""
+        mock_dataset = MagicMock()
+        mock_dataset.nodata = -9999.0
+        mock_dataset.sample.return_value = iter([[100.0], [-9999.0], [300.0]])
+
+        provider = _make_dem_provider(mock_dataset, fallback=250.0)
+        result = provider.get_elevations_batch([(50.0, 14.0), (51.0, 15.0), (52.0, 16.0)])
+
+        assert result == [100.0, 250.0, 300.0]
+
+
+class TestAglViolationSeverity:
+    """tests for AGL violation message includes waypoint type."""
+
+    def test_measurement_waypoint_below_agl_includes_type(self):
+        """measurement waypoint below min AGL includes type in message."""
+        from app.services.safety_validator import _batch_check_minimum_agl
+
+        provider = FlatElevationProvider(300.0)
+        waypoints = [
+            WaypointData(
+                lon=14.0,
+                lat=50.0,
+                alt=310.0,
+                waypoint_type=WaypointType.MEASUREMENT,
+            ),
+        ]
+
+        violations = _batch_check_minimum_agl(waypoints, provider)
+        assert len(violations) == 1
+        assert violations[0].is_warning is True
+        assert "MEASUREMENT" in violations[0].message
+
+    def test_transit_waypoint_below_agl_includes_type(self):
+        """transit waypoint below min AGL includes type in message."""
+        from app.services.safety_validator import _batch_check_minimum_agl
+
+        provider = FlatElevationProvider(300.0)
+        waypoints = [
+            WaypointData(
+                lon=14.0,
+                lat=50.0,
+                alt=310.0,
+                waypoint_type=WaypointType.TRANSIT,
+            ),
+        ]
+
+        violations = _batch_check_minimum_agl(waypoints, provider)
+        assert len(violations) == 1
+        assert violations[0].is_warning is True
+        assert "TRANSIT" in violations[0].message
+
+    def test_mixed_waypoint_types_all_soft_warnings(self):
+        """all waypoint types produce soft warnings with type in message."""
+        from app.services.safety_validator import _batch_check_minimum_agl
+
+        provider = FlatElevationProvider(300.0)
+        waypoints = [
+            WaypointData(lon=14.0, lat=50.0, alt=310.0, waypoint_type=WaypointType.TRANSIT),
+            WaypointData(lon=14.1, lat=50.1, alt=310.0, waypoint_type=WaypointType.MEASUREMENT),
+            WaypointData(lon=14.2, lat=50.2, alt=310.0, waypoint_type=WaypointType.HOVER),
+            WaypointData(lon=14.3, lat=50.3, alt=340.0, waypoint_type=WaypointType.MEASUREMENT),
+        ]
+
+        violations = _batch_check_minimum_agl(waypoints, provider)
+        assert len(violations) == 3
+        # all are soft warnings
+        assert all(v.is_warning is True for v in violations)
+        assert violations[0].waypoint_index == 0
+        assert violations[1].waypoint_index == 1
+        assert violations[2].waypoint_index == 2
+        # each includes its waypoint type
+        assert "TRANSIT" in violations[0].message
+        assert "MEASUREMENT" in violations[1].message
+        assert "HOVER" in violations[2].message
+
+
+class TestTerrainDirConfig:
+    """tests for consolidated TERRAIN_DIR constant."""
+
+    def test_terrain_dir_is_absolute(self):
+        """TERRAIN_DIR is an absolute path."""
+        from app.core.config import TERRAIN_DIR
+
+        assert TERRAIN_DIR.is_absolute()
+
+    def test_terrain_dir_ends_with_data_terrain(self):
+        """TERRAIN_DIR points to data/terrain under project root."""
+        from app.core.config import TERRAIN_DIR
+
+        assert TERRAIN_DIR.parts[-2:] == ("data", "terrain")
+
+
+class TestCreateElevationProviderDEM:
+    """tests for DEM provider creation via factory with mocked rasterio."""
+
+    def test_dem_provider_created_with_valid_path(self):
+        """DEM source with valid path creates DEMElevationProvider."""
+        airport = MagicMock()
+        airport.terrain_source = "DEM"
+        airport.elevation = 300.0
+        airport.dem_file_path = "/some/valid/path.tif"
+
+        with patch("app.services.elevation_provider.DEMElevationProvider") as mock_cls:
+            mock_instance = MagicMock(spec=DEMElevationProvider)
+            mock_cls.return_value = mock_instance
+
+            provider = create_elevation_provider(airport)
+            assert provider is mock_instance
+            mock_cls.assert_called_once_with("/some/valid/path.tif", 300.0)
+
+    def test_dem_provider_fallback_on_open_error(self):
+        """DEM source falls back to flat when rasterio.open fails."""
+        airport = MagicMock()
+        airport.terrain_source = "DEM"
+        airport.elevation = 300.0
+        airport.dem_file_path = "/nonexistent/path.tif"
+
+        with patch(
+            "app.services.elevation_provider.DEMElevationProvider",
+            side_effect=FileNotFoundError("no such file"),
+        ):
+            provider = create_elevation_provider(airport)
+            assert isinstance(provider, FlatElevationProvider)
+            assert provider.elevation == 300.0
 
 
 class TestAirportTerrainFields:

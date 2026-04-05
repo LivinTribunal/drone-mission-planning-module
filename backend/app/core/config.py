@@ -1,4 +1,9 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
+
+# resolved once relative to the project root (backend/../data/terrain)
+TERRAIN_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "terrain"
 
 
 class Settings(BaseSettings):
@@ -15,6 +20,9 @@ class Settings(BaseSettings):
     takeoff_safe_altitude: float = 10.0
     landing_safe_altitude: float = 10.0
     vertex_buffer_m: float = 5.0
+
+    # terrain download limits
+    terrain_download_timeout: float = 300.0  # 5 min total wall-clock limit
 
     class Config:
         env_file = ".env"

@@ -212,7 +212,13 @@ def _batch_check_minimum_agl(
     elevation_provider,
     min_agl: float = MINIMUM_AGL_ALTITUDE,
 ) -> list[Violation]:
-    """check all waypoints maintain minimum height above ground level."""
+    """check all waypoints maintain minimum height above ground level.
+
+    all AGL violations are soft warnings - PAPI approach paths inherently
+    place measurement waypoints below 30m AGL by design (3 deg glide slope
+    at ~400m distance = ~21m AGL). transit waypoints are already hard-clamped
+    in _adjust_transit_altitude_for_terrain.
+    """
     if not waypoints:
         return []
 
@@ -228,8 +234,8 @@ def _batch_check_minimum_agl(
                     is_warning=True,
                     violation_kind="altitude",
                     message=(
-                        f"altitude {wp.alt:.0f}m is only {agl:.1f}m AGL "
-                        f"at this point (min {min_agl:.0f}m)"
+                        f"{wp.waypoint_type} at {wp.alt:.0f}m is only {agl:.1f}m AGL "
+                        f"(min {min_agl:.0f}m)"
                     ),
                     waypoint_index=i,
                 )
