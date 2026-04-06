@@ -293,8 +293,8 @@ function MissionListSection({
       await updateMission(missionId, { name: renameValue.trim() });
       setRenamingId(null);
       onRefresh();
-    } catch {
-      // keep dialog open on error
+    } catch (err) {
+      console.error("rename mission failed:", err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -303,8 +303,8 @@ function MissionListSection({
       await deleteMission(missionId);
       setDeletingId(null);
       onRefresh();
-    } catch {
-      // keep dialog open on error
+    } catch (err) {
+      console.error("delete mission failed:", err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -801,6 +801,7 @@ function DashboardView() {
         isOpen={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
         airportId={selectedAirport.id}
+        defaultDroneProfileId={selectedAirport.default_drone_profile_id}
       />
     </div>
   );

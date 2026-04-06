@@ -1058,7 +1058,7 @@ export default function AirportEditPage() {
                           <span className="flex items-center gap-1 text-[10px]">
                             <span
                               className="inline-block h-1.5 w-1.5 rounded-full"
-                              style={{ backgroundColor: z.is_active ? "#3bbb3b" : "#6b6b6b" }}
+                              style={{ backgroundColor: z.is_active ? "var(--tv-success)" : "#6b6b6b" }}
                             />
                             <span className="text-tv-text-muted">
                               {z.is_active ? t("airport.active") : t("airport.inactive")}

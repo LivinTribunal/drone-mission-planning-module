@@ -44,8 +44,7 @@ export default function AirportInfoPanel({
             {t("coordinator.detail.airportInfo")}
           </span>
           <span
-            className="flex items-center justify-center min-w-[1.25rem] h-5 rounded-full px-1.5 text-[10px] font-semibold text-tv-accent-text"
-            style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
+            className="flex items-center justify-center min-w-[1.25rem] h-5 rounded-full px-1.5 text-[10px] font-semibold bg-tv-accent text-tv-accent-text"
           >
             {airport.icao_code}
           </span>
@@ -96,7 +95,14 @@ export default function AirportInfoPanel({
             label={t("coordinator.detail.airportElevation")}
             type="number"
             value={String(form.elevation)}
-            onChange={(e) => handleChange("elevation", e.target.value === "" ? null : parseFloat(e.target.value))}
+            onChange={(e) => {
+              if (e.target.value === "") {
+                handleChange("elevation", null);
+              } else {
+                const parsed = parseFloat(e.target.value);
+                if (!isNaN(parsed)) handleChange("elevation", parsed);
+              }
+            }}
             className="!px-3 !py-1.5 !text-xs"
           />
         </div>

@@ -79,8 +79,7 @@ export default function AirportSelector() {
         <div className="absolute right-3 flex items-center gap-1.5 pointer-events-none">
           {selectedAirport && (
             <span
-              className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold text-tv-accent-text flex-shrink-0"
-              style={{ backgroundColor: "rgba(59, 187, 59, 0.75)" }}
+              className="flex items-center justify-center min-w-[1.5rem] h-6 rounded-full px-1.5 text-xs font-semibold bg-tv-accent text-tv-accent-text flex-shrink-0"
             >
               {selectedAirport.icao_code}
             </span>
@@ -94,7 +93,7 @@ export default function AirportSelector() {
               }}
               className="flex h-5 w-5 items-center justify-center rounded-full
                 bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors cursor-pointer pointer-events-auto"
-              aria-label="Clear airport"
+              aria-label={t("nav.clearAirport")}
             >
               <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                 <path

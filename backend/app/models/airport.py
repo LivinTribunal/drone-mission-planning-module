@@ -20,10 +20,22 @@ class Airport(Base):
     country = Column(String(100))
     elevation = Column(Float, nullable=False)
     location = Column(Geometry("POINTZ", srid=4326), nullable=False)
+    default_drone_profile_id = Column(
+        UUID, ForeignKey("drone_profile.id", ondelete="SET NULL"), nullable=True
+    )
+
+    default_drone_profile = relationship("DroneProfile", foreign_keys=[default_drone_profile_id])
 
     # terrain source config
     terrain_source = Column(String(20), nullable=False, default="FLAT")
     dem_file_path = Column(String, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "terrain_source IN ('FLAT', 'DEM_UPLOAD', 'DEM_API')",
+            name="ck_airport_terrain_source",
+        ),
+    )
 
     surfaces = relationship(
         "AirfieldSurface", back_populates="airport", cascade="all, delete-orphan"

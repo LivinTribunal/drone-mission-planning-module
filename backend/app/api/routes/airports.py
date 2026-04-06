@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import os
 import shutil
 import tempfile
+from functools import partial
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
@@ -17,6 +19,9 @@ from app.schemas.airport import (
     AirportResponse,
     AirportSummaryListResponse,
     AirportUpdate,
+    BulkChangeDroneRequest,
+    BulkChangeDroneResponse,
+    SetDefaultDroneRequest,
     TerrainCoverage,
     TerrainDownloadResponse,
     TerrainUploadResponse,
@@ -94,12 +99,37 @@ def delete_airport(airport_id: UUID, db: Session = Depends(get_db)):
     return DeleteResponse(deleted=True)
 
 
+@router.put("/{airport_id}/default-drone", response_model=AirportResponse)
+def set_default_drone(
+    airport_id: UUID, body: SetDefaultDroneRequest, db: Session = Depends(get_db)
+):
+    """set or clear the default drone profile for an airport."""
+    return airport_service.set_default_drone(db, airport_id, body.drone_profile_id)
+
+
+@router.post("/{airport_id}/bulk-change-drone", response_model=BulkChangeDroneResponse)
+def bulk_change_drone(
+    airport_id: UUID, body: BulkChangeDroneRequest, db: Session = Depends(get_db)
+):
+    """change drone profile on missions at an airport."""
+    count, regressed, ids = airport_service.bulk_change_drone(
+        db,
+        airport_id,
+        body.drone_profile_id,
+        from_drone_id=body.from_drone_id,
+        scope=body.scope,
+        mission_ids=body.mission_ids,
+    )
+
+    return BulkChangeDroneResponse(updated_count=count, regressed_count=regressed, mission_ids=ids)
+
+
 # terrain DEM
 MAX_DEM_SIZE = 500 * 1024 * 1024  # 500MB
 
 
 @router.post("/{airport_id}/terrain-dem", response_model=TerrainUploadResponse)
-async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends(get_db)):
+def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends(get_db)):
     """upload a GeoTIFF DEM file for terrain-following altitude."""
     try:
         import rasterio
@@ -118,7 +148,7 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
         tmp_path = tmp.name
         try:
             size = 0
-            while chunk := await file.read(8192):
+            while chunk := file.file.read(8192):
                 size += len(chunk)
                 if size > MAX_DEM_SIZE:
                     os.unlink(tmp_path)
@@ -127,12 +157,22 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
         except HTTPException:
             raise
         except Exception:
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
             raise HTTPException(status_code=400, detail="upload stream interrupted")
+
+    # tracks which file to remove on error - starts as tmp, becomes final after move
+    cleanup_path = tmp_path
 
     try:
         # validate with rasterio
         with rasterio.open(tmp_path) as dataset:
+            if dataset.crs is None or dataset.crs.to_epsg() != 4326:
+                os.unlink(tmp_path)
+                raise HTTPException(status_code=400, detail="DEM must be in WGS84 (EPSG:4326)")
+
             bounds = list(dataset.bounds)
             res_x = abs(dataset.transform.a)
             res_y = abs(dataset.transform.e)
@@ -141,7 +181,6 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
             airport = airport_service.get_airport(db, airport_id)
             apt_lon, apt_lat = airport_service.get_airport_lonlat(airport)
 
-            # check if airport point is within DEM bounds
             if not (bounds[0] <= apt_lon <= bounds[2] and bounds[1] <= apt_lat <= bounds[3]):
                 os.unlink(tmp_path)
                 raise HTTPException(status_code=400, detail="DEM does not cover airport location")
@@ -150,12 +189,10 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
         TERRAIN_DIR.mkdir(parents=True, exist_ok=True)
         final_path = TERRAIN_DIR / f"{airport_id}.tif"
         shutil.move(tmp_path, str(final_path))
-
-        # tmp was moved - cleanup now targets final_path
-        tmp_path = str(final_path)
+        cleanup_path = str(final_path)
 
         airport_service.upload_terrain_dem(
-            db, airport_id, str(final_path), bounds, [res_x, res_y], terrain_source="DEM_UPLOAD"
+            db, airport_id, str(final_path), terrain_source="DEM_UPLOAD"
         )
 
         return TerrainUploadResponse(
@@ -166,25 +203,28 @@ async def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = D
     except HTTPException:
         raise
     except (NotFoundError, DomainError) as e:
-        # service layer error - file is valid but db operation failed
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        try:
+            if os.path.exists(cleanup_path):
+                os.unlink(cleanup_path)
+        except OSError:
+            pass
         logger.exception("DEM upload service error")
         raise HTTPException(status_code=e.status_code, detail=str(e))
-    except Exception as e:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+    except Exception:
+        try:
+            if os.path.exists(cleanup_path):
+                os.unlink(cleanup_path)
+        except OSError:
+            pass
         logger.exception("DEM upload failed")
-        raise HTTPException(status_code=400, detail=f"invalid GeoTIFF file: {e}")
+        raise HTTPException(status_code=400, detail="invalid or unsupported GeoTIFF file")
 
 
 @router.delete("/{airport_id}/terrain-dem", response_model=DeleteResponse)
 def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
     """remove DEM file and revert airport to flat terrain."""
-    airport = airport_service.get_airport(db, airport_id)
-    old_dem_path = airport.dem_file_path
+    old_dem_path = airport_service.get_dem_file_path(db, airport_id)
 
-    # db first - only delete file after commit succeeds
     airport_service.delete_terrain_dem(db, airport_id)
 
     if old_dem_path and os.path.exists(old_dem_path):
@@ -196,16 +236,48 @@ def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
 @router.post("/{airport_id}/terrain-download", response_model=TerrainDownloadResponse)
 async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db)):
     """download elevation data from Open-Elevation API and cache as GeoTIFF."""
-    import asyncio
+    # read airport data in the async context where the session lives
+    airport = airport_service.get_airport(db, airport_id)
+    apt_lon, apt_lat = airport_service.get_airport_lonlat(airport)
 
     loop = asyncio.get_running_loop()
 
     try:
         result = await loop.run_in_executor(
-            None, airport_service.download_terrain_from_api, db, airport_id
+            None,
+            partial(
+                airport_service.download_terrain_for_location,
+                airport_id=airport_id,
+                apt_lon=apt_lon,
+                apt_lat=apt_lat,
+                fallback_elevation=airport.elevation,
+            ),
         )
     except DomainError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+    # persist terrain data back in the async context with the original session
+    try:
+        airport_service.upload_terrain_dem(
+            db,
+            airport_id,
+            result["file_path"],
+            terrain_source="DEM_API",
+        )
+    except (NotFoundError, DomainError) as e:
+        try:
+            if os.path.exists(result["file_path"]):
+                os.unlink(result["file_path"])
+        except OSError:
+            pass
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except Exception:
+        try:
+            if os.path.exists(result["file_path"]):
+                os.unlink(result["file_path"])
+        except OSError:
+            pass
+        raise
 
     return TerrainDownloadResponse(
         terrain_source=result["terrain_source"],
@@ -336,13 +408,13 @@ def update_agl(
     db: Session = Depends(get_db),
 ):
     """update AGL"""
-    return airport_service.update_agl(db, surface_id, agl_id, body)
+    return airport_service.update_agl(db, airport_id, surface_id, agl_id, body)
 
 
 @router.delete("/{airport_id}/surfaces/{surface_id}/agls/{agl_id}", response_model=DeleteResponse)
 def delete_agl(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = Depends(get_db)):
     """delete AGL"""
-    airport_service.delete_agl(db, surface_id, agl_id)
+    airport_service.delete_agl(db, airport_id, surface_id, agl_id)
 
     return DeleteResponse(deleted=True)
 
@@ -353,7 +425,7 @@ def delete_agl(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = D
 )
 def list_lhas(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = Depends(get_db)):
     """list all LHAs for AGL"""
-    lhas = airport_service.list_lhas(db, surface_id, agl_id)
+    lhas = airport_service.list_lhas(db, airport_id, surface_id, agl_id)
 
     return LHAListResponse(data=lhas, meta=ListMeta(total=len(lhas)))
 
@@ -371,7 +443,7 @@ def create_lha(
     db: Session = Depends(get_db),
 ):
     """create LHA for AGL"""
-    return airport_service.create_lha(db, surface_id, agl_id, body)
+    return airport_service.create_lha(db, airport_id, surface_id, agl_id, body)
 
 
 @router.put(
@@ -387,7 +459,7 @@ def update_lha(
     db: Session = Depends(get_db),
 ):
     """update LHA"""
-    return airport_service.update_lha(db, agl_id, lha_id, body)
+    return airport_service.update_lha(db, airport_id, surface_id, agl_id, lha_id, body)
 
 
 @router.delete(
@@ -402,6 +474,6 @@ def delete_lha(
     db: Session = Depends(get_db),
 ):
     """delete LHA"""
-    airport_service.delete_lha(db, agl_id, lha_id)
+    airport_service.delete_lha(db, airport_id, surface_id, agl_id, lha_id)
 
     return DeleteResponse(deleted=True)

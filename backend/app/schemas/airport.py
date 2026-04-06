@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, computed_field
@@ -42,7 +43,8 @@ class AirportResponse(BaseModel):
     country: str | None = None
     elevation: float
     location: PointZ
-    terrain_source: str = "FLAT"  # FLAT | DEM_UPLOAD | DEM_API
+    default_drone_profile_id: UUID | None = None
+    terrain_source: Literal["FLAT", "DEM_UPLOAD", "DEM_API"] = "FLAT"
     dem_file_path: str | None = Field(default=None, exclude=True)
 
     @computed_field
@@ -52,6 +54,29 @@ class AirportResponse(BaseModel):
         return self.dem_file_path is not None
 
     model_config = {"from_attributes": True}
+
+
+class SetDefaultDroneRequest(BaseModel):
+    """request to set or clear the default drone for an airport."""
+
+    drone_profile_id: UUID | None = None
+
+
+class BulkChangeDroneRequest(BaseModel):
+    """request to bulk-change drone profile on missions."""
+
+    drone_profile_id: UUID
+    from_drone_id: UUID | None = None
+    scope: Literal["ALL_DRAFT", "SELECTED"] = "ALL_DRAFT"
+    mission_ids: list[UUID] = []
+
+
+class BulkChangeDroneResponse(BaseModel):
+    """response for bulk drone change operation."""
+
+    updated_count: int
+    regressed_count: int = 0
+    mission_ids: list[UUID]
 
 
 class AirportDetailResponse(AirportResponse):
@@ -87,20 +112,20 @@ class AirportSummaryListResponse(BaseModel):
 class TerrainCoverage(BaseModel):
     """terrain DEM coverage info."""
 
-    bounds: list[float]
-    resolution: list[float]
+    bounds: tuple[float, float, float, float]
+    resolution: tuple[float, float]
 
 
 class TerrainUploadResponse(BaseModel):
     """response after uploading a DEM file."""
 
-    terrain_source: str
+    terrain_source: Literal["FLAT", "DEM_UPLOAD", "DEM_API"]
     coverage: TerrainCoverage
 
 
 class TerrainDownloadResponse(BaseModel):
     """response after downloading elevation data from API."""
 
-    terrain_source: str
+    terrain_source: Literal["FLAT", "DEM_UPLOAD", "DEM_API"]
     points_downloaded: int
     coverage: TerrainCoverage

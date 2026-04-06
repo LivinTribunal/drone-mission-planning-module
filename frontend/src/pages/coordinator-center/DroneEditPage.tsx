@@ -687,7 +687,7 @@ export default function DroneEditPage() {
       {/* left panel - 30% matching navbar app title width */}
       <div className="w-[30%] flex-shrink-0 flex">
         <div
-          className="flex-1 overflow-y-auto flex flex-col gap-4"
+          className="flex-1 flex flex-col gap-4 min-h-0 pb-4"
           style={{ scrollbarGutter: "stable" }}
         >
           {/* drone selector */}
@@ -758,10 +758,10 @@ export default function DroneEditPage() {
           />
 
           {/* missions panel */}
-          <div className="bg-tv-surface border border-tv-border rounded-2xl flex flex-col">
+          <div className="bg-tv-surface border border-tv-border rounded-2xl flex flex-col min-h-0">
             <button
               onClick={() => setMissionsExpanded(!missionsExpanded)}
-              className="flex items-center justify-between w-full px-4 py-3"
+              className="flex items-center justify-between w-full px-4 py-3 flex-shrink-0"
               data-testid="missions-panel-toggle"
             >
               <div className="flex items-center gap-2">
@@ -776,7 +776,7 @@ export default function DroneEditPage() {
             </button>
 
             {missionsExpanded && (
-              <div className="px-4 pb-3">
+              <div className="px-4 pb-3 overflow-y-auto min-h-0">
                 {missions.length === 0 ? (
                   <p className="text-sm text-tv-text-muted py-2">
                     {t("coordinator.drones.detail.noMissions")}

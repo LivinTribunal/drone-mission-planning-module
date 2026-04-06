@@ -176,6 +176,19 @@ body {
   margin-right: 14px;
 }
 
+/* role-based accent color overrides */
+.role-coordinator {
+  --tv-accent: #e5a545;
+  --tv-accent-hover: #d4942e;
+  --tv-nav-active-bg: #e5a545;
+}
+
+.role-admin {
+  --tv-accent: #e54545;
+  --tv-accent-hover: #d43030;
+  --tv-nav-active-bg: #e54545;
+}
+
 @keyframes pulse-ring {
   0% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.5); }

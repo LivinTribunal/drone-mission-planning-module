@@ -180,7 +180,7 @@ export default function CreationForm({
         if (obstacleHeight) data.height = parseFloat(obstacleHeight);
         data.radius = bufferRadius ? parseFloat(bufferRadius) : 0;
         if (circleCenter) data.center = circleCenter;
-        if (pointPosition) data.center = pointPosition;
+        else if (pointPosition) data.center = pointPosition;
       }
 
       if (effectiveEntityType === "agl") {
@@ -335,12 +335,12 @@ export default function CreationForm({
                     <svg className="h-6 w-6 flex-shrink-0" viewBox="0 0 24 24">
                       <line
                         x1="12" y1="20" x2="12" y2="4"
-                        stroke="#3bbb3b" strokeWidth="2" strokeLinecap="round"
+                        stroke="var(--tv-accent)" strokeWidth="2" strokeLinecap="round"
                         transform={`rotate(${parseFloat(heading)}, 12, 12)`}
                       />
                       <polygon
                         points="12,2 9,8 15,8"
-                        fill="#3bbb3b"
+                        fill="var(--tv-accent)"
                         transform={`rotate(${parseFloat(heading)}, 12, 12)`}
                       />
                     </svg>
