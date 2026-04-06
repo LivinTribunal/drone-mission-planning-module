@@ -100,9 +100,8 @@ export default function BulkChangeDroneDialog({
       onSuccess(result.updated_count, result.regressed_count);
       onClose();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("bulk change failed:", msg);
-      setError(t("operatorDrones.bulkChangeError", { defaultValue: msg }));
+      console.error("bulk change failed:", err instanceof Error ? err.message : String(err));
+      setError(t("operatorDrones.bulkChangeError"));
     } finally {
       setSubmitting(false);
     }

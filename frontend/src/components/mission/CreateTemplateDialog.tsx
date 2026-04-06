@@ -59,9 +59,8 @@ export default function CreateTemplateDialog({
     try {
       await onSubmit({ name: name.trim(), aglId, method: method as InspectionMethod });
       resetForm();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : t("coordinator.inspections.createError");
-      setApiError(msg);
+    } catch {
+      setApiError(t("coordinator.inspections.createError"));
     } finally {
       setSubmitting(false);
     }

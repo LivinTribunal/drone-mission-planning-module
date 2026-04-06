@@ -70,10 +70,8 @@ export default function CreateMissionDialog({
         onClose();
         navigate(`/operator-center/missions/${mission.id}/overview`);
       })
-      .catch((err: unknown) => {
-        setSubmitError(
-          err instanceof Error ? err.message : t("dashboard.createError")
-        );
+      .catch(() => {
+        setSubmitError(t("dashboard.createError"));
       })
       .finally(() => setLoading(false));
   }
