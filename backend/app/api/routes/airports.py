@@ -157,8 +157,14 @@ def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends
         except HTTPException:
             raise
         except Exception:
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
             raise HTTPException(status_code=400, detail="upload stream interrupted")
+
+    # tracks which file to remove on error - starts as tmp, becomes final after move
+    cleanup_path = tmp_path
 
     try:
         # validate with rasterio
@@ -183,9 +189,7 @@ def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends
         TERRAIN_DIR.mkdir(parents=True, exist_ok=True)
         final_path = TERRAIN_DIR / f"{airport_id}.tif"
         shutil.move(tmp_path, str(final_path))
-
-        # tmp was moved - cleanup now targets final_path
-        tmp_path = str(final_path)
+        cleanup_path = str(final_path)
 
         airport_service.upload_terrain_dem(
             db, airport_id, str(final_path), terrain_source="DEM_UPLOAD"
@@ -199,16 +203,21 @@ def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends
     except HTTPException:
         raise
     except (NotFoundError, DomainError) as e:
-        # service layer error - file is valid but db operation failed
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        try:
+            if os.path.exists(cleanup_path):
+                os.unlink(cleanup_path)
+        except OSError:
+            pass
         logger.exception("DEM upload service error")
         raise HTTPException(status_code=e.status_code, detail=str(e))
-    except Exception as e:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+    except Exception:
+        try:
+            if os.path.exists(cleanup_path):
+                os.unlink(cleanup_path)
+        except OSError:
+            pass
         logger.exception("DEM upload failed")
-        raise HTTPException(status_code=400, detail=f"invalid GeoTIFF file: {e}")
+        raise HTTPException(status_code=400, detail="invalid or unsupported GeoTIFF file")
 
 
 @router.delete("/{airport_id}/terrain-dem", response_model=DeleteResponse)
@@ -256,12 +265,18 @@ async def download_terrain_data(airport_id: UUID, db: Session = Depends(get_db))
             terrain_source="DEM_API",
         )
     except (NotFoundError, DomainError) as e:
-        if os.path.exists(result["file_path"]):
-            os.unlink(result["file_path"])
+        try:
+            if os.path.exists(result["file_path"]):
+                os.unlink(result["file_path"])
+        except OSError:
+            pass
         raise HTTPException(status_code=e.status_code, detail=str(e))
     except Exception:
-        if os.path.exists(result["file_path"]):
-            os.unlink(result["file_path"])
+        try:
+            if os.path.exists(result["file_path"]):
+                os.unlink(result["file_path"])
+        except OSError:
+            pass
         raise
 
     return TerrainDownloadResponse(
@@ -410,7 +425,7 @@ def delete_agl(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = D
 )
 def list_lhas(airport_id: UUID, surface_id: UUID, agl_id: UUID, db: Session = Depends(get_db)):
     """list all LHAs for AGL"""
-    lhas = airport_service.list_lhas(db, surface_id, agl_id)
+    lhas = airport_service.list_lhas(db, airport_id, surface_id, agl_id)
 
     return LHAListResponse(data=lhas, meta=ListMeta(total=len(lhas)))
 
@@ -428,7 +443,7 @@ def create_lha(
     db: Session = Depends(get_db),
 ):
     """create LHA for AGL"""
-    return airport_service.create_lha(db, surface_id, agl_id, body)
+    return airport_service.create_lha(db, airport_id, surface_id, agl_id, body)
 
 
 @router.put(
@@ -444,7 +459,7 @@ def update_lha(
     db: Session = Depends(get_db),
 ):
     """update LHA"""
-    return airport_service.update_lha(db, surface_id, agl_id, lha_id, body)
+    return airport_service.update_lha(db, airport_id, surface_id, agl_id, lha_id, body)
 
 
 @router.delete(
@@ -459,6 +474,6 @@ def delete_lha(
     db: Session = Depends(get_db),
 ):
     """delete LHA"""
-    airport_service.delete_lha(db, surface_id, agl_id, lha_id)
+    airport_service.delete_lha(db, airport_id, surface_id, agl_id, lha_id)
 
     return DeleteResponse(deleted=True)

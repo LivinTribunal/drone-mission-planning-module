@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from tests.data.airports import (
     AGL_PAYLOAD,
     AIRPORT_PAYLOAD,
@@ -314,3 +316,217 @@ def test_mission_auto_fills_default_drone(client):
     )
     assert r.status_code == 201
     assert r.json()["drone_profile_id"] == drone["id"]
+
+
+def test_bulk_change_drone_selected_scope(client, db_engine):
+    """bulk change with SELECTED scope updates draft and planned missions."""
+    from sqlalchemy import text
+
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZSE"},
+    ).json()
+
+    drone1 = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "SelDrone1"},
+    ).json()
+    drone2 = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "SelDrone2"},
+    ).json()
+
+    m_draft = client.post(
+        "/api/v1/missions",
+        json={"name": "SelDraft", "airport_id": apt["id"], "drone_profile_id": drone1["id"]},
+    ).json()
+    m_planned = client.post(
+        "/api/v1/missions",
+        json={"name": "SelPlanned", "airport_id": apt["id"], "drone_profile_id": drone1["id"]},
+    ).json()
+    m_validated = client.post(
+        "/api/v1/missions",
+        json={"name": "SelValidated", "airport_id": apt["id"], "drone_profile_id": drone1["id"]},
+    ).json()
+
+    # force statuses via raw sql
+    with db_engine.connect() as conn:
+        conn.execute(
+            text("UPDATE mission SET status = 'PLANNED' WHERE id = :id"),
+            {"id": m_planned["id"]},
+        )
+        conn.execute(
+            text("UPDATE mission SET status = 'VALIDATED' WHERE id = :id"),
+            {"id": m_validated["id"]},
+        )
+        conn.commit()
+
+    # SELECTED scope targeting all three - validated should be skipped
+    r = client.post(
+        f"/api/v1/airports/{apt['id']}/bulk-change-drone",
+        json={
+            "drone_profile_id": drone2["id"],
+            "scope": "SELECTED",
+            "mission_ids": [m_draft["id"], m_planned["id"], m_validated["id"]],
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["updated_count"] == 2
+    assert body["regressed_count"] == 1
+    assert m_draft["id"] in body["mission_ids"]
+    assert m_planned["id"] in body["mission_ids"]
+    assert m_validated["id"] not in body["mission_ids"]
+
+
+def test_lha_cross_airport_rejected(client):
+    """lha operations reject requests where surface belongs to a different airport."""
+    apt1 = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZCA"},
+    ).json()
+    apt2 = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZCB"},
+    ).json()
+
+    # create surface + agl under apt1
+    surface = client.post(f"/api/v1/airports/{apt1['id']}/surfaces", json=SURFACE_PAYLOAD).json()
+    agl = client.post(
+        f"/api/v1/airports/{apt1['id']}/surfaces/{surface['id']}/agls", json=AGL_PAYLOAD
+    ).json()
+
+    # list lhas via apt2 should 404
+    r = client.get(f"/api/v1/airports/{apt2['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas")
+    assert r.status_code == 404
+
+    # create lha via apt2 should 404
+    r = client.post(
+        f"/api/v1/airports/{apt2['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas",
+        json=LHA_PAYLOAD,
+    )
+    assert r.status_code == 404
+
+    # create a valid lha under apt1 then try to update/delete via apt2
+    lha = client.post(
+        f"/api/v1/airports/{apt1['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas",
+        json=LHA_PAYLOAD,
+    ).json()
+
+    r = client.put(
+        f"/api/v1/airports/{apt2['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas/{lha['id']}",
+        json={"setting_angle": 5.0},
+    )
+    assert r.status_code == 404
+
+    r = client.delete(
+        f"/api/v1/airports/{apt2['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas/{lha['id']}"
+    )
+    assert r.status_code == 404
+
+
+def test_lha_crud(client):
+    """full lha CRUD lifecycle - create, list, update, delete."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZLC"},
+    ).json()
+
+    surface = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD).json()
+    agl = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls", json=AGL_PAYLOAD
+    ).json()
+
+    base = f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas"
+
+    # create
+    r = client.post(base, json=LHA_PAYLOAD)
+    assert r.status_code == 201
+    lha = r.json()
+    assert lha["unit_number"] == 1
+
+    # list
+    r = client.get(base)
+    assert r.status_code == 200
+    assert r.json()["meta"]["total"] == 1
+
+    # update
+    r = client.put(f"{base}/{lha['id']}", json={"setting_angle": 5.0})
+    assert r.status_code == 200
+    assert r.json()["setting_angle"] == 5.0
+
+    # delete
+    r = client.delete(f"{base}/{lha['id']}")
+    assert r.status_code == 200
+
+    # verify deleted
+    r = client.get(base)
+    assert r.json()["meta"]["total"] == 0
+
+
+def test_delete_terrain_dem(client, tmp_path):
+    """delete terrain dem removes file and resets airport to flat."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZTD"},
+    ).json()
+
+    # delete on airport with no DEM should still succeed
+    r = client.delete(f"/api/v1/airports/{apt['id']}/terrain-dem")
+    assert r.status_code == 200
+    assert r.json()["deleted"] is True
+
+
+def test_bulk_change_drone_with_from_filter(client):
+    """bulk change filters by from_drone_id when provided."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZFF"},
+    ).json()
+
+    drone1 = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "Filter1"},
+    ).json()
+    drone2 = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "Filter2"},
+    ).json()
+    drone3 = client.post(
+        "/api/v1/drone-profiles",
+        json={**DRONE_PAYLOAD, "name": "Filter3"},
+    ).json()
+
+    # mission with drone1
+    m1 = client.post(
+        "/api/v1/missions",
+        json={"name": "FilterM1", "airport_id": apt["id"], "drone_profile_id": drone1["id"]},
+    ).json()
+    # mission with drone2
+    m2 = client.post(
+        "/api/v1/missions",
+        json={"name": "FilterM2", "airport_id": apt["id"], "drone_profile_id": drone2["id"]},
+    ).json()
+
+    # bulk change only drone1 missions to drone3
+    r = client.post(
+        f"/api/v1/airports/{apt['id']}/bulk-change-drone",
+        json={"drone_profile_id": drone3["id"], "from_drone_id": drone1["id"]},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["updated_count"] == 1
+    assert m1["id"] in body["mission_ids"]
+    assert m2["id"] not in body["mission_ids"]
+
+
+def test_bulk_change_drone_nonexistent(client):
+    """bulk change with nonexistent drone profile returns 400."""
+    airports = client.get("/api/v1/airports").json()["data"]
+    airport_id = airports[0]["id"]
+
+    r = client.post(
+        f"/api/v1/airports/{airport_id}/bulk-change-drone",
+        json={"drone_profile_id": str(uuid4())},
+    )
+    assert r.status_code == 400

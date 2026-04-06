@@ -468,8 +468,16 @@ def delete_agl(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID):
 
 
 # LHAs
-def list_lhas(db: Session, surface_id: UUID, agl_id: UUID) -> list[LHA]:
-    """list LHAs for AGL, validates AGL belongs to surface."""
+def list_lhas(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID) -> list[LHA]:
+    """list LHAs for AGL, validates surface belongs to airport."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
@@ -477,8 +485,18 @@ def list_lhas(db: Session, surface_id: UUID, agl_id: UUID) -> list[LHA]:
     return db.query(LHA).filter(LHA.agl_id == agl_id).all()
 
 
-def create_lha(db: Session, surface_id: UUID, agl_id: UUID, schema: LHACreate) -> LHA:
-    """create LHA for AGL, validates AGL belongs to surface."""
+def create_lha(
+    db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, schema: LHACreate
+) -> LHA:
+    """create LHA for AGL, validates surface belongs to airport."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
@@ -492,8 +510,18 @@ def create_lha(db: Session, surface_id: UUID, agl_id: UUID, schema: LHACreate) -
     return lha
 
 
-def update_lha(db: Session, surface_id: UUID, agl_id: UUID, lha_id: UUID, schema: LHAUpdate) -> LHA:
-    """update LHA, validates AGL belongs to surface and LHA belongs to AGL."""
+def update_lha(
+    db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, lha_id: UUID, schema: LHAUpdate
+) -> LHA:
+    """update LHA, validates surface belongs to airport and LHA belongs to AGL."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
@@ -509,8 +537,16 @@ def update_lha(db: Session, surface_id: UUID, agl_id: UUID, lha_id: UUID, schema
     return lha
 
 
-def delete_lha(db: Session, surface_id: UUID, agl_id: UUID, lha_id: UUID):
-    """delete LHA, validates AGL belongs to surface and LHA belongs to AGL."""
+def delete_lha(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, lha_id: UUID):
+    """delete LHA, validates surface belongs to airport and LHA belongs to AGL."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
@@ -535,15 +571,19 @@ def upload_terrain_dem(
     if not airport:
         raise NotFoundError("airport not found")
 
-    # clean up old DEM file if switching to a different path
     old_path = airport.dem_file_path
-    if old_path and old_path != file_path and os.path.exists(old_path):
-        os.unlink(old_path)
 
     airport.terrain_source = terrain_source
     airport.dem_file_path = file_path
     db.commit()
     db.refresh(airport)
+
+    # clean up old DEM file only after successful commit
+    if old_path and old_path != file_path and os.path.exists(old_path):
+        try:
+            os.unlink(old_path)
+        except OSError:
+            logger.warning("failed to remove old DEM file: %s", old_path)
 
     return airport
 
