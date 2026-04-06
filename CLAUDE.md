@@ -88,14 +88,17 @@ drone-mission-planning-module/
 │   └── requirements.txt    # Pinned deps (PROTECTED)
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/          # operator-center/ and coordinator-center/ routes
+│   │   ├── pages/          # operator-center/, coordinator-center/, super-admin/ routes
 │   │   ├── components/     # Reusable React components
 │   │   │   ├── common/     # Button, Input, Modal, Badge, Card, Dropdown, etc.
 │   │   │   ├── mission/    # MissionConfigForm, InspectionList, TemplatePicker, etc.
 │   │   │   ├── map/        # AirportMap + layers/ + overlays/
+│   │   │   ├── coordinator/ # coordinator-specific panels and dialogs
+│   │   │   ├── drone/      # DroneModelSelector, DroneModelViewer, BulkChangeDroneDialog
 │   │   │   ├── Layout/     # NavBar, MissionTabNav, OperatorLayout, etc.
 │   │   │   └── Auth/       # ProtectedRoute
-│   │   ├── contexts/       # AuthContext, AirportContext, ThemeContext
+│   │   ├── contexts/       # AuthContext, AirportContext, MissionContext, ThemeContext
+│   │   ├── hooks/          # custom React hooks (map drawing, tools, undo/redo, etc.)
 │   │   ├── api/            # Axios client + API functions
 │   │   ├── i18n/           # i18next config + locale JSON files
 │   │   └── types/          # TypeScript interfaces matching Pydantic schemas
@@ -120,9 +123,9 @@ frontend/src/ → Axios client → /api/v1/* → FastAPI routers → services �
 - `backend/app/schemas/` — Pydantic v2 request/response DTOs
 - `backend/app/core/` — config, database, auth, dependencies
 - `frontend/src/api/client.ts` — Axios with JWT interceptor, all API calls go through here
-- `frontend/src/pages/` — operator-center and coordinator-center routes
+- `frontend/src/pages/` — operator-center, coordinator-center, and super-admin routes
 - `frontend/src/components/map/layers/` — MapLibre GL layer modules (surfaceLayers, obstacleLayers, safetyZoneLayers, aglLayers, waypointLayers, mapImages)
-- `frontend/src/components/map/overlays/` — map UI overlays (LayerPanel, LegendPanel, PoiInfoPanel, WaypointListPanel, WaypointInfoPanel, TerrainToggle, MapHelpPanel)
+- `frontend/src/components/map/overlays/` — map UI overlays (LayerPanel, LegendPanel, PoiInfoPanel, WaypointListPanel, WaypointInfoPanel, TerrainToggle, MapHelpPanel, etc.)
 
 **Dependency rule**: routes → services → models/schemas. Routes never import models directly.
 
