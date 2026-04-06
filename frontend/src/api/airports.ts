@@ -5,6 +5,7 @@ import type {
   AirportDetailResponse,
   AirportCreate,
   AirportUpdate,
+  BulkChangeDroneResponse,
   SurfaceResponse,
   SurfaceCreate,
   SurfaceUpdate,
@@ -66,6 +67,34 @@ export async function deleteAirport(id: string): Promise<DeleteResponse> {
   return res.data;
 }
 
+export async function setDefaultDrone(
+  airportId: string,
+  droneProfileId: string | null,
+): Promise<AirportResponse> {
+  const res = await client.put(`/airports/${airportId}/default-drone`, {
+    drone_profile_id: droneProfileId,
+  });
+  return res.data;
+}
+
+export async function bulkChangeDrone(
+  airportId: string,
+  droneProfileId: string,
+  options?: {
+    fromDroneId?: string;
+    scope?: "ALL_DRAFT" | "SELECTED";
+    missionIds?: string[];
+  },
+): Promise<BulkChangeDroneResponse> {
+  const res = await client.post(`/airports/${airportId}/bulk-change-drone`, {
+    drone_profile_id: droneProfileId,
+    from_drone_id: options?.fromDroneId ?? null,
+    scope: options?.scope ?? "ALL_DRAFT",
+    mission_ids: options?.missionIds ?? [],
+  });
+  return res.data;
+}
+
 // terrain
 
 export async function uploadTerrainDEM(
@@ -77,7 +106,6 @@ export async function uploadTerrainDEM(
   const res = await client.post(
     `/airports/${airportId}/terrain-dem`,
     formData,
-    { headers: { "Content-Type": "multipart/form-data" } },
   );
   return res.data;
 }

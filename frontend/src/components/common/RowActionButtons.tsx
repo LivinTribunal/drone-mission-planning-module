@@ -6,6 +6,8 @@ interface RowAction {
   disabled?: boolean;
   variant?: "default" | "danger";
   title?: string;
+  className?: string;
+  filled?: boolean;
 }
 
 interface RowActionButtonsProps {
@@ -31,12 +33,14 @@ export default function RowActionButtons({ actions }: RowActionButtonsProps) {
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
               action.disabled
                 ? "opacity-40 cursor-not-allowed"
-                : isDanger
-                  ? "text-tv-text-secondary hover:bg-tv-error/15 hover:text-tv-error"
-                  : "text-tv-text-secondary hover:bg-tv-text-primary/10 hover:text-tv-text-primary"
+                : action.className
+                  ? `${action.className} hover:bg-tv-text-primary/10`
+                  : isDanger
+                    ? "text-tv-text-secondary hover:bg-tv-error/15 hover:text-tv-error"
+                    : "text-tv-text-secondary hover:bg-tv-text-primary/10 hover:text-tv-text-primary"
             }`}
           >
-            <Icon className="h-4 w-4" />
+            <Icon className="h-4 w-4" {...(action.filled ? { fill: "currentColor" } : {})} />
           </button>
         );
       })}

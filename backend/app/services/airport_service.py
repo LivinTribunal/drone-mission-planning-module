@@ -1,14 +1,18 @@
 import logging
+import os
+import time
 from uuid import UUID
 
+import httpx
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.config import TERRAIN_DIR
+from app.core.config import TERRAIN_DIR, settings
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
-from app.models.mission import Mission
+from app.models.enums import MissionStatus
+from app.models.mission import DroneProfile, Mission
 from app.models.value_objects import IcaoCode
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
 from app.schemas.infrastructure import (
@@ -143,6 +147,83 @@ def delete_airport(db: Session, airport_id: UUID):
 
     db.delete(airport)
     db.commit()
+
+
+def set_default_drone(db: Session, airport_id: UUID, drone_profile_id: UUID | None) -> Airport:
+    """set or clear the default drone profile for an airport."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
+    if drone_profile_id:
+        drone = db.query(DroneProfile).filter(DroneProfile.id == drone_profile_id).first()
+        if not drone:
+            raise DomainError("drone profile not found")
+
+    airport.default_drone_profile_id = drone_profile_id
+    db.commit()
+    db.refresh(airport)
+
+    return airport
+
+
+def bulk_change_drone(
+    db: Session,
+    airport_id: UUID,
+    drone_profile_id: UUID,
+    from_drone_id: UUID | None = None,
+    scope: str = "ALL_DRAFT",
+    mission_ids: list[UUID] | None = None,
+) -> tuple[int, int, list[UUID]]:
+    """change drone profile on missions at an airport.
+
+    scope ALL_DRAFT updates all draft missions (optionally filtered by from_drone_id).
+    scope SELECTED updates only the listed mission_ids (draft + planned allowed).
+    """
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
+    drone = db.query(DroneProfile).filter(DroneProfile.id == drone_profile_id).first()
+    if not drone:
+        raise DomainError("drone profile not found")
+
+    updated_ids: list[UUID] = []
+    regressed_count = 0
+
+    if scope == "SELECTED":
+        if not mission_ids:
+            return 0, 0, []
+        missions = (
+            db.query(Mission)
+            .filter(
+                Mission.airport_id == airport_id,
+                Mission.id.in_(mission_ids),
+                Mission.status.in_([MissionStatus.DRAFT, MissionStatus.PLANNED]),
+            )
+            .all()
+        )
+        for mission in missions:
+            was_planned = mission.status == MissionStatus.PLANNED
+            mission.change_drone_profile(drone_profile_id)
+            updated_ids.append(mission.id)
+            if was_planned:
+                regressed_count += 1
+    else:
+        # ALL_DRAFT
+        query = db.query(Mission).filter(
+            Mission.airport_id == airport_id, Mission.status == MissionStatus.DRAFT
+        )
+        if from_drone_id:
+            query = query.filter(Mission.drone_profile_id == from_drone_id)
+        draft_missions = query.all()
+        for mission in draft_missions:
+            mission.change_drone_profile(drone_profile_id)
+            updated_ids.append(mission.id)
+
+    db.commit()
+
+    return len(updated_ids), regressed_count, updated_ids
 
 
 # surfaces
@@ -345,8 +426,18 @@ def create_agl(db: Session, airport_id: UUID, surface_id: UUID, schema: AGLCreat
     return agl
 
 
-def update_agl(db: Session, surface_id: UUID, agl_id: UUID, schema: AGLUpdate) -> AGL:
-    """update AGL, validates it belongs to surface"""
+def update_agl(
+    db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, schema: AGLUpdate
+) -> AGL:
+    """update AGL, validates surface belongs to airport and AGL belongs to surface."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
@@ -358,8 +449,16 @@ def update_agl(db: Session, surface_id: UUID, agl_id: UUID, schema: AGLUpdate) -
     return agl
 
 
-def delete_agl(db: Session, surface_id: UUID, agl_id: UUID):
-    """delete AGL, validates it belongs to surface"""
+def delete_agl(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID):
+    """delete AGL, validates surface belongs to airport and AGL belongs to surface."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
@@ -369,8 +468,16 @@ def delete_agl(db: Session, surface_id: UUID, agl_id: UUID):
 
 
 # LHAs
-def list_lhas(db: Session, surface_id: UUID, agl_id: UUID) -> list[LHA]:
-    """list LHAs for AGL, validates AGL belongs to surface."""
+def list_lhas(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID) -> list[LHA]:
+    """list LHAs for AGL, validates surface belongs to airport."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
@@ -378,8 +485,18 @@ def list_lhas(db: Session, surface_id: UUID, agl_id: UUID) -> list[LHA]:
     return db.query(LHA).filter(LHA.agl_id == agl_id).all()
 
 
-def create_lha(db: Session, surface_id: UUID, agl_id: UUID, schema: LHACreate) -> LHA:
-    """create LHA for AGL, validates AGL belongs to surface."""
+def create_lha(
+    db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, schema: LHACreate
+) -> LHA:
+    """create LHA for AGL, validates surface belongs to airport."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
@@ -393,8 +510,22 @@ def create_lha(db: Session, surface_id: UUID, agl_id: UUID, schema: LHACreate) -
     return lha
 
 
-def update_lha(db: Session, agl_id: UUID, lha_id: UUID, schema: LHAUpdate) -> LHA:
-    """update LHA, validates it belongs to AGL"""
+def update_lha(
+    db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, lha_id: UUID, schema: LHAUpdate
+) -> LHA:
+    """update LHA, validates surface belongs to airport and LHA belongs to AGL."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
+    if not agl:
+        raise NotFoundError("agl not found")
+
     lha = db.query(LHA).filter(LHA.id == lha_id, LHA.agl_id == agl_id).first()
     if not lha:
         raise NotFoundError("lha not found")
@@ -406,8 +537,20 @@ def update_lha(db: Session, agl_id: UUID, lha_id: UUID, schema: LHAUpdate) -> LH
     return lha
 
 
-def delete_lha(db: Session, agl_id: UUID, lha_id: UUID):
-    """delete LHA, validates it belongs to AGL"""
+def delete_lha(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, lha_id: UUID):
+    """delete LHA, validates surface belongs to airport and LHA belongs to AGL."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
+    if not agl:
+        raise NotFoundError("agl not found")
+
     lha = db.query(LHA).filter(LHA.id == lha_id, LHA.agl_id == agl_id).first()
     if not lha:
         raise NotFoundError("lha not found")
@@ -421,28 +564,36 @@ def upload_terrain_dem(
     db: Session,
     airport_id: UUID,
     file_path: str,
-    coverage_bounds: list[float],
-    coverage_resolution: list[float],
     terrain_source: str = "DEM_UPLOAD",
 ) -> Airport:
     """set airport terrain source after file upload or API download."""
-    import os
-
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
         raise NotFoundError("airport not found")
 
-    # clean up old DEM file if switching to a different path
     old_path = airport.dem_file_path
-    if old_path and old_path != file_path and os.path.exists(old_path):
-        os.unlink(old_path)
 
     airport.terrain_source = terrain_source
     airport.dem_file_path = file_path
     db.commit()
     db.refresh(airport)
 
+    # clean up old DEM file only after successful commit
+    if old_path and old_path != file_path and os.path.exists(old_path):
+        try:
+            os.unlink(old_path)
+        except OSError:
+            logger.warning("failed to remove old DEM file: %s", old_path)
+
     return airport
+
+
+def get_dem_file_path(db: Session, airport_id: UUID) -> str | None:
+    """get dem_file_path for an airport without eager-loading infrastructure."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+    return airport.dem_file_path
 
 
 def delete_terrain_dem(db: Session, airport_id: UUID) -> Airport:
@@ -477,10 +628,17 @@ def get_airport_lonlat(airport: Airport) -> tuple[float, float]:
     return coords[0], coords[1]
 
 
-def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
-    """download elevation data from open-elevation API and cache as geotiff."""
-    import time
+def download_terrain_for_location(
+    airport_id: UUID,
+    apt_lon: float,
+    apt_lat: float,
+    fallback_elevation: float,
+) -> dict:
+    """download elevation data from open-elevation API and cache as geotiff.
 
+    session-free - safe to call from a thread pool executor.
+    returns file metadata dict; caller is responsible for persisting to db.
+    """
     try:
         import numpy as np
         import rasterio
@@ -490,15 +648,6 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
             "rasterio/numpy not installed - terrain download not available",
             status_code=501,
         ) from e
-
-    import httpx
-
-    from app.core.config import settings
-
-    # fetch airport data then release from session before long HTTP calls
-    airport = get_airport(db, airport_id)
-    apt_lon, apt_lat = get_airport_lonlat(airport)
-    db.expunge(airport)
 
     delta_deg = settings.terrain_grid_delta_deg
     min_lon = apt_lon - delta_deg
@@ -553,10 +702,14 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
                 results = resp.json().get("results", [])
 
                 if len(results) != len(batch):
+                    missing = len(batch) - len(results)
                     logger.warning(
-                        "short batch response (%d/%d) from elevation API",
+                        "short batch response (%d/%d) from elevation API - "
+                        "filling %d missing cells with fallback_elevation=%.1f",
                         len(results),
                         len(batch),
+                        missing,
+                        fallback_elevation,
                     )
 
                 for r in results:
@@ -565,9 +718,14 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
                         try:
                             all_elevations.append(float(raw))
                         except (TypeError, ValueError):
-                            all_elevations.append(airport.elevation)
+                            all_elevations.append(fallback_elevation)
                     else:
-                        all_elevations.append(airport.elevation)
+                        all_elevations.append(fallback_elevation)
+
+                # fill missing cells from short batch with fallback
+                short_count = len(batch) - len(results)
+                for _ in range(short_count):
+                    all_elevations.append(fallback_elevation)
     except DomainError:
         raise
     except Exception as e:
@@ -606,23 +764,10 @@ def download_terrain_from_api(db: Session, airport_id: UUID) -> dict:
     ) as dst:
         dst.write(data, 1)
 
-    try:
-        upload_terrain_dem(
-            db,
-            airport_id,
-            str(final_path),
-            [min_lon, min_lat, max_lon, max_lat],
-            [step, step],
-            terrain_source="DEM_API",
-        )
-    except Exception:
-        if final_path.exists():
-            final_path.unlink()
-        raise
-
     return {
         "terrain_source": "DEM_API",
         "points_downloaded": len(all_elevations),
         "bounds": [min_lon, min_lat, max_lon, max_lat],
         "resolution": [step, step],
+        "file_path": str(final_path),
     }

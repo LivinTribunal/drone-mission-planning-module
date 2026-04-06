@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/Auth/ProtectedRoute";
 import OperatorLayout from "@/components/Layout/OperatorLayout";
 import CoordinatorLayout from "@/components/Layout/CoordinatorLayout";
+import SuperAdminLayout from "@/components/Layout/SuperAdminLayout";
 import MissionTabNav from "@/components/Layout/MissionTabNav";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/operator-center/DashboardPage";
@@ -12,12 +13,17 @@ import MissionConfigPage from "@/pages/operator-center/MissionConfigPage";
 import MissionMapPage from "@/pages/operator-center/MissionMapPage";
 import MissionValidationPage from "@/pages/operator-center/MissionValidationPage";
 import AirportPage from "@/pages/operator-center/AirportPage";
+import OperatorDronesPage from "@/pages/operator-center/OperatorDronesPage";
+import OperatorDroneDetailPage from "@/pages/operator-center/OperatorDroneDetailPage";
 import AirportListPage from "@/pages/coordinator-center/AirportListPage";
 import AirportEditPage from "@/pages/coordinator-center/AirportEditPage";
 import InspectionListPage from "@/pages/coordinator-center/InspectionListPage";
 import InspectionEditPage from "@/pages/coordinator-center/InspectionEditPage";
 import DroneListPage from "@/pages/coordinator-center/DroneListPage";
 import DroneEditPage from "@/pages/coordinator-center/DroneEditPage";
+import SuperAdminUsersPage from "@/pages/super-admin/SuperAdminUsersPage";
+import SuperAdminAirportsPage from "@/pages/super-admin/SuperAdminAirportsPage";
+import SuperAdminSystemPage from "@/pages/super-admin/SuperAdminSystemPage";
 
 function CatchAllRedirect() {
   const { isAuthenticated } = useAuth();
@@ -52,6 +58,8 @@ function App() {
               />
             </Route>
             <Route path="airport" element={<AirportPage />} />
+            <Route path="drones" element={<OperatorDronesPage />} />
+            <Route path="drones/:id" element={<OperatorDroneDetailPage />} />
           </Route>
         </Route>
 
@@ -64,6 +72,15 @@ function App() {
             <Route path="inspections/:id" element={<InspectionEditPage />} />
             <Route path="drones" element={<DroneListPage />} />
             <Route path="drones/:id" element={<DroneEditPage />} />
+          </Route>
+        </Route>
+
+        {/* super admin */}
+        <Route element={<ProtectedRoute requiredRole="SUPER_ADMIN" />}>
+          <Route element={<SuperAdminLayout />}>
+            <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
+            <Route path="/super-admin/airports" element={<SuperAdminAirportsPage />} />
+            <Route path="/super-admin/system" element={<SuperAdminSystemPage />} />
           </Route>
         </Route>
 

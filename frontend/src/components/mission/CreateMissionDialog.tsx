@@ -12,12 +12,14 @@ interface CreateMissionDialogProps {
   isOpen: boolean;
   onClose: () => void;
   airportId: string;
+  defaultDroneProfileId?: string | null;
 }
 
 export default function CreateMissionDialog({
   isOpen,
   onClose,
   airportId,
+  defaultDroneProfileId,
 }: CreateMissionDialogProps) {
   /**  dialog for creating a new mission with name and drone profile. */
   const { t } = useTranslation();
@@ -37,11 +39,11 @@ export default function CreateMissionDialog({
         .then((res) => setDroneProfiles(res.data))
         .catch(() => setDroneLoadError(true));
       setName("");
-      setDroneProfileId("");
+      setDroneProfileId(defaultDroneProfileId ?? "");
       setFormError(null);
       setSubmitError(null);
     }
-  }, [isOpen]);
+  }, [isOpen, defaultDroneProfileId]);
 
   function handleSubmit(e: React.FormEvent) {
     /** validate and submit the create mission form. */

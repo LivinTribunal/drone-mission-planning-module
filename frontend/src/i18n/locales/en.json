@@ -2,6 +2,7 @@
   "common": {
     "appTitle": "TarmacView Mission Control Center",
     "appTitleCoordinator": "TarmacView Coordinator Center",
+    "appTitleAdmin": "TarmacView Super Admin",
     "loading": "Loading...",
     "noResults": "No results found",
     "retry": "Retry",
@@ -33,9 +34,13 @@
     "airports": "Airports",
     "inspections": "Inspections",
     "drones": "Drones",
+    "superAdmin": "Super Admin",
+    "users": "Users",
+    "system": "System",
     "chooseAirport": "Choose a airport",
     "searchAirports": "Search airports...",
-    "selectAirport": "Select an airport to get started"
+    "selectAirport": "Select an airport to get started",
+    "clearAirport": "Clear airport"
   },
   "auth": {
     "loginTitle": "Login to TarmacView",
@@ -1056,6 +1061,36 @@
     "invalidFileType": "Only .glb and .gltf files are supported",
     "addModel": "Add model",
     "noModelAssigned": "No model"
+  },
+  "operatorDrones": {
+    "title": "Drone Profiles",
+    "setDefault": "Set as Default",
+    "removeDefault": "Remove Default",
+    "defaultBadge": "Default",
+    "defaultDrone": "Default Drone",
+    "contactCoordinator": "Contact your Coordinator to modify drone specifications",
+    "bulkChange": "Bulk Change Drone",
+    "bulkChangeConfirm": "Change drone for {{count}} missions from {{from}} to {{to}}?",
+    "bulkChangeSuccess": "Updated {{count}} missions",
+    "bulkRegressed": "{{count}} trajectories invalidated",
+    "noMissions": "No draft missions to update",
+    "noMissionsForDrone": "No missions using this drone",
+    "viewMissions": "View Missions",
+    "missionsUsing": "Missions",
+    "allDraft": "All DRAFT Missions",
+    "allDraftDesc": "Change drone for all DRAFT missions at this airport",
+    "draftCount": "{{count}} missions in DRAFT status will be updated",
+    "selectMissions": "Select Missions",
+    "changeAll": "Change All",
+    "changeSelected": "Change Selected",
+    "cannotChange": "Cannot change drone — mission is {{status}}",
+    "lastSaved": "Last saved: {{date}}",
+    "targetDrone": "Target drone"
+  },
+  "superAdmin": {
+    "usersPlaceholder": "User management will be available here",
+    "airportsPlaceholder": "Airport assignment will be available here",
+    "systemPlaceholder": "System settings will be available here"
   },
   "languages": {
     "en": "English"
