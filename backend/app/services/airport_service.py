@@ -27,6 +27,7 @@ from app.schemas.infrastructure import (
     SurfaceCreate,
     SurfaceUpdate,
 )
+from app.services.elevation_provider import create_elevation_provider
 from app.services.geometry_converter import apply_schema_update, schema_to_model_data
 
 logger = logging.getLogger(__name__)
@@ -286,6 +287,21 @@ def delete_surface(db: Session, airport_id: UUID, surface_id: UUID):
 
 
 # obstacles
+
+
+def _normalize_position_altitude(position_coords: list[float], airport: Airport) -> None:
+    """set position Z to ground elevation so objects sit at ground level."""
+    if len(position_coords) < 3:
+        return
+    provider = create_elevation_provider(airport)
+    try:
+        ground = provider.get_elevation(position_coords[1], position_coords[0])
+        position_coords[2] = ground
+    finally:
+        if hasattr(provider, "close"):
+            provider.close()
+
+
 def list_obstacles(db: Session, airport_id: UUID) -> list[Obstacle]:
     """list obstacles for airport"""
     return db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
@@ -296,6 +312,10 @@ def create_obstacle(db: Session, airport_id: UUID, schema: ObstacleCreate) -> Ob
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
         raise NotFoundError("airport not found")
+
+    # normalize position.z to ground elevation at obstacle location
+    if schema.position and schema.position.coordinates:
+        _normalize_position_altitude(schema.position.coordinates, airport)
 
     data = schema_to_model_data(schema)
     obstacle = Obstacle(**data)
@@ -309,7 +329,11 @@ def create_obstacle(db: Session, airport_id: UUID, schema: ObstacleCreate) -> Ob
 def update_obstacle(
     db: Session, airport_id: UUID, obstacle_id: UUID, schema: ObstacleUpdate
 ) -> Obstacle:
-    """update obstacle, validates it belongs to airport"""
+    """update obstacle, validates it belongs to airport."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
     obstacle = (
         db.query(Obstacle)
         .filter(Obstacle.id == obstacle_id, Obstacle.airport_id == airport_id)
@@ -317,6 +341,10 @@ def update_obstacle(
     )
     if not obstacle:
         raise NotFoundError("obstacle not found")
+
+    # normalize position.z to ground elevation when position is updated
+    if schema.position and schema.position.coordinates:
+        _normalize_position_altitude(schema.position.coordinates, airport)
 
     apply_schema_update(obstacle, schema)
     db.commit()

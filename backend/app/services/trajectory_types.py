@@ -68,11 +68,11 @@ HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
 @dataclass
 class Point3D:
-    """3D geographic point (lon, lat, alt in meters)"""
+    """3D geographic point (lon, lat, alt in meters MSL)."""
 
     lon: float
     lat: float
-    alt: Meters
+    alt: Meters  # meters above mean sea level
 
     def to_tuple(self) -> tuple[float, float, float]:
         """convert to (lon, lat, alt) tuple for geo utility functions"""
