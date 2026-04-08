@@ -167,11 +167,11 @@ export default function EditableFeatureInfo({
                 onChange={(e) => handleChange("height", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
               <Input
-                id="feat-radius"
-                label={t("coordinator.detail.obstacleRadius")}
+                id="feat-buffer-distance"
+                label={t("coordinator.detail.bufferDistance")}
                 type="number"
-                value={val("radius")}
-                onChange={(e) => handleChange("radius", e.target.value === "" ? null : parseFloat(e.target.value))}
+                value={val("buffer_distance")}
+                onChange={(e) => handleChange("buffer_distance", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
             </div>
           </>

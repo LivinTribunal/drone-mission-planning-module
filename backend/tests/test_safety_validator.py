@@ -134,7 +134,8 @@ def test_safety_zone_no_geometry():
     assert check_safety_zone(None, wp, zone) is None
 
 
-def test_obstacle_no_geometry():
+def test_obstacle_no_boundary():
+    """obstacle with no boundary returns None."""
     from app.services.safety_validator import check_obstacle
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
@@ -142,10 +143,10 @@ def test_obstacle_no_geometry():
         "O",
         (),
         {
-            "geometry": None,
-            "position": None,
+            "boundary": None,
             "height": 40.0,
             "name": "Test",
+            "buffer_distance": 5.0,
         },
     )()
 
@@ -245,11 +246,11 @@ def test_drone_zero_max_speed():
 # segment intersection null-geometry early exits
 
 
-def test_segments_intersect_obstacle_null_geometry():
-    """obstacle with no geometry returns False"""
+def test_segments_intersect_obstacle_null_boundary():
+    """obstacle with no boundary returns False."""
     from app.services.safety_validator import segments_intersect_obstacle
 
-    obstacle = type("O", (), {"geometry": None})()
+    obstacle = type("O", (), {"boundary": None})()
     result = segments_intersect_obstacle(None, 14.0, 50.0, 14.1, 50.1, obstacle)
 
     assert result is False
@@ -292,32 +293,36 @@ def test_speed_framerate_fallback_skipped_with_optimal():
 # geometry parse failure paths
 
 
-def test_check_obstacle_null_position_altitude():
-    """obstacle with no position defaults altitude to 0"""
+def test_check_obstacle_null_boundary_altitude():
+    """obstacle with no boundary defaults altitude to 0."""
     from app.services.safety_validator import check_obstacle
     from app.services.trajectory_types import WaypointData
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
-    obstacle = type("O", (), {"geometry": None, "position": None, "height": 10.0, "id": "o1"})()
-
-    # no geometry means no containment check - returns None
-    result = check_obstacle(None, wp, obstacle)
-    assert result is None
-
-
-def test_check_obstacle_corrupt_position():
-    """obstacle with corrupt position data falls back to 0 altitude"""
-    from app.services.safety_validator import check_obstacle
-    from app.services.trajectory_types import WaypointData
-
-    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
-
-    # position with corrupt data that will fail parse_ewkb
-    corrupt_pos = type("P", (), {"data": b"\x00\x00\x00"})()
     obstacle = type(
-        "O", (), {"geometry": None, "position": corrupt_pos, "height": 10.0, "id": "o1"}
+        "O", (), {"boundary": None, "height": 10.0, "id": "o1", "buffer_distance": 5.0}
     )()
 
-    # no geometry means no containment check - returns None regardless of position
+    # no boundary means no containment check - returns None
     result = check_obstacle(None, wp, obstacle)
     assert result is None
+
+
+def test_check_obstacle_corrupt_boundary():
+    """obstacle with corrupt boundary data raises trajectory error."""
+    import pytest
+
+    from app.core.exceptions import TrajectoryGenerationError
+    from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import WaypointData
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
+
+    # boundary with corrupt data that will fail parse_ewkb
+    corrupt_geom = type("G", (), {"data": b"\x00\x00\x00"})()
+    obstacle = type(
+        "O", (), {"boundary": corrupt_geom, "height": 10.0, "id": "o1", "buffer_distance": 5.0}
+    )()
+
+    with pytest.raises(TrajectoryGenerationError):
+        check_obstacle(None, wp, obstacle)

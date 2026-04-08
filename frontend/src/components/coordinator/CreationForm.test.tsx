@@ -13,6 +13,7 @@ const baseSurface: SurfaceResponse = {
   width: 45,
   geometry: { type: "LineString", coordinates: [[0, 0, 0], [1, 0, 0]] },
   boundary: null,
+  buffer_distance: 5.0,
   threshold_position: null,
   end_position: null,
   agls: [

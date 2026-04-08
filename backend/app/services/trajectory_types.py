@@ -121,6 +121,7 @@ class ResolvedConfig:
     sweep_angle: Degrees | None = None
     capture_mode: str = "VIDEO_CAPTURE"
     recording_setup_duration: Seconds = 5.0
+    buffer_distance: Meters = 5.0
 
 
 @dataclass

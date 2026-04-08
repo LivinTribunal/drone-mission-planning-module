@@ -61,11 +61,11 @@ def test_obstacle_null_containment_treated_as_safe(monkeypatch):
         "O",
         (),
         {
-            "geometry": MagicMock(),
-            "position": None,
+            "boundary": MagicMock(),
             "height": 50.0,
             "name": "Degenerate",
             "id": "obs-1",
+            "buffer_distance": 5.0,
         },
     )()
 
@@ -175,17 +175,17 @@ def test_batch_check_obstacles_empty_waypoints():
     """no waypoints returns empty list"""
     from app.services.safety_validator import _batch_check_obstacles
 
-    obs = type("O", (), {"geometry": MagicMock()})()
+    obs = type("O", (), {"boundary": MagicMock()})()
     result = _batch_check_obstacles(None, [], [obs])
     assert result == []
 
 
-def test_batch_check_obstacles_no_geometry():
-    """obstacles with no geometry are skipped"""
+def test_batch_check_obstacles_no_boundary():
+    """obstacles with no boundary are skipped."""
     from app.services.safety_validator import _batch_check_obstacles
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
-    obs = type("O", (), {"geometry": None})()
+    obs = type("O", (), {"boundary": None})()
     result = _batch_check_obstacles(None, [wp], [obs])
     assert result == []
 

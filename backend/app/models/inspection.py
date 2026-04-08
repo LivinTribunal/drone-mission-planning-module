@@ -58,6 +58,7 @@ class InspectionConfiguration(Base):
     lha_ids = Column(JSONB)
     capture_mode = Column(String(20), nullable=True)
     recording_setup_duration = Column(Float, nullable=True)
+    buffer_distance = Column(Float, nullable=True)
 
     # config fields that can be overridden per-inspection.
     # lha_ids is included for duplication support (duplicate_mission copies it)
@@ -75,6 +76,7 @@ class InspectionConfiguration(Base):
         "lha_ids",
         "capture_mode",
         "recording_setup_duration",
+        "buffer_distance",
     )
 
     def resolve_with_defaults(self, template_config: InspectionConfiguration | None):

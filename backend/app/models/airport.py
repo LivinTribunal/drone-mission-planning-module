@@ -72,6 +72,7 @@ class AirfieldSurface(Base):
     surface_type = Column(String(20), nullable=False)
     geometry = Column(Geometry("LINESTRINGZ", srid=4326), nullable=False)
     boundary = Column(Geometry("POLYGONZ", srid=4326))
+    buffer_distance = Column(Float, nullable=False, default=5.0)
 
     # runway-specific columns
     heading = Column(Float)
@@ -108,17 +109,16 @@ class Taxiway(AirfieldSurface):
 
 
 class Obstacle(Base):
-    """airport obstacle with 3D geometry."""
+    """airport obstacle with polygon boundary and buffer distance."""
 
     __tablename__ = "obstacle"
 
     id = Column(UUID, primary_key=True, default=uuid4)
     airport_id = Column(UUID, ForeignKey("airport.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)
-    position = Column(Geometry("POINTZ", srid=4326), nullable=False)
     height = Column(Float, nullable=False)
-    radius = Column(Float, nullable=False)
-    geometry = Column(Geometry("POLYGONZ", srid=4326), nullable=False)
+    boundary = Column(Geometry("POLYGONZ", srid=4326), nullable=False)
+    buffer_distance = Column(Float, nullable=False, default=5.0)
     type = Column(
         String(20),
         nullable=False,

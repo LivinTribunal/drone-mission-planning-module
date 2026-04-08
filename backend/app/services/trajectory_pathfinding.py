@@ -47,8 +47,8 @@ SEARCH_RADIUS_EXPANSION = 1.5
 MAX_ASTAR_RETRIES = 3
 
 
-def _extract_polygon_vertices(geom_data: bytes) -> list[Point3D]:
-    """extract vertices from polygon geometry, offset outward from centroid by vertex buffer."""
+def _extract_polygon_vertices(geom_data: bytes, buffer_m: float | None = None) -> list[Point3D]:
+    """extract vertices from polygon geometry, offset outward from centroid by buffer distance."""
     try:
         geojson = parse_ewkb(geom_data)
         if geojson["type"] != "Polygon":
@@ -60,6 +60,8 @@ def _extract_polygon_vertices(geom_data: bytes) -> list[Point3D]:
         if len(coords) < 3:
             return []
 
+        offset = buffer_m if buffer_m is not None else settings.vertex_buffer_m
+
         # compute centroid for offset direction
         cx = sum(c[0] for c in coords) / len(coords)
         cy = sum(c[1] for c in coords) / len(coords)
@@ -67,9 +69,9 @@ def _extract_polygon_vertices(geom_data: bytes) -> list[Point3D]:
         vertices = []
         for c in coords:
             alt = c[2] if len(c) > 2 else 0.0
-            # push vertex away from centroid by VERTEX_BUFFER_M
+            # push vertex away from centroid by buffer distance
             brng = bearing_between(cx, cy, c[0], c[1])
-            lon, lat = point_at_distance(c[0], c[1], brng, settings.vertex_buffer_m)
+            lon, lat = point_at_distance(c[0], c[1], brng, offset)
             vertices.append(Point3D(lon=lon, lat=lat, alt=alt))
 
         return vertices
@@ -90,16 +92,17 @@ def _collect_nearby_objects(
     """collect obstacles and hard safety zones within search_radius of center."""
     nearby_obs = []
     for obs in obstacles:
-        if not obs.position:
+        if not obs.boundary:
             continue
         try:
-            obs_pos = parse_ewkb(obs.position.data).get("coordinates")
-            if not obs_pos or len(obs_pos) < 2:
+            verts = _extract_polygon_vertices(obs.boundary.data, obs.buffer_distance)
+            if not verts:
                 continue
+            obs_center = center_of_points([v.to_tuple() for v in verts])
         except Exception as e:
-            logger.warning("failed to parse obstacle position for obstacle %s: %s", obs.id, e)
+            logger.warning("failed to parse obstacle boundary for obstacle %s: %s", obs.id, e)
             continue
-        if distance_between(center_lon, center_lat, obs_pos[0], obs_pos[1]) <= search_radius:
+        if distance_between(center_lon, center_lat, obs_center[0], obs_center[1]) <= search_radius:
             nearby_obs.append(obs)
 
     nearby_zones = []
@@ -198,8 +201,8 @@ def _collect_graph_nodes_in_circle(
         return distance_between(center.lon, center.lat, pt.lon, pt.lat) <= radius
 
     for obs in obstacles:
-        if obs.geometry:
-            for v in _extract_polygon_vertices(obs.geometry.data):
+        if obs.boundary:
+            for v in _extract_polygon_vertices(obs.boundary.data, obs.buffer_distance):
                 if in_circle(v):
                     nodes.append(v)
 
@@ -372,11 +375,11 @@ def resolve_inspection_collisions(
         # collect nearby obstacles AND safety zones
         mid_lon = (from_pt.lon + to_pt.lon) / 2
         mid_lat = (from_pt.lat + to_pt.lat) / 2
-        max_radius = max(
-            ((obs.radius or DEFAULT_OBSTACLE_RADIUS) for obs in obstacles),
+        max_buffer = max(
+            ((obs.buffer_distance or DEFAULT_OBSTACLE_RADIUS) for obs in obstacles),
             default=DEFAULT_OBSTACLE_RADIUS,
         )
-        search_radius = max_radius * REROUTE_SEARCH_RADIUS_MULTIPLIER
+        search_radius = max_buffer * REROUTE_SEARCH_RADIUS_MULTIPLIER
         nearby_obs, nearby_zones = _collect_nearby_objects(
             obstacles, zones, mid_lon, mid_lat, search_radius
         )

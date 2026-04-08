@@ -54,6 +54,7 @@ vi.mock("@/contexts/AirportContext", () => ({
           identifier: "09/27",
           surface_type: "RUNWAY",
           agls: [],
+          buffer_distance: 5.0,
           geometry: {
             type: "Polygon",
             coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],

@@ -20,6 +20,7 @@ class InspectionConfigCreate(BaseModel):
     lha_ids: list[UUID] | None = None
     capture_mode: str | None = None
     recording_setup_duration: float | None = None
+    buffer_distance: float | None = None
 
 
 class InspectionConfigResponse(BaseModel):
@@ -37,6 +38,7 @@ class InspectionConfigResponse(BaseModel):
     lha_ids: list[UUID] | None = None
     capture_mode: str | None = None
     recording_setup_duration: float | None = None
+    buffer_distance: float | None = None
 
     model_config = {"from_attributes": True}
 

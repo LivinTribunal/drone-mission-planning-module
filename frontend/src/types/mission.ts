@@ -16,6 +16,7 @@ export interface MissionResponse {
   takeoff_coordinate: PointZ | null;
   landing_coordinate: PointZ | null;
   default_capture_mode: CaptureMode | null;
+  default_buffer_distance: number | null;
   has_unsaved_map_changes: boolean;
   inspection_count: number;
   estimated_duration: number | null;
@@ -37,6 +38,7 @@ export interface InspectionConfigResponse {
   lha_ids: string[] | null;
   capture_mode: CaptureMode | null;
   recording_setup_duration: number | null;
+  buffer_distance: number | null;
 }
 
 export interface InspectionResponse {
@@ -62,6 +64,7 @@ export interface InspectionConfigOverride {
   lha_ids?: string[] | null;
   capture_mode?: CaptureMode | null;
   recording_setup_duration?: number | null;
+  buffer_distance?: number | null;
 }
 
 export interface MissionCreate {
@@ -75,6 +78,7 @@ export interface MissionCreate {
   takeoff_coordinate?: PointZ | null;
   landing_coordinate?: PointZ | null;
   default_capture_mode?: CaptureMode | null;
+  default_buffer_distance?: number | null;
 }
 
 export interface MissionUpdate {
@@ -87,6 +91,7 @@ export interface MissionUpdate {
   takeoff_coordinate?: PointZ | null;
   landing_coordinate?: PointZ | null;
   default_capture_mode?: CaptureMode | null;
+  default_buffer_distance?: number | null;
 }
 
 export interface InspectionCreate {

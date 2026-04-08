@@ -14,6 +14,7 @@ class SurfaceCreate(BaseModel):
     surface_type: str
     geometry: LineStringZ
     boundary: PolygonZ | None = None
+    buffer_distance: float = 5.0
     heading: float | None = None
     length: float | None = None
     width: float | None = None
@@ -27,6 +28,7 @@ class SurfaceUpdate(BaseModel):
     identifier: str | None = None
     geometry: LineStringZ | None = None
     boundary: PolygonZ | None = None
+    buffer_distance: float | None = None
     heading: float | None = None
     length: float | None = None
     width: float | None = None
@@ -43,6 +45,7 @@ class SurfaceResponse(BaseModel):
     surface_type: str
     geometry: LineStringZ
     boundary: PolygonZ | None = None
+    buffer_distance: float = 5.0
     heading: float | None = None
     length: float | None = None
     width: float | None = None
@@ -58,10 +61,9 @@ class ObstacleCreate(BaseModel):
     """obstacle create schema"""
 
     name: str
-    position: PointZ
     height: float
-    radius: float
-    geometry: PolygonZ
+    boundary: PolygonZ
+    buffer_distance: float = 5.0
     type: str
 
 
@@ -69,10 +71,9 @@ class ObstacleUpdate(BaseModel):
     """obstacle update schema"""
 
     name: str | None = None
-    position: PointZ | None = None
     height: float | None = None
-    radius: float | None = None
-    geometry: PolygonZ | None = None
+    boundary: PolygonZ | None = None
+    buffer_distance: float | None = None
     type: str | None = None
 
 
@@ -82,10 +83,9 @@ class ObstacleResponse(BaseModel):
     id: UUID
     airport_id: UUID
     name: str
-    position: PointZ
     height: float
-    radius: float
-    geometry: PolygonZ
+    boundary: PolygonZ
+    buffer_distance: float
     type: str
 
     model_config = {"from_attributes": True}

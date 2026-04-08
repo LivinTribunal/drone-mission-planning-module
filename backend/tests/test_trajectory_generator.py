@@ -432,9 +432,8 @@ def test_line_of_sight_clear(client, db_engine):
             "name": "Far Tower",
             "type": "TOWER",
             "height": 50.0,
-            "radius": 10.0,
-            "position": {"type": "Point", "coordinates": [14.30, 50.15, 300]},
-            "geometry": {
+            "buffer_distance": 10.0,
+            "boundary": {
                 "type": "Polygon",
                 "coordinates": [
                     [
@@ -476,9 +475,8 @@ def test_line_of_sight_blocked(client, db_engine):
             "name": "Blocking Wall",
             "type": "BUILDING",
             "height": 500.0,
-            "radius": 50.0,
-            "position": {"type": "Point", "coordinates": [14.27, 50.10, 300]},
-            "geometry": {
+            "buffer_distance": 50.0,
+            "boundary": {
                 "type": "Polygon",
                 "coordinates": [
                     [

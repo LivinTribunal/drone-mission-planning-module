@@ -56,8 +56,8 @@ export default function PoiInfoPanel({
             <InfoRow label={t("dashboard.poiName")} value={o.name} />
             <InfoRow label={t("dashboard.poiType")} value={o.type} />
             <InfoRow label={t("dashboard.poiHeight")} value={`${o.height}m`} />
-            <InfoRow label={t("dashboard.poiRadius")} value={`${o.radius}m`} />
-            <CoordRows position={o.position} label={t("dashboard.poiCoordinates")} />
+            <InfoRow label={t("dashboard.bufferDistance")} value={`${o.buffer_distance}m`} />
+            <PolygonCoordRows polygon={o.boundary} label={t("dashboard.poiCoordinates")} />
           </>
         );
       }

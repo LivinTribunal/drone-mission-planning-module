@@ -75,13 +75,12 @@ def _batch_check_obstacles(
     obstacles: list[Obstacle],
 ) -> list[Violation]:
     """batch obstacle containment - one query for all waypoints against all obstacles."""
-    # filter obstacles with geometry
-    valid_obs = [(i, obs) for i, obs in enumerate(obstacles) if obs.geometry]
+    valid_obs = [(i, obs) for i, obs in enumerate(obstacles) if obs.boundary]
     if not valid_obs or not waypoints:
         return []
 
     wp_ewkts = [_wp_to_ewkt(wp) for wp in waypoints]
-    obs_ewkts = [(i, _geom_to_ewkt(obs.geometry)) for i, obs in valid_obs]
+    obs_ewkts = [(i, _geom_to_ewkt(obs.boundary)) for i, obs in valid_obs]
 
     # build VALUES clauses with bind parameters
     wp_values = ", ".join(f"(:wp_idx_{i}, :wp_geom_{i})" for i in range(len(waypoints)))
@@ -106,18 +105,10 @@ def _batch_check_obstacles(
 
     rows = db.execute(text(sql), params).fetchall()
 
-    # pre-compute obstacle top altitudes
+    # pre-compute obstacle top altitudes from boundary centroid
     obs_tops: dict[int, float] = {}
     for orig_idx, obs in valid_obs:
-        obs_base_alt = 0.0
-        if obs.position:
-            try:
-                obs_pos = parse_ewkb(obs.position.data)
-                if obs_pos is not None:
-                    coords = obs_pos.get("coordinates", [])
-                    obs_base_alt = coords[2] if len(coords) > 2 else 0.0
-            except (IndexError, KeyError, ValueError):
-                pass
+        obs_base_alt = _obstacle_base_altitude(obs)
         obs_tops[orig_idx] = obs_base_alt + (obs.height or 0)
 
     violations = []
@@ -244,6 +235,21 @@ def _batch_check_minimum_agl(
     return violations
 
 
+def _obstacle_base_altitude(obstacle: Obstacle) -> float:
+    """extract base altitude from obstacle boundary centroid z-coordinate."""
+    if not obstacle.boundary:
+        return 0.0
+    try:
+        geojson = parse_ewkb(obstacle.boundary.data)
+        coords = geojson.get("coordinates", [[]])[0]
+        if coords:
+            alts = [c[2] for c in coords if len(c) > 2]
+            return min(alts) if alts else 0.0
+    except (IndexError, KeyError, ValueError):
+        pass
+    return 0.0
+
+
 def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation | None:
     """check if waypoint exceeds drone altitude or speed limits."""
     if drone.max_altitude is not None and wp.alt > drone.max_altitude:
@@ -277,11 +283,12 @@ def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation 
 
 
 def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violation | None:
-    """check if waypoint is inside an obstacle's geometry below its height"""
-    if not obstacle.geometry:
+    """check if waypoint is inside an obstacle's boundary below its height."""
+    if not obstacle.boundary:
         return None
 
     wp_ewkt = _wp_to_ewkt(wp)
+    obs_ewkt = _geom_to_ewkt(obstacle.boundary)
 
     contained = db.execute(
         text(
@@ -289,22 +296,13 @@ def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violati
             "ST_Force2D(ST_GeomFromEWKT(:obs_geom)), "
             "ST_Force2D(ST_GeomFromEWKT(:point)))"
         ),
-        {"obs_geom": _geom_to_ewkt(obstacle.geometry), "point": wp_ewkt},
+        {"obs_geom": obs_ewkt, "point": wp_ewkt},
     ).scalar()
 
     if contained is not True:
         return None
 
-    obs_base_alt = 0.0
-    if obstacle.position:
-        try:
-            obs_pos = parse_ewkb(obstacle.position.data)
-            if obs_pos is not None:
-                coords = obs_pos.get("coordinates", [])
-                obs_base_alt = coords[2] if len(coords) > 2 else 0.0
-        except (IndexError, KeyError, ValueError):
-            pass
-
+    obs_base_alt = _obstacle_base_altitude(obstacle)
     obs_top = obs_base_alt + (obstacle.height or 0)
 
     if wp.alt <= obs_top:
@@ -386,8 +384,8 @@ def segments_intersect_obstacle(
     to_lat: float,
     obstacle: Obstacle,
 ) -> bool:
-    """check if a line segment intersects an obstacle's 2D footprint"""
-    if not obstacle.geometry:
+    """check if a line segment intersects an obstacle's 2D boundary."""
+    if not obstacle.boundary:
         return False
 
     line_ewkt = _line_ewkt(from_lon, from_lat, to_lon, to_lat)
@@ -398,7 +396,7 @@ def segments_intersect_obstacle(
             "ST_Force2D(ST_GeomFromEWKT(:obs_geom)), "
             "ST_Force2D(ST_GeomFromEWKT(:line)))"
         ),
-        {"obs_geom": _geom_to_ewkt(obstacle.geometry), "line": line_ewkt},
+        {"obs_geom": _geom_to_ewkt(obstacle.boundary), "line": line_ewkt},
     ).scalar()
 
     return bool(result)
