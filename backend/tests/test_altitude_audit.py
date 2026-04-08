@@ -279,8 +279,8 @@ def test_camera_target_below_waypoint():
 # obstacle altitude normalization
 
 
-def test_obstacle_position_normalized_to_ground(client):
-    """obstacle position.z should be normalized to ground elevation."""
+def test_obstacle_boundary_normalized_to_ground(client):
+    """obstacle boundary z-coordinates should be normalized to ground elevation."""
     airport = client.post(
         "/api/v1/airports",
         json={
@@ -292,24 +292,23 @@ def test_obstacle_position_normalized_to_ground(client):
     ).json()
     airport_id = airport["id"]
 
-    # create obstacle with position.z = 350 (wrong - should be ground level)
+    # create obstacle with boundary z = 350 (wrong - should be ground level)
     resp = client.post(
         f"/api/v1/airports/{airport_id}/obstacles",
         json={
             "name": "Test Tower",
             "type": "TOWER",
             "height": 50.0,
-            "radius": 10.0,
-            "position": {"type": "Point", "coordinates": [14.27, 50.10, 350]},
-            "geometry": {
+            "buffer_distance": 10.0,
+            "boundary": {
                 "type": "Polygon",
                 "coordinates": [
                     [
-                        [14.2695, 50.0995, 300],
-                        [14.2705, 50.0995, 300],
-                        [14.2705, 50.1005, 300],
-                        [14.2695, 50.1005, 300],
-                        [14.2695, 50.0995, 300],
+                        [14.2695, 50.0995, 350],
+                        [14.2705, 50.0995, 350],
+                        [14.2705, 50.1005, 350],
+                        [14.2695, 50.1005, 350],
+                        [14.2695, 50.0995, 350],
                     ]
                 ],
             },
@@ -318,15 +317,16 @@ def test_obstacle_position_normalized_to_ground(client):
     assert resp.status_code in (200, 201)
     obs = resp.json()
 
-    # with FlatElevationProvider, position.z should be normalized to airport elevation
-    pos_z = obs["position"]["coordinates"][2]
-    assert abs(pos_z - 300.0) < 0.1, (
-        f"obstacle position.z should be ground elevation (300), got {pos_z}"
-    )
+    # with FlatElevationProvider, boundary z should be normalized to airport elevation
+    ring = obs["boundary"]["coordinates"][0]
+    for coord in ring:
+        assert abs(coord[2] - 300.0) < 0.1, (
+            f"obstacle boundary z should be ground elevation (300), got {coord[2]}"
+        )
 
 
-def test_obstacle_update_normalizes_position(client):
-    """updating obstacle position normalizes z to ground elevation."""
+def test_obstacle_update_normalizes_boundary(client):
+    """updating obstacle boundary normalizes z to ground elevation."""
     airport = client.post(
         "/api/v1/airports",
         json={
@@ -344,9 +344,8 @@ def test_obstacle_update_normalizes_position(client):
             "name": "Update Tower",
             "type": "TOWER",
             "height": 30.0,
-            "radius": 5.0,
-            "position": {"type": "Point", "coordinates": [14.27, 50.10, 280]},
-            "geometry": {
+            "buffer_distance": 5.0,
+            "boundary": {
                 "type": "Polygon",
                 "coordinates": [
                     [
@@ -361,20 +360,32 @@ def test_obstacle_update_normalizes_position(client):
         },
     ).json()
 
-    # update position with wrong z
+    # update boundary with wrong z
     update_resp = client.put(
         f"/api/v1/airports/{airport_id}/obstacles/{obs['id']}",
         json={
-            "position": {"type": "Point", "coordinates": [14.27, 50.10, 500]},
+            "boundary": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [14.2695, 50.0995, 500],
+                        [14.2705, 50.0995, 500],
+                        [14.2705, 50.1005, 500],
+                        [14.2695, 50.1005, 500],
+                        [14.2695, 50.0995, 500],
+                    ]
+                ],
+            },
         },
     )
     assert update_resp.status_code == 200
     updated = update_resp.json()
 
-    pos_z = updated["position"]["coordinates"][2]
-    assert abs(pos_z - 280.0) < 0.1, (
-        f"updated obstacle position.z should be ground elevation (280), got {pos_z}"
-    )
+    ring = updated["boundary"]["coordinates"][0]
+    for coord in ring:
+        assert abs(coord[2] - 280.0) < 0.1, (
+            f"updated obstacle boundary z should be ground elevation (280), got {coord[2]}"
+        )
 
 
 # LHA altitude normalization
@@ -604,9 +615,8 @@ def test_renormalize_airport_altitudes(client):
             "name": "Tower",
             "type": "TOWER",
             "height": 50.0,
-            "radius": 10.0,
-            "position": {"type": "Point", "coordinates": [14.27, 50.10, 300]},
-            "geometry": {
+            "buffer_distance": 10.0,
+            "boundary": {
                 "type": "Polygon",
                 "coordinates": [
                     [
@@ -646,10 +656,13 @@ def test_renormalize_airport_altitudes(client):
         json={"elevation": 350.0},
     )
 
-    # re-read all entities - position.z should now be 350.0
+    # re-read all entities - z should now be 350.0
     obs_resp = client.get(f"/api/v1/airports/{aid}/obstacles").json()
-    obs_z = obs_resp["data"][0]["position"]["coordinates"][2]
-    assert abs(obs_z - 350.0) < 0.1, f"obstacle should be re-normalized to 350, got {obs_z}"
+    obs_ring = obs_resp["data"][0]["boundary"]["coordinates"][0]
+    for coord in obs_ring:
+        assert abs(coord[2] - 350.0) < 0.1, (
+            f"obstacle boundary z should be re-normalized to 350, got {coord[2]}"
+        )
 
     agls_resp = client.get(f"/api/v1/airports/{aid}/surfaces/{sid}/agls").json()
     agl_z = agls_resp["data"][0]["position"]["coordinates"][2]
