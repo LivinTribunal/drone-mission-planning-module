@@ -93,6 +93,7 @@ def _collect_nearby_objects(
     center_lon: float,
     center_lat: float,
     search_radius: Meters,
+    buffer_distance_override: float | None = None,
 ) -> tuple[list[Obstacle], list[SafetyZone]]:
     """collect obstacles and hard safety zones within search_radius of center."""
     nearby_obs = []
@@ -100,7 +101,12 @@ def _collect_nearby_objects(
         if not obs.boundary:
             continue
         try:
-            verts = _extract_polygon_vertices(obs.boundary.data, obs.buffer_distance)
+            buf = (
+                buffer_distance_override
+                if buffer_distance_override is not None
+                else obs.buffer_distance
+            )
+            verts = _extract_polygon_vertices(obs.boundary.data, buf)
             if not verts:
                 continue
             obs_center = center_of_points([v.to_tuple() for v in verts])
@@ -116,12 +122,17 @@ def _collect_nearby_objects(
             continue
 
         # approximate zone distance by checking if zone center is within range
-        verts = _extract_polygon_vertices(zone.geometry.data)
-        if verts:
+        try:
+            verts = _extract_polygon_vertices(zone.geometry.data)
+            if not verts:
+                continue
             zone_center = center_of_points([v.to_tuple() for v in verts])
-            zone_dist = distance_between(center_lon, center_lat, zone_center[0], zone_center[1])
-            if zone_dist <= search_radius:
-                nearby_zones.append(zone)
+        except Exception as e:
+            logger.warning("failed to parse zone geometry for zone %s: %s", zone.id, e)
+            continue
+        zone_dist = distance_between(center_lon, center_lat, zone_center[0], zone_center[1])
+        if zone_dist <= search_radius:
+            nearby_zones.append(zone)
 
     return nearby_obs, nearby_zones
 
@@ -194,6 +205,7 @@ def _collect_graph_nodes_in_circle(
     surfaces: list[AirfieldSurface] | None,
     center: Point3D,
     radius: Meters,
+    buffer_distance_override: float | None = None,
 ) -> list[Point3D]:
     """collect nodes within search circle for visibility graph construction.
 
@@ -207,7 +219,12 @@ def _collect_graph_nodes_in_circle(
 
     for obs in obstacles:
         if obs.boundary:
-            for v in _extract_polygon_vertices(obs.boundary.data, obs.buffer_distance):
+            buf = (
+                buffer_distance_override
+                if buffer_distance_override is not None
+                else obs.buffer_distance
+            )
+            for v in _extract_polygon_vertices(obs.boundary.data, buf):
                 if in_circle(v):
                     nodes.append(v)
 
@@ -273,6 +290,7 @@ def _run_astar(
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface] | None = None,
+    buffer_distance_override: float | None = None,
 ) -> list[Point3D] | None:
     """circle-based A* pathfinding with expanding search radius on failure.
 
@@ -290,7 +308,13 @@ def _run_astar(
 
     for attempt in range(MAX_ASTAR_RETRIES):
         nodes = _collect_graph_nodes_in_circle(
-            [from_point, to_point], obstacles, zones, surfaces, mid, radius
+            [from_point, to_point],
+            obstacles,
+            zones,
+            surfaces,
+            mid,
+            radius,
+            buffer_distance_override=buffer_distance_override,
         )
         graph = _build_visibility_graph(db, nodes, obstacles, zones, surfaces)
         node_tuples = [n.to_tuple() for n in nodes]
@@ -335,6 +359,7 @@ def resolve_inspection_collisions(
     zones: list[SafetyZone],
     center: Point3D,
     surfaces: list[AirfieldSurface] | None = None,
+    buffer_distance_override: float | None = None,
 ) -> list[WaypointData]:
     """A*-based rerouting of measurement waypoints around obstacles and safety zones.
 
@@ -383,9 +408,13 @@ def resolve_inspection_collisions(
         max_buffer = max(
             (
                 (
-                    obs.buffer_distance
-                    if obs.buffer_distance is not None
-                    else DEFAULT_OBSTACLE_RADIUS
+                    buffer_distance_override
+                    if buffer_distance_override is not None
+                    else (
+                        obs.buffer_distance
+                        if obs.buffer_distance is not None
+                        else DEFAULT_OBSTACLE_RADIUS
+                    )
                 )
                 for obs in obstacles
             ),
@@ -393,11 +422,24 @@ def resolve_inspection_collisions(
         )
         search_radius = max_buffer * REROUTE_SEARCH_RADIUS_MULTIPLIER
         nearby_obs, nearby_zones = _collect_nearby_objects(
-            obstacles, zones, mid_lon, mid_lat, search_radius
+            obstacles,
+            zones,
+            mid_lon,
+            mid_lat,
+            search_radius,
+            buffer_distance_override=buffer_distance_override,
         )
 
         # A* through local visibility graph (includes runway crossing penalties)
-        path = _run_astar(db, from_pt, to_pt, nearby_obs, nearby_zones, surfaces)
+        path = _run_astar(
+            db,
+            from_pt,
+            to_pt,
+            nearby_obs,
+            nearby_zones,
+            surfaces,
+            buffer_distance_override=buffer_distance_override,
+        )
         if path is None:
             raise TrajectoryGenerationError("no obstacle-free reroute path found")
 

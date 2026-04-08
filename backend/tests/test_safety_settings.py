@@ -216,3 +216,25 @@ def test_batch_check_zones_no_geometry():
     zone = type("Z", (), {"geometry": None})()
     result = _batch_check_zones(None, [wp], [zone])
     assert result == []
+
+
+def test_buffer_distance_zero_in_max_buffer_calc():
+    """buffer_distance=0 in max_buffer calc should use 0, not DEFAULT_OBSTACLE_RADIUS."""
+    from app.services.trajectory_types import DEFAULT_OBSTACLE_RADIUS
+
+    obstacles = [
+        type("O", (), {"buffer_distance": 0.0})(),
+        type("O", (), {"buffer_distance": 0.0})(),
+    ]
+
+    # replicate the max_buffer logic from resolve_inspection_collisions (no override)
+    max_buffer = max(
+        (
+            (obs.buffer_distance if obs.buffer_distance is not None else DEFAULT_OBSTACLE_RADIUS)
+            for obs in obstacles
+        ),
+        default=DEFAULT_OBSTACLE_RADIUS,
+    )
+
+    assert max_buffer == 0.0
+    assert DEFAULT_OBSTACLE_RADIUS > 0

@@ -45,6 +45,7 @@ CONFIG_FIELDS = (
     "sweep_angle",
     "capture_mode",
     "recording_setup_duration",
+    "buffer_distance",
 )
 
 

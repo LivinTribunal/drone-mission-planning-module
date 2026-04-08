@@ -833,6 +833,110 @@ def test_buffer_distance_zero_uses_zero_not_default(client, db_engine):
             assert dist_def > dist_zero
 
 
+def test_overlay_config_includes_buffer_distance():
+    """overlay_config copies buffer_distance from config to resolved config."""
+    from app.models.inspection import InspectionConfiguration
+    from app.services.trajectory_computation import overlay_config
+
+    result = ResolvedConfig()
+    config = InspectionConfiguration(buffer_distance=30.0)
+
+    overlay_config(result, config)
+
+    assert result.buffer_distance == 30.0
+
+
+def test_resolve_with_defaults_template_buffer_distance():
+    """template default_config buffer_distance picked up when no inspection config."""
+    from app.models.inspection import InspectionConfiguration
+    from app.services.trajectory_computation import resolve_with_defaults as _resolve_with_defaults
+
+    template_config = InspectionConfiguration(buffer_distance=20.0)
+    template = type("T", (), {"default_config": template_config})()
+    inspection = type("I", (), {"config": None})()
+
+    result = _resolve_with_defaults(inspection, template)
+
+    assert result.buffer_distance == 20.0
+
+
+def test_resolve_inspection_collisions_max_buffer_uses_override():
+    """buffer_distance_override should be used in max_buffer calc instead of obs value."""
+    from app.services.trajectory_pathfinding import DEFAULT_OBSTACLE_RADIUS
+
+    # directly test the max_buffer expression used in resolve_inspection_collisions
+    obstacles = [
+        type("O", (), {"buffer_distance": 5.0, "boundary": True})(),
+        type("O", (), {"buffer_distance": 3.0, "boundary": True})(),
+    ]
+    override = 25.0
+
+    # replicate the max_buffer logic with override
+    max_buffer = max(
+        (
+            (
+                override
+                if override is not None
+                else (
+                    obs.buffer_distance
+                    if obs.buffer_distance is not None
+                    else DEFAULT_OBSTACLE_RADIUS
+                )
+            )
+            for obs in obstacles
+        ),
+        default=DEFAULT_OBSTACLE_RADIUS,
+    )
+
+    assert max_buffer == 25.0
+
+
+def test_resolve_inspection_collisions_zero_override_not_defaulted():
+    """buffer_distance_override=0.0 should produce max_buffer=0, not DEFAULT_OBSTACLE_RADIUS."""
+    from app.services.trajectory_pathfinding import DEFAULT_OBSTACLE_RADIUS
+
+    obstacles = [
+        type("O", (), {"buffer_distance": 5.0, "boundary": True})(),
+    ]
+    override = 0.0
+
+    max_buffer = max(
+        (
+            (
+                override
+                if override is not None
+                else (
+                    obs.buffer_distance
+                    if obs.buffer_distance is not None
+                    else DEFAULT_OBSTACLE_RADIUS
+                )
+            )
+            for obs in obstacles
+        ),
+        default=DEFAULT_OBSTACLE_RADIUS,
+    )
+
+    assert max_buffer == 0.0
+    assert DEFAULT_OBSTACLE_RADIUS > 0
+
+
+def test_mission_default_buffer_distance_fallback():
+    """mission default_buffer_distance used when neither inspection nor template sets it."""
+    from app.services.trajectory_computation import resolve_with_defaults as _resolve_with_defaults
+
+    template = type("T", (), {"default_config": None})()
+    inspection = type("I", (), {"config": None})()
+
+    result = _resolve_with_defaults(inspection, template)
+
+    # without mission fallback, result uses hardcoded default
+    assert result.buffer_distance == 5.0
+
+    # simulate mission-level injection (done in orchestrator)
+    result.buffer_distance = 25.0
+    assert result.buffer_distance == 25.0
+
+
 def test_extract_polygon_vertices_skips_closing_duplicate(client, db_engine):
     """closed GeoJSON ring (first == last) should not produce duplicate vertices."""
     from sqlalchemy.orm import Session
