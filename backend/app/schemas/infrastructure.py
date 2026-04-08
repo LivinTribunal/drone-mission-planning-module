@@ -14,7 +14,7 @@ class SurfaceCreate(BaseModel):
     surface_type: str
     geometry: LineStringZ
     boundary: PolygonZ | None = None
-    buffer_distance: float = Field(default=5.0, ge=0)
+    buffer_distance: float = Field(default=5.0, ge=0)  # 0 = use raw boundary, no expansion
     heading: float | None = None
     length: float | None = None
     width: float | None = None
@@ -63,7 +63,7 @@ class ObstacleCreate(BaseModel):
     name: str
     height: float
     boundary: PolygonZ
-    buffer_distance: float = Field(default=5.0, ge=0)
+    buffer_distance: float = Field(default=5.0, ge=0)  # 0 = use raw boundary, no expansion
     type: str
 
 

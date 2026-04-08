@@ -40,7 +40,7 @@ export default function PoiInfoPanel({
             {s.length != null && s.width != null && (
               <InfoRow
                 label={t("dashboard.poiDimensions")}
-                value={`${s.length}m x ${s.width}m`}
+                value={`${s.length}${t("common.units.m")} x ${s.width}${t("common.units.m")}`}
               />
             )}
             {s.boundary && (
@@ -55,8 +55,8 @@ export default function PoiInfoPanel({
           <>
             <InfoRow label={t("dashboard.poiName")} value={o.name} />
             <InfoRow label={t("dashboard.poiType")} value={o.type} />
-            <InfoRow label={t("dashboard.poiHeight")} value={`${o.height}m`} />
-            <InfoRow label={t("dashboard.bufferDistance")} value={`${o.buffer_distance}m`} />
+            <InfoRow label={t("dashboard.poiHeight")} value={`${o.height}${t("common.units.m")}`} />
+            <InfoRow label={t("dashboard.bufferDistance")} value={`${o.buffer_distance}${t("common.units.m")}`} />
             <PolygonCoordRows polygon={o.boundary} label={t("dashboard.poiCoordinates")} />
           </>
         );
@@ -69,10 +69,10 @@ export default function PoiInfoPanel({
             <InfoRow label={t("dashboard.poiType")} value={z.type} />
             <InfoRow label={t("dashboard.poiActive")} value={z.is_active ? t("common.yes") : t("common.no")} />
             {z.altitude_floor != null && (
-              <InfoRow label={t("dashboard.poiFloor")} value={`${z.altitude_floor}m`} />
+              <InfoRow label={t("dashboard.poiFloor")} value={`${z.altitude_floor}${t("common.units.m")}`} />
             )}
             {z.altitude_ceiling != null && (
-              <InfoRow label={t("dashboard.poiCeiling")} value={`${z.altitude_ceiling}m`} />
+              <InfoRow label={t("dashboard.poiCeiling")} value={`${z.altitude_ceiling}${t("common.units.m")}`} />
             )}
             <PolygonCoordRows polygon={z.geometry} label={t("dashboard.poiCoordinates")} />
           </>
@@ -118,7 +118,7 @@ export default function PoiInfoPanel({
               {w.alt_min != null && w.alt_max != null && (
                 <InfoRow
                   label={t("dashboard.poiAltitude")}
-                  value={`${w.alt_min.toFixed(1)}m - ${w.alt_max.toFixed(1)}m`}
+                  value={`${w.alt_min.toFixed(1)}${t("common.units.m")} - ${w.alt_max.toFixed(1)}${t("common.units.m")}`}
                 />
               )}
               <CoordRows position={w.position} label={t("dashboard.poiCoordinates")} />
@@ -126,7 +126,7 @@ export default function PoiInfoPanel({
                 <InfoRow label={t("mission.config.heading")} value={`${w.heading.toFixed(1)}\u00B0`} />
               )}
               {w.speed != null && (
-                <InfoRow label={t("mission.config.speed")} value={`${w.speed} m/s`} />
+                <InfoRow label={t("mission.config.speed")} value={`${w.speed} ${t("common.units.ms")}`} />
               )}
               <InfoRow
                 label={t("mission.config.cameraAction")}
@@ -161,7 +161,7 @@ export default function PoiInfoPanel({
               <InfoRow label={t("mission.config.heading")} value={`${w.heading.toFixed(1)}\u00B0`} />
             )}
             {w.speed != null && (
-              <InfoRow label={t("mission.config.speed")} value={`${w.speed} m/s`} />
+              <InfoRow label={t("mission.config.speed")} value={`${w.speed} ${t("common.units.ms")}`} />
             )}
             <InfoRow
               label={t("mission.config.cameraAction")}
@@ -227,7 +227,7 @@ function CoordRows({ position, label }: { position: PointZ; label: string }) {
         {alt != null && alt !== 0 && (
           <div className="flex justify-between">
             <span className="text-tv-text-muted">{t("map.coordinates.alt")}</span>
-            <span className="text-tv-text-primary font-medium">{alt.toFixed(1)}m</span>
+            <span className="text-tv-text-primary font-medium">{alt.toFixed(1)}{t("common.units.m")}</span>
           </div>
         )}
       </div>
@@ -358,7 +358,7 @@ function EditableCoordRows({
           className="text-tv-text-primary font-medium hover:text-tv-accent transition-colors cursor-text"
           title={t("common.edit")}
         >
-          {value.toFixed(decimals)}{fieldName === "alt" ? "m" : ""}
+          {value.toFixed(decimals)}{fieldName === "alt" ? t("common.units.m") : ""}
         </button>
       </div>
     );

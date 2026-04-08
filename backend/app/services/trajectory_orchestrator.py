@@ -213,8 +213,10 @@ def generate_trajectory(
             provider.close()
 
 
-def _generate_trajectory_inner(db: Session, data: MissionData) -> tuple[FlightPlan, list[str]]:
-    """inner trajectory generation - separated for resource cleanup."""
+def _generate_trajectory_inner(
+    db: Session, data: MissionData
+) -> tuple[FlightPlan, list[tuple[str, list[str]]]]:
+    """run phases 2-5 of trajectory generation; outer function handles resource cleanup."""
     mission = data.mission
     drone = data.drone
     default_speed = data.default_speed

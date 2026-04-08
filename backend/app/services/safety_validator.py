@@ -116,7 +116,7 @@ def _batch_check_obstacles(
         if contained is not True:
             continue
 
-        obs = obstacles[obs_idx]
+        obs = obstacles[obs_idx]  # obs_idx is the original index into the unfiltered obstacles list
         obs_top = obs_tops[obs_idx]
         wp = waypoints[wp_idx]
 

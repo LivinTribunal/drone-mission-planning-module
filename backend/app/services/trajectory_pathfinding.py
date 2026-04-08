@@ -110,9 +110,12 @@ def _collect_nearby_objects(
             if not verts:
                 continue
             obs_center = center_of_points([v.to_tuple() for v in verts])
+        except TrajectoryGenerationError:
+            raise
         except Exception as e:
-            logger.warning("failed to parse obstacle boundary for obstacle %s: %s", obs.id, e)
-            continue
+            raise TrajectoryGenerationError(
+                f"failed to parse obstacle boundary for obstacle {obs.id}: {e}"
+            ) from e
         if distance_between(center_lon, center_lat, obs_center[0], obs_center[1]) <= search_radius:
             nearby_obs.append(obs)
 
@@ -127,9 +130,12 @@ def _collect_nearby_objects(
             if not verts:
                 continue
             zone_center = center_of_points([v.to_tuple() for v in verts])
+        except TrajectoryGenerationError:
+            raise
         except Exception as e:
-            logger.warning("failed to parse zone geometry for zone %s: %s", zone.id, e)
-            continue
+            raise TrajectoryGenerationError(
+                f"failed to parse zone geometry for zone {zone.id}: {e}"
+            ) from e
         zone_dist = distance_between(center_lon, center_lat, zone_center[0], zone_center[1])
         if zone_dist <= search_radius:
             nearby_zones.append(zone)

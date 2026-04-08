@@ -22,7 +22,11 @@
     "violation_one": "violation",
     "violation_other": "violations",
     "2d": "2D",
-    "3d": "3D"
+    "3d": "3D",
+    "units": {
+      "m": "m",
+      "ms": "m/s"
+    }
   },
   "nav": {
     "dashboard": "Dashboard",

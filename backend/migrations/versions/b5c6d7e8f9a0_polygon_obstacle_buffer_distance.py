@@ -27,8 +27,14 @@ def upgrade() -> None:
         sa.Column("buffer_distance", sa.Float(), nullable=False, server_default="5.0"),
     )
 
-    # rename geometry -> boundary on obstacle table
-    op.alter_column("obstacle", "geometry", new_column_name="boundary")
+    # rename geometry -> boundary and cast from generic geometry to POLYGONZ
+    op.alter_column(
+        "obstacle",
+        "geometry",
+        new_column_name="boundary",
+        type_=Geometry("POLYGONZ", srid=4326),
+        postgresql_using="geometry::geometry(POLYGONZ,4326)",
+    )
 
     # drop old obstacle columns
     op.drop_column("obstacle", "position")
@@ -73,7 +79,13 @@ def downgrade() -> None:
         ),
     )
 
-    # rename boundary -> geometry on obstacle table
-    op.alter_column("obstacle", "boundary", new_column_name="geometry")
+    # rename boundary -> geometry and cast back to generic geometry
+    op.alter_column(
+        "obstacle",
+        "boundary",
+        new_column_name="geometry",
+        type_=Geometry("GEOMETRY", srid=4326),
+        postgresql_using="boundary::geometry(Geometry,4326)",
+    )
 
     op.drop_column("obstacle", "buffer_distance")
