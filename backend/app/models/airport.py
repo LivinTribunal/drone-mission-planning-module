@@ -108,15 +108,20 @@ class Taxiway(AirfieldSurface):
 
 
 class Obstacle(Base):
-    """airport obstacle with 3D geometry."""
+    """airport obstacle with 3D geometry.
+
+    position.z is ground-level base altitude (MSL) - normalized to terrain
+    elevation at creation time. height is the vertical extent above that base.
+    obstacle top = position.z + height.
+    """
 
     __tablename__ = "obstacle"
 
     id = Column(UUID, primary_key=True, default=uuid4)
     airport_id = Column(UUID, ForeignKey("airport.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)
-    position = Column(Geometry("POINTZ", srid=4326), nullable=False)
-    height = Column(Float, nullable=False)
+    position = Column(Geometry("POINTZ", srid=4326), nullable=False)  # MSL ground level
+    height = Column(Float, nullable=False)  # meters above position.z
     radius = Column(Float, nullable=False)
     geometry = Column(Geometry("POLYGONZ", srid=4326), nullable=False)
     type = Column(

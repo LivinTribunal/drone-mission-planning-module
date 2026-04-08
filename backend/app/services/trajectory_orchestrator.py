@@ -318,6 +318,7 @@ def _generate_trajectory_inner(db: Session, data: MissionData) -> tuple[FlightPl
             continue
 
         center = Point3D.center(lha_positions)
+
         glide_slope = get_glide_slope_angle(template)
         rwy_heading = get_runway_heading(template, data.surfaces)
         setting_angles = get_lha_setting_angles(template, lha_ids)
