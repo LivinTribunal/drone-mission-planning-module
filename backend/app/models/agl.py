@@ -31,7 +31,7 @@ class AGL(Base):
 
     def calculate_lha_center_point(self) -> tuple[float, float, float]:
         """compute centroid (lon, lat, alt) of all LHA positions."""
-        from app.schemas.geometry import parse_ewkb
+        from app.core.geometry import parse_ewkb
 
         if not self.lhas:
             raise ValueError("no LHA units to compute center from")

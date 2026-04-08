@@ -140,11 +140,16 @@ def update_airport(db: Session, airport_id: UUID, schema: AirportUpdate) -> Airp
 
     # value objects are immutable, ORM models are mutable - updates apply to ORM instances
     apply_schema_update(airport, schema)
-    db.commit()
-    db.refresh(airport)
 
     if elevation_changed:
+        # flush instead of commit so both the airport update and renormalization
+        # happen in a single transaction - avoids stale position.z on partial failure
+        db.flush()
         renormalize_airport_altitudes(db, airport_id)
+    else:
+        db.commit()
+
+    db.refresh(airport)
 
     return airport
 
@@ -337,12 +342,21 @@ def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
         )
 
         for entity in [*obstacles, *agls, *lhas]:
-            coords = parse_ewkb(entity.position.data).get("coordinates", [])
-            if len(coords) < 3:
+            try:
+                coords = parse_ewkb(entity.position.data).get("coordinates", [])
+                if len(coords) < 3:
+                    continue
+                lon, lat = coords[0], coords[1]
+                ground = provider.get_elevation(lat, lon)
+                entity.position = WKTElement(f"SRID=4326;POINTZ({lon} {lat} {ground})", srid=4326)
+            except Exception as e:
+                logger.warning(
+                    "skipping renormalization for %s %s: %s",
+                    type(entity).__name__,
+                    entity.id,
+                    e,
+                )
                 continue
-            lon, lat = coords[0], coords[1]
-            ground = provider.get_elevation(lat, lon)
-            entity.position = WKTElement(f"SRID=4326;POINTZ({lon} {lat} {ground})", srid=4326)
 
         db.commit()
     finally:

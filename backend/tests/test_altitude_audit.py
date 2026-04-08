@@ -320,9 +320,9 @@ def test_obstacle_position_normalized_to_ground(client):
 
     # with FlatElevationProvider, position.z should be normalized to airport elevation
     pos_z = obs["position"]["coordinates"][2]
-    assert (
-        abs(pos_z - 300.0) < 0.1
-    ), f"obstacle position.z should be ground elevation (300), got {pos_z}"
+    assert abs(pos_z - 300.0) < 0.1, (
+        f"obstacle position.z should be ground elevation (300), got {pos_z}"
+    )
 
 
 def test_obstacle_update_normalizes_position(client):
@@ -372,9 +372,9 @@ def test_obstacle_update_normalizes_position(client):
     updated = update_resp.json()
 
     pos_z = updated["position"]["coordinates"][2]
-    assert (
-        abs(pos_z - 280.0) < 0.1
-    ), f"updated obstacle position.z should be ground elevation (280), got {pos_z}"
+    assert abs(pos_z - 280.0) < 0.1, (
+        f"updated obstacle position.z should be ground elevation (280), got {pos_z}"
+    )
 
 
 # LHA altitude normalization
@@ -465,9 +465,9 @@ def test_lha_position_normalized_on_update(client):
     updated = update_resp.json()
 
     pos_z = updated["position"]["coordinates"][2]
-    assert (
-        abs(pos_z - 300.0) < 0.1
-    ), f"updated LHA position.z should be ground elevation (300), got {pos_z}"
+    assert abs(pos_z - 300.0) < 0.1, (
+        f"updated LHA position.z should be ground elevation (300), got {pos_z}"
+    )
 
 
 # AGL altitude normalization
@@ -563,9 +563,9 @@ def test_agl_position_normalized_on_update(client):
     updated = update_resp.json()
 
     pos_z = updated["position"]["coordinates"][2]
-    assert (
-        abs(pos_z - 280.0) < 0.1
-    ), f"updated AGL position.z should be ground elevation (280), got {pos_z}"
+    assert abs(pos_z - 280.0) < 0.1, (
+        f"updated AGL position.z should be ground elevation (280), got {pos_z}"
+    )
 
 
 # bulk re-normalization
