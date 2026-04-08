@@ -20,7 +20,7 @@ GEOM_FIELDS = {
 }
 
 # geometry fields that are NOT NULL in the database - never set these to None
-NON_NULLABLE_GEOM_FIELDS = {"location", "geometry"}
+NON_NULLABLE_GEOM_FIELDS = {"location", "geometry", "boundary"}
 
 
 def _fmt_coord(c: list) -> str:

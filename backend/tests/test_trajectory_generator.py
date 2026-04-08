@@ -501,6 +501,64 @@ def test_line_of_sight_blocked(client, db_engine):
         assert has_line_of_sight(db, point, target, obstacles, []) is False
 
 
+def test_extract_polygon_vertices_buffer_offset(client, db_engine):
+    """buffer distance offsets vertices outward from centroid by the correct magnitude."""
+    from sqlalchemy.orm import Session
+
+    from app.models.airport import Obstacle
+    from app.services.trajectory_pathfinding import _extract_polygon_vertices
+
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LOSV"},
+    ).json()
+    airport_id = airport["id"]
+
+    # simple square polygon centered near (14.27, 50.10)
+    coords = [
+        [14.269, 50.099, 300],
+        [14.271, 50.099, 300],
+        [14.271, 50.101, 300],
+        [14.269, 50.101, 300],
+        [14.269, 50.099, 300],
+    ]
+    client.post(
+        f"/api/v1/airports/{airport_id}/obstacles",
+        json={
+            "name": "Buffer Test Box",
+            "type": "BUILDING",
+            "height": 20.0,
+            "buffer_distance": 10.0,
+            "boundary": {"type": "Polygon", "coordinates": [coords]},
+        },
+    )
+
+    with Session(db_engine) as db:
+        obs = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).first()
+
+        # extract with zero buffer - vertices should match original polygon
+        verts_zero = _extract_polygon_vertices(obs.boundary.data, buffer_m=0.0)
+        assert len(verts_zero) == len(coords)
+        for v, c in zip(verts_zero, coords):
+            assert abs(v.lon - c[0]) < 1e-6
+            assert abs(v.lat - c[1]) < 1e-6
+
+        # extract with 25m buffer
+        buffer_m = 25.0
+        verts_buffered = _extract_polygon_vertices(obs.boundary.data, buffer_m=buffer_m)
+        assert len(verts_buffered) == len(coords)
+
+        # each buffered vertex should be ~25m farther from centroid than the original
+        cx = sum(c[0] for c in coords) / len(coords)
+        cy = sum(c[1] for c in coords) / len(coords)
+
+        for v_buf, v_orig in zip(verts_buffered, verts_zero):
+            dist_orig = distance_between(cx, cy, v_orig.lon, v_orig.lat)
+            dist_buf = distance_between(cx, cy, v_buf.lon, v_buf.lat)
+            offset = dist_buf - dist_orig
+            assert abs(offset - buffer_m) < 2.0, f"expected ~{buffer_m}m offset, got {offset:.1f}m"
+
+
 # full pipeline e2e test
 def test_full_pipeline(client):
     """end-to-end trajectory generation with real PostGIS"""

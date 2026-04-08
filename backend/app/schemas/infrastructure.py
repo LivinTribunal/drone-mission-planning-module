@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.common import ListMeta
 from app.schemas.geometry import LineStringZ, PointZ, PolygonZ
@@ -14,7 +14,7 @@ class SurfaceCreate(BaseModel):
     surface_type: str
     geometry: LineStringZ
     boundary: PolygonZ | None = None
-    buffer_distance: float = 5.0
+    buffer_distance: float = Field(default=5.0, ge=0)
     heading: float | None = None
     length: float | None = None
     width: float | None = None
@@ -28,7 +28,7 @@ class SurfaceUpdate(BaseModel):
     identifier: str | None = None
     geometry: LineStringZ | None = None
     boundary: PolygonZ | None = None
-    buffer_distance: float | None = None
+    buffer_distance: float | None = Field(default=None, ge=0)
     heading: float | None = None
     length: float | None = None
     width: float | None = None
@@ -63,7 +63,7 @@ class ObstacleCreate(BaseModel):
     name: str
     height: float
     boundary: PolygonZ
-    buffer_distance: float = 5.0
+    buffer_distance: float = Field(default=5.0, ge=0)
     type: str
 
 
@@ -73,7 +73,7 @@ class ObstacleUpdate(BaseModel):
     name: str | None = None
     height: float | None = None
     boundary: PolygonZ | None = None
-    buffer_distance: float | None = None
+    buffer_distance: float | None = Field(default=None, ge=0)
     type: str | None = None
 
 
