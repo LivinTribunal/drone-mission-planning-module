@@ -31,7 +31,7 @@ class AGL(Base):
 
     def calculate_lha_center_point(self) -> tuple[float, float, float]:
         """compute centroid (lon, lat, alt) of all LHA positions."""
-        from app.schemas.geometry import parse_ewkb
+        from app.core.geometry import parse_ewkb
 
         if not self.lhas:
             raise ValueError("no LHA units to compute center from")
@@ -57,7 +57,11 @@ class AGL(Base):
 
 
 class LHA(Base):
-    """light housing assembly - individual light unit within an AGL."""
+    """light housing assembly - individual light unit within an AGL.
+
+    position.z is normalized to ground elevation at write time (same as obstacles).
+    the trajectory engine reads this value directly - no elevation provider override needed.
+    """
 
     __tablename__ = "lha"
 
@@ -70,7 +74,7 @@ class LHA(Base):
         String(10),
         nullable=False,
     )
-    position = Column(Geometry("POINTZ", srid=4326), nullable=False)
+    position = Column(Geometry("POINTZ", srid=4326), nullable=False)  # normalized ground elevation
 
     agl = relationship("AGL", back_populates="lhas")
 
