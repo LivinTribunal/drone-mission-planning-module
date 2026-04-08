@@ -136,6 +136,7 @@ export interface SurfaceCreate {
   surface_type: SurfaceType;
   geometry: LineStringZ;
   boundary?: PolygonZ;
+  buffer_distance?: number;
   heading?: number | null;
   length?: number | null;
   width?: number | null;
@@ -147,6 +148,7 @@ export interface SurfaceUpdate {
   identifier?: string;
   geometry?: LineStringZ;
   boundary?: PolygonZ;
+  buffer_distance?: number;
   heading?: number | null;
   length?: number | null;
   width?: number | null;

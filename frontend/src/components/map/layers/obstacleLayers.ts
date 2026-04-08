@@ -30,7 +30,9 @@ const obstacleColors: Record<ObstacleType, string> = {
 
 export { obstacleColors as OBSTACLE_COLORS };
 
-/** generates a buffered polygon by expanding each vertex outward from centroid. */
+/** generates a buffered polygon by expanding each vertex outward from centroid.
+ * display approximation only - not a topologically correct minkowski buffer;
+ * may produce incorrect outlines for non-convex polygons. */
 function bufferPolygon(
   coords: number[][],
   bufferMeters: number,

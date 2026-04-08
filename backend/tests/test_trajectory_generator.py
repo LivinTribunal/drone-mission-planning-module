@@ -536,17 +536,18 @@ def test_extract_polygon_vertices_buffer_offset(client, db_engine):
     with Session(db_engine) as db:
         obs = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).first()
 
-        # extract with zero buffer - vertices should match original polygon
+        # extract with zero buffer - vertices should match unique polygon vertices
         verts_zero = _extract_polygon_vertices(obs.boundary.data, buffer_m=0.0)
-        assert len(verts_zero) == len(coords)
-        for v, c in zip(verts_zero, coords):
+        unique_coords = coords[:-1]  # strip closing duplicate
+        assert len(verts_zero) == len(unique_coords)
+        for v, c in zip(verts_zero, unique_coords):
             assert abs(v.lon - c[0]) < 1e-6
             assert abs(v.lat - c[1]) < 1e-6
 
         # extract with 25m buffer
         buffer_m = 25.0
         verts_buffered = _extract_polygon_vertices(obs.boundary.data, buffer_m=buffer_m)
-        assert len(verts_buffered) == len(coords)
+        assert len(verts_buffered) == len(unique_coords)
 
         # each buffered vertex should be ~25m farther from centroid than the original
         cx = sum(c[0] for c in coords) / len(coords)
@@ -777,3 +778,101 @@ def test_get_lha_positions_skips_no_position():
     positions = get_lha_positions(template, lha_ids=None)
 
     assert len(positions) == 0
+
+
+def test_buffer_distance_zero_uses_zero_not_default(client, db_engine):
+    """buffer_distance=0 should use 0, not fall back to DEFAULT_OBSTACLE_RADIUS."""
+    from sqlalchemy.orm import Session
+
+    from app.models.airport import Obstacle
+    from app.services.trajectory_pathfinding import _extract_polygon_vertices
+    from app.services.trajectory_types import DEFAULT_OBSTACLE_RADIUS
+
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LZBZ"},
+    ).json()
+    airport_id = airport["id"]
+
+    coords = [
+        [14.269, 50.099, 300],
+        [14.271, 50.099, 300],
+        [14.271, 50.101, 300],
+        [14.269, 50.101, 300],
+        [14.269, 50.099, 300],
+    ]
+    client.post(
+        f"/api/v1/airports/{airport_id}/obstacles",
+        json={
+            "name": "Zero Buffer Obs",
+            "type": "BUILDING",
+            "height": 20.0,
+            "buffer_distance": 0.0,
+            "boundary": {"type": "Polygon", "coordinates": [coords]},
+        },
+    )
+
+    with Session(db_engine) as db:
+        obs = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).first()
+        assert obs.buffer_distance == 0.0
+
+        # extract with obs.buffer_distance (0.0) - vertices should match originals
+        verts = _extract_polygon_vertices(obs.boundary.data, buffer_m=obs.buffer_distance)
+        for v, c in zip(verts, coords[:-1]):
+            assert abs(v.lon - c[0]) < 1e-6
+            assert abs(v.lat - c[1]) < 1e-6
+
+        # confirm DEFAULT_OBSTACLE_RADIUS is non-zero (sanity check)
+        assert DEFAULT_OBSTACLE_RADIUS > 0
+
+        # using None should offset by default - different from zero buffer
+        verts_default = _extract_polygon_vertices(obs.boundary.data, buffer_m=None)
+        for v_def, v_zero in zip(verts_default, verts):
+            dist_def = distance_between(14.27, 50.10, v_def.lon, v_def.lat)
+            dist_zero = distance_between(14.27, 50.10, v_zero.lon, v_zero.lat)
+            assert dist_def > dist_zero
+
+
+def test_extract_polygon_vertices_skips_closing_duplicate(client, db_engine):
+    """closed GeoJSON ring (first == last) should not produce duplicate vertices."""
+    from sqlalchemy.orm import Session
+
+    from app.models.airport import Obstacle
+    from app.services.trajectory_pathfinding import _extract_polygon_vertices
+
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LZCD"},
+    ).json()
+    airport_id = airport["id"]
+
+    # closed ring: 4 unique vertices + closing duplicate = 5 coords
+    coords = [
+        [14.269, 50.099, 300],
+        [14.271, 50.099, 300],
+        [14.271, 50.101, 300],
+        [14.269, 50.101, 300],
+        [14.269, 50.099, 300],
+    ]
+    client.post(
+        f"/api/v1/airports/{airport_id}/obstacles",
+        json={
+            "name": "Closed Ring Obs",
+            "type": "BUILDING",
+            "height": 20.0,
+            "buffer_distance": 5.0,
+            "boundary": {"type": "Polygon", "coordinates": [coords]},
+        },
+    )
+
+    with Session(db_engine) as db:
+        obs = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).first()
+        verts = _extract_polygon_vertices(obs.boundary.data, buffer_m=5.0)
+
+        # should have 4 vertices, not 5 (closing duplicate removed)
+        assert len(verts) == 4
+
+        # first and last should NOT be at the same position
+        assert not (
+            abs(verts[0].lon - verts[-1].lon) < 1e-8 and abs(verts[0].lat - verts[-1].lat) < 1e-8
+        )

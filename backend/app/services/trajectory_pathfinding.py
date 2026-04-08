@@ -57,6 +57,11 @@ def _extract_polygon_vertices(geom_data: bytes, buffer_m: float | None = None) -
         if not geojson.get("coordinates"):
             return []
         coords = geojson["coordinates"][0]
+
+        # skip closing duplicate of a closed ring
+        if len(coords) > 1 and coords[0][:2] == coords[-1][:2]:
+            coords = coords[:-1]
+
         if len(coords) < 3:
             return []
 
@@ -376,7 +381,14 @@ def resolve_inspection_collisions(
         mid_lon = (from_pt.lon + to_pt.lon) / 2
         mid_lat = (from_pt.lat + to_pt.lat) / 2
         max_buffer = max(
-            ((obs.buffer_distance or DEFAULT_OBSTACLE_RADIUS) for obs in obstacles),
+            (
+                (
+                    obs.buffer_distance
+                    if obs.buffer_distance is not None
+                    else DEFAULT_OBSTACLE_RADIUS
+                )
+                for obs in obstacles
+            ),
             default=DEFAULT_OBSTACLE_RADIUS,
         )
         search_radius = max_buffer * REROUTE_SEARCH_RADIUS_MULTIPLIER

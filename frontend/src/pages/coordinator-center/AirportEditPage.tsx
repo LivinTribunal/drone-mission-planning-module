@@ -258,6 +258,15 @@ export default function AirportEditPage() {
         // update boundary polygon
         if (update.boundary) {
           updateSourceFeatureGeometry(m, "obstacles-boundary", featureId, update.boundary);
+          // sync icon/label point to new centroid
+          const ring = (update.boundary as GeoJSON.Polygon).coordinates[0];
+          const cx = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+          const cy = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+          const cz = ring.reduce((s, c) => s + (c[2] ?? 0), 0) / ring.length;
+          updateSourceFeatureGeometry(m, "obstacles", featureId, {
+            type: "Point",
+            coordinates: [cx, cy, cz],
+          });
         }
       } else if (featureType === "surface") {
         const surfaceData = airport?.surfaces.find((s) => s.id === featureId);
