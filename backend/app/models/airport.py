@@ -109,7 +109,12 @@ class Taxiway(AirfieldSurface):
 
 
 class Obstacle(Base):
-    """airport obstacle with polygon boundary and buffer distance."""
+    """airport obstacle with polygon boundary and buffer distance.
+
+    boundary z-coordinates are ground-level base altitude (MSL) - normalized
+    to terrain elevation at creation time. height is the vertical extent
+    above that base. obstacle top = min(boundary z) + height.
+    """
 
     __tablename__ = "obstacle"
 

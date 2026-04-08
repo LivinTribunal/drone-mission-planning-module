@@ -519,8 +519,10 @@ def _apply_terrain_delta(
 ) -> None:
     """shift waypoint altitudes by terrain difference from center point.
 
-    preserves geometric relationships (glide slope) while following terrain.
-    uses batch query for performance.
+    center.alt must already be ground-truthed to terrain elevation at the
+    PAPI location (done in orchestrator). this function adjusts each waypoint
+    by the terrain delta relative to center, preserving glide slope geometry
+    while following terrain undulation. recalculates gimbal pitch after shift.
     """
     if not elevation_provider or not waypoints:
         return
