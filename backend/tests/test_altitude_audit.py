@@ -19,25 +19,19 @@ from app.services.trajectory_types import (
 # center point altitude tests
 
 
-def test_center_altitude_uses_ground_elevation():
-    """center.alt should be ground elevation, not mean of LHA Z values."""
-    # LHA fixtures at varying heights above ground (e.g., on poles)
+def test_center_altitude_from_normalized_lhas():
+    """center.alt equals mean of stored LHA Z values when already normalized."""
+    ground = 300.0
+    # LHA positions already normalized to ground elevation at write time
     lha_positions = [
-        Point3D(lon=14.274, lat=50.098, alt=302.0),  # 2m above ground
-        Point3D(lon=14.275, lat=50.098, alt=303.0),  # 3m above ground
-        Point3D(lon=14.276, lat=50.098, alt=301.0),  # 1m above ground
+        Point3D(lon=14.274, lat=50.098, alt=ground),
+        Point3D(lon=14.275, lat=50.098, alt=ground),
+        Point3D(lon=14.276, lat=50.098, alt=ground),
     ]
-    raw_center = Point3D.center(lha_positions)
+    center = Point3D.center(lha_positions)
 
-    # raw mean would be 302.0 - but ground elevation is 300.0
-    assert abs(raw_center.alt - 302.0) < 0.01
-
-    # after ground-truthing with elevation provider
-    provider = FlatElevationProvider(300.0)
-    ground_truthed_alt = provider.get_elevation(raw_center.lat, raw_center.lon)
-
-    assert ground_truthed_alt == 300.0
-    assert ground_truthed_alt < raw_center.alt
+    # center.alt is the mean of normalized LHA Z values - already correct
+    assert abs(center.alt - ground) < 0.01
 
 
 def test_arc_path_altitude_with_ground_truthed_center():
@@ -59,13 +53,30 @@ def test_arc_path_altitude_with_ground_truthed_center():
 
 
 def test_arc_path_altitude_not_affected_by_lha_height():
-    """if center.alt is ground-truthed, different LHA heights produce same arc altitude."""
+    """different raw LHA fixture heights produce same arc altitude after normalization."""
     ground = 300.0
     glide_slope = 3.0
 
-    # both use ground-truthed center altitude
-    center_a = Point3D(lon=14.274, lat=50.098, alt=ground)
-    center_b = Point3D(lon=14.274, lat=50.098, alt=ground)
+    # group A: fixtures at 305m raw, normalized to ground
+    raw_a = [
+        Point3D(lon=14.274, lat=50.098, alt=305.0),
+        Point3D(lon=14.275, lat=50.098, alt=305.0),
+    ]
+    # group B: fixtures at 298m raw, normalized to ground
+    raw_b = [
+        Point3D(lon=14.274, lat=50.098, alt=298.0),
+        Point3D(lon=14.275, lat=50.098, alt=298.0),
+    ]
+
+    # simulate write-time normalization
+    normalized_a = [Point3D(lon=p.lon, lat=p.lat, alt=ground) for p in raw_a]
+    normalized_b = [Point3D(lon=p.lon, lat=p.lat, alt=ground) for p in raw_b]
+
+    center_a = Point3D.center(normalized_a)
+    center_b = Point3D.center(normalized_b)
+
+    assert abs(center_a.alt - ground) < 0.01
+    assert abs(center_b.alt - ground) < 0.01
 
     config = ResolvedConfig(measurement_density=3)
     wps_a = calculate_arc_path(center_a, 243.0, glide_slope, config, None, 5.0)
@@ -97,10 +108,34 @@ def test_vertical_path_consistent_altitudes():
     alts = [wp.alt for wp in wps]
 
     for i in range(1, len(alts)):
-        assert alts[i] > alts[i - 1], f"altitude must increase: {alts[i]} <= {alts[i-1]}"
+        assert alts[i] > alts[i - 1], f"altitude must increase: {alts[i]} <= {alts[i - 1]}"
 
 
 # terrain delta tests
+
+
+class _SlopedProvider:
+    """synthetic provider that returns different elevations for different positions."""
+
+    def __init__(self, center_elev: float, waypoint_elev: float):
+        """initialize with distinct center and waypoint elevations."""
+        self.center_elev = center_elev
+        self.waypoint_elev = waypoint_elev
+        self._center_lat = None
+        self._center_lon = None
+
+    def get_elevation(self, lat: float, lon: float) -> float:
+        """return elevation based on position."""
+        if self._center_lat is not None:
+            if abs(lat - self._center_lat) < 1e-6 and abs(lon - self._center_lon) < 1e-6:
+                return self.center_elev
+        return self.waypoint_elev
+
+    def get_elevations_batch(self, points: list[tuple[float, float]]) -> list[float]:
+        """batch elevation query - last point is center per _apply_terrain_delta convention."""
+        results = [self.waypoint_elev] * (len(points) - 1)
+        results.append(self.center_elev)
+        return results
 
 
 def test_terrain_delta_flat_provider_no_change():
@@ -119,6 +154,21 @@ def test_terrain_delta_flat_provider_no_change():
 
     for wp, orig in zip(wps, original_alts):
         assert abs(wp.alt - orig) < 0.01
+
+
+def test_terrain_delta_nonflat_shifts_waypoint_altitude():
+    """non-uniform terrain shifts waypoint altitudes by terrain delta from center."""
+    center = Point3D(lon=14.274, lat=50.098, alt=300.0)
+    provider = _SlopedProvider(center_elev=300.0, waypoint_elev=350.0)
+
+    wps = [
+        WaypointData(lon=14.280, lat=50.100, alt=320.0, camera_target=center),
+    ]
+
+    _apply_terrain_delta(wps, center, provider)
+
+    # terrain delta = 350 - 300 = 50, so waypoint should shift up by 50
+    assert abs(wps[0].alt - 370.0) < 0.01
 
 
 def test_terrain_delta_preserves_relative_geometry():
@@ -327,21 +377,300 @@ def test_obstacle_update_normalizes_position(client):
     ), f"updated obstacle position.z should be ground elevation (280), got {pos_z}"
 
 
+# LHA altitude normalization
+
+
+def _create_airport_surface_agl(client, icao, elevation=300.0):
+    """helper - create airport, surface, and AGL for LHA/AGL normalization tests."""
+    airport = client.post(
+        "/api/v1/airports",
+        json={
+            "icao_code": icao,
+            "name": f"{icao} Test",
+            "elevation": elevation,
+            "location": {"type": "Point", "coordinates": [14.26, 50.10, elevation]},
+        },
+    ).json()
+    aid = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{aid}/surfaces",
+        json={
+            "identifier": "09L",
+            "surface_type": "RUNWAY",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [14.26, 50.10, elevation],
+                    [14.28, 50.10, elevation],
+                ],
+            },
+        },
+    ).json()
+    sid = surface["id"]
+
+    agl = client.post(
+        f"/api/v1/airports/{aid}/surfaces/{sid}/agls",
+        json={
+            "agl_type": "PAPI",
+            "name": "PAPI 09L",
+            "position": {"type": "Point", "coordinates": [14.27, 50.10, elevation]},
+        },
+    ).json()
+
+    return aid, sid, agl
+
+
+def test_lha_position_normalized_on_create(client):
+    """LHA position.z should be normalized to ground elevation on create."""
+    aid, sid, agl = _create_airport_surface_agl(client, "LHAC", elevation=300.0)
+
+    resp = client.post(
+        f"/api/v1/airports/{aid}/surfaces/{sid}/agls/{agl['id']}/lhas",
+        json={
+            "unit_number": 1,
+            "setting_angle": 3.0,
+            "lamp_type": "LED",
+            "position": {"type": "Point", "coordinates": [14.271, 50.10, 350.0]},
+        },
+    )
+    assert resp.status_code in (200, 201)
+    lha = resp.json()
+
+    pos_z = lha["position"]["coordinates"][2]
+    assert abs(pos_z - 300.0) < 0.1, f"LHA position.z should be ground elevation (300), got {pos_z}"
+
+
+def test_lha_position_normalized_on_update(client):
+    """LHA position.z should be normalized to ground elevation on update."""
+    aid, sid, agl = _create_airport_surface_agl(client, "LHAU", elevation=300.0)
+
+    lha = client.post(
+        f"/api/v1/airports/{aid}/surfaces/{sid}/agls/{agl['id']}/lhas",
+        json={
+            "unit_number": 1,
+            "setting_angle": 3.0,
+            "lamp_type": "LED",
+            "position": {"type": "Point", "coordinates": [14.271, 50.10, 300.0]},
+        },
+    ).json()
+
+    update_resp = client.put(
+        f"/api/v1/airports/{aid}/surfaces/{sid}/agls/{agl['id']}/lhas/{lha['id']}",
+        json={
+            "position": {"type": "Point", "coordinates": [14.271, 50.10, 999.0]},
+        },
+    )
+    assert update_resp.status_code == 200
+    updated = update_resp.json()
+
+    pos_z = updated["position"]["coordinates"][2]
+    assert (
+        abs(pos_z - 300.0) < 0.1
+    ), f"updated LHA position.z should be ground elevation (300), got {pos_z}"
+
+
+# AGL altitude normalization
+
+
+def test_agl_position_normalized_on_create(client):
+    """AGL position.z should be normalized to ground elevation on create."""
+    airport = client.post(
+        "/api/v1/airports",
+        json={
+            "icao_code": "AGLC",
+            "name": "AGL Create Test",
+            "elevation": 280.0,
+            "location": {"type": "Point", "coordinates": [14.26, 50.10, 280]},
+        },
+    ).json()
+    aid = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{aid}/surfaces",
+        json={
+            "identifier": "27R",
+            "surface_type": "RUNWAY",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [14.26, 50.10, 280],
+                    [14.28, 50.10, 280],
+                ],
+            },
+        },
+    ).json()
+
+    resp = client.post(
+        f"/api/v1/airports/{aid}/surfaces/{surface['id']}/agls",
+        json={
+            "agl_type": "PAPI",
+            "name": "PAPI 27R",
+            "position": {"type": "Point", "coordinates": [14.27, 50.10, 400.0]},
+        },
+    )
+    assert resp.status_code in (200, 201)
+    agl = resp.json()
+
+    pos_z = agl["position"]["coordinates"][2]
+    assert abs(pos_z - 280.0) < 0.1, f"AGL position.z should be ground elevation (280), got {pos_z}"
+
+
+def test_agl_position_normalized_on_update(client):
+    """AGL position.z should be normalized to ground elevation on update."""
+    airport = client.post(
+        "/api/v1/airports",
+        json={
+            "icao_code": "AGLU",
+            "name": "AGL Update Test",
+            "elevation": 280.0,
+            "location": {"type": "Point", "coordinates": [14.26, 50.10, 280]},
+        },
+    ).json()
+    aid = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{aid}/surfaces",
+        json={
+            "identifier": "27R",
+            "surface_type": "RUNWAY",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [14.26, 50.10, 280],
+                    [14.28, 50.10, 280],
+                ],
+            },
+        },
+    ).json()
+
+    agl = client.post(
+        f"/api/v1/airports/{aid}/surfaces/{surface['id']}/agls",
+        json={
+            "agl_type": "PAPI",
+            "name": "PAPI 27R",
+            "position": {"type": "Point", "coordinates": [14.27, 50.10, 280.0]},
+        },
+    ).json()
+
+    update_resp = client.put(
+        f"/api/v1/airports/{aid}/surfaces/{surface['id']}/agls/{agl['id']}",
+        json={
+            "position": {"type": "Point", "coordinates": [14.27, 50.10, 999.0]},
+        },
+    )
+    assert update_resp.status_code == 200
+    updated = update_resp.json()
+
+    pos_z = updated["position"]["coordinates"][2]
+    assert (
+        abs(pos_z - 280.0) < 0.1
+    ), f"updated AGL position.z should be ground elevation (280), got {pos_z}"
+
+
+# bulk re-normalization
+
+
+def test_renormalize_airport_altitudes(client):
+    """updating airport elevation triggers re-normalization of all positions."""
+    airport = client.post(
+        "/api/v1/airports",
+        json={
+            "icao_code": "RNRM",
+            "name": "Renorm Test",
+            "elevation": 300.0,
+            "location": {"type": "Point", "coordinates": [14.26, 50.10, 300]},
+        },
+    ).json()
+    aid = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{aid}/surfaces",
+        json={
+            "identifier": "09L",
+            "surface_type": "RUNWAY",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[14.26, 50.10, 300], [14.28, 50.10, 300]],
+            },
+        },
+    ).json()
+    sid = surface["id"]
+
+    # create obstacle, AGL, and LHA - all normalized to 300.0
+    client.post(
+        f"/api/v1/airports/{aid}/obstacles",
+        json={
+            "name": "Tower",
+            "type": "TOWER",
+            "height": 50.0,
+            "radius": 10.0,
+            "position": {"type": "Point", "coordinates": [14.27, 50.10, 300]},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [14.2695, 50.0995, 300],
+                        [14.2705, 50.0995, 300],
+                        [14.2705, 50.1005, 300],
+                        [14.2695, 50.1005, 300],
+                        [14.2695, 50.0995, 300],
+                    ]
+                ],
+            },
+        },
+    ).json()
+
+    agl = client.post(
+        f"/api/v1/airports/{aid}/surfaces/{sid}/agls",
+        json={
+            "agl_type": "PAPI",
+            "name": "PAPI 09L",
+            "position": {"type": "Point", "coordinates": [14.27, 50.10, 300]},
+        },
+    ).json()
+
+    client.post(
+        f"/api/v1/airports/{aid}/surfaces/{sid}/agls/{agl['id']}/lhas",
+        json={
+            "unit_number": 1,
+            "setting_angle": 3.0,
+            "lamp_type": "LED",
+            "position": {"type": "Point", "coordinates": [14.271, 50.10, 300]},
+        },
+    ).json()
+
+    # update airport elevation - should trigger re-normalization
+    client.put(
+        f"/api/v1/airports/{aid}",
+        json={"elevation": 350.0},
+    )
+
+    # re-read all entities - position.z should now be 350.0
+    obs_resp = client.get(f"/api/v1/airports/{aid}/obstacles").json()
+    obs_z = obs_resp["data"][0]["position"]["coordinates"][2]
+    assert abs(obs_z - 350.0) < 0.1, f"obstacle should be re-normalized to 350, got {obs_z}"
+
+    agls_resp = client.get(f"/api/v1/airports/{aid}/surfaces/{sid}/agls").json()
+    agl_z = agls_resp["data"][0]["position"]["coordinates"][2]
+    assert abs(agl_z - 350.0) < 0.1, f"AGL should be re-normalized to 350, got {agl_z}"
+
+    lha_data = agls_resp["data"][0]["lhas"][0]
+    lha_z = lha_data["position"]["coordinates"][2]
+    assert abs(lha_z - 350.0) < 0.1, f"LHA should be re-normalized to 350, got {lha_z}"
+
+
 # edge cases
 
 
 def test_single_lha_center_altitude():
-    """single LHA should produce valid center with ground elevation."""
-    provider = FlatElevationProvider(300.0)
-    positions = [Point3D(lon=14.274, lat=50.098, alt=305.0)]
+    """single normalized LHA produces valid center at ground elevation."""
+    ground = 300.0
+    positions = [Point3D(lon=14.274, lat=50.098, alt=ground)]
     center = Point3D.center(positions)
 
-    # before ground-truthing, center.alt = LHA fixture alt
-    assert center.alt == 305.0
-
-    # after ground-truthing
-    ground = provider.get_elevation(center.lat, center.lon)
-    assert ground == 300.0
+    # LHA already normalized, center.alt == ground
+    assert abs(center.alt - ground) < 0.01
 
 
 def test_arc_path_altitude_offset():

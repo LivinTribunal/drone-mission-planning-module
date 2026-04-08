@@ -319,16 +319,6 @@ def _generate_trajectory_inner(db: Session, data: MissionData) -> tuple[FlightPl
 
         center = Point3D.center(lha_positions)
 
-        # ground-truth center altitude to actual terrain elevation
-        # LHA Z values represent fixture altitude which may differ from ground -
-        # the geometric formulas expect center.alt to be the reference ground level
-        if data.elevation_provider:
-            center = Point3D(
-                lon=center.lon,
-                lat=center.lat,
-                alt=data.elevation_provider.get_elevation(center.lat, center.lon),
-            )
-
         glide_slope = get_glide_slope_angle(template)
         rwy_heading = get_runway_heading(template, data.surfaces)
         setting_angles = get_lha_setting_angles(template, lha_ids)

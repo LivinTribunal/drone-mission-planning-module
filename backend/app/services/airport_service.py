@@ -4,6 +4,7 @@ import time
 from uuid import UUID
 
 import httpx
+from geoalchemy2.elements import WKTElement
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -15,6 +16,7 @@ from app.models.enums import MissionStatus
 from app.models.mission import DroneProfile, Mission
 from app.models.value_objects import IcaoCode
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
+from app.schemas.geometry import parse_ewkb
 from app.schemas.infrastructure import (
     AGLCreate,
     AGLUpdate,
@@ -132,10 +134,17 @@ def update_airport(db: Session, airport_id: UUID, schema: AirportUpdate) -> Airp
     if not airport:
         raise NotFoundError("airport not found")
 
+    # detect elevation-related field changes before applying update
+    elevation_fields = {"elevation", "terrain_source", "dem_file_path"}
+    elevation_changed = bool(schema.model_fields_set & elevation_fields)
+
     # value objects are immutable, ORM models are mutable - updates apply to ORM instances
     apply_schema_update(airport, schema)
     db.commit()
     db.refresh(airport)
+
+    if elevation_changed:
+        renormalize_airport_altitudes(db, airport_id)
 
     return airport
 
@@ -302,6 +311,45 @@ def _normalize_position_altitude(position_coords: list[float], airport: Airport)
             provider.close()
 
 
+def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
+    """re-normalize all position.z values for obstacles, agls, and lhas at airport."""
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
+    provider = create_elevation_provider(airport)
+    try:
+        obstacles = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
+
+        agls = (
+            db.query(AGL)
+            .join(AirfieldSurface, AGL.surface_id == AirfieldSurface.id)
+            .filter(AirfieldSurface.airport_id == airport_id)
+            .all()
+        )
+
+        lhas = (
+            db.query(LHA)
+            .join(AGL, LHA.agl_id == AGL.id)
+            .join(AirfieldSurface, AGL.surface_id == AirfieldSurface.id)
+            .filter(AirfieldSurface.airport_id == airport_id)
+            .all()
+        )
+
+        for entity in [*obstacles, *agls, *lhas]:
+            coords = parse_ewkb(entity.position.data).get("coordinates", [])
+            if len(coords) < 3:
+                continue
+            lon, lat = coords[0], coords[1]
+            ground = provider.get_elevation(lat, lon)
+            entity.position = WKTElement(f"SRID=4326;POINTZ({lon} {lat} {ground})", srid=4326)
+
+        db.commit()
+    finally:
+        if hasattr(provider, "close"):
+            provider.close()
+
+
 def list_obstacles(db: Session, airport_id: UUID) -> list[Obstacle]:
     """list obstacles for airport"""
     return db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
@@ -445,6 +493,11 @@ def create_agl(db: Session, airport_id: UUID, surface_id: UUID, schema: AGLCreat
     if not surface:
         raise NotFoundError("surface not found")
 
+    # normalize position.z to ground elevation at AGL location
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if schema.position and schema.position.coordinates:
+        _normalize_position_altitude(schema.position.coordinates, airport)
+
     data = schema_to_model_data(schema)
     agl = AGL(surface_id=surface_id, **data)
     db.add(agl)
@@ -469,6 +522,11 @@ def update_agl(
     agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
     if not agl:
         raise NotFoundError("agl not found")
+
+    # normalize position.z to ground elevation when position is updated
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if schema.position and schema.position.coordinates:
+        _normalize_position_altitude(schema.position.coordinates, airport)
 
     apply_schema_update(agl, schema)
     db.commit()
@@ -529,6 +587,11 @@ def create_lha(
     if not agl:
         raise NotFoundError("agl not found")
 
+    # normalize position.z to ground elevation at LHA location
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if schema.position and schema.position.coordinates:
+        _normalize_position_altitude(schema.position.coordinates, airport)
+
     data = schema_to_model_data(schema)
     lha = LHA(agl_id=agl_id, **data)
     db.add(lha)
@@ -557,6 +620,11 @@ def update_lha(
     lha = db.query(LHA).filter(LHA.id == lha_id, LHA.agl_id == agl_id).first()
     if not lha:
         raise NotFoundError("lha not found")
+
+    # normalize position.z to ground elevation when position is updated
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if schema.position and schema.position.coordinates:
+        _normalize_position_altitude(schema.position.coordinates, airport)
 
     apply_schema_update(lha, schema)
     db.commit()
