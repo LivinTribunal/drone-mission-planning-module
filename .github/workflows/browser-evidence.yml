@@ -1,13 +1,7 @@
 name: Browser Evidence
 
 on:
-  pull_request:
-    paths:
-      - 'frontend/src/**/*.tsx'
-      - 'frontend/src/**/*.ts'
-      - 'frontend/src/**/*.css'
-      - 'frontend/public/**'
-      - 'frontend/index.html'
+  workflow_dispatch:
 
 permissions:
   contents: read
