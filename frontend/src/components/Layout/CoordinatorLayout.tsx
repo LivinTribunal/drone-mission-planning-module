@@ -40,7 +40,7 @@ export default function CoordinatorLayout() {
   ];
 
   return (
-    <div className="flex flex-col h-screen bg-tv-bg text-tv-text-primary role-coordinator">
+    <div className="flex flex-col h-screen bg-tv-bg text-tv-text-primary role-coordinator" style={{ "--tv-accent": "var(--tv-warning)" } as React.CSSProperties}>
       <NavBar items={coordinatorItems} role="coordinator" />
       <main className="flex-1 overflow-auto">
         <Outlet />

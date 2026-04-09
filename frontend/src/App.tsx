@@ -26,8 +26,11 @@ import SuperAdminAirportsPage from "@/pages/super-admin/SuperAdminAirportsPage";
 import SuperAdminSystemPage from "@/pages/super-admin/SuperAdminSystemPage";
 
 function CatchAllRedirect() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+  if (isLoading) return null;
   if (isAuthenticated) {
+    if (user?.role === "SUPER_ADMIN") return <Navigate to="/super-admin/users" replace />;
+    if (user?.role === "COORDINATOR") return <Navigate to="/coordinator-center/airports" replace />;
     return <Navigate to="/operator-center/dashboard" replace />;
   }
   return <Navigate to="/login" replace />;

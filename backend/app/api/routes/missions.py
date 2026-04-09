@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.api.dependencies import get_airport_ids_for_user, get_db, require_operator
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.export import ExportRequest
 from app.schemas.mission import (
@@ -35,8 +35,10 @@ def list_missions(
     limit: int = Query(20, le=200),
     offset: int = Query(0),
     db: Session = Depends(get_db),
+    user=Depends(require_operator),
 ):
     """list missions with filters and pagination."""
+    allowed_airport_ids = get_airport_ids_for_user(user)
     missions, total = mission_service.list_missions(
         db,
         airport_id=airport_id,
@@ -44,6 +46,7 @@ def list_missions(
         drone_profile_id=drone_profile_id,
         limit=limit,
         offset=offset,
+        allowed_airport_ids=allowed_airport_ids,
     )
 
     data = []
@@ -57,25 +60,34 @@ def list_missions(
 
 
 @router.get("/{mission_id}", response_model=MissionDetailResponse)
-def get_mission(mission_id: UUID, db: Session = Depends(get_db)):
+def get_mission(mission_id: UUID, db: Session = Depends(get_db), _user=Depends(require_operator)):
     """get mission with inspections"""
     return mission_service.get_mission(db, mission_id)
 
 
 @router.post("", status_code=201, response_model=MissionResponse)
-def create_mission(body: MissionCreate, db: Session = Depends(get_db)):
+def create_mission(
+    body: MissionCreate, db: Session = Depends(get_db), _user=Depends(require_operator)
+):
     """create mission in DRAFT status"""
     return mission_service.create_mission(db, body)
 
 
 @router.put("/{mission_id}", response_model=MissionResponse)
-def update_mission(mission_id: UUID, body: MissionUpdate, db: Session = Depends(get_db)):
+def update_mission(
+    mission_id: UUID,
+    body: MissionUpdate,
+    db: Session = Depends(get_db),
+    _user=Depends(require_operator),
+):
     """update mission"""
     return mission_service.update_mission(db, mission_id, body)
 
 
 @router.delete("/{mission_id}", response_model=DeleteResponse)
-def delete_mission(mission_id: UUID, db: Session = Depends(get_db)):
+def delete_mission(
+    mission_id: UUID, db: Session = Depends(get_db), _user=Depends(require_operator)
+):
     """delete mission"""
     mission_service.delete_mission(db, mission_id)
 
@@ -83,20 +95,29 @@ def delete_mission(mission_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{mission_id}/duplicate", status_code=201, response_model=MissionResponse)
-def duplicate_mission(mission_id: UUID, db: Session = Depends(get_db)):
+def duplicate_mission(
+    mission_id: UUID, db: Session = Depends(get_db), _user=Depends(require_operator)
+):
     """duplicate mission as new DRAFT"""
     return mission_service.duplicate_mission(db, mission_id)
 
 
 # status transitions
 @router.post("/{mission_id}/validate", response_model=MissionResponse)
-def validate_mission(mission_id: UUID, db: Session = Depends(get_db)):
+def validate_mission(
+    mission_id: UUID, db: Session = Depends(get_db), _user=Depends(require_operator)
+):
     """PLANNED -> VALIDATED"""
     return mission_service.transition_mission(db, mission_id, "VALIDATED")
 
 
 @router.post("/{mission_id}/export")
-def export_mission(mission_id: UUID, body: ExportRequest, db: Session = Depends(get_db)):
+def export_mission(
+    mission_id: UUID,
+    body: ExportRequest,
+    db: Session = Depends(get_db),
+    _user=Depends(require_operator),
+):
     """generate export files and transition VALIDATED -> EXPORTED."""
     files, safe_name = export_service.export_mission(db, mission_id, body.formats)
 
@@ -124,27 +145,41 @@ def export_mission(mission_id: UUID, body: ExportRequest, db: Session = Depends(
 
 
 @router.post("/{mission_id}/complete", response_model=MissionResponse)
-def complete_mission(mission_id: UUID, db: Session = Depends(get_db)):
+def complete_mission(
+    mission_id: UUID, db: Session = Depends(get_db), _user=Depends(require_operator)
+):
     """EXPORTED -> COMPLETED"""
     return mission_service.transition_mission(db, mission_id, "COMPLETED")
 
 
 @router.post("/{mission_id}/cancel", response_model=MissionResponse)
-def cancel_mission(mission_id: UUID, db: Session = Depends(get_db)):
+def cancel_mission(
+    mission_id: UUID, db: Session = Depends(get_db), _user=Depends(require_operator)
+):
     """EXPORTED -> CANCELLED"""
     return mission_service.transition_mission(db, mission_id, "CANCELLED")
 
 
 # inspections
 @router.post("/{mission_id}/inspections", status_code=201, response_model=InspectionResponse)
-def add_inspection(mission_id: UUID, body: InspectionCreate, db: Session = Depends(get_db)):
+def add_inspection(
+    mission_id: UUID,
+    body: InspectionCreate,
+    db: Session = Depends(get_db),
+    _user=Depends(require_operator),
+):
     """add inspection to mission"""
     return inspection_service.add_inspection(db, mission_id, body)
 
 
 # reorder must be before {inspection_id} routes so "reorder" isn't parsed as a uuid
 @router.put("/{mission_id}/inspections/reorder", response_model=ReorderResponse)
-def reorder_inspections(mission_id: UUID, body: ReorderRequest, db: Session = Depends(get_db)):
+def reorder_inspections(
+    mission_id: UUID,
+    body: ReorderRequest,
+    db: Session = Depends(get_db),
+    _user=Depends(require_operator),
+):
     """reorder inspections by sequence"""
     inspection_service.reorder_inspections(db, mission_id, body.inspection_ids)
 
@@ -157,13 +192,19 @@ def update_inspection(
     inspection_id: UUID,
     body: InspectionUpdate,
     db: Session = Depends(get_db),
+    _user=Depends(require_operator),
 ):
     """update inspection"""
     return inspection_service.update_inspection(db, mission_id, inspection_id, body)
 
 
 @router.delete("/{mission_id}/inspections/{inspection_id}", response_model=DeleteResponse)
-def delete_inspection(mission_id: UUID, inspection_id: UUID, db: Session = Depends(get_db)):
+def delete_inspection(
+    mission_id: UUID,
+    inspection_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(require_operator),
+):
     """delete inspection"""
     inspection_service.delete_inspection(db, mission_id, inspection_id)
 

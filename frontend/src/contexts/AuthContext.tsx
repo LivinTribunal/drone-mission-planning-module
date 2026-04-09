@@ -4,101 +4,143 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
-import { setOnUnauthorized } from "@/api/client";
-
-const TOKEN_KEY = "tarmacview_token";
-const USER_KEY = "tarmacview_user";
+import { REFRESH_TOKEN_KEY } from "@/api/constants";
+import { setOnUnauthorized, setGetAccessToken, setSetNewAccessToken } from "@/api/client";
+import type { UserRole } from "@/types/enums";
 
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
-  roles: string[];
+  role: UserRole;
+  assigned_airport_ids: string[];
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
-  token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const accessTokenRef = useRef<string | null>(null);
 
-  // rehydrate from localStorage on mount
+  // keep ref in sync for the interceptor
   useEffect(() => {
-    const savedToken = localStorage.getItem(TOKEN_KEY);
-    const savedUser = localStorage.getItem(USER_KEY);
-    if (savedToken && savedUser) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        // validate shape - reset if stale schema
-        if (
-          parsed?.id &&
-          parsed?.email &&
-          typeof parsed?.name === "string" &&
-          Array.isArray(parsed?.roles)
-        ) {
-          setToken(savedToken);
-          setUser(parsed as AuthUser);
-        } else {
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
-        }
-      } catch {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_KEY);
-      }
-    }
+    accessTokenRef.current = accessToken;
+  }, [accessToken]);
+
+  // register token getter for axios interceptor
+  useEffect(() => {
+    setGetAccessToken(() => accessTokenRef.current);
+    return () => setGetAccessToken(null);
   }, []);
 
-  // register 401 handler so axios interceptor can clear react state
+  // register token setter so interceptor can update state after refresh
+  useEffect(() => {
+    setSetNewAccessToken((token: string) => {
+      accessTokenRef.current = token;
+      setAccessToken(token);
+    });
+    return () => setSetNewAccessToken(null);
+  }, []);
+
+  // register 401 handler
   useEffect(() => {
     setOnUnauthorized(() => {
-      setToken(null);
+      setAccessToken(null);
       setUser(null);
-      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
     });
     return () => setOnUnauthorized(null);
   }, []);
 
-  // TODO: replace with real JWT auth when backend auth endpoints are implemented
-  const login = useCallback(async (email: string, password: string) => {
-    // mock auth - any credentials succeed, token is not a real JWT
-    void password;
-    const mockUser: AuthUser = {
-      id: "00000000-0000-0000-0000-000000000001",
-      email,
-      name: "Stefan Moravik",
-      roles: ["OPERATOR", "COORDINATOR"],
-    };
-    const mockToken = btoa(
-      JSON.stringify({ sub: mockUser.id, email: mockUser.email }),
-    );
+  // attempt refresh on mount
+  useEffect(() => {
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (!refreshToken) {
+      setIsLoading(false);
+      return;
+    }
 
-    localStorage.setItem(TOKEN_KEY, mockToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(mockUser));
-    setToken(mockToken);
-    setUser(mockUser);
+    const controller = new AbortController();
+
+    fetch("/api/v1/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("refresh failed");
+        const data = await res.json();
+        setAccessToken(data.access_token);
+        localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+
+        // always fetch user from server to prevent localStorage tampering
+        const meRes = await fetch("/api/v1/auth/me", {
+          headers: { Authorization: `Bearer ${data.access_token}` },
+          signal: controller.signal,
+        });
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          setUser(meData);
+        }
+      })
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.warn("silent session restore failed:", err);
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
+      })
+      .finally(() => setIsLoading(false));
+
+    return () => controller.abort();
+  }, []);
+
+  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
+    const res = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "login failed");
+    }
+
+    const data = await res.json();
+    setAccessToken(data.access_token);
+    setUser(data.user);
+    localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+    return data.user;
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    setToken(null);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    setAccessToken(null);
     setUser(null);
   }, []);
 
   return (
     <AuthContext.Provider
-      value={{ user, token, login, logout, isAuthenticated: !!token }}
+      value={{
+        user,
+        login,
+        logout,
+        isAuthenticated: !!user,
+        isLoading,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -2,27 +2,36 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
+import { getDefaultRoute } from "@/components/Auth/ProtectedRoute";
 
 export default function LoginPage() {
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, isLoading, user } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  if (isAuthenticated) {
-    return <Navigate to="/operator-center/dashboard" replace />;
+  if (isLoading) {
+    return null;
+  }
+
+  if (isAuthenticated && user) {
+    return <Navigate to={getDefaultRoute(user.role)} replace />;
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(false);
+    setSubmitting(true);
     try {
-      await login(email, password);
-      navigate("/operator-center/dashboard");
+      const loggedInUser = await login(email, password);
+      navigate(getDefaultRoute(loggedInUser.role));
     } catch {
       setError(true);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -80,11 +89,12 @@ export default function LoginPage() {
           </div>
           <button
             type="submit"
+            disabled={submitting}
             className="w-full py-2.5 rounded-full bg-tv-accent text-tv-accent-text font-semibold text-sm
-              hover:bg-tv-accent-hover transition-colors"
+              hover:bg-tv-accent-hover transition-colors disabled:opacity-50"
             data-testid="login-button"
           >
-            {t("auth.login")}
+            {submitting ? t("common.loading") : t("auth.login")}
           </button>
         </form>
       </div>

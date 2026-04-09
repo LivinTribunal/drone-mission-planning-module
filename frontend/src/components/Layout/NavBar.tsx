@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAirport } from "@/contexts/AirportContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import AirportSelector from "@/components/common/AirportSelector";
+import type { UserRole } from "@/types/enums";
 
 export interface NavItem {
   label: string;
@@ -17,6 +18,22 @@ interface NavBarProps {
   role: "operator" | "coordinator" | "admin";
 }
 
+const ROLE_LABELS: Record<UserRole, string> = {
+  OPERATOR: "auth.role.operator",
+  COORDINATOR: "auth.role.coordinator",
+  SUPER_ADMIN: "auth.role.superAdmin",
+};
+
+function hasAccess(userRole: UserRole | undefined, requiredRole: UserRole): boolean {
+  if (!userRole) return false;
+  const hierarchy: Record<UserRole, number> = {
+    OPERATOR: 1,
+    COORDINATOR: 2,
+    SUPER_ADMIN: 3,
+  };
+  return hierarchy[userRole] >= hierarchy[requiredRole];
+}
+
 export default function NavBar({ items, role }: NavBarProps) {
   const { user, logout } = useAuth();
   const { selectedAirport } = useAirport();
@@ -26,7 +43,9 @@ export default function NavBar({ items, role }: NavBarProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const hasCoordinatorRole = user?.roles.includes("COORDINATOR");
+  const userRole = user?.role;
+  const isCoordinator = hasAccess(userRole, "COORDINATOR");
+  const isSuperAdmin = hasAccess(userRole, "SUPER_ADMIN");
 
   const availableLanguages = Object.keys(i18n.options.resources ?? {});
 
@@ -148,8 +167,8 @@ export default function NavBar({ items, role }: NavBarProps) {
           </button>
         </div>
 
-        {/* user dropdown - w-[140px] matches mission tab timestamp */}
-        <div ref={menuRef} className="relative w-[140px]">
+        {/* user dropdown */}
+        <div ref={menuRef} className="relative">
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="flex items-center gap-2 rounded-full px-4 h-11 text-sm font-medium
@@ -157,6 +176,11 @@ export default function NavBar({ items, role }: NavBarProps) {
             data-testid="user-menu-button"
           >
             {user?.name ?? "User"}
+            {userRole && (
+              <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-tv-accent/20 text-tv-accent leading-none">
+                {t(ROLE_LABELS[userRole])}
+              </span>
+            )}
             <svg
               className={`h-4 w-4 transition-transform duration-200 ${userMenuOpen ? "rotate-180" : ""}`}
               viewBox="0 0 20 20"
@@ -183,7 +207,7 @@ export default function NavBar({ items, role }: NavBarProps) {
               >
                 {t("user.settings")}
               </button>
-              {role === "operator" && hasCoordinatorRole && (
+              {role === "operator" && isCoordinator && (
                 <button
                   onClick={() => {
                     setUserMenuOpen(false);
@@ -207,7 +231,7 @@ export default function NavBar({ items, role }: NavBarProps) {
                   {t("nav.missionCenter")}
                 </button>
               )}
-              {role !== "admin" && hasCoordinatorRole && (
+              {role !== "admin" && isSuperAdmin && (
                 <button
                   onClick={() => {
                     setUserMenuOpen(false);
@@ -256,7 +280,7 @@ export default function NavBar({ items, role }: NavBarProps) {
                   className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 text-sm
                     text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
                 >
-                  {i18n.language === code && (
+                  {i18n.language.startsWith(code) && (
                     <svg className="h-4 w-4 text-tv-accent" viewBox="0 0 20 20" fill="currentColor">
                       <path
                         fillRule="evenodd"

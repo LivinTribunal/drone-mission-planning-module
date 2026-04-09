@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -8,6 +8,30 @@ import App from "./App";
 import LoginPage from "@/pages/LoginPage";
 import ProtectedRoute from "@/components/Auth/ProtectedRoute";
 import { Routes, Route } from "react-router-dom";
+
+vi.mock("@/api/client", () => ({
+  default: {
+    interceptors: {
+      request: { use: vi.fn() },
+      response: { use: vi.fn() },
+    },
+  },
+  setOnUnauthorized: vi.fn(),
+  setGetAccessToken: vi.fn(),
+  setSetNewAccessToken: vi.fn(),
+}));
+
+vi.mock("@/api/airports", () => ({
+  listAirports: vi.fn().mockResolvedValue({ data: [] }),
+  getAirport: vi.fn().mockResolvedValue({
+    id: "apt-1",
+    icao_code: "LZIB",
+    name: "Bratislava",
+    surfaces: [],
+    obstacles: [],
+    safety_zones: [],
+  }),
+}));
 
 function renderWithProviders(ui: React.ReactElement, { route = "/" } = {}) {
   return render(
@@ -24,16 +48,20 @@ function renderWithProviders(ui: React.ReactElement, { route = "/" } = {}) {
 describe("App", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.restoreAllMocks();
   });
 
-  it("renders login page at /login", () => {
+  it("renders login page at /login", async () => {
     renderWithProviders(<LoginPage />);
-    expect(screen.getByTestId("email-input")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("email-input")).toBeInTheDocument();
+    });
     expect(screen.getByTestId("password-input")).toBeInTheDocument();
     expect(screen.getByTestId("login-button")).toBeInTheDocument();
   });
 
-  it("redirects unauthenticated users to login", () => {
+  it("redirects unauthenticated users to login", async () => {
     renderWithProviders(
       <Routes>
         <Route element={<ProtectedRoute />}>
@@ -43,11 +71,36 @@ describe("App", () => {
       </Routes>,
       { route: "/dashboard" },
     );
-    expect(screen.getByText("Login Page")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText("Login Page")).toBeInTheDocument();
+    });
   });
 
-  it("login stores token and shows authenticated content", async () => {
+  it("login stores refresh token in localStorage", async () => {
+    const mockResponse = {
+      access_token: "test-access",
+      refresh_token: "test-refresh",
+      user: {
+        id: "u-1",
+        email: "test@example.com",
+        name: "Test",
+        role: "OPERATOR",
+        assigned_airport_ids: [],
+        is_active: true,
+        created_at: "2026-01-01T00:00:00",
+      },
+    };
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(mockResponse), { status: 200 }),
+    );
+
     renderWithProviders(<LoginPage />, { route: "/login" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("email-input")).toBeInTheDocument();
+    });
 
     fireEvent.change(screen.getByTestId("email-input"), {
       target: { value: "test@example.com" },
@@ -58,8 +111,7 @@ describe("App", () => {
     fireEvent.click(screen.getByTestId("login-button"));
 
     await waitFor(() => {
-      expect(localStorage.getItem("tarmacview_token")).toBeTruthy();
-      expect(localStorage.getItem("tarmacview_user")).toBeTruthy();
+      expect(localStorage.getItem("tarmacview_refresh_token")).toBe("test-refresh");
     });
   });
 });
@@ -67,6 +119,7 @@ describe("App", () => {
 describe("full app routing", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.restoreAllMocks();
   });
 
   it("smoke test - app renders without crashing", () => {

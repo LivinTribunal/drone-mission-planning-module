@@ -54,7 +54,14 @@
     "passwordPlaceholder": "Enter your password",
     "login": "Sign in",
     "logout": "Logout",
-    "wrongCredentials": "Login failed"
+    "wrongCredentials": "Login failed",
+    "sessionExpired": "Session expired, please sign in again",
+    "accessDenied": "Access denied",
+    "role": {
+      "operator": "Operator",
+      "coordinator": "Coordinator",
+      "superAdmin": "Admin"
+    }
   },
   "user": {
     "settings": "Settings",

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/contexts/AuthContext";
 import { useAirport } from "@/contexts/AirportContext";
 import type { AirportResponse } from "@/types/airport";
 import { listAirports } from "@/api/airports";
@@ -7,6 +8,7 @@ import { listAirports } from "@/api/airports";
 export default function AirportSelector() {
   /** airport selector dropdown with search. */
   const { selectedAirport, selectAirport, clearAirport } = useAirport();
+  const { user } = useAuth();
   const { t } = useTranslation();
   const [airports, setAirports] = useState<AirportResponse[]>([]);
   const [error, setError] = useState(false);
@@ -15,16 +17,36 @@ export default function AirportSelector() {
   const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const autoSelectedRef = useRef(false);
+
+  const selectedAirportRef = useRef(selectedAirport);
+  useEffect(() => {
+    selectedAirportRef.current = selectedAirport;
+  }, [selectedAirport]);
 
   const fetchAirports = useCallback(() => {
     /** fetch all airports. */
     setLoading(true);
     setError(false);
     listAirports()
-      .then((res) => setAirports(res.data))
+      .then((res) => {
+        // filter by user's assigned airports (super_admin sees all)
+        let data = res.data;
+        if (user?.role !== "SUPER_ADMIN" && user?.assigned_airport_ids?.length) {
+          const ids = new Set(user.assigned_airport_ids);
+          data = data.filter((a: AirportResponse) => ids.has(a.id));
+        }
+        setAirports(data);
+
+        // auto-select if only one airport
+        if (data.length === 1 && !selectedAirportRef.current && !autoSelectedRef.current) {
+          autoSelectedRef.current = true;
+          selectAirport(data[0]);
+        }
+      })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user, selectAirport]);
 
   useEffect(() => {
     fetchAirports();

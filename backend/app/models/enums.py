@@ -80,3 +80,9 @@ class ConstraintType(str, enum.Enum):
 class SurfaceType(str, enum.Enum):
     RUNWAY = "RUNWAY"
     TAXIWAY = "TAXIWAY"
+
+
+class UserRole(str, enum.Enum):
+    OPERATOR = "OPERATOR"
+    COORDINATOR = "COORDINATOR"
+    SUPER_ADMIN = "SUPER_ADMIN"

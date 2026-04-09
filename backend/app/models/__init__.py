@@ -16,6 +16,7 @@ from app.models.enums import (  # noqa: F401
     ObstacleType,
     PAPISide,
     SafetyZoneType,
+    UserRole,
     WaypointType,
 )
 from app.models.flight_plan import (  # noqa: F401
@@ -39,4 +40,5 @@ from app.models.inspection import (  # noqa: F401
     insp_template_targets,
 )
 from app.models.mission import DroneProfile, Mission  # noqa: F401
+from app.models.user import User, user_airports  # noqa: F401
 from app.models.value_objects import AltitudeRange, Coordinate, IcaoCode, Speed  # noqa: F401

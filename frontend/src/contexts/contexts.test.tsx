@@ -11,6 +11,8 @@ import { ThemeProvider, useTheme } from "./ThemeContext";
 
 vi.mock("@/api/client", () => ({
   setOnUnauthorized: vi.fn(),
+  setGetAccessToken: vi.fn(),
+  setSetNewAccessToken: vi.fn(),
 }));
 
 vi.mock("@/api/airports", () => ({
@@ -38,6 +40,21 @@ const MOCK_AIRPORT = {
   has_dem: false,
 };
 
+// mock login response
+const MOCK_LOGIN_RESPONSE = {
+  access_token: "test-access-token",
+  refresh_token: "test-refresh-token",
+  user: {
+    id: "u-1",
+    email: "test@example.com",
+    name: "Test User",
+    role: "OPERATOR",
+    assigned_airport_ids: [],
+    is_active: true,
+    created_at: "2026-01-01T00:00:00",
+  },
+};
+
 beforeEach(() => {
   localStorage.clear();
   document.documentElement.classList.remove("dark");
@@ -61,15 +78,27 @@ describe("AuthContext", () => {
     );
   });
 
-  it("starts unauthenticated", () => {
+  it("starts unauthenticated after loading", async () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.user).toBeNull();
-    expect(result.current.token).toBeNull();
   });
 
-  it("login stores credentials in state and localStorage", async () => {
+  it("login stores user in state and refresh token in localStorage", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(MOCK_LOGIN_RESPONSE), { status: 200 }),
+    );
+
     const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
 
     await act(async () => {
       await result.current.login("test@example.com", "password123");
@@ -77,13 +106,20 @@ describe("AuthContext", () => {
 
     expect(result.current.isAuthenticated).toBe(true);
     expect(result.current.user?.email).toBe("test@example.com");
-    expect(result.current.token).toBeTruthy();
-    expect(localStorage.getItem("tarmacview_token")).toBeTruthy();
-    expect(localStorage.getItem("tarmacview_user")).toBeTruthy();
+    expect(result.current.user?.role).toBe("OPERATOR");
+    expect(localStorage.getItem("tarmacview_refresh_token")).toBe("test-refresh-token");
   });
 
   it("logout clears credentials from state and localStorage", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(MOCK_LOGIN_RESPONSE), { status: 200 }),
+    );
+
     const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
 
     await act(async () => {
       await result.current.login("test@example.com", "pw");
@@ -96,55 +132,27 @@ describe("AuthContext", () => {
 
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.user).toBeNull();
-    expect(result.current.token).toBeNull();
-    expect(localStorage.getItem("tarmacview_token")).toBeNull();
-    expect(localStorage.getItem("tarmacview_user")).toBeNull();
+    expect(localStorage.getItem("tarmacview_refresh_token")).toBeNull();
   });
 
-  it("rehydrates valid user from localStorage on mount", async () => {
-    const storedUser = {
-      id: "u-1",
-      email: "saved@example.com",
-      name: "Saved User",
-      roles: ["OPERATOR"],
-    };
-    localStorage.setItem("tarmacview_token", "saved-token");
-    localStorage.setItem("tarmacview_user", JSON.stringify(storedUser));
+  it("login throws on bad credentials", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: "invalid credentials" }), { status: 401 }),
+    );
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
     await waitFor(() => {
-      expect(result.current.isAuthenticated).toBe(true);
+      expect(result.current.isLoading).toBe(false);
     });
-    expect(result.current.user?.email).toBe("saved@example.com");
-    expect(result.current.token).toBe("saved-token");
-  });
 
-  it("clears corrupt localStorage data on mount", async () => {
-    localStorage.setItem("tarmacview_token", "bad-token");
-    localStorage.setItem("tarmacview_user", "not-json{{{");
+    await expect(
+      act(async () => {
+        await result.current.login("bad@example.com", "wrong");
+      }),
+    ).rejects.toThrow();
 
-    renderHook(() => useAuth(), { wrapper });
-
-    await waitFor(() => {
-      expect(localStorage.getItem("tarmacview_token")).toBeNull();
-      expect(localStorage.getItem("tarmacview_user")).toBeNull();
-    });
-  });
-
-  it("clears localStorage when user shape is invalid", async () => {
-    localStorage.setItem("tarmacview_token", "token");
-    localStorage.setItem(
-      "tarmacview_user",
-      JSON.stringify({ id: "u-1", email: "a@b.com" }),
-    );
-
-    renderHook(() => useAuth(), { wrapper });
-
-    await waitFor(() => {
-      expect(localStorage.getItem("tarmacview_token")).toBeNull();
-      expect(localStorage.getItem("tarmacview_user")).toBeNull();
-    });
+    expect(result.current.isAuthenticated).toBe(false);
   });
 });
 

@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.api.dependencies import get_db, require_operator
 from app.core.exceptions import DomainError, NotFoundError, TrajectoryGenerationError
 from app.schemas.flight_plan import (
     FlightPlanResponse,
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
     "/{mission_id}/generate-trajectory",
     response_model=GenerateTrajectoryResponse,
 )
-def generate(mission_id: UUID, db: Session = Depends(get_db)):
+def generate(mission_id: UUID, db: Session = Depends(get_db), _user=Depends(require_operator)):
     """run 5-phase trajectory generation pipeline."""
     try:
         mission = mission_service.get_mission(db, mission_id)
@@ -57,7 +57,7 @@ def generate(mission_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{mission_id}/flight-plan", response_model=FlightPlanResponse)
-def get_plan(mission_id: UUID, db: Session = Depends(get_db)):
+def get_plan(mission_id: UUID, db: Session = Depends(get_db), _user=Depends(require_operator)):
     """get flight plan for mission"""
     try:
         return flight_plan_service.get_flight_plan(db, mission_id)
@@ -70,6 +70,7 @@ def batch_update_waypoints(
     mission_id: UUID,
     payload: WaypointBatchUpdateRequest,
     db: Session = Depends(get_db),
+    _user=Depends(require_operator),
 ):
     """batch update waypoint positions and camera targets."""
     try:
@@ -88,6 +89,7 @@ def insert_transit_waypoint(
     mission_id: UUID,
     payload: TransitWaypointInsertRequest,
     db: Session = Depends(get_db),
+    _user=Depends(require_operator),
 ):
     """insert a new transit waypoint at a position on the transit path."""
     try:
@@ -106,6 +108,7 @@ def delete_transit_waypoint(
     mission_id: UUID,
     waypoint_id: UUID,
     db: Session = Depends(get_db),
+    _user=Depends(require_operator),
 ):
     """delete a transit waypoint from the flight plan."""
     try:

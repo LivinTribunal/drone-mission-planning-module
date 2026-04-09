@@ -6,20 +6,38 @@ interface ProtectedRouteProps {
   requiredRole?: UserRole;
 }
 
+const ROLE_HIERARCHY: Record<UserRole, UserRole[]> = {
+  OPERATOR: ["OPERATOR", "COORDINATOR", "SUPER_ADMIN"],
+  COORDINATOR: ["COORDINATOR", "SUPER_ADMIN"],
+  SUPER_ADMIN: ["SUPER_ADMIN"],
+};
+
+export function getDefaultRoute(role: UserRole): string {
+  if (role === "SUPER_ADMIN") return "/super-admin/users";
+  if (role === "COORDINATOR") return "/coordinator-center/airports";
+  return "/operator-center/dashboard";
+}
+
 export default function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin h-8 w-8 border-4 border-tv-accent border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && !user?.roles.includes(requiredRole)) {
-    // redirect to default route - they're already authenticated
-    const coordinator: UserRole = "COORDINATOR";
-    const defaultRoute = user?.roles.includes(coordinator)
-      ? "/coordinator-center/dashboard"
-      : "/operator-center/dashboard";
-    return <Navigate to={defaultRoute} replace />;
+  if (requiredRole && user?.role) {
+    const allowed = ROLE_HIERARCHY[requiredRole] || [];
+    if (!allowed.includes(user.role)) {
+      return <Navigate to={getDefaultRoute(user.role)} replace />;
+    }
   }
 
   return <Outlet />;
