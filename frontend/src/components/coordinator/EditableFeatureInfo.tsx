@@ -44,6 +44,7 @@ export default function EditableFeatureInfo({
     feature.data as unknown as Record<string, unknown>,
   );
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [recalcPreview, setRecalcPreview] = useState<RecalcPreview | null>(null);
   const [recalcLoading, setRecalcLoading] = useState(false);
   const [recalcError, setRecalcError] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export default function EditableFeatureInfo({
     setFormData(feature.data as unknown as Record<string, unknown>);
     setRecalcPreview(null);
     setRecalcError(null);
+    setDeleteError(null);
   }, [feature]);
 
   async function handleRecalculate() {
@@ -77,13 +79,16 @@ export default function EditableFeatureInfo({
   function handleApplyRecalculate() {
     /** apply recalculated dimensions via the standard update path. */
     if (!recalcPreview) return;
+    // obstacle preview is read-only - obstacles have no length/width columns
+    if (recalcPreview.kind !== "surface") {
+      setRecalcPreview(null);
+      return;
+    }
     const recalculated = recalcPreview.data.recalculated;
     const updates: Record<string, unknown> = {};
-    if (recalcPreview.kind === "surface") {
-      if (recalculated.length != null) updates.length = recalculated.length;
-      if (recalculated.width != null) updates.width = recalculated.width;
-      if (recalculated.heading != null) updates.heading = recalculated.heading;
-    }
+    if (recalculated.length != null) updates.length = recalculated.length;
+    if (recalculated.width != null) updates.width = recalculated.width;
+    if (recalculated.heading != null) updates.heading = recalculated.heading;
     setFormData((prev) => ({ ...prev, ...updates }));
     onUpdate(updates);
     setRecalcPreview(null);
@@ -436,16 +441,25 @@ export default function EditableFeatureInfo({
           isOpen={showDeleteConfirm}
           name={val("name") || val("identifier") || val("unit_number") || ""}
           warnings={deleteWarnings}
+          error={deleteError}
           onConfirm={async () => {
+            setDeleteError(null);
             try {
-              setShowDeleteConfirm(false);
               await onDelete(feature.type, String(formData.id));
-              onClose();
-            } catch {
               setShowDeleteConfirm(false);
+              onClose();
+            } catch (err) {
+              setDeleteError(
+                err instanceof Error && err.message
+                  ? err.message
+                  : t("coordinator.detail.deleteError"),
+              );
             }
           }}
-          onCancel={() => setShowDeleteConfirm(false)}
+          onCancel={() => {
+            setDeleteError(null);
+            setShowDeleteConfirm(false);
+          }}
         />
       )}
     </div>
@@ -570,20 +584,33 @@ function RecalculateBlock({
           </div>
         )}
         <div className="flex gap-1.5 pt-1">
-          <button
-            onClick={onApply}
-            className="flex-1 rounded-full px-3 py-1.5 text-xs font-semibold border border-tv-accent text-tv-accent hover:bg-tv-surface-hover transition-colors"
-            data-testid="recalculate-apply"
-          >
-            {t("coordinator.detail.applyRecalculated")}
-          </button>
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-full px-3 py-1.5 text-xs font-semibold border border-tv-border text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-            data-testid="recalculate-cancel"
-          >
-            {t("coordinator.detail.cancelRecalculated")}
-          </button>
+          {preview.kind === "surface" ? (
+            <>
+              <button
+                onClick={onApply}
+                className="flex-1 rounded-full px-3 py-1.5 text-xs font-semibold border border-tv-accent text-tv-accent hover:bg-tv-surface-hover transition-colors"
+                data-testid="recalculate-apply"
+              >
+                {t("coordinator.detail.applyRecalculated")}
+              </button>
+              <button
+                onClick={onCancel}
+                className="flex-1 rounded-full px-3 py-1.5 text-xs font-semibold border border-tv-border text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                data-testid="recalculate-cancel"
+              >
+                {t("coordinator.detail.cancelRecalculated")}
+              </button>
+            </>
+          ) : (
+            // obstacle preview is informational only - no writable dimension columns
+            <button
+              onClick={onCancel}
+              className="flex-1 rounded-full px-3 py-1.5 text-xs font-semibold border border-tv-border text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+              data-testid="recalculate-close"
+            >
+              {t("common.close")}
+            </button>
+          )}
         </div>
       </div>
     );

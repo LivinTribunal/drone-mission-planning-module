@@ -617,6 +617,8 @@ def update_agl(
 
     # normalize position.z to ground unless coordinator explicitly preserves altitude
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
     if schema.position and schema.position.coordinates and not schema.preserve_altitude:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
@@ -715,6 +717,8 @@ def update_lha(
 
     # normalize position.z to ground unless coordinator explicitly preserves altitude
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
     if schema.position and schema.position.coordinates and not schema.preserve_altitude:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
@@ -802,8 +806,6 @@ def get_airport_lonlat(airport: Airport) -> tuple[float, float]:
     """extract lon, lat from airport location geometry."""
     loc = airport.location
     if hasattr(loc, "data"):
-        from app.schemas.geometry import parse_ewkb
-
         parsed = parse_ewkb(loc.data)
         coords = parsed.get("coordinates", [])
         if len(coords) < 2:

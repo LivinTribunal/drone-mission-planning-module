@@ -6,6 +6,7 @@ interface ConfirmDeleteDialogProps {
   isOpen: boolean;
   name: string;
   warnings?: string[];
+  error?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -14,6 +15,7 @@ export default function ConfirmDeleteDialog({
   isOpen,
   name,
   warnings,
+  error,
   onConfirm,
   onCancel,
 }: ConfirmDeleteDialogProps) {
@@ -35,6 +37,14 @@ export default function ConfirmDeleteDialog({
               <li key={i}>{w}</li>
             ))}
           </ul>
+        </div>
+      )}
+      {error && (
+        <div
+          className="mb-4 rounded-xl border border-tv-error px-3 py-2"
+          data-testid="delete-error"
+        >
+          <p className="text-xs text-tv-error">{error}</p>
         </div>
       )}
       <div className="flex justify-end gap-2">
