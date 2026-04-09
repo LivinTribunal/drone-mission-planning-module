@@ -640,3 +640,61 @@ def test_update_obstacle_preserve_altitude(client):
     # the explicit altitude must be preserved (not overwritten by ground elevation)
     for vertex in body["boundary"]["coordinates"][0]:
         assert vertex[2] == explicit_alt
+
+
+def test_update_agl_preserve_altitude(client):
+    """preserve_altitude=True skips position z-normalization on agl update."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZAG"},
+    ).json()
+    surface = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces",
+        json=SURFACE_PAYLOAD,
+    ).json()
+    agl = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls",
+        json=AGL_PAYLOAD,
+    ).json()
+
+    explicit_alt = 777.25
+    new_position = {"type": "Point", "coordinates": [14.2745, 50.0972, explicit_alt]}
+
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls/{agl['id']}",
+        json={"position": new_position, "preserve_altitude": True},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["position"]["coordinates"][2] == explicit_alt
+
+
+def test_update_lha_preserve_altitude(client):
+    """preserve_altitude=True skips position z-normalization on lha update."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZLH"},
+    ).json()
+    surface = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces",
+        json=SURFACE_PAYLOAD,
+    ).json()
+    agl = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls",
+        json=AGL_PAYLOAD,
+    ).json()
+    lha = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas",
+        json=LHA_PAYLOAD,
+    ).json()
+
+    explicit_alt = 555.75
+    new_position = {"type": "Point", "coordinates": [14.2748, 50.0979, explicit_alt]}
+
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas/{lha['id']}",
+        json={"position": new_position, "preserve_altitude": True},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["position"]["coordinates"][2] == explicit_alt

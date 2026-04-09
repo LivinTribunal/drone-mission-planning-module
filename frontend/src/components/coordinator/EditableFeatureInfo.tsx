@@ -19,7 +19,7 @@ interface EditableFeatureInfoProps {
   onClose: () => void;
   airportId?: string;
   surfaces?: SurfaceResponse[];
-  onDelete?: (featureType: string, id: string) => void;
+  onDelete?: (featureType: string, id: string) => Promise<void>;
   deleteWarnings?: string[];
   onAddLha?: (aglId: string) => void;
 }

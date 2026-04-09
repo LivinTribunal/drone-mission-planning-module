@@ -587,6 +587,8 @@ def create_agl(db: Session, airport_id: UUID, surface_id: UUID, schema: AGLCreat
 
     # normalize position.z to ground elevation at AGL location
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
     if schema.position and schema.position.coordinates:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
@@ -683,6 +685,8 @@ def create_lha(
 
     # normalize position.z to ground elevation at LHA location
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
     if schema.position and schema.position.coordinates:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
