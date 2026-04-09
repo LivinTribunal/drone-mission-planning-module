@@ -742,6 +742,18 @@
       "lhaUnitNumber": "Unit Number",
       "lhaSettingAngle": "Setting Angle",
       "lhaLampType": "Lamp Type",
+      "recalculate": "Recalculate Dimensions",
+      "recalculateDescription": "Recompute length, width, and heading from polygon geometry",
+      "currentValues": "Current",
+      "recalculatedValues": "Recalculated",
+      "applyRecalculated": "Apply",
+      "cancelRecalculated": "Cancel",
+      "recalculateError": "Failed to recalculate dimensions",
+      "vertexCoord": "Vertices",
+      "vertexEdit": "Edit vertex",
+      "latInvalid": "Latitude must be between -90 and 90",
+      "lonInvalid": "Longitude must be between -180 and 180",
+      "altInvalid": "Altitude must be ≥ 0",
       "surfaceTypes": {
         "runway": "Runway",
         "taxiway": "Taxiway",
@@ -769,6 +781,9 @@
         "halogen": "Halogen",
         "led": "LED"
       }
+    },
+    "agl": {
+      "displayNameFormat": "PAPI RWY {{runway}}"
     },
     "tools": {
       "select": "Select",

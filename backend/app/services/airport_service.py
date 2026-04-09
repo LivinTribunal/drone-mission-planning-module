@@ -14,9 +14,8 @@ from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.enums import MissionStatus
 from app.models.mission import DroneProfile, Mission
-from app.models.value_objects import IcaoCode
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
-from app.schemas.geometry import parse_ewkb
+from app.schemas.geometry import PolygonZ, parse_ewkb
 from app.schemas.infrastructure import (
     AGLCreate,
     AGLUpdate,
@@ -114,12 +113,7 @@ def get_airport(db: Session, airport_id: UUID) -> Airport:
 
 
 def create_airport(db: Session, schema: AirportCreate) -> Airport:
-    """create airport with ICAO code validation."""
-    try:
-        IcaoCode(schema.icao_code)
-    except ValueError as e:
-        raise DomainError(str(e))
-
+    """create airport - icao validation happens at the schema layer."""
     airport = Airport(**schema_to_model_data(schema))
     db.add(airport)
     db.commit()
@@ -300,6 +294,26 @@ def delete_surface(db: Session, airport_id: UUID, surface_id: UUID):
     db.commit()
 
 
+def recalculate_surface_dimensions(db: Session, airport_id: UUID, surface_id: UUID) -> dict:
+    """compute surface length/width/heading from geometry, returns current + recalculated."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
+    return {
+        "current": {
+            "length": surface.length,
+            "width": surface.width,
+            "heading": surface.heading,
+        },
+        "recalculated": surface.recalculate_dimensions(),
+    }
+
+
 # obstacles
 
 
@@ -316,11 +330,18 @@ def _normalize_position_altitude(position_coords: list[float], airport: Airport)
             provider.close()
 
 
-def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
-    """re-normalize all position.z values for obstacles, agls, and lhas at airport."""
+def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> dict[str, list[UUID]]:
+    """re-normalize all position.z values for obstacles, agls, and lhas at airport.
+
+    returns a dict of skipped entity ids per type so callers can surface partial
+    failures - per-item errors are logged and the loop continues so one bad
+    geometry does not block the rest of the airport.
+    """
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
         raise NotFoundError("airport not found")
+
+    skipped: dict[str, list[UUID]] = {"obstacles": [], "agls": [], "lhas": []}
 
     provider = create_elevation_provider(airport)
     try:
@@ -357,10 +378,12 @@ def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
                 obs.boundary = WKTElement(f"SRID=4326;POLYGONZ(({wkt_ring}))", srid=4326)
             except Exception as e:
                 logger.warning("skipping renormalization for Obstacle %s: %s", obs.id, e)
+                skipped["obstacles"].append(obs.id)
                 continue
 
         # renormalize AGL and LHA position.z
         for entity in [*agls, *lhas]:
+            bucket = "agls" if isinstance(entity, AGL) else "lhas"
             try:
                 coords = parse_ewkb(entity.position.data).get("coordinates", [])
                 if len(coords) < 3:
@@ -375,9 +398,19 @@ def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
                     entity.id,
                     e,
                 )
+                skipped[bucket].append(entity.id)
                 continue
 
         db.commit()
+
+        if any(skipped.values()):
+            logger.warning(
+                "renormalize_airport_altitudes for %s left partial state: %s",
+                airport_id,
+                {k: len(v) for k, v in skipped.items() if v},
+            )
+
+        return skipped
     finally:
         if hasattr(provider, "close"):
             provider.close()
@@ -388,7 +421,7 @@ def list_obstacles(db: Session, airport_id: UUID) -> list[Obstacle]:
     return db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
 
 
-def _normalize_boundary_altitude(boundary: dict | None, airport: Airport) -> None:
+def _normalize_boundary_altitude(boundary: PolygonZ | None, airport: Airport) -> None:
     """set all boundary ring z-coordinates to ground elevation."""
     if not boundary or not boundary.coordinates:
         return
@@ -440,8 +473,8 @@ def update_obstacle(
     if not obstacle:
         raise NotFoundError("obstacle not found")
 
-    # normalize boundary z-coordinates to ground elevation when boundary is updated
-    if schema.boundary and schema.boundary.coordinates:
+    # normalize boundary z-coordinates unless coordinator explicitly preserves altitude
+    if schema.boundary and schema.boundary.coordinates and not schema.preserve_altitude:
         _normalize_boundary_altitude(schema.boundary, airport)
 
     apply_schema_update(obstacle, schema)
@@ -463,6 +496,30 @@ def delete_obstacle(db: Session, airport_id: UUID, obstacle_id: UUID):
 
     db.delete(obstacle)
     db.commit()
+
+
+def recalculate_obstacle_dimensions(db: Session, airport_id: UUID, obstacle_id: UUID) -> dict:
+    """compute obstacle dimensions from boundary, returns current + recalculated."""
+    obstacle = (
+        db.query(Obstacle)
+        .filter(Obstacle.id == obstacle_id, Obstacle.airport_id == airport_id)
+        .first()
+    )
+    if not obstacle:
+        raise NotFoundError("obstacle not found")
+
+    recalculated = obstacle.recalculate_dimensions()
+    # obstacles have no stored length/width/heading/radius columns - all dimensions
+    # are derived from the boundary polygon, so "current" is always None
+    return {
+        "current": {
+            "length": None,
+            "width": None,
+            "heading": None,
+            "radius": None,
+        },
+        "recalculated": recalculated,
+    }
 
 
 # safety zones
@@ -545,6 +602,8 @@ def create_agl(db: Session, airport_id: UUID, surface_id: UUID, schema: AGLCreat
 
     # normalize position.z to ground elevation at AGL location
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
     if schema.position and schema.position.coordinates:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
@@ -573,9 +632,11 @@ def update_agl(
     if not agl:
         raise NotFoundError("agl not found")
 
-    # normalize position.z to ground elevation when position is updated
+    # normalize position.z to ground unless coordinator explicitly preserves altitude
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
-    if schema.position and schema.position.coordinates:
+    if not airport:
+        raise NotFoundError("airport not found")
+    if schema.position and schema.position.coordinates and not schema.preserve_altitude:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
     apply_schema_update(agl, schema)
@@ -639,6 +700,8 @@ def create_lha(
 
     # normalize position.z to ground elevation at LHA location
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
     if schema.position and schema.position.coordinates:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
@@ -671,9 +734,11 @@ def update_lha(
     if not lha:
         raise NotFoundError("lha not found")
 
-    # normalize position.z to ground elevation when position is updated
+    # normalize position.z to ground unless coordinator explicitly preserves altitude
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
-    if schema.position and schema.position.coordinates:
+    if not airport:
+        raise NotFoundError("airport not found")
+    if schema.position and schema.position.coordinates and not schema.preserve_altitude:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
     apply_schema_update(lha, schema)
@@ -760,8 +825,6 @@ def get_airport_lonlat(airport: Airport) -> tuple[float, float]:
     """extract lon, lat from airport location geometry."""
     loc = airport.location
     if hasattr(loc, "data"):
-        from app.schemas.geometry import parse_ewkb
-
         parsed = parse_ewkb(loc.data)
         coords = parsed.get("coordinates", [])
         if len(coords) < 2:

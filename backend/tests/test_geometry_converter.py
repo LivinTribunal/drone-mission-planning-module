@@ -30,6 +30,29 @@ class FakeUpdateSchema(BaseModel):
     location: Optional[dict] = None
 
 
+class _FakeColumn:
+    """stand-in for a sqlalchemy Column object exposing only `.nullable`."""
+
+    def __init__(self, nullable: bool):
+        """remember nullability flag."""
+        self.nullable = nullable
+
+
+class _FakeTable:
+    """stand-in for `obj.__table__` exposing a `.columns` dict."""
+
+    def __init__(self, columns: dict[str, bool]):
+        """build column map from {name: nullable} dict."""
+        self.columns = {k: _FakeColumn(v) for k, v in columns.items()}
+
+
+def _model(columns: dict[str, bool], **attrs) -> SimpleNamespace:
+    """build a fake ORM-like object with __table__ and initial attrs."""
+    obj = SimpleNamespace(**attrs)
+    obj.__table__ = _FakeTable(columns)
+    return obj
+
+
 class TestGeojsonToEwkt:
     """tests for geojson_to_ewkt conversion."""
 
@@ -104,7 +127,7 @@ class TestApplyDictUpdate:
 
     def test_sets_attributes_with_geometry_conversion(self):
         """geometry fields are converted to EWKT when set on object."""
-        obj = SimpleNamespace()
+        obj = _model({"location": False})
         data = {
             "name": "mission-1",
             "location": {"type": "Point", "coordinates": [16.5, 48.1, 300.0]},
@@ -116,25 +139,31 @@ class TestApplyDictUpdate:
 
     def test_none_non_nullable_geometry_skipped(self):
         """none on non-nullable geometry fields is skipped to protect constraints."""
-        obj = SimpleNamespace(location="existing")
+        obj = _model({"location": False}, location="existing")
         apply_dict_update(obj, {"location": None})
         assert obj.location == "existing"
 
     def test_none_nullable_geometry_set(self):
         """none on nullable geometry fields is applied (e.g. camera_target)."""
-        obj = SimpleNamespace(camera_target="existing")
+        obj = _model({"camera_target": True}, camera_target="existing")
         apply_dict_update(obj, {"camera_target": None})
         assert obj.camera_target is None
 
-    def test_none_boundary_skipped(self):
-        """none on non-nullable boundary field is skipped to protect constraints."""
-        obj = SimpleNamespace(boundary="existing")
+    def test_none_boundary_cleared_when_nullable(self):
+        """nullable boundary (AirfieldSurface) accepts explicit None to clear it."""
+        obj = _model({"boundary": True}, boundary="existing")
+        apply_dict_update(obj, {"boundary": None})
+        assert obj.boundary is None
+
+    def test_none_boundary_skipped_when_non_nullable(self):
+        """non-nullable boundary (Obstacle) silently drops explicit None."""
+        obj = _model({"boundary": False}, boundary="existing")
         apply_dict_update(obj, {"boundary": None})
         assert obj.boundary == "existing"
 
     def test_non_geometry_field_set_directly(self):
         """non-geometry fields are set without conversion."""
-        obj = SimpleNamespace()
+        obj = _model({})
         apply_dict_update(obj, {"status": "DRAFT", "priority": 5})
         assert obj.status == "DRAFT"
         assert obj.priority == 5
@@ -145,7 +174,7 @@ class TestApplySchemaUpdate:
 
     def test_delegates_to_apply_dict_update(self):
         """schema update converts and applies geometry fields to object."""
-        obj = SimpleNamespace(name="old", location="old-ewkt")
+        obj = _model({"location": False}, name="old", location="old-ewkt")
         schema = FakeUpdateSchema(
             name="new",
             location={"type": "Point", "coordinates": [1.0, 2.0, 3.0]},
@@ -157,7 +186,7 @@ class TestApplySchemaUpdate:
 
     def test_excludes_unset_fields(self):
         """only explicitly set fields are applied."""
-        obj = SimpleNamespace(name="original", location="keep-this")
+        obj = _model({"location": False}, name="original", location="keep-this")
         schema = FakeUpdateSchema(name="updated")
         apply_schema_update(obj, schema)
         assert obj.name == "updated"

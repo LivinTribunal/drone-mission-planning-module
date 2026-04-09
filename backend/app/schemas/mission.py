@@ -1,10 +1,16 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
+
+# inspection method values - mirrors InspectionMethod enum
+InspectionMethodStr = Literal["VERTICAL_PROFILE", "ANGULAR_SWEEP"]
+# capture mode values - used by trajectory_computation to choose camera_action
+CaptureModeStr = Literal["VIDEO_CAPTURE", "PHOTO_CAPTURE"]
 
 
 class InspectionConfigOverride(BaseModel):
@@ -19,7 +25,7 @@ class InspectionConfigOverride(BaseModel):
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
     lha_ids: list[UUID] | None = None
-    capture_mode: str | None = None
+    capture_mode: CaptureModeStr | None = None
     recording_setup_duration: float | None = None
     buffer_distance: float | None = Field(default=None, ge=0)
 
@@ -36,14 +42,14 @@ class InspectionCreate(BaseModel):
     """add inspection to mission"""
 
     template_id: UUID
-    method: str
+    method: InspectionMethodStr
     config: InspectionConfigOverride | None = None
 
 
 class InspectionUpdate(BaseModel):
     """update inspection within mission"""
 
-    method: str | None = None
+    method: InspectionMethodStr | None = None
     config: InspectionConfigOverride | None = None
     sequence_order: int | None = None
 
@@ -60,7 +66,7 @@ class InspectionConfigResponse(BaseModel):
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
     lha_ids: list[UUID] | None = None
-    capture_mode: str | None = None
+    capture_mode: CaptureModeStr | None = None
     recording_setup_duration: float | None = None
     buffer_distance: float | None = None
 
@@ -74,7 +80,7 @@ class InspectionResponse(BaseModel):
     mission_id: UUID
     template_id: UUID
     config_id: UUID | None = None
-    method: str
+    method: InspectionMethodStr
     sequence_order: int
     lha_ids: list[UUID] | None = None
     config: InspectionConfigResponse | None = None
@@ -105,7 +111,7 @@ class MissionCreate(BaseModel):
     default_altitude_offset: float | None = None
     takeoff_coordinate: PointZ | None = None
     landing_coordinate: PointZ | None = None
-    default_capture_mode: str | None = None
+    default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
 
 
@@ -120,7 +126,7 @@ class MissionUpdate(BaseModel):
     takeoff_coordinate: PointZ | None = None
     landing_coordinate: PointZ | None = None
     date_time: datetime | None = None
-    default_capture_mode: str | None = None
+    default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
 
 
@@ -140,7 +146,7 @@ class MissionResponse(BaseModel):
     default_altitude_offset: float | None = None
     takeoff_coordinate: PointZ | None = None
     landing_coordinate: PointZ | None = None
-    default_capture_mode: str | None = None
+    default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = None
     has_unsaved_map_changes: bool = False
     inspection_count: int = 0
