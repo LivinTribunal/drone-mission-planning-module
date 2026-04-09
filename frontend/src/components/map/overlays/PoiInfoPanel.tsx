@@ -2,13 +2,16 @@ import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import FeatureInfoPanel from "@/components/common/FeatureInfoPanel";
 import { ChevronDown } from "lucide-react";
+import { formatAglDisplayName } from "@/utils/agl";
 import type { MapFeature } from "@/types/map";
 import type { PointZ, PolygonZ } from "@/types/common";
+import type { SurfaceResponse } from "@/types/airport";
 
 interface PoiInfoPanelProps {
   feature: MapFeature | null;
   onClose: () => void;
   editable?: boolean;
+  surfaces?: SurfaceResponse[];
   onCoordinateChange?: (waypointId: string, lat: number, lon: number, alt: number) => void;
   onDeleteTakeoffLanding?: (waypointType: string) => void;
 }
@@ -17,6 +20,7 @@ export default function PoiInfoPanel({
   feature,
   onClose,
   editable = false,
+  surfaces,
   onCoordinateChange,
   onDeleteTakeoffLanding,
 }: PoiInfoPanelProps) {
@@ -80,9 +84,10 @@ export default function PoiInfoPanel({
       }
       case "agl": {
         const a = feature.data;
+        const parentSurface = surfaces?.find((s) => s.id === a.surface_id);
         return (
           <>
-            <InfoRow label={t("dashboard.poiName")} value={a.name} />
+            <InfoRow label={t("dashboard.poiName")} value={formatAglDisplayName(a, parentSurface)} />
             <InfoRow label={t("dashboard.poiType")} value={a.agl_type} />
             {a.side && <InfoRow label={t("dashboard.poiSide")} value={a.side} />}
             <CoordRows position={a.position} label={t("dashboard.poiCoordinates")} />
@@ -224,21 +229,27 @@ function CoordRows({ position, label }: { position: PointZ; label: string }) {
           <span className="text-tv-text-muted">{t("map.coordinates.lon")}</span>
           <span className="text-tv-text-primary font-medium">{lon.toFixed(6)}</span>
         </div>
-        {alt != null && alt !== 0 && (
-          <div className="flex justify-between">
-            <span className="text-tv-text-muted">{t("map.coordinates.alt")}</span>
-            <span className="text-tv-text-primary font-medium">{alt.toFixed(1)}{t("common.units.m")}</span>
-          </div>
-        )}
+        <div className="flex justify-between">
+          <span className="text-tv-text-muted">{t("map.coordinates.alt")}</span>
+          <span className="text-tv-text-primary font-medium">{(alt ?? 0).toFixed(2)}{t("common.units.m")}</span>
+        </div>
       </div>
     </div>
   );
 }
 
-function PolygonCoordRows({ polygon, label }: { polygon: PolygonZ; label: string }) {
-  /** polygon centroid + expandable vertex list. */
+function PolygonCoordRows({
+  polygon,
+  label,
+  defaultExpanded = false,
+}: {
+  polygon: PolygonZ;
+  label: string;
+  defaultExpanded?: boolean;
+}) {
+  /** polygon centroid + expandable vertex list with altitude. */
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const ring = polygon.coordinates[0];
   if (!ring || ring.length < 3) return null;
 
@@ -272,12 +283,12 @@ function PolygonCoordRows({ polygon, label }: { polygon: PolygonZ; label: string
         <span>{t("map.vertices")} ({vertices.length})</span>
       </button>
       {expanded && (
-        <div className="pl-2 mt-0.5 space-y-1 max-h-32 overflow-y-auto">
+        <div className="pl-2 mt-0.5 space-y-1 max-h-40 overflow-y-auto">
           {vertices.map((v, i) => (
             <div key={i} className="flex justify-between gap-2">
               <span className="text-tv-text-muted">#{i + 1}</span>
-              <span className="text-tv-text-primary font-medium">
-                {v[1].toFixed(6)}, {v[0].toFixed(6)}
+              <span className="text-tv-text-primary font-medium tabular-nums text-right">
+                {v[1].toFixed(6)}, {v[0].toFixed(6)}, {(v[2] ?? 0).toFixed(2)}{t("common.units.m")}
               </span>
             </div>
           ))}

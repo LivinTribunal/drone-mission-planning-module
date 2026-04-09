@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ListMeta
+from app.schemas.mission import CaptureModeStr, InspectionMethodStr
 
 
 class InspectionConfigCreate(BaseModel):
@@ -18,7 +19,7 @@ class InspectionConfigCreate(BaseModel):
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
     lha_ids: list[UUID] | None = None
-    capture_mode: str | None = None
+    capture_mode: CaptureModeStr | None = None
     recording_setup_duration: float | None = None
     buffer_distance: float | None = Field(default=None, ge=0)
 
@@ -36,7 +37,7 @@ class InspectionConfigResponse(BaseModel):
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
     lha_ids: list[UUID] | None = None
-    capture_mode: str | None = None
+    capture_mode: CaptureModeStr | None = None
     recording_setup_duration: float | None = None
     buffer_distance: float | None = None
 
@@ -52,7 +53,7 @@ class InspectionTemplateCreate(BaseModel):
     created_by: str | None = None
     default_config: InspectionConfigCreate | None = None
     target_agl_ids: list[UUID] = []
-    methods: list[str] = []
+    methods: list[InspectionMethodStr] = []
 
 
 class InspectionTemplateUpdate(BaseModel):
@@ -62,7 +63,7 @@ class InspectionTemplateUpdate(BaseModel):
     description: str | None = None
     angular_tolerances: dict | None = None
     target_agl_ids: list[UUID] | None = None
-    methods: list[str] | None = None
+    methods: list[InspectionMethodStr] | None = None
     default_config: InspectionConfigCreate | None = None
 
 
@@ -78,7 +79,7 @@ class InspectionTemplateResponse(BaseModel):
     updated_at: datetime | None = None
     default_config: InspectionConfigResponse | None = None
     target_agl_ids: list[UUID] = []
-    methods: list[str] = []
+    methods: list[InspectionMethodStr] = []
     mission_count: int = 0
 
     model_config = {"from_attributes": True}

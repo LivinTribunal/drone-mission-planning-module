@@ -1,7 +1,7 @@
 """polygon obstacle geometry and buffer distance
 
 Revision ID: b5c6d7e8f9a0
-Revises: f9a0b1c2d3e4
+Revises: b3c4d5e6f7a8
 Create Date: 2026-04-08 10:00:00.000000
 
 """
@@ -14,7 +14,7 @@ from geoalchemy2 import Geometry
 
 
 revision: str = "b5c6d7e8f9a0"
-down_revision: Union[str, None] = "f9a0b1c2d3e4"
+down_revision: Union[str, None] = "b3c4d5e6f7a8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

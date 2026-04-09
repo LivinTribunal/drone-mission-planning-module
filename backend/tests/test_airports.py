@@ -530,3 +530,265 @@ def test_bulk_change_drone_nonexistent(client):
         json={"drone_profile_id": str(uuid4())},
     )
     assert r.status_code == 400
+
+
+# recalculate dimensions
+def test_recalculate_surface_dimensions(client):
+    """recompute surface length/heading from centerline geometry."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZRC"},
+    ).json()
+    surface = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces",
+        json=SURFACE_PAYLOAD,
+    ).json()
+
+    r = client.post(f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/recalculate")
+    assert r.status_code == 200
+    body = r.json()
+    assert "current" in body
+    assert "recalculated" in body
+    # current should match the seed values
+    assert body["current"]["length"] == 3715.0
+    assert body["current"]["width"] == 45.0
+    assert body["current"]["heading"] == 243.0
+    # recalculated length is great-circle along the linestring (~ 2.5km)
+    assert body["recalculated"]["length"] is not None
+    assert body["recalculated"]["length"] > 0
+    # heading is bearing from start to end of centerline
+    assert body["recalculated"]["heading"] is not None
+
+
+def test_recalculate_surface_404(client):
+    """recalculate returns 404 for unknown surface."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZNF"},
+    ).json()
+
+    r = client.post(f"/api/v1/airports/{apt['id']}/surfaces/{uuid4()}/recalculate")
+    assert r.status_code == 404
+
+
+def test_recalculate_obstacle_dimensions(client):
+    """recompute obstacle dimensions from polygon boundary."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZRO"},
+    ).json()
+    obstacle = client.post(
+        f"/api/v1/airports/{apt['id']}/obstacles",
+        json=OBSTACLE_PAYLOAD,
+    ).json()
+
+    r = client.post(f"/api/v1/airports/{apt['id']}/obstacles/{obstacle['id']}/recalculate")
+    assert r.status_code == 200
+    body = r.json()
+    assert "recalculated" in body
+    rec = body["recalculated"]
+    # rectangular obstacle should yield non-zero length and width
+    assert rec["length"] is not None and rec["length"] > 0
+    assert rec["width"] is not None and rec["width"] > 0
+    # radius is half the smaller axis
+    assert rec["radius"] is not None
+    assert abs(rec["radius"] - rec["width"] / 2) < 1e-6
+
+
+def test_recalculate_obstacle_404(client):
+    """recalculate returns 404 for unknown obstacle."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZNX"},
+    ).json()
+
+    r = client.post(f"/api/v1/airports/{apt['id']}/obstacles/{uuid4()}/recalculate")
+    assert r.status_code == 404
+
+
+def test_update_obstacle_preserve_altitude(client):
+    """preserve_altitude=True skips boundary z-normalization on update."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZPA"},
+    ).json()
+    obstacle = client.post(
+        f"/api/v1/airports/{apt['id']}/obstacles",
+        json=OBSTACLE_PAYLOAD,
+    ).json()
+
+    explicit_alt = 999.5
+    new_boundary = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [14.261, 50.100, explicit_alt],
+                [14.263, 50.100, explicit_alt],
+                [14.263, 50.102, explicit_alt],
+                [14.261, 50.102, explicit_alt],
+                [14.261, 50.100, explicit_alt],
+            ]
+        ],
+    }
+
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/obstacles/{obstacle['id']}",
+        json={"boundary": new_boundary, "preserve_altitude": True},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    # the explicit altitude must be preserved (not overwritten by ground elevation)
+    for vertex in body["boundary"]["coordinates"][0]:
+        assert vertex[2] == explicit_alt
+
+
+def test_update_agl_preserve_altitude(client):
+    """preserve_altitude=True skips position z-normalization on agl update."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZAG"},
+    ).json()
+    surface = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces",
+        json=SURFACE_PAYLOAD,
+    ).json()
+    agl = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls",
+        json=AGL_PAYLOAD,
+    ).json()
+
+    explicit_alt = 777.25
+    new_position = {"type": "Point", "coordinates": [14.2745, 50.0972, explicit_alt]}
+
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls/{agl['id']}",
+        json={"position": new_position, "preserve_altitude": True},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["position"]["coordinates"][2] == explicit_alt
+
+
+def test_update_surface_clear_boundary(client):
+    """PUT with boundary=null on a surface clears the polygon (was silently ignored before)."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZBN"},
+    ).json()
+
+    with_boundary = {
+        **SURFACE_PAYLOAD,
+        "boundary": {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [14.24, 50.10, 380],
+                    [14.27, 50.10, 380],
+                    [14.27, 50.09, 380],
+                    [14.24, 50.09, 380],
+                    [14.24, 50.10, 380],
+                ]
+            ],
+        },
+    }
+    surface = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=with_boundary).json()
+    assert surface["boundary"] is not None
+
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}",
+        json={"boundary": None},
+    )
+    assert r.status_code == 200
+    assert r.json()["boundary"] is None
+
+
+def test_create_surface_invalid_type_returns_422(client):
+    """invalid surface_type fails at the schema layer with 422, not 500."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZIT"},
+    ).json()
+
+    bad = {**SURFACE_PAYLOAD, "surface_type": "BOGUS"}
+    r = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=bad)
+    assert r.status_code == 422
+
+
+def test_create_obstacle_invalid_type_returns_422(client):
+    """invalid obstacle type fails at the schema layer with 422, not 500."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZIO"},
+    ).json()
+
+    bad = {**OBSTACLE_PAYLOAD, "type": "BOGUS"}
+    r = client.post(f"/api/v1/airports/{apt['id']}/obstacles", json=bad)
+    assert r.status_code == 422
+
+
+def test_negative_buffer_distance_rejected(client):
+    """ge=0 constraint on buffer_distance must reject negatives at the schema layer."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZBD"},
+    ).json()
+
+    # surface create
+    bad_surface = {**SURFACE_PAYLOAD, "buffer_distance": -1.0}
+    r = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=bad_surface)
+    assert r.status_code == 422
+
+    # obstacle create
+    bad_obstacle = {**OBSTACLE_PAYLOAD, "buffer_distance": -2.5}
+    r = client.post(f"/api/v1/airports/{apt['id']}/obstacles", json=bad_obstacle)
+    assert r.status_code == 422
+
+    # surface update - need a valid surface first
+    surface = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD).json()
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}",
+        json={"buffer_distance": -3.0},
+    )
+    assert r.status_code == 422
+
+    # mission default_buffer_distance
+    r = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "BadBuffer",
+            "airport_id": apt["id"],
+            "default_buffer_distance": -4.0,
+        },
+    )
+    assert r.status_code == 422
+
+
+def test_update_lha_preserve_altitude(client):
+    """preserve_altitude=True skips position z-normalization on lha update."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZLH"},
+    ).json()
+    surface = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces",
+        json=SURFACE_PAYLOAD,
+    ).json()
+    agl = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls",
+        json=AGL_PAYLOAD,
+    ).json()
+    lha = client.post(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas",
+        json=LHA_PAYLOAD,
+    ).json()
+
+    explicit_alt = 555.75
+    new_position = {"type": "Point", "coordinates": [14.2748, 50.0979, explicit_alt]}
+
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas/{lha['id']}",
+        json={"position": new_position, "preserve_altitude": True},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["position"]["coordinates"][2] == explicit_alt

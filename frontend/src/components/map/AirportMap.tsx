@@ -1156,6 +1156,23 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       addHighlightLayers(map);
       addPendingPreviewLayers(map);
       layersAddedRef.current = true;
+
+      // sync layer visibility immediately so newly-added layers honor the
+      // current LayerPanel toggle state instead of defaulting to "visible"
+      const cfg = layerConfigRef.current;
+      for (const [key, layerIds] of Object.entries(layerGroupMap)) {
+        const visible = cfg[key as keyof MapLayerConfig];
+        if (visible === undefined) continue;
+        for (const layerId of layerIds) {
+          try {
+            if (map.getLayer(layerId)) {
+              map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+            }
+          } catch {
+            // layer may not exist
+          }
+        }
+      }
     },
     [airport],
   );
@@ -1281,6 +1298,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   // add or update waypoint layers
   const addWaypointLayers = useCallback((map: maplibregl.Map, wpsOverride?: WaypointResponse[]) => {
     const wps = wpsOverride ?? waypointsRef.current;
+    // keep ref in sync so other code paths see the same data
+    waypointsRef.current = wps;
     const takeoff = takeoffRef.current;
     const landing = landingRef.current;
     const idxMap = indexMapRef.current;
@@ -1300,6 +1319,12 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       highlightSeverityRef.current,
       layerConfigRef.current.simplifiedTrajectory,
     );
+
+    // force maplibre to render the updated source data on the next frame
+    // - GeoJSONSource.setData is queued internally and may not redraw until
+    //   the next user interaction; triggerRepaint guarantees immediate paint
+    //   so newly-inserted transit waypoints appear without an extra click.
+    map.triggerRepaint();
   }, [selectedWaypointId, syncLayerVisibility, syncInspectionFilters]);
 
   // sync waypoints ref and re-render layers when waypoints or coords change
@@ -1848,6 +1873,28 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     }
   }, [layerConfig]);
 
+  // mount-time guard - poll until the style is loaded then sync visibility once
+  // so the LayerPanel toggle state matches actual MapLibre layer visibility
+  // regardless of which layer-add path created the layers first.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    let cancelled = false;
+    function trySync() {
+      if (cancelled || !map) return;
+      if (!map.isStyleLoaded()) {
+        requestAnimationFrame(trySync);
+        return;
+      }
+      syncLayerVisibility(map);
+    }
+    trySync();
+    return () => {
+      cancelled = true;
+    };
+  }, [airport, syncLayerVisibility]);
+
   // sync inspection visibility filters
   useEffect(() => {
     const map = mapRef.current;
@@ -2134,6 +2181,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
             <PoiInfoPanel
               feature={selectedFeature}
               onClose={() => setSelectedFeature(null)}
+              surfaces={airport.surfaces}
             />
           )}
           {selectedWarning && onWarningClose && (

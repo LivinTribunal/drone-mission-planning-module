@@ -38,6 +38,7 @@ from app.schemas.infrastructure import (
     LHAUpdate,
     ObstacleCreate,
     ObstacleListResponse,
+    ObstacleRecalculateResponse,
     ObstacleResponse,
     ObstacleUpdate,
     SafetyZoneCreate,
@@ -46,6 +47,7 @@ from app.schemas.infrastructure import (
     SafetyZoneUpdate,
     SurfaceCreate,
     SurfaceListResponse,
+    SurfaceRecalculateResponse,
     SurfaceResponse,
     SurfaceUpdate,
 )
@@ -228,7 +230,10 @@ def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
     airport_service.delete_terrain_dem(db, airport_id)
 
     if old_dem_path and os.path.exists(old_dem_path):
-        os.unlink(old_dem_path)
+        try:
+            os.unlink(old_dem_path)
+        except OSError:
+            logger.warning("failed to unlink old DEM file: %s", old_dem_path)
 
     return DeleteResponse(deleted=True)
 
@@ -320,6 +325,15 @@ def delete_surface(airport_id: UUID, surface_id: UUID, db: Session = Depends(get
     return DeleteResponse(deleted=True)
 
 
+@router.post(
+    "/{airport_id}/surfaces/{surface_id}/recalculate",
+    response_model=SurfaceRecalculateResponse,
+)
+def recalculate_surface(airport_id: UUID, surface_id: UUID, db: Session = Depends(get_db)):
+    """recompute surface length/width/heading from geometry without persisting."""
+    return airport_service.recalculate_surface_dimensions(db, airport_id, surface_id)
+
+
 # obstacles
 @router.get("/{airport_id}/obstacles", response_model=ObstacleListResponse)
 def list_obstacles(airport_id: UUID, db: Session = Depends(get_db)):
@@ -349,6 +363,15 @@ def delete_obstacle(airport_id: UUID, obstacle_id: UUID, db: Session = Depends(g
     airport_service.delete_obstacle(db, airport_id, obstacle_id)
 
     return DeleteResponse(deleted=True)
+
+
+@router.post(
+    "/{airport_id}/obstacles/{obstacle_id}/recalculate",
+    response_model=ObstacleRecalculateResponse,
+)
+def recalculate_obstacle(airport_id: UUID, obstacle_id: UUID, db: Session = Depends(get_db)):
+    """recompute obstacle dimensions from boundary geometry without persisting."""
+    return airport_service.recalculate_obstacle_dimensions(db, airport_id, obstacle_id)
 
 
 # safety zones

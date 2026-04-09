@@ -147,7 +147,8 @@ export interface SurfaceCreate {
 export interface SurfaceUpdate {
   identifier?: string;
   geometry?: LineStringZ;
-  boundary?: PolygonZ;
+  // null clears the polygon boundary on the backend; undefined leaves it untouched
+  boundary?: PolygonZ | null;
   buffer_distance?: number;
   heading?: number | null;
   length?: number | null;
@@ -170,6 +171,7 @@ export interface ObstacleUpdate {
   boundary?: PolygonZ;
   buffer_distance?: number;
   type?: ObstacleType;
+  preserve_altitude?: boolean;
 }
 
 export interface SafetyZoneCreate {
@@ -208,6 +210,7 @@ export interface AGLUpdate {
   glide_slope_angle?: number | null;
   distance_from_threshold?: number | null;
   offset_from_centerline?: number | null;
+  preserve_altitude?: boolean;
 }
 
 export interface LHACreate {
@@ -224,4 +227,28 @@ export interface LHAUpdate {
   transition_sector_width?: number | null;
   lamp_type?: LampType;
   position?: PointZ;
+  preserve_altitude?: boolean;
+}
+
+export interface SurfaceDimensions {
+  length: number | null;
+  width: number | null;
+  heading: number | null;
+}
+
+export interface SurfaceRecalculateResponse {
+  current: SurfaceDimensions;
+  recalculated: SurfaceDimensions;
+}
+
+export interface ObstacleDimensions {
+  length: number | null;
+  width: number | null;
+  heading: number | null;
+  radius: number | null;
+}
+
+export interface ObstacleRecalculateResponse {
+  current: ObstacleDimensions;
+  recalculated: ObstacleDimensions;
 }
