@@ -17,6 +17,7 @@ export interface MissionResponse {
   landing_coordinate: PointZ | null;
   default_capture_mode: CaptureMode | null;
   default_buffer_distance: number | null;
+  default_transit_altitude: number | null;
   has_unsaved_map_changes: boolean;
   inspection_count: number;
   estimated_duration: number | null;
@@ -79,6 +80,7 @@ export interface MissionCreate {
   landing_coordinate?: PointZ | null;
   default_capture_mode?: CaptureMode | null;
   default_buffer_distance?: number | null;
+  default_transit_altitude?: number | null;
 }
 
 export interface MissionUpdate {
@@ -92,6 +94,7 @@ export interface MissionUpdate {
   landing_coordinate?: PointZ | null;
   default_capture_mode?: CaptureMode | null;
   default_buffer_distance?: number | null;
+  default_transit_altitude?: number | null;
 }
 
 export interface InspectionCreate {

@@ -130,6 +130,58 @@ class TestMissionInvalidateTrajectory:
             m.invalidate_trajectory()
 
 
+class TestMissionValidateTransitAltitude:
+    """tests for Mission.validate_transit_altitude business rules."""
+
+    @dataclass
+    class _Drone:
+        max_altitude: float | None = None
+
+    def _make_mission(self, value):
+        """create a mission with given default_transit_altitude."""
+        m = Mission(id=uuid4(), name="test", status="DRAFT", airport_id=uuid4())
+        m.default_transit_altitude = value
+        return m
+
+    def test_none_is_noop(self):
+        """unset field passes validation."""
+        m = self._make_mission(None)
+        m.validate_transit_altitude(None)
+
+    def test_rejects_zero(self):
+        """zero altitude is rejected."""
+        m = self._make_mission(0.0)
+        with pytest.raises(ValueError, match="greater than 0"):
+            m.validate_transit_altitude(None)
+
+    def test_rejects_below_minimum_agl(self):
+        """below 30m AGL is rejected."""
+        m = self._make_mission(10.0)
+        with pytest.raises(ValueError, match="at least 30m AGL"):
+            m.validate_transit_altitude(None)
+
+    def test_accepts_exactly_minimum(self):
+        """exactly 30m AGL is accepted."""
+        m = self._make_mission(30.0)
+        m.validate_transit_altitude(None)
+
+    def test_rejects_above_drone_max(self):
+        """value above drone.max_altitude is rejected."""
+        m = self._make_mission(150.0)
+        with pytest.raises(ValueError, match="exceeds drone max altitude"):
+            m.validate_transit_altitude(self._Drone(max_altitude=100.0))
+
+    def test_accepts_within_drone_max(self):
+        """value within drone.max_altitude is accepted."""
+        m = self._make_mission(80.0)
+        m.validate_transit_altitude(self._Drone(max_altitude=100.0))
+
+    def test_ignores_drone_without_max_altitude(self):
+        """drone without max_altitude does not cap cruise altitude."""
+        m = self._make_mission(200.0)
+        m.validate_transit_altitude(self._Drone(max_altitude=None))
+
+
 class TestMissionInspections:
     """tests for Mission.add_inspection and remove_inspection."""
 

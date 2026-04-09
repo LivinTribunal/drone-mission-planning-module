@@ -98,6 +98,7 @@ def create_mission(db: Session, schema: MissionCreate) -> Mission:
     if not airport:
         raise DomainError("airport not found")
 
+    drone: DroneProfile | None = None
     if schema.drone_profile_id:
         drone = db.query(DroneProfile).filter(DroneProfile.id == schema.drone_profile_id).first()
         if not drone:
@@ -108,8 +109,19 @@ def create_mission(db: Session, schema: MissionCreate) -> Mission:
     # auto-fill from airport default when no drone specified
     if not data.get("drone_profile_id") and airport.default_drone_profile_id:
         data["drone_profile_id"] = airport.default_drone_profile_id
+        drone = (
+            db.query(DroneProfile)
+            .filter(DroneProfile.id == airport.default_drone_profile_id)
+            .first()
+        )
 
     mission = Mission(**data)
+
+    try:
+        mission.validate_transit_altitude(drone)
+    except ValueError as e:
+        raise DomainError(str(e), status_code=422)
+
     db.add(mission)
     db.commit()
     db.refresh(mission)
@@ -143,6 +155,18 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
         mission.has_unsaved_map_changes = True
 
     apply_schema_update(mission, schema)
+
+    # validate the new cruise altitude against the (possibly updated) drone
+    if "default_transit_altitude" in data or "drone_profile_id" in data:
+        drone = None
+        drone_id = mission.drone_profile_id
+        if drone_id:
+            drone = db.query(DroneProfile).filter(DroneProfile.id == drone_id).first()
+        try:
+            mission.validate_transit_altitude(drone)
+        except ValueError as e:
+            raise DomainError(str(e), status_code=422)
+
     db.commit()
     db.refresh(mission)
 
@@ -190,6 +214,9 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
         default_altitude_offset=original.default_altitude_offset,
         takeoff_coordinate=original.takeoff_coordinate,
         landing_coordinate=original.landing_coordinate,
+        default_capture_mode=original.default_capture_mode,
+        default_buffer_distance=original.default_buffer_distance,
+        default_transit_altitude=original.default_transit_altitude,
     )
     db.add(copy)
     db.flush()

@@ -202,3 +202,130 @@ def test_delete_inspection(client):
 
     response = client.delete(f"/api/v1/missions/{mission_id}/inspections/{insp_id}")
     assert response.status_code == 200
+
+
+def test_create_mission_accepts_valid_default_transit_altitude(client, airport_id):
+    """mission create persists default_transit_altitude when above the 30m AGL floor."""
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Cruise Mission",
+            "airport_id": airport_id,
+            "default_transit_altitude": 80.0,
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["default_transit_altitude"] == 80.0
+
+
+def test_create_mission_rejects_default_transit_altitude_below_minimum(client, airport_id):
+    """mission create with default_transit_altitude < MIN_AGL returns 422."""
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Too Low",
+            "airport_id": airport_id,
+            "default_transit_altitude": 10.0,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_create_mission_rejects_non_positive_default_transit_altitude(client, airport_id):
+    """mission create with default_transit_altitude <= 0 returns 422 via schema Field(gt=0)."""
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Zero Cruise",
+            "airport_id": airport_id,
+            "default_transit_altitude": 0,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_create_mission_rejects_default_transit_altitude_above_drone_max(client, airport_id):
+    """mission create with default_transit_altitude above drone.max_altitude returns 422."""
+    drone = client.post(
+        "/api/v1/drone-profiles",
+        json={
+            "name": "Low Ceiling Drone",
+            "max_speed": 20.0,
+            "max_altitude": 100.0,
+            "endurance_minutes": 40.0,
+            "camera_frame_rate": 30,
+            "sensor_fov": 84.0,
+        },
+    ).json()
+
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Above Ceiling",
+            "airport_id": airport_id,
+            "drone_profile_id": drone["id"],
+            "default_transit_altitude": 200.0,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_update_mission_default_transit_altitude_invalidates_trajectory(
+    client, airport_id, db_session
+):
+    """updating default_transit_altitude on a PLANNED mission regresses it to DRAFT."""
+    from app.models.enums import MissionStatus
+    from app.models.mission import Mission
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Invalidate Cruise Test",
+            "airport_id": airport_id,
+            "default_transit_altitude": 60.0,
+        },
+    ).json()
+    mission_id = mission["id"]
+
+    # flip status directly so we don't need a full inspection fixture
+    db_mission = db_session.query(Mission).filter(Mission.id == mission_id).first()
+    db_mission.status = MissionStatus.PLANNED
+    db_session.commit()
+
+    response = client.put(
+        f"/api/v1/missions/{mission_id}",
+        json={"default_transit_altitude": 90.0},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "DRAFT"
+    assert response.json()["default_transit_altitude"] == 90.0
+
+
+def test_update_mission_rejects_invalid_default_transit_altitude(client, airport_id):
+    """updating default_transit_altitude below MIN_AGL returns 422."""
+    mission = client.post(
+        "/api/v1/missions",
+        json={"name": "Update Reject", "airport_id": airport_id},
+    ).json()
+
+    response = client.put(
+        f"/api/v1/missions/{mission['id']}",
+        json={"default_transit_altitude": 5.0},
+    )
+    assert response.status_code == 422
+
+
+def test_duplicate_mission_preserves_default_transit_altitude(client, airport_id):
+    """duplicate carries default_transit_altitude over to the new draft."""
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Dup Cruise",
+            "airport_id": airport_id,
+            "default_transit_altitude": 75.0,
+        },
+    ).json()
+
+    dup = client.post(f"/api/v1/missions/{mission['id']}/duplicate")
+    assert dup.status_code == 201
+    assert dup.json()["default_transit_altitude"] == 75.0

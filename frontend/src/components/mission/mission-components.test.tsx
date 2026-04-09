@@ -297,6 +297,24 @@ describe("MissionConfigForm", () => {
     renderForm({ values: { default_speed: 99 } });
     expect(screen.getByTestId("default-speed-input")).toHaveValue(99);
   });
+
+  it("calls onChange when default transit altitude changes", () => {
+    /** verify onChange fires with the new default_transit_altitude value. */
+    const { onChange } = renderForm();
+    fireEvent.change(screen.getByTestId("default-transit-altitude-input"), {
+      target: { value: "120" },
+    });
+    expect(onChange).toHaveBeenCalledWith({ default_transit_altitude: 120 });
+  });
+
+  it("clears default transit altitude when emptied", () => {
+    /** verify emptying the field sends null. */
+    const { onChange } = renderForm({ values: { default_transit_altitude: 80 } });
+    fireEvent.change(screen.getByTestId("default-transit-altitude-input"), {
+      target: { value: "" },
+    });
+    expect(onChange).toHaveBeenCalledWith({ default_transit_altitude: null });
+  });
 });
 
 /* ------------------------------------------------------------------ */
