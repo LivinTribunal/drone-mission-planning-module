@@ -75,6 +75,8 @@ class ObstacleUpdate(BaseModel):
     boundary: PolygonZ | None = None
     buffer_distance: float | None = Field(default=None, ge=0)
     type: str | None = None
+    # transport-only flag - skip ground-altitude renormalization on this update
+    preserve_altitude: bool = False
 
 
 class ObstacleResponse(BaseModel):
@@ -148,6 +150,8 @@ class LHAUpdate(BaseModel):
     transition_sector_width: float | None = None
     lamp_type: str | None = None
     position: PointZ | None = None
+    # transport-only flag - skip ground-altitude renormalization on this update
+    preserve_altitude: bool = False
 
 
 class LHAResponse(BaseModel):
@@ -186,6 +190,8 @@ class AGLUpdate(BaseModel):
     glide_slope_angle: float | None = None
     distance_from_threshold: float | None = None
     offset_from_centerline: float | None = None
+    # transport-only flag - skip ground-altitude renormalization on this update
+    preserve_altitude: bool = False
 
 
 class AGLResponse(BaseModel):
@@ -203,6 +209,38 @@ class AGLResponse(BaseModel):
     lhas: list[LHAResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+# recalculate dimensions responses
+class SurfaceDimensions(BaseModel):
+    """surface dimensions snapshot"""
+
+    length: float | None = None
+    width: float | None = None
+    heading: float | None = None
+
+
+class SurfaceRecalculateResponse(BaseModel):
+    """response for surface recalculate dimensions endpoint"""
+
+    current: SurfaceDimensions
+    recalculated: SurfaceDimensions
+
+
+class ObstacleDimensions(BaseModel):
+    """obstacle dimensions snapshot"""
+
+    length: float | None = None
+    width: float | None = None
+    heading: float | None = None
+    radius: float | None = None
+
+
+class ObstacleRecalculateResponse(BaseModel):
+    """response for obstacle recalculate dimensions endpoint"""
+
+    current: ObstacleDimensions
+    recalculated: ObstacleDimensions
 
 
 # list responses

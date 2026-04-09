@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, ChevronUp, Trash2, Plus } from "lucide-react";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
+import { formatAglDisplayName } from "@/utils/agl";
 import type { AGLResponse, LHAResponse, SurfaceResponse } from "@/types/airport";
 import type { MapFeature } from "@/types/map";
 
@@ -26,6 +27,10 @@ export default function CoordinatorAGLPanel({
 
   const allAgls = surfaces.flatMap((s) => s.agls);
   const count = allAgls.length;
+  const surfaceByAglId: Record<string, SurfaceResponse> = {};
+  for (const s of surfaces) {
+    for (const a of s.agls) surfaceByAglId[a.id] = s;
+  }
 
   function toggleExpand(aglId: string) {
     /** toggle expand/collapse state for an agl item. */
@@ -124,7 +129,7 @@ export default function CoordinatorAGLPanel({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium text-tv-text-primary truncate">
-                            {agl.name}
+                            {formatAglDisplayName(agl, surfaceByAglId[agl.id])}
                           </span>
                           <span
                             className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border"

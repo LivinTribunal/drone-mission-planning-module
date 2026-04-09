@@ -75,6 +75,116 @@ def center_of_points(
     )
 
 
+def linestring_length(coords: list[list[float]]) -> float:
+    """sum of great-circle distances along a linestring of (lon, lat, ...) points in meters"""
+    total = 0.0
+    for i in range(1, len(coords)):
+        total += distance_between(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1])
+
+    return total
+
+
+def polygon_oriented_dimensions(
+    ring: list[list[float]],
+) -> tuple[float, float, float]:
+    """oriented bounding box of a polygon ring (lon, lat, ...).
+
+    returns (length, width, heading_deg) where length is the longest side of
+    the OBB, width is the perpendicular dimension, and heading is the bearing
+    of the long axis. uses rotating calipers on the convex hull and projects
+    points to a local east/north plane centered at the polygon centroid.
+    """
+    pts = list(ring)
+    if len(pts) >= 2 and pts[0] == pts[-1]:
+        pts = pts[:-1]
+    if len(pts) < 3:
+        return 0.0, 0.0, 0.0
+
+    # local east/north projection in meters
+    lat0 = sum(p[1] for p in pts) / len(pts)
+    lon0 = sum(p[0] for p in pts) / len(pts)
+    cos_lat0 = math.cos(math.radians(lat0))
+
+    def to_xy(p):
+        """convert (lon, lat) to local (east, north) meters."""
+        x = math.radians(p[0] - lon0) * EARTH_RADIUS_M * cos_lat0
+        y = math.radians(p[1] - lat0) * EARTH_RADIUS_M
+        return x, y
+
+    xy = [to_xy(p) for p in pts]
+
+    # convex hull (Andrew's monotone chain)
+    xy_sorted = sorted(set(xy))
+    if len(xy_sorted) < 3:
+        return 0.0, 0.0, 0.0
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower = []
+    for p in xy_sorted:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper = []
+    for p in reversed(xy_sorted):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    hull = lower[:-1] + upper[:-1]
+    if len(hull) < 3:
+        return 0.0, 0.0, 0.0
+
+    # rotating calipers - try each hull edge as the OBB long axis
+    best_area = float("inf")
+    best_length = 0.0
+    best_width = 0.0
+    best_angle = 0.0
+
+    n = len(hull)
+    for i in range(n):
+        x1, y1 = hull[i]
+        x2, y2 = hull[(i + 1) % n]
+        edge_len = math.hypot(x2 - x1, y2 - y1)
+        if edge_len == 0:
+            continue
+        ux, uy = (x2 - x1) / edge_len, (y2 - y1) / edge_len
+        # perpendicular axis
+        vx, vy = -uy, ux
+        min_u = min_v = float("inf")
+        max_u = max_v = float("-inf")
+        for hx, hy in hull:
+            dx, dy = hx - x1, hy - y1
+            u = dx * ux + dy * uy
+            v = dx * vx + dy * vy
+            if u < min_u:
+                min_u = u
+            if u > max_u:
+                max_u = u
+            if v < min_v:
+                min_v = v
+            if v > max_v:
+                max_v = v
+        du = max_u - min_u
+        dv = max_v - min_v
+        area = du * dv
+        if area < best_area:
+            best_area = area
+            length = max(du, dv)
+            width = min(du, dv)
+            # heading aligned with the long side
+            if du >= dv:
+                angle_rad = math.atan2(uy, ux)
+            else:
+                angle_rad = math.atan2(vy, vx)
+            best_length = length
+            best_width = width
+            # convert math angle (CCW from east) to compass bearing (CW from north)
+            best_angle = (90.0 - math.degrees(angle_rad)) % 180.0
+
+    return best_length, best_width, best_angle
+
+
 def total_path_distance(
     points: list[tuple[float, float, float]],
 ) -> float:

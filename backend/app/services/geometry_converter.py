@@ -22,6 +22,9 @@ GEOM_FIELDS = {
 # geometry fields that are NOT NULL in the database - never set these to None
 NON_NULLABLE_GEOM_FIELDS = {"location", "geometry", "boundary"}
 
+# transport-only schema fields that must never be written to the model
+TRANSPORT_ONLY_FIELDS = {"preserve_altitude"}
+
 
 def _fmt_coord(c: list) -> str:
     """format a single coordinate as 'x y z', defaulting z to 0 if missing."""
@@ -58,6 +61,8 @@ def geojson_to_ewkt(geojson: GeoJSON) -> EWKT:
 def schema_to_model_data(schema: BaseModel) -> dict:
     """convert pydantic schema to dict with geometry fields as WKTElement"""
     data = schema.model_dump()
+    for f in TRANSPORT_ONLY_FIELDS:
+        data.pop(f, None)
     for key in GEOM_FIELDS & data.keys():
         if data[key] is not None:
             data[key] = WKTElement(geojson_to_ewkt(data[key]), srid=4326)
@@ -67,7 +72,10 @@ def schema_to_model_data(schema: BaseModel) -> dict:
 
 def apply_schema_update(obj, schema: BaseModel):
     """apply pydantic update schema to ORM model, converting geometry to EWKT"""
-    apply_dict_update(obj, schema.model_dump(exclude_unset=True))
+    data = schema.model_dump(exclude_unset=True)
+    for f in TRANSPORT_ONLY_FIELDS:
+        data.pop(f, None)
+    apply_dict_update(obj, data)
 
 
 def apply_dict_update(obj, data: dict):

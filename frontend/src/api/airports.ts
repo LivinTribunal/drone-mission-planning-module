@@ -9,9 +9,11 @@ import type {
   SurfaceResponse,
   SurfaceCreate,
   SurfaceUpdate,
+  SurfaceRecalculateResponse,
   ObstacleResponse,
   ObstacleCreate,
   ObstacleUpdate,
+  ObstacleRecalculateResponse,
   SafetyZoneResponse,
   SafetyZoneCreate,
   SafetyZoneUpdate,
@@ -166,6 +168,16 @@ export async function deleteSurface(
   return res.data;
 }
 
+export async function recalculateSurface(
+  airportId: string,
+  id: string,
+): Promise<SurfaceRecalculateResponse> {
+  const res = await client.post(
+    `/airports/${airportId}/surfaces/${id}/recalculate`,
+  );
+  return res.data;
+}
+
 // obstacles
 
 export async function listObstacles(
@@ -205,6 +217,16 @@ export async function deleteObstacle(
   id: string,
 ): Promise<DeleteResponse> {
   const res = await client.delete(`/airports/${airportId}/obstacles/${id}`);
+  return res.data;
+}
+
+export async function recalculateObstacle(
+  airportId: string,
+  id: string,
+): Promise<ObstacleRecalculateResponse> {
+  const res = await client.post(
+    `/airports/${airportId}/obstacles/${id}/recalculate`,
+  );
   return res.data;
 }
 

@@ -6,6 +6,12 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from app.core.geometry import parse_ewkb
+from app.utils.geo import (
+    bearing_between,
+    linestring_length,
+    polygon_oriented_dimensions,
+)
 
 
 class Airport(Base):
@@ -95,6 +101,44 @@ class AirfieldSurface(Base):
         ),
     )
 
+    def recalculate_dimensions(self) -> dict:
+        """compute length, width, heading from stored geometry without persisting.
+
+        length and heading derive from the centerline linestring. width derives
+        from the boundary polygon's perpendicular OBB axis when available;
+        otherwise the existing width is preserved.
+        """
+        length = self.length
+        width = self.width
+        heading = self.heading
+
+        # centerline-derived length and heading
+        if self.geometry is not None:
+            line_geo = parse_ewkb(self.geometry.data)
+            line_coords = line_geo.get("coordinates", [])
+            if len(line_coords) >= 2:
+                length = linestring_length(line_coords)
+                start = line_coords[0]
+                end = line_coords[-1]
+                heading = bearing_between(start[0], start[1], end[0], end[1])
+
+        # boundary-derived width via OBB perpendicular to centerline
+        if self.boundary is not None:
+            poly_geo = parse_ewkb(self.boundary.data)
+            rings = poly_geo.get("coordinates", [])
+            if rings:
+                obb_length, obb_width, _ = polygon_oriented_dimensions(rings[0])
+                if obb_width > 0:
+                    width = obb_width
+                if length is None and obb_length > 0:
+                    length = obb_length
+
+        return {
+            "length": length,
+            "width": width,
+            "heading": heading,
+        }
+
 
 class Runway(AirfieldSurface):
     """runway surface subtype."""
@@ -137,6 +181,31 @@ class Obstacle(Base):
             name="ck_obstacle_type",
         ),
     )
+
+    def recalculate_dimensions(self) -> dict:
+        """compute length, width, heading from the stored polygon boundary.
+
+        derives an oriented bounding box from the boundary's outer ring.
+        radius is half of the smaller OBB axis (useful for circular-ish obstacles).
+        """
+        length = 0.0
+        width = 0.0
+        heading = 0.0
+
+        if self.boundary is not None:
+            poly_geo = parse_ewkb(self.boundary.data)
+            rings = poly_geo.get("coordinates", [])
+            if rings:
+                length, width, heading = polygon_oriented_dimensions(rings[0])
+
+        radius = width / 2.0 if width > 0 else 0.0
+
+        return {
+            "length": length,
+            "width": width,
+            "heading": heading,
+            "radius": radius,
+        }
 
 
 class SafetyZone(Base):

@@ -1159,6 +1159,7 @@ export default function AirportEditPage() {
                 feature={selectedFeature}
                 onUpdate={handleFeatureUpdate}
                 onClose={() => setSelectedFeature(null)}
+                airportId={id}
                 surfaces={surfaces}
                 onDelete={handleFeatureDelete}
                 deleteWarnings={

@@ -300,6 +300,26 @@ def delete_surface(db: Session, airport_id: UUID, surface_id: UUID):
     db.commit()
 
 
+def recalculate_surface_dimensions(db: Session, airport_id: UUID, surface_id: UUID) -> dict:
+    """compute surface length/width/heading from geometry, returns current + recalculated."""
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
+    return {
+        "current": {
+            "length": surface.length,
+            "width": surface.width,
+            "heading": surface.heading,
+        },
+        "recalculated": surface.recalculate_dimensions(),
+    }
+
+
 # obstacles
 
 
@@ -440,8 +460,8 @@ def update_obstacle(
     if not obstacle:
         raise NotFoundError("obstacle not found")
 
-    # normalize boundary z-coordinates to ground elevation when boundary is updated
-    if schema.boundary and schema.boundary.coordinates:
+    # normalize boundary z-coordinates unless coordinator explicitly preserves altitude
+    if schema.boundary and schema.boundary.coordinates and not schema.preserve_altitude:
         _normalize_boundary_altitude(schema.boundary, airport)
 
     apply_schema_update(obstacle, schema)
@@ -463,6 +483,28 @@ def delete_obstacle(db: Session, airport_id: UUID, obstacle_id: UUID):
 
     db.delete(obstacle)
     db.commit()
+
+
+def recalculate_obstacle_dimensions(db: Session, airport_id: UUID, obstacle_id: UUID) -> dict:
+    """compute obstacle dimensions from boundary, returns current + recalculated."""
+    obstacle = (
+        db.query(Obstacle)
+        .filter(Obstacle.id == obstacle_id, Obstacle.airport_id == airport_id)
+        .first()
+    )
+    if not obstacle:
+        raise NotFoundError("obstacle not found")
+
+    recalculated = obstacle.recalculate_dimensions()
+    return {
+        "current": {
+            "length": None,
+            "width": None,
+            "heading": None,
+            "radius": None,
+        },
+        "recalculated": recalculated,
+    }
 
 
 # safety zones
@@ -573,9 +615,9 @@ def update_agl(
     if not agl:
         raise NotFoundError("agl not found")
 
-    # normalize position.z to ground elevation when position is updated
+    # normalize position.z to ground unless coordinator explicitly preserves altitude
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
-    if schema.position and schema.position.coordinates:
+    if schema.position and schema.position.coordinates and not schema.preserve_altitude:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
     apply_schema_update(agl, schema)
@@ -671,9 +713,9 @@ def update_lha(
     if not lha:
         raise NotFoundError("lha not found")
 
-    # normalize position.z to ground elevation when position is updated
+    # normalize position.z to ground unless coordinator explicitly preserves altitude
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
-    if schema.position and schema.position.coordinates:
+    if schema.position and schema.position.coordinates and not schema.preserve_altitude:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
     apply_schema_update(lha, schema)
