@@ -27,7 +27,8 @@ def upgrade() -> None:
         sa.Column("buffer_distance", sa.Float(), nullable=False, server_default="5.0"),
     )
 
-    # rename geometry -> boundary and cast from generic geometry to POLYGONZ
+    # precondition: all existing obstacle.geometry values are already POLYGONZ
+    # (frontend polygon submission was deployed before this migration)
     op.alter_column(
         "obstacle",
         "geometry",
@@ -65,7 +66,8 @@ def downgrade() -> None:
     op.drop_column("mission", "default_buffer_distance")
     op.drop_column("airfield_surface", "buffer_distance")
 
-    # restore obstacle columns
+    # restore obstacle columns - position is nullable because centroid
+    # extraction from boundary is lossy (original point data is lost)
     op.add_column(
         "obstacle",
         sa.Column("radius", sa.Float(), nullable=False, server_default="15.0"),

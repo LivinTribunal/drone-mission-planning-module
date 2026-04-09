@@ -4,6 +4,7 @@ from app.services.trajectory_types import WaypointData
 
 
 def test_altitude_above_max():
+    """waypoint above max altitude triggers hard violation."""
     from app.services.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=600.0)
@@ -27,6 +28,7 @@ def test_altitude_above_max():
 
 
 def test_altitude_below_min():
+    """waypoint below min altitude triggers violation."""
     from app.services.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=30.0)
@@ -52,6 +54,7 @@ def test_altitude_below_min():
 
 
 def test_speed_exceeds_max():
+    """speed above max triggers soft warning."""
     from app.services.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=300.0, speed=30.0)
@@ -76,6 +79,7 @@ def test_speed_exceeds_max():
 
 
 def test_drone_max_altitude():
+    """waypoint exceeding drone max altitude returns violation."""
     from app.services.safety_validator import check_drone_constraints
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=600.0)
@@ -85,6 +89,7 @@ def test_drone_max_altitude():
 
 
 def test_drone_within_limits():
+    """waypoint within drone limits returns no violation."""
     from app.services.safety_validator import check_drone_constraints
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=200.0, speed=10.0)
@@ -97,6 +102,7 @@ def test_drone_within_limits():
 
 
 def test_battery_exceeded():
+    """flight duration exceeding battery endurance returns violation."""
     from app.services.safety_validator import check_battery
 
     drone = type("D", (), {"endurance_minutes": 55.0})()
@@ -105,6 +111,7 @@ def test_battery_exceeded():
 
 
 def test_battery_ok():
+    """flight within battery endurance returns no violation."""
     from app.services.safety_validator import check_battery
 
     drone = type("D", (), {"endurance_minutes": 55.0})()
@@ -116,6 +123,7 @@ def test_battery_ok():
 
 
 def test_safety_zone_no_geometry():
+    """zone with no geometry is skipped."""
     from app.services.safety_validator import check_safety_zone
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)

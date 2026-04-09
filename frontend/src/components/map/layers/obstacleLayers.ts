@@ -195,8 +195,12 @@ export function addBufferZoneLayers(
         .map((o) => {
           const ring = o.boundary.coordinates[0];
           const buffered = bufferPolygon(ring, o.buffer_distance);
-          // close the ring
-          if (buffered.length > 0 && (buffered[0][0] !== buffered[buffered.length - 1][0] || buffered[0][1] !== buffered[buffered.length - 1][1])) {
+          // close the ring if not already closed
+          const last = buffered[buffered.length - 1];
+          if (
+            buffered.length > 0 &&
+            (buffered[0][0] !== last[0] || buffered[0][1] !== last[1])
+          ) {
             buffered.push([...buffered[0]]);
           }
           return {

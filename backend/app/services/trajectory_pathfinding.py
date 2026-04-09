@@ -221,6 +221,7 @@ def _collect_graph_nodes_in_circle(
     nodes = list(endpoints)
 
     def in_circle(pt: Point3D) -> bool:
+        """check if point is within search radius of center."""
         return distance_between(center.lon, center.lat, pt.lon, pt.lat) <= radius
 
     for obs in obstacles:
@@ -358,6 +359,22 @@ def _max_turn_angle(waypoints: list[WaypointData]) -> Degrees:
     return max_angle
 
 
+def _max_effective_buffer(
+    obstacles: list[Obstacle],
+    buffer_distance_override: float | None,
+) -> float:
+    """largest effective buffer distance across all obstacles."""
+    if buffer_distance_override is not None:
+        return buffer_distance_override if obstacles else DEFAULT_OBSTACLE_RADIUS
+    return max(
+        (
+            obs.buffer_distance if obs.buffer_distance is not None else DEFAULT_OBSTACLE_RADIUS
+            for obs in obstacles
+        ),
+        default=DEFAULT_OBSTACLE_RADIUS,
+    )
+
+
 def resolve_inspection_collisions(
     db: Session,
     waypoints: list[WaypointData],
@@ -411,21 +428,7 @@ def resolve_inspection_collisions(
         # collect nearby obstacles AND safety zones
         mid_lon = (from_pt.lon + to_pt.lon) / 2
         mid_lat = (from_pt.lat + to_pt.lat) / 2
-        max_buffer = max(
-            (
-                (
-                    buffer_distance_override
-                    if buffer_distance_override is not None
-                    else (
-                        obs.buffer_distance
-                        if obs.buffer_distance is not None
-                        else DEFAULT_OBSTACLE_RADIUS
-                    )
-                )
-                for obs in obstacles
-            ),
-            default=DEFAULT_OBSTACLE_RADIUS,
-        )
+        max_buffer = _max_effective_buffer(obstacles, buffer_distance_override)
         search_radius = max_buffer * REROUTE_SEARCH_RADIUS_MULTIPLIER
         nearby_obs, nearby_zones = _collect_nearby_objects(
             obstacles,
@@ -475,6 +478,12 @@ def resolve_inspection_collisions(
                     inspection_id=anchor_before.inspection_id,
                     gimbal_pitch=pitch,
                 )
+            )
+
+        if not rerouted_wps:
+            raise TrajectoryGenerationError(
+                "reroute produced no intermediate waypoints"
+                " - obstacle may be too close to flight path"
             )
 
         # validate: path deviation

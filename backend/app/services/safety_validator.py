@@ -95,12 +95,12 @@ def _batch_check_obstacles(
         params[f"obs_geom_{i}"] = ewkt
 
     sql = (
-        f"SELECT wp.idx, obs.idx, "  # noqa: S608
-        f"ST_Contains("
-        f"ST_Force2D(ST_GeomFromEWKT(obs.geom)), "
-        f"ST_Force2D(ST_GeomFromEWKT(wp.geom))) AS contained "
+        f"SELECT wp.idx, obs.idx "  # noqa: S608
         f"FROM (VALUES {wp_values}) AS wp(idx, geom), "
-        f"(VALUES {obs_values}) AS obs(idx, geom)"
+        f"(VALUES {obs_values}) AS obs(idx, geom) "
+        f"WHERE ST_Contains("
+        f"ST_Force2D(ST_GeomFromEWKT(obs.geom)), "
+        f"ST_Force2D(ST_GeomFromEWKT(wp.geom)))"
     )
 
     rows = db.execute(text(sql), params).fetchall()
@@ -112,11 +112,8 @@ def _batch_check_obstacles(
         obs_tops[orig_idx] = obs_base_alt + (obs.height or 0)
 
     violations = []
-    for wp_idx, obs_idx, contained in rows:
-        if contained is not True:
-            continue
-
-        obs = obstacles[obs_idx]  # obs_idx is the original index into the unfiltered obstacles list
+    for wp_idx, obs_idx in rows:
+        obs = obstacles[obs_idx]
         obs_top = obs_tops[obs_idx]
         wp = waypoints[wp_idx]
 
@@ -161,21 +158,18 @@ def _batch_check_zones(
         params[f"z_geom_{i}"] = ewkt
 
     sql = (
-        f"SELECT wp.idx, z.idx, "  # noqa: S608
-        f"ST_Contains("
-        f"ST_Force2D(ST_GeomFromEWKT(z.geom)), "
-        f"ST_Force2D(ST_GeomFromEWKT(wp.geom))) AS contained "
+        f"SELECT wp.idx, z.idx "  # noqa: S608
         f"FROM (VALUES {wp_values}) AS wp(idx, geom), "
-        f"(VALUES {zone_values}) AS z(idx, geom)"
+        f"(VALUES {zone_values}) AS z(idx, geom) "
+        f"WHERE ST_Contains("
+        f"ST_Force2D(ST_GeomFromEWKT(z.geom)), "
+        f"ST_Force2D(ST_GeomFromEWKT(wp.geom)))"
     )
 
     rows = db.execute(text(sql), params).fetchall()
 
     violations = []
-    for wp_idx, zone_idx, contained in rows:
-        if contained is not True:
-            continue
-
+    for wp_idx, zone_idx in rows:
         zone = zones[zone_idx]
         wp = waypoints[wp_idx]
 

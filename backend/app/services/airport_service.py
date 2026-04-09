@@ -341,7 +341,7 @@ def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
             .all()
         )
 
-        # renormalize obstacle boundary z-coordinates
+        # renormalize obstacle boundary z-coordinates (outer ring only)
         for obs in obstacles:
             try:
                 geojson = parse_ewkb(obs.boundary.data)
@@ -354,13 +354,9 @@ def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
                     ground = provider.get_elevation(lat, lon)
                     parts.append(f"{lon} {lat} {ground}")
                 wkt_ring = ", ".join(parts)
-                obs.boundary = WKTElement(
-                    f"SRID=4326;POLYGONZ(({wkt_ring}))", srid=4326
-                )
+                obs.boundary = WKTElement(f"SRID=4326;POLYGONZ(({wkt_ring}))", srid=4326)
             except Exception as e:
-                logger.warning(
-                    "skipping renormalization for Obstacle %s: %s", obs.id, e
-                )
+                logger.warning("skipping renormalization for Obstacle %s: %s", obs.id, e)
                 continue
 
         # renormalize AGL and LHA position.z
@@ -392,7 +388,7 @@ def list_obstacles(db: Session, airport_id: UUID) -> list[Obstacle]:
     return db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
 
 
-def _normalize_boundary_altitude(boundary, airport: Airport) -> None:
+def _normalize_boundary_altitude(boundary: dict | None, airport: Airport) -> None:
     """set all boundary ring z-coordinates to ground elevation."""
     if not boundary or not boundary.coordinates:
         return
@@ -401,10 +397,10 @@ def _normalize_boundary_altitude(boundary, airport: Airport) -> None:
         return
     provider = create_elevation_provider(airport)
     try:
-        for coord in ring:
+        for j, coord in enumerate(ring):
             if len(coord) >= 3:
                 ground = provider.get_elevation(coord[1], coord[0])
-                coord[2] = ground
+                ring[j] = list(coord[:2]) + [ground]
     finally:
         if hasattr(provider, "close"):
             provider.close()
