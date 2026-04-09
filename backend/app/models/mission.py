@@ -40,6 +40,7 @@ TRAJECTORY_FIELDS = {
     "takeoff_coordinate",
     "landing_coordinate",
     "default_capture_mode",
+    "default_buffer_distance",
 }
 
 
@@ -93,6 +94,7 @@ class Mission(Base):
     takeoff_coordinate = Column(Geometry("POINTZ", srid=4326))
     landing_coordinate = Column(Geometry("POINTZ", srid=4326))
     default_capture_mode = Column(String(20), nullable=True, default="VIDEO_CAPTURE")
+    default_buffer_distance = Column(Float, nullable=True)
     has_unsaved_map_changes = Column(Boolean, nullable=False, default=False, server_default="false")
 
     airport = relationship("Airport")

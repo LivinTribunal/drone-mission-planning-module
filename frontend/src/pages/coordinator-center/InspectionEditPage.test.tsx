@@ -24,6 +24,8 @@ const mockAirportDetail = {
       identifier: "RWY 22",
       surface_type: "RUNWAY",
       geometry: { type: "LineString", coordinates: [] },
+      boundary: null,
+      buffer_distance: 5.0,
       heading: 220,
       length: 3190,
       width: 45,

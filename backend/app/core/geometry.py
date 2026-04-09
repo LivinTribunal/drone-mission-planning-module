@@ -36,6 +36,7 @@ def parse_ewkb(data) -> dict:
         dim = 3 if has_z else 2
 
         def read_point():
+            """unpack one xyz point from the buffer."""
             nonlocal offset
             coords = list(struct.unpack_from(f"{fmt}{dim}d", raw, offset))
             offset += dim * 8

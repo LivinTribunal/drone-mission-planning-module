@@ -39,6 +39,7 @@ export interface SurfaceResponse {
   surface_type: SurfaceType;
   geometry: LineStringZ;
   boundary: PolygonZ | null;
+  buffer_distance: number;
   heading: number | null;
   length: number | null;
   width: number | null;
@@ -51,10 +52,9 @@ export interface ObstacleResponse {
   id: string;
   airport_id: string;
   name: string;
-  position: PointZ;
   height: number;
-  radius: number;
-  geometry: PolygonZ;
+  boundary: PolygonZ;
+  buffer_distance: number;
   type: ObstacleType;
 }
 
@@ -136,6 +136,7 @@ export interface SurfaceCreate {
   surface_type: SurfaceType;
   geometry: LineStringZ;
   boundary?: PolygonZ;
+  buffer_distance?: number;
   heading?: number | null;
   length?: number | null;
   width?: number | null;
@@ -147,6 +148,7 @@ export interface SurfaceUpdate {
   identifier?: string;
   geometry?: LineStringZ;
   boundary?: PolygonZ;
+  buffer_distance?: number;
   heading?: number | null;
   length?: number | null;
   width?: number | null;
@@ -156,19 +158,17 @@ export interface SurfaceUpdate {
 
 export interface ObstacleCreate {
   name: string;
-  position: PointZ;
   height: number;
-  radius: number;
-  geometry: PolygonZ;
+  boundary: PolygonZ;
+  buffer_distance?: number;
   type: ObstacleType;
 }
 
 export interface ObstacleUpdate {
   name?: string;
-  position?: PointZ;
   height?: number;
-  radius?: number;
-  geometry?: PolygonZ;
+  boundary?: PolygonZ;
+  buffer_distance?: number;
   type?: ObstacleType;
 }
 

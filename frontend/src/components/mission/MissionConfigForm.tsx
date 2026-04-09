@@ -151,6 +151,10 @@ export default function MissionConfigForm({
     values.default_capture_mode !== undefined
       ? values.default_capture_mode
       : mission.default_capture_mode;
+  const defaultBufferDistance =
+    values.default_buffer_distance !== undefined
+      ? values.default_buffer_distance
+      : mission.default_buffer_distance;
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -238,6 +242,27 @@ export default function MissionConfigForm({
           <option value="VIDEO_CAPTURE">{t("mission.config.captureMode.video")}</option>
           <option value="PHOTO_CAPTURE">{t("mission.config.captureMode.photo")}</option>
         </select>
+      </div>
+
+      {/* default buffer distance */}
+      <div>
+        <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+          {t("mission.config.defaultBufferDistance")}
+        </label>
+        <input
+          type="number"
+          step="0.5"
+          min="0"
+          value={defaultBufferDistance ?? ""}
+          onChange={(e) =>
+            onChange({
+              default_buffer_distance: e.target.value ? parseFloat(e.target.value) : null,
+            })
+          }
+          placeholder={t("mission.config.defaultBufferDistanceHint")}
+          className="w-full px-3 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+          data-testid="default-buffer-distance-input"
+        />
       </div>
 
       {/* takeoff coordinate */}

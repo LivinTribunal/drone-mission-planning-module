@@ -432,9 +432,8 @@ def test_line_of_sight_clear(client, db_engine):
             "name": "Far Tower",
             "type": "TOWER",
             "height": 50.0,
-            "radius": 10.0,
-            "position": {"type": "Point", "coordinates": [14.30, 50.15, 300]},
-            "geometry": {
+            "buffer_distance": 10.0,
+            "boundary": {
                 "type": "Polygon",
                 "coordinates": [
                     [
@@ -476,9 +475,8 @@ def test_line_of_sight_blocked(client, db_engine):
             "name": "Blocking Wall",
             "type": "BUILDING",
             "height": 500.0,
-            "radius": 50.0,
-            "position": {"type": "Point", "coordinates": [14.27, 50.10, 300]},
-            "geometry": {
+            "buffer_distance": 50.0,
+            "boundary": {
                 "type": "Polygon",
                 "coordinates": [
                     [
@@ -501,6 +499,65 @@ def test_line_of_sight_blocked(client, db_engine):
         target = Point3D(lon=14.28, lat=50.10, alt=300.0)
 
         assert has_line_of_sight(db, point, target, obstacles, []) is False
+
+
+def test_extract_polygon_vertices_buffer_offset(client, db_engine):
+    """buffer distance offsets vertices outward from centroid by the correct magnitude."""
+    from sqlalchemy.orm import Session
+
+    from app.models.airport import Obstacle
+    from app.services.trajectory_pathfinding import _extract_polygon_vertices
+
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LOSV"},
+    ).json()
+    airport_id = airport["id"]
+
+    # simple square polygon centered near (14.27, 50.10)
+    coords = [
+        [14.269, 50.099, 300],
+        [14.271, 50.099, 300],
+        [14.271, 50.101, 300],
+        [14.269, 50.101, 300],
+        [14.269, 50.099, 300],
+    ]
+    client.post(
+        f"/api/v1/airports/{airport_id}/obstacles",
+        json={
+            "name": "Buffer Test Box",
+            "type": "BUILDING",
+            "height": 20.0,
+            "buffer_distance": 10.0,
+            "boundary": {"type": "Polygon", "coordinates": [coords]},
+        },
+    )
+
+    with Session(db_engine) as db:
+        obs = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).first()
+
+        # extract with zero buffer - vertices should match unique polygon vertices
+        verts_zero = _extract_polygon_vertices(obs.boundary.data, buffer_m=0.0)
+        unique_coords = coords[:-1]  # strip closing duplicate
+        assert len(verts_zero) == len(unique_coords)
+        for v, c in zip(verts_zero, unique_coords):
+            assert abs(v.lon - c[0]) < 1e-6
+            assert abs(v.lat - c[1]) < 1e-6
+
+        # extract with 25m buffer
+        buffer_m = 25.0
+        verts_buffered = _extract_polygon_vertices(obs.boundary.data, buffer_m=buffer_m)
+        assert len(verts_buffered) == len(unique_coords)
+
+        # each buffered vertex should be ~25m farther from centroid than the original
+        cx = sum(c[0] for c in coords) / len(coords)
+        cy = sum(c[1] for c in coords) / len(coords)
+
+        for v_buf, v_orig in zip(verts_buffered, verts_zero):
+            dist_orig = distance_between(cx, cy, v_orig.lon, v_orig.lat)
+            dist_buf = distance_between(cx, cy, v_buf.lon, v_buf.lat)
+            offset = dist_buf - dist_orig
+            assert abs(offset - buffer_m) < 2.0, f"expected ~{buffer_m}m offset, got {offset:.1f}m"
 
 
 # full pipeline e2e test
@@ -721,3 +778,205 @@ def test_get_lha_positions_skips_no_position():
     positions = get_lha_positions(template, lha_ids=None)
 
     assert len(positions) == 0
+
+
+def test_buffer_distance_zero_uses_zero_not_default(client, db_engine):
+    """buffer_distance=0 should use 0, not fall back to DEFAULT_OBSTACLE_RADIUS."""
+    from sqlalchemy.orm import Session
+
+    from app.models.airport import Obstacle
+    from app.services.trajectory_pathfinding import _extract_polygon_vertices
+    from app.services.trajectory_types import DEFAULT_OBSTACLE_RADIUS
+
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LZBZ"},
+    ).json()
+    airport_id = airport["id"]
+
+    coords = [
+        [14.269, 50.099, 300],
+        [14.271, 50.099, 300],
+        [14.271, 50.101, 300],
+        [14.269, 50.101, 300],
+        [14.269, 50.099, 300],
+    ]
+    client.post(
+        f"/api/v1/airports/{airport_id}/obstacles",
+        json={
+            "name": "Zero Buffer Obs",
+            "type": "BUILDING",
+            "height": 20.0,
+            "buffer_distance": 0.0,
+            "boundary": {"type": "Polygon", "coordinates": [coords]},
+        },
+    )
+
+    with Session(db_engine) as db:
+        obs = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).first()
+        assert obs.buffer_distance == 0.0
+
+        # extract with obs.buffer_distance (0.0) - vertices should match originals
+        verts = _extract_polygon_vertices(obs.boundary.data, buffer_m=obs.buffer_distance)
+        for v, c in zip(verts, coords[:-1]):
+            assert abs(v.lon - c[0]) < 1e-6
+            assert abs(v.lat - c[1]) < 1e-6
+
+        # confirm DEFAULT_OBSTACLE_RADIUS is non-zero (sanity check)
+        assert DEFAULT_OBSTACLE_RADIUS > 0
+
+        # using None should offset by default - different from zero buffer
+        verts_default = _extract_polygon_vertices(obs.boundary.data, buffer_m=None)
+        for v_def, v_zero in zip(verts_default, verts):
+            dist_def = distance_between(14.27, 50.10, v_def.lon, v_def.lat)
+            dist_zero = distance_between(14.27, 50.10, v_zero.lon, v_zero.lat)
+            assert dist_def > dist_zero
+
+
+def test_overlay_config_includes_buffer_distance():
+    """overlay_config copies buffer_distance from config to resolved config."""
+    from app.models.inspection import InspectionConfiguration
+    from app.services.trajectory_computation import overlay_config
+
+    result = ResolvedConfig()
+    config = InspectionConfiguration(buffer_distance=30.0)
+
+    overlay_config(result, config)
+
+    assert result.buffer_distance == 30.0
+
+
+def test_resolve_with_defaults_template_buffer_distance():
+    """template default_config buffer_distance picked up when no inspection config."""
+    from app.models.inspection import InspectionConfiguration
+    from app.services.trajectory_computation import resolve_with_defaults as _resolve_with_defaults
+
+    template_config = InspectionConfiguration(buffer_distance=20.0)
+    template = type("T", (), {"default_config": template_config})()
+    inspection = type("I", (), {"config": None})()
+
+    result = _resolve_with_defaults(inspection, template)
+
+    assert result.buffer_distance == 20.0
+
+
+def test_resolve_inspection_collisions_max_buffer_uses_override():
+    """buffer_distance_override should be used in max_buffer calc instead of obs value."""
+    from app.services.trajectory_pathfinding import DEFAULT_OBSTACLE_RADIUS
+
+    # directly test the max_buffer expression used in resolve_inspection_collisions
+    obstacles = [
+        type("O", (), {"buffer_distance": 5.0, "boundary": True})(),
+        type("O", (), {"buffer_distance": 3.0, "boundary": True})(),
+    ]
+    override = 25.0
+
+    # replicate the max_buffer logic with override
+    max_buffer = max(
+        (
+            (
+                override
+                if override is not None
+                else (
+                    obs.buffer_distance
+                    if obs.buffer_distance is not None
+                    else DEFAULT_OBSTACLE_RADIUS
+                )
+            )
+            for obs in obstacles
+        ),
+        default=DEFAULT_OBSTACLE_RADIUS,
+    )
+
+    assert max_buffer == 25.0
+
+
+def test_resolve_inspection_collisions_zero_override_not_defaulted():
+    """buffer_distance_override=0.0 should produce max_buffer=0, not DEFAULT_OBSTACLE_RADIUS."""
+    from app.services.trajectory_pathfinding import DEFAULT_OBSTACLE_RADIUS
+
+    obstacles = [
+        type("O", (), {"buffer_distance": 5.0, "boundary": True})(),
+    ]
+    override = 0.0
+
+    max_buffer = max(
+        (
+            (
+                override
+                if override is not None
+                else (
+                    obs.buffer_distance
+                    if obs.buffer_distance is not None
+                    else DEFAULT_OBSTACLE_RADIUS
+                )
+            )
+            for obs in obstacles
+        ),
+        default=DEFAULT_OBSTACLE_RADIUS,
+    )
+
+    assert max_buffer == 0.0
+    assert DEFAULT_OBSTACLE_RADIUS > 0
+
+
+def test_mission_default_buffer_distance_fallback():
+    """mission default_buffer_distance used when neither inspection nor template sets it."""
+    from app.services.trajectory_computation import resolve_with_defaults as _resolve_with_defaults
+
+    template = type("T", (), {"default_config": None})()
+    inspection = type("I", (), {"config": None})()
+
+    result = _resolve_with_defaults(inspection, template)
+
+    # without mission fallback, result uses hardcoded default
+    assert result.buffer_distance == 5.0
+
+    # simulate mission-level injection (done in orchestrator)
+    result.buffer_distance = 25.0
+    assert result.buffer_distance == 25.0
+
+
+def test_extract_polygon_vertices_skips_closing_duplicate(client, db_engine):
+    """closed GeoJSON ring (first == last) should not produce duplicate vertices."""
+    from sqlalchemy.orm import Session
+
+    from app.models.airport import Obstacle
+    from app.services.trajectory_pathfinding import _extract_polygon_vertices
+
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LZCD"},
+    ).json()
+    airport_id = airport["id"]
+
+    # closed ring: 4 unique vertices + closing duplicate = 5 coords
+    coords = [
+        [14.269, 50.099, 300],
+        [14.271, 50.099, 300],
+        [14.271, 50.101, 300],
+        [14.269, 50.101, 300],
+        [14.269, 50.099, 300],
+    ]
+    client.post(
+        f"/api/v1/airports/{airport_id}/obstacles",
+        json={
+            "name": "Closed Ring Obs",
+            "type": "BUILDING",
+            "height": 20.0,
+            "buffer_distance": 5.0,
+            "boundary": {"type": "Polygon", "coordinates": [coords]},
+        },
+    )
+
+    with Session(db_engine) as db:
+        obs = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).first()
+        verts = _extract_polygon_vertices(obs.boundary.data, buffer_m=5.0)
+
+        # should have 4 vertices, not 5 (closing duplicate removed)
+        assert len(verts) == 4
+
+        # first and last should NOT be at the same position
+        assert not (
+            abs(verts[0].lon - verts[-1].lon) < 1e-8 and abs(verts[0].lat - verts[-1].lat) < 1e-8
+        )

@@ -21,6 +21,7 @@ class InspectionConfigOverride(BaseModel):
     lha_ids: list[UUID] | None = None
     capture_mode: str | None = None
     recording_setup_duration: float | None = None
+    buffer_distance: float | None = Field(default=None, ge=0)
 
     @field_validator("lha_ids", mode="before")
     @classmethod
@@ -61,6 +62,7 @@ class InspectionConfigResponse(BaseModel):
     lha_ids: list[UUID] | None = None
     capture_mode: str | None = None
     recording_setup_duration: float | None = None
+    buffer_distance: float | None = None
 
     model_config = {"from_attributes": True}
 
@@ -104,6 +106,7 @@ class MissionCreate(BaseModel):
     takeoff_coordinate: PointZ | None = None
     landing_coordinate: PointZ | None = None
     default_capture_mode: str | None = None
+    default_buffer_distance: float | None = Field(default=None, ge=0)
 
 
 class MissionUpdate(BaseModel):
@@ -118,6 +121,7 @@ class MissionUpdate(BaseModel):
     landing_coordinate: PointZ | None = None
     date_time: datetime | None = None
     default_capture_mode: str | None = None
+    default_buffer_distance: float | None = Field(default=None, ge=0)
 
 
 class MissionResponse(BaseModel):
@@ -137,6 +141,7 @@ class MissionResponse(BaseModel):
     takeoff_coordinate: PointZ | None = None
     landing_coordinate: PointZ | None = None
     default_capture_mode: str | None = None
+    default_buffer_distance: float | None = None
     has_unsaved_map_changes: bool = False
     inspection_count: int = 0
     estimated_duration: float | None = None

@@ -243,8 +243,6 @@ export default function AirportEditPage() {
       // only include api-safe fields in dirty data (exclude `polygon` which is preview-only)
       const dirtyData: Record<string, unknown> = { geometry: update.geometry };
       if (update.boundary) dirtyData.boundary = update.boundary;
-      if (update.position) dirtyData.position = update.position;
-      if (update.radius != null) dirtyData.radius = update.radius;
       if (update.width != null) dirtyData.width = update.width;
       if (update.length != null) dirtyData.length = update.length;
       if (update.heading != null) dirtyData.heading = update.heading;
@@ -257,11 +255,18 @@ export default function AirportEditPage() {
       if (featureType === "safety_zone") {
         updateSourceFeatureGeometry(m, "safety-zones", featureId, update.geometry);
       } else if (featureType === "obstacle") {
-        // update radius polygon
-        updateSourceFeatureGeometry(m, "obstacles-radius", featureId, update.geometry);
-        // update center point position
-        if (update.position) {
-          updateSourceFeatureGeometry(m, "obstacles", featureId, update.position);
+        // update boundary polygon
+        if (update.boundary) {
+          updateSourceFeatureGeometry(m, "obstacles-boundary", featureId, update.boundary);
+          // sync icon/label point to new centroid
+          const ring = (update.boundary as GeoJSON.Polygon).coordinates[0];
+          const cx = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+          const cy = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+          const cz = ring.reduce((s, c) => s + (c[2] ?? 0), 0) / ring.length;
+          updateSourceFeatureGeometry(m, "obstacles", featureId, {
+            type: "Point",
+            coordinates: [cx, cy, cz],
+          });
         }
       } else if (featureType === "surface") {
         const surfaceData = airport?.surfaces.find((s) => s.id === featureId);
@@ -412,17 +417,22 @@ export default function AirportEditPage() {
           is_active: data.is_active as boolean | undefined,
         });
       } else if (entityType === "obstacle") {
-        const center = (data.center as [number, number]) ?? pendingCircleCenter ?? pendingPointPosition;
-        if (!center) throw new Error("missing position");
-        const radius = data.radius as number ?? 0;
-        const ring = circleToPolygon(center, Math.max(radius, 1));
-        const obstacleCoords: [number, number, number][] = ring.map(([lng, lat]): [number, number, number] => [lng, lat, elevation]);
+        const bufferDist = (data.buffer_distance as number) ?? 5.0;
+        // use pending drawn polygon or generate from circle center
+        let obstacleCoords: [number, number, number][];
+        if (pendingGeometry) {
+          obstacleCoords = pendingGeometry.coordinates[0].map(([lng, lat]): [number, number, number] => [lng, lat, elevation]);
+        } else {
+          const center = (data.center as [number, number]) ?? pendingCircleCenter ?? pendingPointPosition;
+          if (!center) throw new Error("missing position");
+          const ring = circleToPolygon(center, Math.max(bufferDist, 1));
+          obstacleCoords = ring.map(([lng, lat]): [number, number, number] => [lng, lat, elevation]);
+        }
         await createObstacle(id, {
           name: String(data.name ?? ""),
-          position: { type: "Point", coordinates: [center[0], center[1], elevation] },
           height: (data.height as number) ?? 0,
-          radius,
-          geometry: { type: "Polygon", coordinates: [obstacleCoords] },
+          boundary: { type: "Polygon", coordinates: [obstacleCoords] },
+          buffer_distance: bufferDist,
           type: (data.type as "BUILDING" | "TOWER" | "ANTENNA" | "VEGETATION" | "OTHER") ?? "BUILDING",
         });
       } else if (entityType === "agl") {

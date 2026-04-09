@@ -35,6 +35,7 @@ const baseLayerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
   { key: "taxiways", i18nKey: "dashboard.taxiways" },
   { key: "safetyZones", i18nKey: "dashboard.safetyZones" },
   { key: "obstacles", i18nKey: "dashboard.obstacles" },
+  { key: "bufferZones", i18nKey: "dashboard.bufferZones" },
   { key: "aglSystems", i18nKey: "dashboard.aglSystems" },
 ];
 

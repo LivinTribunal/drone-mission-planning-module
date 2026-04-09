@@ -32,11 +32,19 @@ import {
 } from "./layers/surfaceLayers";
 import {
   addObstacleLayers,
+  addBufferZoneLayers,
   OBSTACLE_SOURCE,
-  OBSTACLE_RADIUS_SOURCE,
+  OBSTACLE_BOUNDARY_SOURCE,
   OBSTACLE_ICON_LAYER,
-  OBSTACLE_RADIUS_LAYER,
+  OBSTACLE_BOUNDARY_LAYER,
+  OBSTACLE_BOUNDARY_OUTLINE_LAYER,
   OBSTACLE_LABEL_LAYER,
+  OBSTACLE_BUFFER_FILL_LAYER,
+  OBSTACLE_BUFFER_OUTLINE_LAYER,
+  OBSTACLE_BUFFER_SOURCE,
+  SURFACE_BUFFER_SOURCE,
+  SURFACE_BUFFER_FILL_LAYER,
+  SURFACE_BUFFER_OUTLINE_LAYER,
 } from "./layers/obstacleLayers";
 import {
   addSafetyZoneLayers,
@@ -165,7 +173,8 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
     RUNWAY_LABEL_LAYER,
   ],
   taxiways: [TAXIWAY_FILL_LAYER, TAXIWAY_STROKE_LAYER, TAXIWAY_CENTERLINE_LAYER, TAXIWAY_LABEL_LAYER],
-  obstacles: [OBSTACLE_ICON_LAYER, OBSTACLE_RADIUS_LAYER, "obstacles-radius-outline", OBSTACLE_LABEL_LAYER],
+  obstacles: [OBSTACLE_ICON_LAYER, OBSTACLE_BOUNDARY_LAYER, OBSTACLE_BOUNDARY_OUTLINE_LAYER, OBSTACLE_LABEL_LAYER],
+  bufferZones: [OBSTACLE_BUFFER_FILL_LAYER, OBSTACLE_BUFFER_OUTLINE_LAYER, SURFACE_BUFFER_FILL_LAYER, SURFACE_BUFFER_OUTLINE_LAYER],
   safetyZones: [
     SAFETY_ZONE_FILL_LAYER,
     SAFETY_ZONE_HATCH_LAYER,
@@ -420,7 +429,11 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     let minZoom = 15.5;
 
     if (focusFeature.type === "obstacle") {
-      [lon, lat] = focusFeature.data.position.coordinates;
+      const ring = focusFeature.data.boundary?.coordinates?.[0];
+      if (ring && ring.length > 0) {
+        lon = ring.reduce((s: number, c: number[]) => s + c[0], 0) / ring.length;
+        lat = ring.reduce((s: number, c: number[]) => s + c[1], 0) / ring.length;
+      }
     } else if (focusFeature.type === "agl") {
       [lon, lat] = focusFeature.data.position.coordinates;
     } else if (focusFeature.type === "lha") {
@@ -1105,7 +1118,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   const INFRA_SOURCES = [
     SAFETY_ZONE_SOURCE, RUNWAY_SOURCE, RUNWAY_POLYGON_SOURCE,
     TAXIWAY_SOURCE, TAXIWAY_POLYGON_SOURCE, OBSTACLE_SOURCE,
-    OBSTACLE_RADIUS_SOURCE, AGL_SOURCE, LHA_SOURCE,
+    OBSTACLE_BOUNDARY_SOURCE, OBSTACLE_BUFFER_SOURCE, SURFACE_BUFFER_SOURCE,
+    AGL_SOURCE, LHA_SOURCE,
   ];
 
   function removeInfraLayers(map: maplibregl.Map) {
@@ -1135,6 +1149,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       addSafetyZoneLayers(map, airport.safety_zones);
       addSurfaceLayers(map, airport.surfaces);
       addObstacleLayers(map, airport.obstacles);
+      addBufferZoneLayers(map, airport.obstacles, airport.surfaces);
       addAglLayers(map, airport.surfaces);
       addMeasureLayersToMap(map);
       addHeadingLayersToMap(map);

@@ -213,8 +213,10 @@ def generate_trajectory(
             provider.close()
 
 
-def _generate_trajectory_inner(db: Session, data: MissionData) -> tuple[FlightPlan, list[str]]:
-    """inner trajectory generation - separated for resource cleanup."""
+def _generate_trajectory_inner(
+    db: Session, data: MissionData
+) -> tuple[FlightPlan, list[tuple[str, list[str]]]]:
+    """run phases 2-5 of trajectory generation; outer function handles resource cleanup."""
     mission = data.mission
     drone = data.drone
     default_speed = data.default_speed
@@ -277,6 +279,16 @@ def _generate_trajectory_inner(db: Session, data: MissionData) -> tuple[FlightPl
         )
         if insp_cm is None and tmpl_cm is None and mission.default_capture_mode:
             config.capture_mode = mission.default_capture_mode
+
+        # inject mission-level default buffer distance when neither inspection nor template set it
+        insp_bd = getattr(inspection.config, "buffer_distance", None) if inspection.config else None
+        tmpl_bd = (
+            getattr(template.default_config, "buffer_distance", None)
+            if template.default_config
+            else None
+        )
+        if insp_bd is None and tmpl_bd is None and mission.default_buffer_distance is not None:
+            config.buffer_distance = mission.default_buffer_distance
 
         # generate suggestions for fields using template defaults
         label = f"{template.name} #{inspection.sequence_order}"
@@ -399,7 +411,13 @@ def _generate_trajectory_inner(db: Session, data: MissionData) -> tuple[FlightPl
 
         if obstacle_violations:
             pass_wps = resolve_inspection_collisions(
-                db, pass_wps, data.obstacles, data.safety_zones, center, data.surfaces
+                db,
+                pass_wps,
+                data.obstacles,
+                data.safety_zones,
+                center,
+                data.surfaces,
+                buffer_distance_override=config.buffer_distance,
             )
 
             # re-validate after rerouting
