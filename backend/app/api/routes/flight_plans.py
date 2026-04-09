@@ -3,7 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_operator
+from app.api.dependencies import require_operator
+from app.core.dependencies import get_db
 from app.core.exceptions import DomainError, NotFoundError, TrajectoryGenerationError
 from app.schemas.flight_plan import (
     FlightPlanResponse,

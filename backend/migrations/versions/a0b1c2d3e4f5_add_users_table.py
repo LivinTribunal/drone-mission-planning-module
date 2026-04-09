@@ -55,10 +55,11 @@ def upgrade() -> None:
     )
     op.create_index("ix_user_airports_airport_id", "user_airports", ["airport_id"])
 
-    # db-level updated_at trigger for raw sql updates
+    # db-level updated_at trigger for raw sql updates - namespaced to avoid
+    # clashing with other tables that may define their own set_updated_at()
     op.execute(
         """
-        CREATE OR REPLACE FUNCTION set_updated_at()
+        CREATE OR REPLACE FUNCTION set_users_updated_at()
         RETURNS TRIGGER AS $$
         BEGIN
             NEW.updated_at = now();
@@ -71,7 +72,7 @@ def upgrade() -> None:
         """
         CREATE TRIGGER trg_users_updated_at
         BEFORE UPDATE ON users
-        FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+        FOR EACH ROW EXECUTE FUNCTION set_users_updated_at();
         """
     )
 
@@ -79,7 +80,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """drop users and user_airports tables."""
     op.execute("DROP TRIGGER IF EXISTS trg_users_updated_at ON users")
-    op.execute("DROP FUNCTION IF EXISTS set_updated_at()")
+    op.execute("DROP FUNCTION IF EXISTS set_users_updated_at()")
     op.drop_index("ix_user_airports_airport_id", table_name="user_airports")
     op.drop_table("user_airports")
     op.drop_index("ix_users_email", table_name="users")

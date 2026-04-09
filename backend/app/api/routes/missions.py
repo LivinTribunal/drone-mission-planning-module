@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_airport_ids_for_user, get_db, require_operator
+from app.api.dependencies import get_airport_ids_for_user, require_operator
+from app.core.dependencies import get_db
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.export import ExportRequest
 from app.schemas.mission import (

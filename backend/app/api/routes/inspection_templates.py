@@ -3,7 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_coordinator, require_operator
+from app.api.dependencies import require_coordinator, require_operator
+from app.core.dependencies import get_db
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.inspection_template import (
     InspectionTemplateCreate,

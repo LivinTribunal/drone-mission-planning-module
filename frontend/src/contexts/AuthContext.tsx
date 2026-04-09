@@ -120,6 +120,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await res.json();
+    // sync ref before state so api calls on the navigated-to page see the token
+    accessTokenRef.current = data.access_token;
     setAccessToken(data.access_token);
     setUser(data.user);
     localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);

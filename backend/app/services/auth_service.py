@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -9,7 +10,12 @@ from app.core.config import settings
 from app.models.user import User
 from app.schemas.auth import UserResponse, UserUpdate
 
+logger = logging.getLogger(__name__)
+
 ALGORITHM = "HS256"
+
+# minimum length for a seeded password - matches UserUpdate schema validation
+_MIN_SEED_PASSWORD_LENGTH = 8
 
 # pre-computed bcrypt hash for timing-safe auth - prevents user enumeration
 _DUMMY_HASH = "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"
@@ -136,8 +142,20 @@ def seed_users(db: Session) -> None:
         },
     ]
 
-    # skip entries with no password configured
-    seeds = [s for s in seeds if s["password"]]
+    # skip entries with no password configured, warn and skip short passwords
+    valid_seeds = []
+    for s in seeds:
+        if not s["password"]:
+            continue
+        if len(s["password"]) < _MIN_SEED_PASSWORD_LENGTH:
+            logger.warning(
+                "skipping seed user %s: password shorter than %d chars",
+                s["email"],
+                _MIN_SEED_PASSWORD_LENGTH,
+            )
+            continue
+        valid_seeds.append(s)
+    seeds = valid_seeds
 
     for seed in seeds:
         existing = db.query(User).filter(User.email == seed["email"]).first()

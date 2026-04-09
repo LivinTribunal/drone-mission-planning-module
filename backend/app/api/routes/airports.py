@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import (
     get_airport_ids_for_user,
-    get_db,
     require_coordinator,
     require_operator,
 )
 from app.core.config import TERRAIN_DIR
+from app.core.dependencies import get_db
 from app.core.exceptions import DomainError, NotFoundError
 from app.schemas.airport import (
     AirportCreate,

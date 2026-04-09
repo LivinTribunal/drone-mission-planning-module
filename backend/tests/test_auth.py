@@ -78,7 +78,7 @@ def auth_db_session(auth_db_engine):
 
 @pytest.fixture(scope="module", autouse=True)
 def seed_test_user(auth_db_session):
-    """create test users for auth tests."""
+    """create test users for auth tests - one per role plus an inactive user."""
     user = User(
         id=uuid4(),
         email="testauth@tarmacview.com",
@@ -99,6 +99,28 @@ def seed_test_user(auth_db_session):
         is_active=False,
     )
     auth_db_session.add(inactive_user)
+
+    # coordinator and super_admin users for role hierarchy tests
+    coordinator_user = User(
+        id=uuid4(),
+        email="coordinator@tarmacview.com",
+        hashed_password=hash_password("coordpass123"),
+        name="Coordinator User",
+        role="COORDINATOR",
+        is_active=True,
+    )
+    auth_db_session.add(coordinator_user)
+
+    super_admin_user = User(
+        id=uuid4(),
+        email="superadmin@tarmacview.com",
+        hashed_password=hash_password("adminpass123"),
+        name="Super Admin User",
+        role="SUPER_ADMIN",
+        is_active=True,
+    )
+    auth_db_session.add(super_admin_user)
+
     auth_db_session.commit()
     return user
 
@@ -489,6 +511,101 @@ class TestRoleAccess:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 403
+
+
+class TestRoleHierarchy:
+    """verify role hierarchy - higher roles can access lower-role endpoints."""
+
+    def _login(self, client, email, password):
+        """helper: log in and return access token."""
+        resp = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+        assert resp.status_code == 200
+        return resp.json()["access_token"]
+
+    def test_coordinator_can_access_operator_endpoint(self, auth_client):
+        """coordinator should be able to hit an operator-level endpoint."""
+        token = self._login(auth_client, "coordinator@tarmacview.com", "coordpass123")
+        resp = auth_client.get(
+            "/api/v1/airports",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+
+    def test_super_admin_can_access_operator_endpoint(self, auth_client):
+        """super_admin should be able to hit an operator-level endpoint."""
+        token = self._login(auth_client, "superadmin@tarmacview.com", "adminpass123")
+        resp = auth_client.get(
+            "/api/v1/airports",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+
+    def test_super_admin_can_access_coordinator_endpoint(self, auth_client):
+        """super_admin should bypass coordinator-level gate (status != 403)."""
+        token = self._login(auth_client, "superadmin@tarmacview.com", "adminpass123")
+        resp = auth_client.post(
+            "/api/v1/airports",
+            json={
+                "icao_code": "SUPR",
+                "name": "Super Admin Airport",
+                "elevation": 100.0,
+                "location": {"type": "Point", "coordinates": [0, 0, 100]},
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        # role gate must have passed - accept 201 or validation errors, never 403
+        assert resp.status_code != 403
+
+    def test_coordinator_can_create_airport(self, auth_client):
+        """coordinator should bypass coordinator-level gate (status != 403)."""
+        token = self._login(auth_client, "coordinator@tarmacview.com", "coordpass123")
+        resp = auth_client.post(
+            "/api/v1/airports",
+            json={
+                "icao_code": "COOR",
+                "name": "Coordinator Airport",
+                "elevation": 100.0,
+                "location": {"type": "Point", "coordinates": [0, 0, 100]},
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code != 403
+
+    def test_operator_rejected_by_require_super_admin(self, auth_db_session):
+        """require_super_admin dependency should raise 403 for operator role."""
+        from fastapi import HTTPException
+
+        from app.api.dependencies import require_super_admin
+
+        operator = (
+            auth_db_session.query(User).filter(User.email == "testauth@tarmacview.com").first()
+        )
+        with pytest.raises(HTTPException) as exc:
+            require_super_admin(operator)
+        assert exc.value.status_code == 403
+
+    def test_coordinator_rejected_by_require_super_admin(self, auth_db_session):
+        """require_super_admin dependency should raise 403 for coordinator role."""
+        from fastapi import HTTPException
+
+        from app.api.dependencies import require_super_admin
+
+        coordinator = (
+            auth_db_session.query(User).filter(User.email == "coordinator@tarmacview.com").first()
+        )
+        with pytest.raises(HTTPException) as exc:
+            require_super_admin(coordinator)
+        assert exc.value.status_code == 403
+
+    def test_super_admin_passes_require_super_admin(self, auth_db_session):
+        """require_super_admin dependency should return the user for super_admin role."""
+        from app.api.dependencies import require_super_admin
+
+        super_admin = (
+            auth_db_session.query(User).filter(User.email == "superadmin@tarmacview.com").first()
+        )
+        returned = require_super_admin(super_admin)
+        assert returned.id == super_admin.id
 
 
 # verify_password edge cases

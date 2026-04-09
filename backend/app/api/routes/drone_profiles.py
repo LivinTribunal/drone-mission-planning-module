@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_coordinator, require_operator
+from app.api.dependencies import require_coordinator, require_operator
+from app.core.dependencies import get_db
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.drone_profile import (
     DroneProfileCreate,
