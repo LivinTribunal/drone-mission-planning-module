@@ -21,10 +21,8 @@ SURFACE_PAYLOAD = {
 
 OBSTACLE_PAYLOAD = {
     "name": "Tower",
-    "position": {"type": "Point", "coordinates": [14.262, 50.101, 380]},
     "height": 40.0,
-    "radius": 15.0,
-    "geometry": {
+    "boundary": {
         "type": "Polygon",
         "coordinates": [
             [
@@ -36,6 +34,7 @@ OBSTACLE_PAYLOAD = {
             ]
         ],
     },
+    "buffer_distance": 5.0,
     "type": "TOWER",
 }
 

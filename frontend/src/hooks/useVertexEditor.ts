@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import type maplibregl from "maplibre-gl";
 import type { MapFeature } from "@/types/map";
-import { polygonCentroid, haversineDistance, circleToPolygon, extractCenterline, computeBearing, EARTH_RADIUS } from "@/utils/geo";
+import { polygonCentroid, haversineDistance, extractCenterline, computeBearing, EARTH_RADIUS } from "@/utils/geo";
 import { bufferLineString } from "@/components/map/layers/surfaceLayers";
 import { DEFAULT_TAXIWAY_WIDTH_M } from "@/constants/surface";
 
@@ -23,12 +23,6 @@ interface EditState {
   radius: number;
 }
 
-// obstacle is a circle if it has radius > 0
-function isCircleObstacle(feature: MapFeature): boolean {
-  /** check if a feature is a circle obstacle. */
-  return feature.type === "obstacle" && (feature.data.radius ?? 0) > 0;
-}
-
 function extractEditState(feature: MapFeature): EditState | null {
   /** build edit state from a selected feature. */
   if (feature.type === "safety_zone") {
@@ -39,13 +33,7 @@ function extractEditState(feature: MapFeature): EditState | null {
   }
 
   if (feature.type === "obstacle") {
-    const pos = feature.data.position.coordinates;
-    const center: [number, number] = [pos[0], pos[1]];
-    if (isCircleObstacle(feature)) {
-      return { mode: "circle", corners: [], center, radius: feature.data.radius };
-    }
-    // polygon obstacle
-    const ring = feature.data.geometry.coordinates[0];
+    const ring = feature.data.boundary?.coordinates[0];
     if (!ring || ring.length < 4) return null;
     const corners = ring.slice(0, -1).map(([lng, lat]) => [lng, lat] as [number, number]);
     return { mode: "polygon", corners, center: polygonCentroid(corners), radius: 0 };
@@ -215,8 +203,6 @@ export interface VertexGeometryUpdate {
   geometry: GeoJSON.Geometry;
   boundary?: GeoJSON.Geometry;
   polygon?: GeoJSON.Geometry;
-  position?: { type: "Point"; coordinates: [number, number, number] };
-  radius?: number;
   width?: number;
   length?: number;
   heading?: number;
@@ -299,22 +285,14 @@ export default function useVertexEditor(
         geometry: { type: "Polygon", coordinates: [ring] },
       });
     } else if (feat.type === "obstacle") {
-      const elevation = feat.data.position.coordinates[2] ?? 0;
-      if (st.mode === "circle") {
-        const circleRing = circleToPolygon(st.center, Math.max(st.radius, 1));
-        const ring3d = circleRing.map(([lng, lat]) => [lng, lat, elevation]);
-        onUpdateRef.current(feat.type, feat.data.id, {
-          geometry: { type: "Polygon", coordinates: [ring3d] },
-          position: { type: "Point", coordinates: [st.center[0], st.center[1], elevation] },
-          radius: st.radius,
-        });
-      } else {
-        if (st.corners.length < 3) return;
-        const ring = [...st.corners.map(([lng, lat]) => [lng, lat, elevation]), [st.corners[0][0], st.corners[0][1], elevation]];
-        onUpdateRef.current(feat.type, feat.data.id, {
-          geometry: { type: "Polygon", coordinates: [ring] },
-        });
-      }
+      const elevation = feat.data.boundary?.coordinates[0]?.[0]?.[2] ?? 0;
+      if (st.corners.length < 3) return;
+      const ring = [...st.corners.map(([lng, lat]) => [lng, lat, elevation]), [st.corners[0][0], st.corners[0][1], elevation]];
+      const poly = { type: "Polygon" as const, coordinates: [ring] };
+      onUpdateRef.current(feat.type, feat.data.id, {
+        geometry: poly,
+        boundary: poly,
+      });
     } else if (feat.type === "surface") {
       if (st.corners.length < 3) return;
       const elevation = feat.data.boundary?.coordinates[0]?.[0]?.[2]

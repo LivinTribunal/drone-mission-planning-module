@@ -1,7 +1,7 @@
 from geoalchemy2.elements import WKBElement
 from pydantic import BaseModel, field_validator, model_validator
 
-from app.core.geometry import parse_ewkb as parse_ewkb  # noqa: F401
+from app.core.geometry import parse_ewkb as parse_ewkb
 
 
 class PointZ(BaseModel):

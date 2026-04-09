@@ -365,7 +365,9 @@ class TestAirportAggregate:
     def test_add_obstacle(self):
         """add_obstacle sets airport_id and appends."""
         airport = self._make_airport()
-        obstacle = Obstacle(id=uuid4(), name="tower", height=30.0, radius=5.0, type="TOWER")
+        obstacle = Obstacle(
+            id=uuid4(), name="tower", height=30.0, buffer_distance=5.0, type="TOWER"
+        )
         airport.add_obstacle(obstacle)
         assert obstacle.airport_id == airport.id
         assert len(airport.obstacles) == 1

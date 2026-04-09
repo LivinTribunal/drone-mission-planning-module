@@ -17,6 +17,7 @@ export interface MapLayerConfig {
   obstacles: boolean;
   safetyZones: boolean;
   aglSystems: boolean;
+  bufferZones: boolean;
   simplifiedTrajectory: boolean;
   trajectory: boolean;
   transitWaypoints: boolean;
@@ -171,6 +172,7 @@ export const DEFAULT_LAYER_CONFIG: MapLayerConfig = {
   obstacles: true,
   safetyZones: true,
   aglSystems: true,
+  bufferZones: false,
   simplifiedTrajectory: false,
   trajectory: true,
   transitWaypoints: true,

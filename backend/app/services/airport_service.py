@@ -341,7 +341,26 @@ def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
             .all()
         )
 
-        for entity in [*obstacles, *agls, *lhas]:
+        # renormalize obstacle boundary z-coordinates (outer ring only)
+        for obs in obstacles:
+            try:
+                geojson = parse_ewkb(obs.boundary.data)
+                ring = geojson.get("coordinates", [[]])[0]
+                if not ring:
+                    continue
+                parts = []
+                for c in ring:
+                    lon, lat = c[0], c[1]
+                    ground = provider.get_elevation(lat, lon)
+                    parts.append(f"{lon} {lat} {ground}")
+                wkt_ring = ", ".join(parts)
+                obs.boundary = WKTElement(f"SRID=4326;POLYGONZ(({wkt_ring}))", srid=4326)
+            except Exception as e:
+                logger.warning("skipping renormalization for Obstacle %s: %s", obs.id, e)
+                continue
+
+        # renormalize AGL and LHA position.z
+        for entity in [*agls, *lhas]:
             try:
                 coords = parse_ewkb(entity.position.data).get("coordinates", [])
                 if len(coords) < 3:
@@ -369,15 +388,32 @@ def list_obstacles(db: Session, airport_id: UUID) -> list[Obstacle]:
     return db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
 
 
+def _normalize_boundary_altitude(boundary: dict | None, airport: Airport) -> None:
+    """set all boundary ring z-coordinates to ground elevation."""
+    if not boundary or not boundary.coordinates:
+        return
+    ring = boundary.coordinates[0]
+    if not ring:
+        return
+    provider = create_elevation_provider(airport)
+    try:
+        for j, coord in enumerate(ring):
+            if len(coord) >= 3:
+                ground = provider.get_elevation(coord[1], coord[0])
+                ring[j] = list(coord[:2]) + [ground]
+    finally:
+        if hasattr(provider, "close"):
+            provider.close()
+
+
 def create_obstacle(db: Session, airport_id: UUID, schema: ObstacleCreate) -> Obstacle:
     """create obstacle via airport aggregate root."""
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
         raise NotFoundError("airport not found")
 
-    # normalize position.z to ground elevation at obstacle location
-    if schema.position and schema.position.coordinates:
-        _normalize_position_altitude(schema.position.coordinates, airport)
+    # normalize boundary z-coordinates to ground elevation
+    _normalize_boundary_altitude(schema.boundary, airport)
 
     data = schema_to_model_data(schema)
     obstacle = Obstacle(**data)
@@ -404,9 +440,9 @@ def update_obstacle(
     if not obstacle:
         raise NotFoundError("obstacle not found")
 
-    # normalize position.z to ground elevation when position is updated
-    if schema.position and schema.position.coordinates:
-        _normalize_position_altitude(schema.position.coordinates, airport)
+    # normalize boundary z-coordinates to ground elevation when boundary is updated
+    if schema.boundary and schema.boundary.coordinates:
+        _normalize_boundary_altitude(schema.boundary, airport)
 
     apply_schema_update(obstacle, schema)
     db.commit()

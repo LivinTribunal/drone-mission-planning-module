@@ -121,10 +121,16 @@ class TestApplyDictUpdate:
         assert obj.location == "existing"
 
     def test_none_nullable_geometry_set(self):
-        """none on nullable geometry fields is applied (e.g. boundary, camera_target)."""
+        """none on nullable geometry fields is applied (e.g. camera_target)."""
+        obj = SimpleNamespace(camera_target="existing")
+        apply_dict_update(obj, {"camera_target": None})
+        assert obj.camera_target is None
+
+    def test_none_boundary_skipped(self):
+        """none on non-nullable boundary field is skipped to protect constraints."""
         obj = SimpleNamespace(boundary="existing")
         apply_dict_update(obj, {"boundary": None})
-        assert obj.boundary is None
+        assert obj.boundary == "existing"
 
     def test_non_geometry_field_set_directly(self):
         """non-geometry fields are set without conversion."""

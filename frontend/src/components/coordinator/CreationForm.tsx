@@ -73,7 +73,6 @@ const OBSTACLE_SUBTYPES: { value: string; labelKey: string }[] = [
 
 export default function CreationForm({
   geometryType,
-  circleRadius,
   circleCenter,
   pointPosition,
   surfaces,
@@ -101,7 +100,7 @@ export default function CreationForm({
   const [isActive, setIsActive] = useState(true);
   const [obstacleType, setObstacleType] = useState("BUILDING");
   const [obstacleHeight, setObstacleHeight] = useState("");
-  const [bufferRadius, setBufferRadius] = useState(circleRadius != null ? String(Math.round(circleRadius)) : "0");
+  const [bufferDistance, setBufferDistance] = useState("5");
   const [aglType] = useState("PAPI");
   const [aglSide, setAglSide] = useState("LEFT");
   const [glideSlopeAngle, setGlideSlopeAngle] = useState("3.0");
@@ -178,7 +177,7 @@ export default function CreationForm({
       if (effectiveEntityType === "obstacle") {
         data.type = obstacleType;
         if (obstacleHeight) data.height = parseFloat(obstacleHeight);
-        data.radius = bufferRadius ? parseFloat(bufferRadius) : 0;
+        data.buffer_distance = bufferDistance ? parseFloat(bufferDistance) : 5.0;
         if (circleCenter) data.center = circleCenter;
         else if (pointPosition) data.center = pointPosition;
       }
@@ -440,11 +439,11 @@ export default function CreationForm({
                     onChange={(e) => setObstacleHeight(e.target.value)}
                   />
                   <Input
-                    id="create-radius"
-                    label={t("coordinator.creation.bufferRadius")}
+                    id="create-buffer-distance"
+                    label={t("coordinator.creation.bufferDistance")}
                     type="number"
-                    value={bufferRadius}
-                    onChange={(e) => setBufferRadius(e.target.value)}
+                    value={bufferDistance}
+                    onChange={(e) => setBufferDistance(e.target.value)}
                   />
                 </div>
                 {(circleCenter || pointPosition) && (
