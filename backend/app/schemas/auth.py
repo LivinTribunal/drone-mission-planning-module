@@ -4,8 +4,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.enums import UserRole
-
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -51,7 +49,7 @@ class UserResponse(BaseModel):
     id: UUID
     email: str
     name: str
-    role: UserRole
+    role: str
     assigned_airport_ids: list[UUID]
     is_active: bool
     created_at: datetime
