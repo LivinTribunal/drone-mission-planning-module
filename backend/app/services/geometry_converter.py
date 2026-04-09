@@ -19,9 +19,6 @@ GEOM_FIELDS = {
     "boundary",
 }
 
-# geometry fields that are NOT NULL in the database - never set these to None
-NON_NULLABLE_GEOM_FIELDS = {"location", "geometry", "boundary"}
-
 # transport-only schema fields that must never be written to the model
 TRANSPORT_ONLY_FIELDS = {"preserve_altitude"}
 
@@ -79,13 +76,27 @@ def apply_schema_update(obj, schema: BaseModel):
 
 
 def apply_dict_update(obj, data: dict):
-    """apply dict to ORM model, converting geometry fields to WKTElement."""
+    """apply dict to ORM model, converting geometry fields to WKTElement.
+
+    explicit None on a non-nullable geometry column is dropped (treated as
+    'no change') so PATCH-style updates do not have to know which fields
+    are required at the db level.
+    """
+    table = obj.__table__
     for key, val in data.items():
         if key in GEOM_FIELDS:
             if val is not None:
                 setattr(obj, key, WKTElement(geojson_to_ewkt(val), srid=4326))
-            elif key not in NON_NULLABLE_GEOM_FIELDS:
+            elif _is_column_nullable(table, key):
                 setattr(obj, key, None)
-            # skip None for non-nullable geometry fields
+            # else: skip None for non-nullable geometry columns
         else:
             setattr(obj, key, val)
+
+
+def _is_column_nullable(table, key: str) -> bool:
+    """check if an ORM table column is nullable, defaults to True if unknown."""
+    column = table.columns.get(key)
+    if column is None:
+        return True
+    return bool(column.nullable)

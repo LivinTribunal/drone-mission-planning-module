@@ -669,6 +669,63 @@ def test_update_agl_preserve_altitude(client):
     assert body["position"]["coordinates"][2] == explicit_alt
 
 
+def test_update_surface_clear_boundary(client):
+    """PUT with boundary=null on a surface clears the polygon (was silently ignored before)."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZBN"},
+    ).json()
+
+    with_boundary = {
+        **SURFACE_PAYLOAD,
+        "boundary": {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [14.24, 50.10, 380],
+                    [14.27, 50.10, 380],
+                    [14.27, 50.09, 380],
+                    [14.24, 50.09, 380],
+                    [14.24, 50.10, 380],
+                ]
+            ],
+        },
+    }
+    surface = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=with_boundary).json()
+    assert surface["boundary"] is not None
+
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}",
+        json={"boundary": None},
+    )
+    assert r.status_code == 200
+    assert r.json()["boundary"] is None
+
+
+def test_create_surface_invalid_type_returns_422(client):
+    """invalid surface_type fails at the schema layer with 422, not 500."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZIT"},
+    ).json()
+
+    bad = {**SURFACE_PAYLOAD, "surface_type": "BOGUS"}
+    r = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=bad)
+    assert r.status_code == 422
+
+
+def test_create_obstacle_invalid_type_returns_422(client):
+    """invalid obstacle type fails at the schema layer with 422, not 500."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZIO"},
+    ).json()
+
+    bad = {**OBSTACLE_PAYLOAD, "type": "BOGUS"}
+    r = client.post(f"/api/v1/airports/{apt['id']}/obstacles", json=bad)
+    assert r.status_code == 422
+
+
 def test_update_lha_preserve_altitude(client):
     """preserve_altitude=True skips position z-normalization on lha update."""
     apt = client.post(

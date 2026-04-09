@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -5,13 +6,21 @@ from pydantic import BaseModel, Field
 from app.schemas.common import ListMeta
 from app.schemas.geometry import LineStringZ, PointZ, PolygonZ
 
+# enum-bounded string aliases - mirror the db check constraints so invalid
+# values fail with a clean 422 instead of a 500 IntegrityError at commit
+SurfaceTypeStr = Literal["RUNWAY", "TAXIWAY"]
+ObstacleTypeStr = Literal["BUILDING", "TOWER", "ANTENNA", "VEGETATION", "OTHER"]
+SafetyZoneTypeStr = Literal["CTR", "RESTRICTED", "PROHIBITED", "TEMPORARY_NO_FLY"]
+LampTypeStr = Literal["HALOGEN", "LED"]
+PAPISideStr = Literal["LEFT", "RIGHT"]
+
 
 # surfaces for airport
 class SurfaceCreate(BaseModel):
     """surface create schema"""
 
     identifier: str
-    surface_type: str
+    surface_type: SurfaceTypeStr
     geometry: LineStringZ
     boundary: PolygonZ | None = None
     buffer_distance: float = Field(default=5.0, ge=0)  # 0 = use raw boundary, no expansion
@@ -42,7 +51,7 @@ class SurfaceResponse(BaseModel):
     id: UUID
     airport_id: UUID
     identifier: str
-    surface_type: str
+    surface_type: SurfaceTypeStr
     geometry: LineStringZ
     boundary: PolygonZ | None = None
     buffer_distance: float = 5.0
@@ -64,7 +73,7 @@ class ObstacleCreate(BaseModel):
     height: float
     boundary: PolygonZ
     buffer_distance: float = Field(default=5.0, ge=0)  # 0 = use raw boundary, no expansion
-    type: str
+    type: ObstacleTypeStr
 
 
 class ObstacleUpdate(BaseModel):
@@ -74,7 +83,7 @@ class ObstacleUpdate(BaseModel):
     height: float | None = None
     boundary: PolygonZ | None = None
     buffer_distance: float | None = Field(default=None, ge=0)
-    type: str | None = None
+    type: ObstacleTypeStr | None = None
     # transport-only flag - skip ground-altitude renormalization on this update
     preserve_altitude: bool = False
 
@@ -88,7 +97,7 @@ class ObstacleResponse(BaseModel):
     height: float
     boundary: PolygonZ
     buffer_distance: float
-    type: str
+    type: ObstacleTypeStr
 
     model_config = {"from_attributes": True}
 
@@ -98,7 +107,7 @@ class SafetyZoneCreate(BaseModel):
     """safety zone create schema"""
 
     name: str
-    type: str
+    type: SafetyZoneTypeStr
     geometry: PolygonZ
     altitude_floor: float | None = None
     altitude_ceiling: float | None = None
@@ -109,7 +118,7 @@ class SafetyZoneUpdate(BaseModel):
     """safety zone update schema"""
 
     name: str | None = None
-    type: str | None = None
+    type: SafetyZoneTypeStr | None = None
     geometry: PolygonZ | None = None
     altitude_floor: float | None = None
     altitude_ceiling: float | None = None
@@ -122,7 +131,7 @@ class SafetyZoneResponse(BaseModel):
     id: UUID
     airport_id: UUID
     name: str
-    type: str
+    type: SafetyZoneTypeStr
     geometry: PolygonZ
     altitude_floor: float | None = None
     altitude_ceiling: float | None = None
@@ -138,7 +147,7 @@ class LHACreate(BaseModel):
     unit_number: int
     setting_angle: float
     transition_sector_width: float | None = None
-    lamp_type: str
+    lamp_type: LampTypeStr
     position: PointZ
 
 
@@ -148,7 +157,7 @@ class LHAUpdate(BaseModel):
     unit_number: int | None = None
     setting_angle: float | None = None
     transition_sector_width: float | None = None
-    lamp_type: str | None = None
+    lamp_type: LampTypeStr | None = None
     position: PointZ | None = None
     # transport-only flag - skip ground-altitude renormalization on this update
     preserve_altitude: bool = False
@@ -162,7 +171,7 @@ class LHAResponse(BaseModel):
     unit_number: int
     setting_angle: float
     transition_sector_width: float | None = None
-    lamp_type: str
+    lamp_type: LampTypeStr
     position: PointZ
 
     model_config = {"from_attributes": True}
@@ -174,7 +183,7 @@ class AGLCreate(BaseModel):
     agl_type: str
     name: str
     position: PointZ
-    side: str | None = None
+    side: PAPISideStr | None = None
     glide_slope_angle: float | None = None
     distance_from_threshold: float | None = None
     offset_from_centerline: float | None = None
@@ -186,7 +195,7 @@ class AGLUpdate(BaseModel):
     agl_type: str | None = None
     name: str | None = None
     position: PointZ | None = None
-    side: str | None = None
+    side: PAPISideStr | None = None
     glide_slope_angle: float | None = None
     distance_from_threshold: float | None = None
     offset_from_centerline: float | None = None
@@ -202,7 +211,7 @@ class AGLResponse(BaseModel):
     agl_type: str
     name: str
     position: PointZ
-    side: str | None = None
+    side: PAPISideStr | None = None
     glide_slope_angle: float | None = None
     distance_from_threshold: float | None = None
     offset_from_centerline: float | None = None

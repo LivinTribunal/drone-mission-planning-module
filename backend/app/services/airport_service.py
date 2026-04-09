@@ -14,7 +14,6 @@ from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.enums import MissionStatus
 from app.models.mission import DroneProfile, Mission
-from app.models.value_objects import IcaoCode
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
 from app.schemas.geometry import PolygonZ, parse_ewkb
 from app.schemas.infrastructure import (
@@ -114,12 +113,7 @@ def get_airport(db: Session, airport_id: UUID) -> Airport:
 
 
 def create_airport(db: Session, schema: AirportCreate) -> Airport:
-    """create airport with ICAO code validation."""
-    try:
-        IcaoCode(schema.icao_code)
-    except ValueError as e:
-        raise DomainError(str(e))
-
+    """create airport - icao validation happens at the schema layer."""
     airport = Airport(**schema_to_model_data(schema))
     db.add(airport)
     db.commit()

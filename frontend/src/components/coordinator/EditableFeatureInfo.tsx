@@ -40,9 +40,12 @@ export default function EditableFeatureInfo({
 }: EditableFeatureInfoProps) {
   /** editable feature info panel for selected map features. */
   const { t } = useTranslation();
-  const [formData, setFormData] = useState<Record<string, unknown>>(
-    feature.data as unknown as Record<string, unknown>,
-  );
+  // form state is intentionally loose - it collects partial edits that get
+  // pushed to onUpdate, but the source data is always one of the typed
+  // response shapes from MapFeature
+  const [formData, setFormData] = useState<Record<string, unknown>>(() => ({
+    ...feature.data,
+  }));
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [recalcPreview, setRecalcPreview] = useState<RecalcPreview | null>(null);
@@ -50,7 +53,7 @@ export default function EditableFeatureInfo({
   const [recalcError, setRecalcError] = useState<string | null>(null);
 
   useEffect(() => {
-    setFormData(feature.data as unknown as Record<string, unknown>);
+    setFormData({ ...feature.data });
     setRecalcPreview(null);
     setRecalcError(null);
     setDeleteError(null);
@@ -489,7 +492,7 @@ function PointCoordEditor({
     if (isNaN(v)) return;
     if (field === "lat" && (v < -90 || v > 90)) return;
     if (field === "lon" && (v < -180 || v > 180)) return;
-    if (field === "alt" && v < 0) return;
+    // altitude is MSL, can be negative for sub-sea-level airports
     const newLat = field === "lat" ? v : lat;
     const newLon = field === "lon" ? v : lon;
     const newAlt = field === "alt" ? v : alt;
