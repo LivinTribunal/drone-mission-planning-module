@@ -135,14 +135,6 @@ export async function listSurfaces(
   return res.data;
 }
 
-export async function getSurface(
-  airportId: string,
-  id: string,
-): Promise<SurfaceResponse> {
-  const res = await client.get(`/airports/${airportId}/surfaces/${id}`);
-  return res.data;
-}
-
 export async function createSurface(
   airportId: string,
   data: SurfaceCreate,
@@ -184,14 +176,6 @@ export async function listObstacles(
   airportId: string,
 ): Promise<{ data: ObstacleResponse[]; meta: ListMeta }> {
   const res = await client.get(`/airports/${airportId}/obstacles`);
-  return res.data;
-}
-
-export async function getObstacle(
-  airportId: string,
-  id: string,
-): Promise<ObstacleResponse> {
-  const res = await client.get(`/airports/${airportId}/obstacles/${id}`);
   return res.data;
 }
 
@@ -239,14 +223,6 @@ export async function listSafetyZones(
   return res.data;
 }
 
-export async function getSafetyZone(
-  airportId: string,
-  id: string,
-): Promise<SafetyZoneResponse> {
-  const res = await client.get(`/airports/${airportId}/safety-zones/${id}`);
-  return res.data;
-}
-
 export async function createSafetyZone(
   airportId: string,
   data: SafetyZoneCreate,
@@ -283,17 +259,6 @@ export async function listAGLs(
 ): Promise<{ data: AGLResponse[]; meta: ListMeta }> {
   const res = await client.get(
     `/airports/${airportId}/surfaces/${surfaceId}/agls`,
-  );
-  return res.data;
-}
-
-export async function getAGL(
-  airportId: string,
-  surfaceId: string,
-  id: string,
-): Promise<AGLResponse> {
-  const res = await client.get(
-    `/airports/${airportId}/surfaces/${surfaceId}/agls/${id}`,
   );
   return res.data;
 }
@@ -343,18 +308,6 @@ export async function listLHAs(
 ): Promise<{ data: LHAResponse[]; meta: ListMeta }> {
   const res = await client.get(
     `/airports/${airportId}/surfaces/${surfaceId}/agls/${aglId}/lhas`,
-  );
-  return res.data;
-}
-
-export async function getLHA(
-  airportId: string,
-  surfaceId: string,
-  aglId: string,
-  id: string,
-): Promise<LHAResponse> {
-  const res = await client.get(
-    `/airports/${airportId}/surfaces/${surfaceId}/agls/${aglId}/lhas/${id}`,
   );
   return res.data;
 }

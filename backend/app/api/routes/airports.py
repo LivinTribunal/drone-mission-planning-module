@@ -230,7 +230,10 @@ def delete_terrain_dem(airport_id: UUID, db: Session = Depends(get_db)):
     airport_service.delete_terrain_dem(db, airport_id)
 
     if old_dem_path and os.path.exists(old_dem_path):
-        os.unlink(old_dem_path)
+        try:
+            os.unlink(old_dem_path)
+        except OSError:
+            logger.warning("failed to unlink old DEM file: %s", old_dem_path)
 
     return DeleteResponse(deleted=True)
 

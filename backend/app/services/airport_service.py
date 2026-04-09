@@ -16,7 +16,7 @@ from app.models.enums import MissionStatus
 from app.models.mission import DroneProfile, Mission
 from app.models.value_objects import IcaoCode
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
-from app.schemas.geometry import parse_ewkb
+from app.schemas.geometry import PolygonZ, parse_ewkb
 from app.schemas.infrastructure import (
     AGLCreate,
     AGLUpdate,
@@ -408,7 +408,7 @@ def list_obstacles(db: Session, airport_id: UUID) -> list[Obstacle]:
     return db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
 
 
-def _normalize_boundary_altitude(boundary: dict | None, airport: Airport) -> None:
+def _normalize_boundary_altitude(boundary: PolygonZ | None, airport: Airport) -> None:
     """set all boundary ring z-coordinates to ground elevation."""
     if not boundary or not boundary.coordinates:
         return

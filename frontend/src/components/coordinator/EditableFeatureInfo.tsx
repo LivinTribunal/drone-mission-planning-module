@@ -69,8 +69,13 @@ export default function EditableFeatureInfo({
         const data = await recalculateObstacle(airportId, String(formData.id));
         setRecalcPreview({ kind: "obstacle", data });
       }
-    } catch {
-      setRecalcError(t("coordinator.detail.recalculateError"));
+    } catch (err) {
+      console.error("recalculate failed", err);
+      setRecalcError(
+        err instanceof Error && err.message
+          ? err.message
+          : t("coordinator.detail.recalculateError"),
+      );
     } finally {
       setRecalcLoading(false);
     }
