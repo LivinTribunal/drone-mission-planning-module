@@ -240,12 +240,11 @@ export default function AirportEditPage() {
   const handleVertexGeometryUpdate = useCallback(
     (featureType: string, featureId: string, update: VertexGeometryUpdate) => {
       /** handle geometry update from vertex editor - mark dirty and update map preview. */
-      // only include api-safe fields in dirty data (exclude `polygon` which is preview-only)
+      // only persist geometry + boundary from vertex drags. length/width/heading
+      // are user-facing metadata and should not get silently overwritten - use
+      // the "recalculate dimensions" button to sync them from geometry on demand.
       const dirtyData: Record<string, unknown> = { geometry: update.geometry };
       if (update.boundary) dirtyData.boundary = update.boundary;
-      if (update.width != null) dirtyData.width = update.width;
-      if (update.length != null) dirtyData.length = update.length;
-      if (update.heading != null) dirtyData.heading = update.heading;
       markDirty(featureType, featureId, "update", dirtyData);
 
       // live preview: update map source so the shape moves with the vertices
@@ -385,19 +384,29 @@ export default function AirportEditPage() {
             drawnWidth = (d01 + haversineDistance(pts[2][0], pts[2][1], pts[3][0], pts[3][1])) / 2;
           }
         }
-        const dLng = centerline[1][0] - centerline[0][0];
-        const dLat = centerline[1][1] - centerline[0][1];
-        const drawnHeading = ((Math.atan2(dLng, dLat) * 180) / Math.PI + 360) % 360;
+        // geographic bearing - naive atan2 on lng/lat deltas is off by several
+        // degrees at non-equatorial latitudes
+        const drawnHeading = computeBearing(
+          centerline[0][0], centerline[0][1], centerline[1][0], centerline[1][1],
+        );
 
-        const computedWidth = drawnWidth != null ? Math.round(drawnWidth * 100) / 100 : undefined;
+        // prefer user-entered form values over the derived ones
+        const formHeading = typeof data.heading === "number" ? data.heading : undefined;
+        const formLength = typeof data.length === "number" ? data.length : undefined;
+        const formWidth = typeof data.width === "number" ? data.width : undefined;
+
+        const roundedDrawnWidth = drawnWidth != null ? Math.round(drawnWidth * 100) / 100 : undefined;
+        const roundedDrawnLength = drawnLength != null ? Math.round(drawnLength * 100) / 100 : undefined;
+        const roundedDrawnHeading = Math.round(drawnHeading * 10) / 10;
+
         await createSurface(id, {
           identifier: String(data.name ?? ""),
           surface_type: entityType === "runway" ? "RUNWAY" : "TAXIWAY",
           geometry: { type: "LineString", coordinates: geomCoords },
           boundary: { type: "Polygon", coordinates: boundaryCoords },
-          heading: drawnHeading != null ? Math.round(drawnHeading * 10) / 10 : undefined,
-          length: drawnLength != null ? Math.round(drawnLength * 100) / 100 : undefined,
-          width: entityType === "runway" ? computedWidth : undefined,
+          heading: formHeading ?? roundedDrawnHeading,
+          length: formLength ?? roundedDrawnLength,
+          width: entityType === "runway" ? (formWidth ?? roundedDrawnWidth) : undefined,
         });
       } else if (entityType.startsWith("safety_zone_")) {
         if (!pendingGeometry) throw new Error("missing geometry");
@@ -675,8 +684,10 @@ export default function AirportEditPage() {
       try {
         await deleteAGL(id, surface.id, aglId);
         await fetchAirport();
-      } catch {
+      } catch (e) {
         setDeleteError(true);
+        // re-throw so the calling dialog can surface the error inline
+        throw e;
       }
     },
     [id, airport, fetchAirport],

@@ -9,7 +9,7 @@ import type { MapFeature } from "@/types/map";
 interface CoordinatorAGLPanelProps {
   surfaces: SurfaceResponse[];
   onItemClick: (feature: MapFeature) => void;
-  onDeleteAgl: (id: string) => void;
+  onDeleteAgl: (id: string) => Promise<void>;
   onAdd?: () => void;
 }
 
@@ -24,6 +24,7 @@ export default function CoordinatorAGLPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [expandedAgls, setExpandedAgls] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<AGLResponse | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const allAgls = surfaces.flatMap((s) => s.agls);
   const count = allAgls.length;
@@ -208,13 +209,25 @@ export default function CoordinatorAGLPanel({
       <ConfirmDeleteDialog
         isOpen={deleteTarget !== null}
         name={deleteTarget?.name ?? ""}
-        onConfirm={() => {
-          if (deleteTarget) {
-            onDeleteAgl(deleteTarget.id);
+        error={deleteError}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          setDeleteError(null);
+          try {
+            await onDeleteAgl(deleteTarget.id);
             setDeleteTarget(null);
+          } catch (err) {
+            setDeleteError(
+              err instanceof Error && err.message
+                ? err.message
+                : t("coordinator.detail.deleteError"),
+            );
           }
         }}
-        onCancel={() => setDeleteTarget(null)}
+        onCancel={() => {
+          setDeleteError(null);
+          setDeleteTarget(null);
+        }}
       />
     </>
   );

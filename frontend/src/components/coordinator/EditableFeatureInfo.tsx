@@ -196,6 +196,13 @@ export default function EditableFeatureInfo({
                 onChange={(e) => handleChange("width", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
             </div>
+            <Input
+              id="feat-surface-buffer"
+              label={t("coordinator.detail.bufferDistance")}
+              type="number"
+              value={val("buffer_distance")}
+              onChange={(e) => handleChange("buffer_distance", e.target.value === "" ? null : parseFloat(e.target.value))}
+            />
             {airportId && (
               <RecalculateBlock
                 loading={recalcLoading}

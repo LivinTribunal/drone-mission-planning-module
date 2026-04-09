@@ -147,7 +147,8 @@ export interface SurfaceCreate {
 export interface SurfaceUpdate {
   identifier?: string;
   geometry?: LineStringZ;
-  boundary?: PolygonZ;
+  // null clears the polygon boundary on the backend; undefined leaves it untouched
+  boundary?: PolygonZ | null;
   buffer_distance?: number;
   heading?: number | null;
   length?: number | null;

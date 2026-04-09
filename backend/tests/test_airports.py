@@ -726,6 +726,43 @@ def test_create_obstacle_invalid_type_returns_422(client):
     assert r.status_code == 422
 
 
+def test_negative_buffer_distance_rejected(client):
+    """ge=0 constraint on buffer_distance must reject negatives at the schema layer."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZBD"},
+    ).json()
+
+    # surface create
+    bad_surface = {**SURFACE_PAYLOAD, "buffer_distance": -1.0}
+    r = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=bad_surface)
+    assert r.status_code == 422
+
+    # obstacle create
+    bad_obstacle = {**OBSTACLE_PAYLOAD, "buffer_distance": -2.5}
+    r = client.post(f"/api/v1/airports/{apt['id']}/obstacles", json=bad_obstacle)
+    assert r.status_code == 422
+
+    # surface update - need a valid surface first
+    surface = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD).json()
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}",
+        json={"buffer_distance": -3.0},
+    )
+    assert r.status_code == 422
+
+    # mission default_buffer_distance
+    r = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "BadBuffer",
+            "airport_id": apt["id"],
+            "default_buffer_distance": -4.0,
+        },
+    )
+    assert r.status_code == 422
+
+
 def test_update_lha_preserve_altitude(client):
     """preserve_altitude=True skips position z-normalization on lha update."""
     apt = client.post(

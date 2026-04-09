@@ -330,11 +330,18 @@ def _normalize_position_altitude(position_coords: list[float], airport: Airport)
             provider.close()
 
 
-def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
-    """re-normalize all position.z values for obstacles, agls, and lhas at airport."""
+def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> dict[str, list[UUID]]:
+    """re-normalize all position.z values for obstacles, agls, and lhas at airport.
+
+    returns a dict of skipped entity ids per type so callers can surface partial
+    failures - per-item errors are logged and the loop continues so one bad
+    geometry does not block the rest of the airport.
+    """
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
         raise NotFoundError("airport not found")
+
+    skipped: dict[str, list[UUID]] = {"obstacles": [], "agls": [], "lhas": []}
 
     provider = create_elevation_provider(airport)
     try:
@@ -371,10 +378,12 @@ def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
                 obs.boundary = WKTElement(f"SRID=4326;POLYGONZ(({wkt_ring}))", srid=4326)
             except Exception as e:
                 logger.warning("skipping renormalization for Obstacle %s: %s", obs.id, e)
+                skipped["obstacles"].append(obs.id)
                 continue
 
         # renormalize AGL and LHA position.z
         for entity in [*agls, *lhas]:
+            bucket = "agls" if isinstance(entity, AGL) else "lhas"
             try:
                 coords = parse_ewkb(entity.position.data).get("coordinates", [])
                 if len(coords) < 3:
@@ -389,9 +398,19 @@ def renormalize_airport_altitudes(db: Session, airport_id: UUID) -> None:
                     entity.id,
                     e,
                 )
+                skipped[bucket].append(entity.id)
                 continue
 
         db.commit()
+
+        if any(skipped.values()):
+            logger.warning(
+                "renormalize_airport_altitudes for %s left partial state: %s",
+                airport_id,
+                {k: len(v) for k, v in skipped.items() if v},
+            )
+
+        return skipped
     finally:
         if hasattr(provider, "close"):
             provider.close()
@@ -490,6 +509,8 @@ def recalculate_obstacle_dimensions(db: Session, airport_id: UUID, obstacle_id: 
         raise NotFoundError("obstacle not found")
 
     recalculated = obstacle.recalculate_dimensions()
+    # obstacles have no stored length/width/heading/radius columns - all dimensions
+    # are derived from the boundary polygon, so "current" is always None
     return {
         "current": {
             "length": None,
