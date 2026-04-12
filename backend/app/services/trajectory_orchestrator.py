@@ -526,7 +526,7 @@ def _generate_trajectory_inner(
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
         # note: uses per-pass speed for battery estimate; final duration uses per-waypoint speed
-        seg_dur = seg_dist / max(speed, MIN_SPEED_FLOOR)
+        seg_dur = seg_dist / max(speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
 
         for wp in pass_wps:
             if wp.hover_duration is not None:

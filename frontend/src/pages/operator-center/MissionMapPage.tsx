@@ -280,7 +280,7 @@ export default function MissionMapPage() {
       showNotification(t("map.changesSaved"));
     } catch (err) {
       if (isAxiosError(err) && err.response?.data?.detail) {
-        const detail = err.response.data.detail;
+        const detail = err.response?.data?.detail;
         showNotification(typeof detail === "string" ? detail : t("mission.config.trajectoryError"));
       } else {
         showNotification(t("mission.config.trajectoryError"));

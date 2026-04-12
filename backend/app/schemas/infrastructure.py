@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.common import ListMeta
 from app.schemas.geometry import LineStringZ, PointZ, PolygonZ
@@ -24,7 +24,7 @@ class SurfaceCreate(BaseModel):
     geometry: LineStringZ
     boundary: PolygonZ | None = None
     buffer_distance: float = Field(default=5.0, ge=0)  # 0 = use raw boundary, no expansion
-    heading: float | None = None
+    heading: float | None = Field(default=None, ge=0, lt=360)
     length: float | None = None
     width: float | None = None
     threshold_position: PointZ | None = None
@@ -38,7 +38,7 @@ class SurfaceUpdate(BaseModel):
     geometry: LineStringZ | None = None
     boundary: PolygonZ | None = None
     buffer_distance: float | None = Field(default=None, ge=0)
-    heading: float | None = None
+    heading: float | None = Field(default=None, ge=0, lt=360)
     length: float | None = None
     width: float | None = None
     threshold_position: PointZ | None = None
@@ -113,6 +113,17 @@ class SafetyZoneCreate(BaseModel):
     altitude_ceiling: float | None = None
     is_active: bool = True
 
+    @model_validator(mode="after")
+    def _validate_altitude_range(self) -> "SafetyZoneCreate":
+        """reject inverted altitude envelopes before they reach the db."""
+        if (
+            self.altitude_floor is not None
+            and self.altitude_ceiling is not None
+            and self.altitude_floor > self.altitude_ceiling
+        ):
+            raise ValueError("altitude_floor must be <= altitude_ceiling")
+        return self
+
 
 class SafetyZoneUpdate(BaseModel):
     """safety zone update schema"""
@@ -123,6 +134,17 @@ class SafetyZoneUpdate(BaseModel):
     altitude_floor: float | None = None
     altitude_ceiling: float | None = None
     is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def _validate_altitude_range(self) -> "SafetyZoneUpdate":
+        """reject inverted altitude envelopes before they reach the db."""
+        if (
+            self.altitude_floor is not None
+            and self.altitude_ceiling is not None
+            and self.altitude_floor > self.altitude_ceiling
+        ):
+            raise ValueError("altitude_floor must be <= altitude_ceiling")
+        return self
 
 
 class SafetyZoneResponse(BaseModel):
