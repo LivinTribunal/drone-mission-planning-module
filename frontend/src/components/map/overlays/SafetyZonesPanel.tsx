@@ -58,7 +58,7 @@ export default function SafetyZonesPanel({
       </button>
 
       {!collapsed && (
-        <div className="border-t border-tv-border">
+        <div className="border-t border-tv-border max-h-60 overflow-y-auto">
           {count === 0 ? (
             <p className="px-3 py-3 text-sm italic text-tv-text-muted text-center">
               {t("airport.noSafetyZones")}

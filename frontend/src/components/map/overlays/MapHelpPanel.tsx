@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-export default function MapHelpPanel() {
+export type MapHelpVariant = "full" | "preview";
+
+interface MapHelpPanelProps {
+  variant?: MapHelpVariant;
+}
+
+export default function MapHelpPanel({ variant = "full" }: MapHelpPanelProps) {
+  /** context-aware map controls help panel - shows relevant shortcuts per map type. */
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -31,7 +38,14 @@ export default function MapHelpPanel() {
     );
   }
 
-  const shortcuts = [
+  // preview maps - minimal controls
+  const previewShortcuts = [
+    { key: t("map.help.middleMouse"), desc: t("map.help.shortcutTilt") },
+    { key: t("map.help.scroll"), desc: t("map.help.shortcutScroll") },
+  ];
+
+  // full editor maps - all controls including waypoint editing
+  const fullShortcuts = [
     { key: "S", desc: t("map.help.shortcutSelect") },
     { key: "P", desc: t("map.help.shortcutPan") },
     { key: "W", desc: t("map.help.shortcutMove") },
@@ -46,13 +60,22 @@ export default function MapHelpPanel() {
     { key: t("map.help.scroll"), desc: t("map.help.shortcutScroll") },
   ];
 
-  const tools = [
+  const previewTools = [
+    { name: t("map.tools.select"), desc: t("map.help.descSelect") },
+    { name: t("map.tools.pan"), desc: t("map.help.descPan") },
+    { name: t("map.tools.zoom"), desc: t("map.help.descZoom") },
+  ];
+
+  const fullTools = [
     { name: t("map.tools.select"), desc: t("map.help.descSelect") },
     { name: t("map.tools.pan"), desc: t("map.help.descPan") },
     { name: t("map.tools.moveWaypoint"), desc: t("map.help.descMove") },
     { name: t("map.tools.measure"), desc: t("map.help.descMeasure") },
     { name: t("map.tools.zoom"), desc: t("map.help.descZoom") },
   ];
+
+  const shortcuts = variant === "preview" ? previewShortcuts : fullShortcuts;
+  const tools = variant === "preview" ? previewTools : fullTools;
 
   return (
     <div

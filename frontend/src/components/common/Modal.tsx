@@ -8,6 +8,15 @@ interface ModalProps {
   children: ReactNode;
 }
 
+/** detect role class from the closest layout ancestor so portaled modals inherit accent colors. */
+function detectRoleClass(): string {
+  const el = document.querySelector(".role-coordinator, .role-admin");
+  if (!el) return "";
+  if (el.classList.contains("role-coordinator")) return "role-coordinator";
+  if (el.classList.contains("role-admin")) return "role-admin";
+  return "";
+}
+
 export default function Modal({ isOpen, onClose, title, children }: ModalProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -32,7 +41,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${detectRoleClass()}`}
       onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"

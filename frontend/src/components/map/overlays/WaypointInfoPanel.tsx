@@ -66,6 +66,9 @@ export default function WaypointInfoPanel({
           ? `${waypoint.gimbal_pitch.toFixed(1)}°`
           : "\u2014",
     },
+    ...(waypoint.hover_duration != null
+      ? [{ label: t("mission.config.hoverDuration"), value: `${waypoint.hover_duration}s` }]
+      : []),
   ];
 
   return (

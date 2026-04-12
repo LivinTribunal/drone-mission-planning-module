@@ -35,6 +35,7 @@ const baseSurface: SurfaceResponse = {
 const defaultProps = {
   geometryType: "point" as const,
   surfaces: [baseSurface],
+  pointPosition: [14.26, 50.1] as [number, number],
   onCancel: vi.fn(),
   onCreate: vi.fn().mockResolvedValue(undefined),
 };

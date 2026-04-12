@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -25,6 +25,8 @@ import StatsPanel from "@/components/mission/StatsPanel";
 import ExportPanel from "@/components/mission/ExportPanel";
 import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
+import PoiInfoPanel from "@/components/map/overlays/PoiInfoPanel";
+import type { MapFeature } from "@/types/map";
 
 export default function MissionValidationPage() {
   const { id } = useParams<{ id: string }>();
@@ -48,6 +50,14 @@ export default function MissionValidationPage() {
   );
   const [is3D, setIs3D] = useState(false);
   const [selectedWarning, setSelectedWarning] = useState<ValidationViolation | null>(null);
+  const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
+  const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
+
+  const inspectionIndexMap = useMemo(() => {
+    if (!mission) return undefined;
+    const sorted = [...mission.inspections].sort((a, b) => a.sequence_order - b.sequence_order);
+    return Object.fromEntries(sorted.map((insp, i) => [insp.id, i + 1]));
+  }, [mission]);
 
   // wire up disabled save button
   useEffect(() => {
@@ -320,6 +330,7 @@ export default function MissionValidationPage() {
             <div className="flex-1 relative rounded-2xl overflow-hidden border border-tv-border">
               <AirportMap
                 airport={airportDetail}
+                helpVariant="preview"
                 terrainMode={terrainMode}
                 onTerrainChange={setTerrainMode}
                 showTerrainToggle={false}
@@ -333,19 +344,33 @@ export default function MissionValidationPage() {
                   transitWaypoints: false,
                   measurementWaypoints: false,
                   path: false,
-                  takeoffLanding: false,
+                  takeoffLanding: !!(mission.takeoff_coordinate || mission.landing_coordinate),
                   cameraHeading: false,
                   pathHeading: false,
                 }}
                 waypoints={flightPlan?.waypoints ?? []}
+                selectedWaypointId={selectedWaypointId}
+                onWaypointClick={setSelectedWaypointId}
                 missionStatus={mission.status}
                 takeoffCoordinate={mission.takeoff_coordinate}
                 landingCoordinate={mission.landing_coordinate}
+                inspectionIndexMap={inspectionIndexMap}
+                onFeatureClick={setSelectedFeature}
+                focusFeature={selectedFeature}
                 highlightedWaypointIds={selectedWarning?.waypoint_ids}
                 highlightSeverity={selectedWarning?.severity}
                 selectedWarning={selectedWarning}
                 onWarningClose={() => setSelectedWarning(null)}
-              />
+              >
+                {selectedFeature && (
+                  <div className="absolute top-3 right-3 z-10 w-56">
+                    <PoiInfoPanel
+                      feature={selectedFeature}
+                      onClose={() => setSelectedFeature(null)}
+                    />
+                  </div>
+                )}
+              </AirportMap>
 
               {/* bottom bar */}
               <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">

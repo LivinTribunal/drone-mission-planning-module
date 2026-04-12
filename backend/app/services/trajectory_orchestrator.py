@@ -44,7 +44,7 @@ from app.services.trajectory_types import (
     DEFAULT_SPEED,
     MIN_ARC_RADIUS,
     MIN_SPEED_FLOOR,
-    MINIMUM_AGL_ALTITUDE,
+    TRANSIT_AGL,
     VERTICAL_POSITION_TOLERANCE_DEG,
     InspectionPass,
     MissionData,
@@ -262,6 +262,20 @@ def _generate_trajectory_inner(
     cumulative_distance = 0.0
     cumulative_duration = 0.0
 
+    # resolve configurable transit altitude above ground level
+    transit_agl = data.mission.transit_agl if data.mission.transit_agl is not None else TRANSIT_AGL
+    if data.mission.transit_agl is None:
+        suggestions.append(
+            (
+                f"no transit AGL set - using default ({TRANSIT_AGL:.1f} m); "
+                "consider raising transit_agl to reduce soft AGL warnings",
+                [],
+            )
+        )
+
+    # resolve mission-level default buffer for transit A*
+    mission_buffer_override = data.mission.default_buffer_distance
+
     sorted_inspections = sorted(mission.inspections, key=lambda i: i.sequence_order)
 
     for inspection in sorted_inspections:
@@ -278,7 +292,7 @@ def _generate_trajectory_inner(
             else None
         )
         if insp_cm is None and tmpl_cm is None and mission.default_capture_mode:
-            config.capture_mode = mission.default_capture_mode
+            config.capture_mode = str(mission.default_capture_mode)
 
         # inject mission-level default buffer distance when neither inspection nor template set it
         insp_bd = getattr(inspection.config, "buffer_distance", None) if inspection.config else None
@@ -393,6 +407,50 @@ def _generate_trajectory_inner(
         except ValueError as e:
             raise TrajectoryGenerationError(str(e))
 
+        # append descent waypoints before validation so they're included in the check
+
+        # for vertical profiles, add descent waypoint back to start altitude
+        # so transit doesn't start from the top of the vertical sweep
+        if (
+            inspection.method == InspectionMethod.VERTICAL_PROFILE
+            and len(pass_wps) >= 2
+            and abs(pass_wps[0].lon - pass_wps[-1].lon) < VERTICAL_POSITION_TOLERANCE_DEG
+            and abs(pass_wps[0].lat - pass_wps[-1].lat) < VERTICAL_POSITION_TOLERANCE_DEG
+        ):
+            pass_wps.append(
+                WaypointData(
+                    lon=pass_wps[0].lon,
+                    lat=pass_wps[0].lat,
+                    alt=pass_wps[0].alt,
+                    heading=pass_wps[-1].heading,
+                    speed=speed,
+                    waypoint_type=WaypointType.TRANSIT,
+                    camera_action=CameraAction.NONE,
+                )
+            )
+
+        # add descent to transit altitude after each inspection pass
+        # so drone lowers to transit_agl before flying to next inspection/landing
+        if pass_wps:
+            last_wp = pass_wps[-1]
+            if data.elevation_provider:
+                ground_at_descent = data.elevation_provider.get_elevation(last_wp.lat, last_wp.lon)
+                transit_alt = ground_at_descent + transit_agl
+            else:
+                transit_alt = center.alt + transit_agl
+            if abs(last_wp.alt - transit_alt) > 0.5:
+                pass_wps.append(
+                    WaypointData(
+                        lon=last_wp.lon,
+                        lat=last_wp.lat,
+                        alt=transit_alt,
+                        heading=last_wp.heading,
+                        speed=speed,
+                        waypoint_type=WaypointType.TRANSIT,
+                        camera_action=CameraAction.NONE,
+                    )
+                )
+
         # phase 3 - validate and reroute
         violations = validate_inspection_pass(
             db,
@@ -403,6 +461,7 @@ def _generate_trajectory_inner(
             data.safety_zones,
             data.surfaces,
             elevation_provider=data.elevation_provider,
+            buffer_distance=config.buffer_distance,
         )
 
         obstacle_violations = [
@@ -430,6 +489,7 @@ def _generate_trajectory_inner(
                 data.safety_zones,
                 data.surfaces,
                 elevation_provider=data.elevation_provider,
+                buffer_distance=config.buffer_distance,
             )
 
         hard = [v for v in violations if not v.is_warning]
@@ -475,26 +535,6 @@ def _generate_trajectory_inner(
         cumulative_distance += seg_dist
         cumulative_duration += seg_dur
 
-        # for vertical profiles, add descent waypoint back to start altitude
-        # so transit doesn't start from the top of the vertical sweep
-        if (
-            inspection.method == InspectionMethod.VERTICAL_PROFILE
-            and len(pass_wps) >= 2
-            and abs(pass_wps[0].lon - pass_wps[-1].lon) < VERTICAL_POSITION_TOLERANCE_DEG
-            and abs(pass_wps[0].lat - pass_wps[-1].lat) < VERTICAL_POSITION_TOLERANCE_DEG
-        ):
-            pass_wps.append(
-                WaypointData(
-                    lon=pass_wps[0].lon,
-                    lat=pass_wps[0].lat,
-                    alt=pass_wps[0].alt,
-                    heading=pass_wps[-1].heading,
-                    speed=speed,
-                    waypoint_type=WaypointType.TRANSIT,
-                    camera_action=CameraAction.NONE,
-                )
-            )
-
         deferred_pass_data.append((label, violations, obstructed_wps))
         inspection_passes.append(InspectionPass(waypoints=pass_wps, inspection_id=inspection.id))
 
@@ -513,29 +553,16 @@ def _generate_trajectory_inner(
     # terrain helper
     provider = data.elevation_provider
 
-    # resolve per-mission cruise altitude (AGL). falls back to a safe default
-    # derived from takeoff_safe_altitude when the operator did not configure one.
-    transit_alt_agl = (
-        mission.default_transit_altitude
-        if mission.default_transit_altitude is not None
-        else max(MINIMUM_AGL_ALTITUDE, settings.takeoff_safe_altitude)
-    )
-
-    # takeoff + climb to cruise altitude before transit
+    # takeoff at ground level - transit handles climb via transit_agl
     if mission.takeoff_coordinate:
         tc = _parse_coordinate(mission.takeoff_coordinate.data, "takeoff")
         if not inspection_passes[0].waypoints:
             raise TrajectoryGenerationError("first inspection produced no waypoints")
         first_wp = inspection_passes[0].waypoints[0]
 
-        # takeoff waypoint sits at operator-supplied altitude (or ground from
-        # the elevation provider when no explicit altitude is given). no AGL
-        # clamp here - the drone is literally on the ground.
         takeoff_alt = tc[2]
-        if takeoff_alt is None and provider:
+        if provider:
             takeoff_alt = provider.get_elevation(tc[1], tc[0])
-        if takeoff_alt is None:
-            takeoff_alt = 0.0
 
         all_waypoints.append(
             WaypointData(
@@ -549,10 +576,9 @@ def _generate_trajectory_inner(
             )
         )
 
-        # climb to cruise altitude (ground + transit AGL) so the following
-        # transit stays on the same vertical level instead of drifting.
+        # ascend to transit altitude at takeoff position before horizontal flight
         ground_at_takeoff = provider.get_elevation(tc[1], tc[0]) if provider else takeoff_alt
-        climb_alt = ground_at_takeoff + transit_alt_agl
+        climb_alt = ground_at_takeoff + transit_agl
         all_waypoints.append(
             WaypointData(
                 lon=tc[0],
@@ -564,6 +590,10 @@ def _generate_trajectory_inner(
                 camera_action=CameraAction.NONE,
             )
         )
+
+    # record each pass's starting index in all_waypoints so we don't rely on
+    # object identity to recover it in phase 5 postprocessing
+    pass_start_indices: list[int] = []
 
     for i, ipass in enumerate(inspection_passes):
         # A* transit from previous endpoint to this pass start
@@ -582,47 +612,40 @@ def _generate_trajectory_inner(
                 default_speed,
                 data.surfaces,
                 elevation_provider=provider,
-                cruise_altitude_agl=transit_alt_agl,
+                transit_agl=transit_agl,
+                buffer_distance_override=mission_buffer_override,
             )
             all_waypoints.extend(transit_wps)
 
+        pass_start_indices.append(len(all_waypoints))
         all_waypoints.extend(ipass.waypoints)
 
-    # landing: transit at cruise altitude above landing spot, then descend
+    # landing at ground level - transit handles descent via transit_agl
     if mission.landing_coordinate:
         lc = _parse_coordinate(mission.landing_coordinate.data, "landing")
 
-        # landing waypoint sits at operator-supplied altitude (or ground from
-        # the elevation provider). no AGL clamp here - the drone touches down.
         landing_alt = lc[2]
-        if landing_alt is None and provider:
+        if provider:
             landing_alt = provider.get_elevation(lc[1], lc[0])
-        if landing_alt is None:
-            landing_alt = 0.0
 
-        # descend-above-landing target uses cruise altitude (ground + transit AGL)
-        # to match the rest of the transit profile.
-        ground_at_landing = provider.get_elevation(lc[1], lc[0]) if provider else landing_alt
-        descent_alt = ground_at_landing + transit_alt_agl
         last = all_waypoints[-1]
         from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)
-        above_landing = Point3D(lon=lc[0], lat=lc[1], alt=descent_alt)
+        to_pt = Point3D(lon=lc[0], lat=lc[1], alt=landing_alt)
 
-        # transit to point above landing spot
         landing_transit = compute_transit_path(
             db,
             from_pt,
-            above_landing,
+            to_pt,
             data.obstacles,
             data.safety_zones,
             default_speed,
             data.surfaces,
             elevation_provider=provider,
-            cruise_altitude_agl=transit_alt_agl,
+            transit_agl=transit_agl,
+            buffer_distance_override=mission_buffer_override,
         )
         all_waypoints.extend(landing_transit)
 
-        # vertical descent to landing
         all_waypoints.append(
             WaypointData(
                 lon=lc[0],
@@ -635,27 +658,15 @@ def _generate_trajectory_inner(
             )
         )
 
-    # build waypoint index -> inspection sequence mapping
+    # build waypoint index -> inspection sequence mapping from explicit start indices
     wp_inspection_seq: dict[int, int] = {}
-    idx = 0
-    # skip takeoff/transit waypoints before first inspection
-    if mission.takeoff_coordinate:
-        idx += 2  # takeoff + climb
-    for i, ipass in enumerate(inspection_passes):
-        # transit waypoints before this pass don't belong to an inspection
-        pass_start = None
-        for k in range(idx, len(all_waypoints)):
-            if all_waypoints[k] is ipass.waypoints[0]:
-                pass_start = k
-                break
-        if pass_start is not None:
-            for k in range(pass_start, pass_start + len(ipass.waypoints)):
-                if k < len(all_waypoints):
-                    wp_inspection_seq[k] = i + 1
-            idx = pass_start + len(ipass.waypoints)
+    for i, (pass_start, ipass) in enumerate(zip(pass_start_indices, inspection_passes)):
+        for k in range(pass_start, pass_start + len(ipass.waypoints)):
+            if k < len(all_waypoints):
+                wp_inspection_seq[k] = i + 1
 
         # format deferred per-pass warnings now that global offsets are known
-        if pass_start is not None and i < len(deferred_pass_data):
+        if i < len(deferred_pass_data):
             d_label, d_violations, d_obstructed = deferred_pass_data[i]
             _format_soft_warnings(d_violations, d_label, warnings, wp_offset=pass_start)
 
@@ -710,8 +721,8 @@ def _generate_trajectory_inner(
         count = len(indices)
         msg = f"inspection {seq} crosses {surface_label} during measurement ({count} segments)"
         wp_ids = []
-        for idx in indices:
-            wp_ids.extend([f"idx:{idx - 1}", f"idx:{idx}"])
+        for wp_idx in indices:
+            wp_ids.extend([f"idx:{wp_idx - 1}", f"idx:{wp_idx}"])
         # deduplicate while preserving order
         seen: set[str] = set()
         unique_ids: list[str] = []
@@ -722,6 +733,11 @@ def _generate_trajectory_inner(
         non_aborting_violations.append((msg, unique_ids))
 
     # final validation of assembled path
+    final_buffer = (
+        data.mission.default_buffer_distance
+        if data.mission.default_buffer_distance is not None
+        else settings.vertex_buffer_m
+    )
     final_violations = validate_inspection_pass(
         db,
         all_waypoints,
@@ -731,6 +747,7 @@ def _generate_trajectory_inner(
         data.safety_zones,
         data.surfaces,
         elevation_provider=provider,
+        buffer_distance=final_buffer,
     )
     final_hard = [v for v in final_violations if not v.is_warning]
     if final_hard:

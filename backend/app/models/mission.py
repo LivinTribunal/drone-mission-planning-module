@@ -41,13 +41,13 @@ TRAJECTORY_FIELDS = {
     "landing_coordinate",
     "default_capture_mode",
     "default_buffer_distance",
-    "default_transit_altitude",
+    "transit_agl",
 }
 
 # minimum allowable cruise altitude (AGL meters) - kept in sync with
-# app.services.trajectory_types.MINIMUM_AGL_ALTITUDE to avoid a schema->services
-# import from validators.
-MIN_TRANSIT_ALTITUDE_AGL = 30.0
+# app.services.trajectory_types.MINIMUM_ALTITUDE_THRESHOLD to avoid a
+# schema->services import from validators.
+MIN_TRANSIT_ALTITUDE_AGL = 5.0
 
 
 class DroneProfile(Base):
@@ -101,7 +101,7 @@ class Mission(Base):
     landing_coordinate = Column(Geometry("POINTZ", srid=4326))
     default_capture_mode = Column(String(20), nullable=True, default="VIDEO_CAPTURE")
     default_buffer_distance = Column(Float, nullable=True)
-    default_transit_altitude = Column(Float, nullable=True)
+    transit_agl = Column(Float, nullable=True)
     has_unsaved_map_changes = Column(Boolean, nullable=False, default=False, server_default="false")
 
     airport = relationship("Airport")
@@ -126,22 +126,22 @@ class Mission(Base):
         self.status = target_status
 
     # terminal states - no modifications allowed, user must duplicate
-    _TERMINAL = {"EXPORTED", "COMPLETED", "CANCELLED"}
+    _TERMINAL = {"COMPLETED", "CANCELLED"}
 
     def regress_to_planned(self):
-        """regress VALIDATED -> PLANNED when waypoints are modified in place.
+        """regress VALIDATED/EXPORTED -> PLANNED when waypoints are modified in place.
 
         bypasses transition_to() because the state machine has no backward
         transitions by design - this is the intentional exception for waypoint
         edits that don't invalidate the full trajectory but do invalidate validation.
         """
         if self.status in self._TERMINAL:
-            raise ValueError("cannot modify mission after export - duplicate to make changes")
-        if self.status == MissionStatus.VALIDATED:
+            raise ValueError("cannot modify mission in completed or cancelled state")
+        if self.status in (MissionStatus.VALIDATED, MissionStatus.EXPORTED):
             self.status = MissionStatus.PLANNED
 
     def invalidate_trajectory(self):
-        """regress PLANNED/VALIDATED -> DRAFT when trajectory-affecting data changes.
+        """regress PLANNED/VALIDATED/EXPORTED -> DRAFT when trajectory-affecting data changes.
 
         bypasses transition_to() because the state machine has no backward
         transitions by design - this is the intentional exception for config changes
@@ -151,8 +151,12 @@ class Mission(Base):
         flight plan needs to be removed from the database - models don't touch sessions.
         """
         if self.status in self._TERMINAL:
-            raise ValueError("cannot modify mission after export - duplicate to make changes")
-        if self.status in (MissionStatus.PLANNED, MissionStatus.VALIDATED):
+            raise ValueError("cannot modify mission in completed or cancelled state")
+        if self.status in (
+            MissionStatus.PLANNED,
+            MissionStatus.VALIDATED,
+            MissionStatus.EXPORTED,
+        ):
             self.status = MissionStatus.DRAFT
             self.flight_plan = None
 
@@ -195,18 +199,15 @@ class Mission(Base):
         when a drone profile is attached. raises ValueError on failure; no-op
         when the field is not set.
         """
-        value = self.default_transit_altitude
+        value = self.transit_agl
         if value is None:
             return
 
         if value <= 0:
-            raise ValueError("default_transit_altitude must be greater than 0")
+            raise ValueError("transit_agl must be greater than 0")
         if value < MIN_TRANSIT_ALTITUDE_AGL:
-            raise ValueError(
-                f"default_transit_altitude must be at least {MIN_TRANSIT_ALTITUDE_AGL:.0f}m AGL"
-            )
+            raise ValueError(f"transit_agl must be at least {MIN_TRANSIT_ALTITUDE_AGL:.0f}m AGL")
         if drone and drone.max_altitude is not None and value > drone.max_altitude:
             raise ValueError(
-                f"default_transit_altitude {value:.0f}m exceeds drone max altitude "
-                f"{drone.max_altitude:.0f}m"
+                f"transit_agl {value:.0f}m exceeds drone max altitude {drone.max_altitude:.0f}m"
             )

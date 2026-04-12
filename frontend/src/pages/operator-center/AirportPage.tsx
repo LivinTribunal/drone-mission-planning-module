@@ -13,6 +13,7 @@ import ObstaclesPanel from "@/components/map/overlays/ObstaclesPanel";
 import SafetyZonesPanel from "@/components/map/overlays/SafetyZonesPanel";
 import AGLPanel from "@/components/map/overlays/AGLPanel";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
+import AirportInfoPanel from "@/components/map/overlays/AirportInfoPanel";
 
 export default function AirportPage() {
   /** read-only airport infrastructure viewer with full-screen map. */
@@ -98,6 +99,7 @@ export default function AirportPage() {
         showLegend={false}
         showPoiInfo={false}
         showWaypointList={false}
+        helpVariant="preview"
         terrainMode={terrainMode}
         onTerrainChange={setTerrainMode}
         onFeatureClick={handleFeatureClick}
@@ -145,6 +147,12 @@ export default function AirportPage() {
             layers={layerConfig}
             className="w-full rounded-2xl border border-tv-border bg-tv-bg flex-shrink-0"
           />
+          {airportDetail && (
+            <AirportInfoPanel
+              airport={airportDetail}
+              className="w-full rounded-2xl border border-tv-border bg-tv-bg flex-shrink-0"
+            />
+          )}
         </div>
         {/* bottom-right: 2D/3D + terrain toggle */}
         <div className="absolute bottom-2 right-2 z-10 flex items-center gap-2">

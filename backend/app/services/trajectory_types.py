@@ -59,7 +59,8 @@ RUNWAY_CROSSING_PENALTY_PER_METER = 10.0
 VERTICAL_POSITION_TOLERANCE_DEG: Degrees = 0.0001
 
 # terrain following
-MINIMUM_AGL_ALTITUDE: Meters = 30.0
+MINIMUM_ALTITUDE_THRESHOLD: Meters = 5.0
+TRANSIT_AGL: Meters = 30.0
 
 # safety validation
 DEFAULT_RUNWAY_BUFFER: Meters = 100.0
@@ -115,7 +116,6 @@ class ResolvedConfig:
     speed_override: MetersPerSecond | None = None
     measurement_density: int = 8
     custom_tolerances: dict | None = None
-    density: float | None = None
     hover_duration: Seconds | None = None
     horizontal_distance: Meters | None = None
     sweep_angle: Degrees | None = None

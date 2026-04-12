@@ -32,29 +32,32 @@ vi.mock("@/i18n", () => ({}));
 
 // mock maplibre-gl globally - jsdom lacks WebGL and URL.createObjectURL
 vi.mock("maplibre-gl", () => {
-  const MockMap = vi.fn().mockImplementation(() => ({
-    on: vi.fn(),
-    off: vi.fn(),
-    once: vi.fn(),
-    remove: vi.fn(),
-    addControl: vi.fn(),
-    addSource: vi.fn(),
-    addLayer: vi.fn(),
-    getLayer: vi.fn().mockReturnValue(null),
-    setLayoutProperty: vi.fn(),
-    setStyle: vi.fn(),
-    getCenter: vi.fn().mockReturnValue({ lng: 0, lat: 0 }),
-    getZoom: vi.fn().mockReturnValue(14),
-    getBearing: vi.fn().mockReturnValue(0),
-    getPitch: vi.fn().mockReturnValue(0),
-    setCenter: vi.fn(),
-    setZoom: vi.fn(),
-    setBearing: vi.fn(),
-    setPitch: vi.fn(),
-    isStyleLoaded: vi.fn().mockReturnValue(false),
-    queryRenderedFeatures: vi.fn().mockReturnValue([]),
-    panBy: vi.fn(),
-  }));
+  const MockMap = vi.fn().mockImplementation(function () {
+    return {
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn(),
+      remove: vi.fn(),
+      addControl: vi.fn(),
+      addSource: vi.fn(),
+      addLayer: vi.fn(),
+      getLayer: vi.fn().mockReturnValue(null),
+      setLayoutProperty: vi.fn(),
+      setStyle: vi.fn(),
+      getCenter: vi.fn().mockReturnValue({ lng: 0, lat: 0 }),
+      getZoom: vi.fn().mockReturnValue(14),
+      getBearing: vi.fn().mockReturnValue(0),
+      getPitch: vi.fn().mockReturnValue(0),
+      setCenter: vi.fn(),
+      setZoom: vi.fn(),
+      setBearing: vi.fn(),
+      setPitch: vi.fn(),
+      isStyleLoaded: vi.fn().mockReturnValue(false),
+      queryRenderedFeatures: vi.fn().mockReturnValue([]),
+      panBy: vi.fn(),
+      zoomTo: vi.fn(),
+    };
+  });
   const MockNavigationControl = vi.fn();
   return {
     default: { Map: MockMap, NavigationControl: MockNavigationControl },

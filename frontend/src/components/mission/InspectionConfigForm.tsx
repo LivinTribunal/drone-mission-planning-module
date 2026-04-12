@@ -16,6 +16,7 @@ interface InspectionConfigFormProps {
   onChange: (override: InspectionConfigOverride) => void;
   selectedLhaIds: Set<string>;
   onToggleLha: (lhaId: string) => void;
+  disabled?: boolean;
 }
 
 export default function InspectionConfigForm({
@@ -27,6 +28,7 @@ export default function InspectionConfigForm({
   onChange,
   selectedLhaIds,
   onToggleLha,
+  disabled = false,
 }: InspectionConfigFormProps) {
   const { t } = useTranslation();
 
@@ -42,6 +44,12 @@ export default function InspectionConfigForm({
     configOverride.measurement_density ?? savedCfg?.measurement_density ?? defaultCfg?.measurement_density ?? "";
   const hoverDuration =
     configOverride.hover_duration ?? savedCfg?.hover_duration ?? defaultCfg?.hover_duration ?? "";
+  const bufferDistance =
+    configOverride.buffer_distance ?? savedCfg?.buffer_distance ?? defaultCfg?.buffer_distance ?? "";
+  const horizontalDistance =
+    configOverride.horizontal_distance ?? savedCfg?.horizontal_distance ?? defaultCfg?.horizontal_distance ?? "";
+  const sweepAngle =
+    configOverride.sweep_angle ?? savedCfg?.sweep_angle ?? defaultCfg?.sweep_angle ?? "";
   const captureMode =
     configOverride.capture_mode !== undefined
       ? configOverride.capture_mode
@@ -95,7 +103,7 @@ export default function InspectionConfigForm({
       {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
 
       {!collapsed && (
-      <div className="space-y-4 mt-3">
+      <div className={`space-y-4 mt-3${disabled ? " pointer-events-none opacity-60" : ""}`}>
 
       {/* read-only fields */}
       <div className="grid grid-cols-2 gap-3">
@@ -259,11 +267,70 @@ export default function InspectionConfigForm({
               onChange={(e) =>
                 handleNumberChange("recording_setup_duration", e.target.value)
               }
-              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+              placeholder={t("mission.config.captureMode.recordingSetupDurationHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
               data-testid="inspection-recording-setup-duration"
             />
           </div>
         )}
+      </div>
+
+      {/* geometry overrides */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+            {t("mission.config.horizontalDistance")}
+          </label>
+          <input
+            type="number"
+            step="1"
+            min="50"
+            value={horizontalDistance}
+            onChange={(e) =>
+              handleNumberChange("horizontal_distance", e.target.value)
+            }
+            placeholder={t("mission.config.horizontalDistanceHint")}
+            className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+            data-testid="inspection-horizontal-distance"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+            {t("mission.config.sweepAngle")}
+          </label>
+          <input
+            type="number"
+            step="0.5"
+            min="1"
+            max="180"
+            value={sweepAngle}
+            onChange={(e) =>
+              handleNumberChange("sweep_angle", e.target.value)
+            }
+            placeholder={t("mission.config.sweepAngleHint")}
+            className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+            data-testid="inspection-sweep-angle"
+          />
+        </div>
+      </div>
+
+      {/* buffer distance override */}
+      <div>
+        <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+          {t("mission.config.bufferDistanceOverride")}
+        </label>
+        <input
+          type="number"
+          step="0.5"
+          min="0"
+          value={bufferDistance}
+          onChange={(e) =>
+            handleNumberChange("buffer_distance", e.target.value)
+          }
+          placeholder={t("mission.config.bufferDistanceOverrideHint")}
+          className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+          data-testid="inspection-buffer-distance"
+        />
       </div>
 
       {/* speed/framerate warning */}

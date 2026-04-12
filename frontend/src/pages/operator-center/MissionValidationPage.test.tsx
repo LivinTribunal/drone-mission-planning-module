@@ -4,6 +4,7 @@ import ValidationResultsPanel from "@/components/mission/ValidationResultsPanel"
 import ExportPanel from "@/components/mission/ExportPanel";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 import type { MissionDetailResponse } from "@/types/mission";
+import type { ExportPanelProps } from "@/components/mission/ExportPanel";
 
 // mock react-router-dom
 vi.mock("react-router-dom", () => ({
@@ -36,7 +37,7 @@ function makeMission(
     landing_coordinate: null,
     default_capture_mode: null,
     default_buffer_distance: null,
-    default_transit_altitude: null,
+    transit_agl: null,
     has_unsaved_map_changes: false,
     inspection_count: 0,
     estimated_duration: null,
@@ -202,14 +203,7 @@ describe("ValidationResultsPanel", () => {
 });
 
 describe("ExportPanel", () => {
-  let defaultProps: {
-    mission: MissionDetailResponse;
-    onExport: ReturnType<typeof vi.fn>;
-    onComplete: ReturnType<typeof vi.fn>;
-    onCancel: ReturnType<typeof vi.fn>;
-    onDelete: ReturnType<typeof vi.fn>;
-    isExporting: boolean;
-  };
+  let defaultProps: ExportPanelProps;
 
   beforeEach(() => {
     defaultProps = {

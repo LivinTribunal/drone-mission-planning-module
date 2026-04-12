@@ -136,7 +136,7 @@ export default function InspectionList({
       )}
 
       {!collapsed && (
-      <div className="space-y-1 mt-2">
+      <div className="space-y-1 mt-2 max-h-60 overflow-y-auto">
         {sorted.map((insp, idx) => {
           const template = templates.get(insp.template_id);
           const isSelected = selectedId === insp.id;

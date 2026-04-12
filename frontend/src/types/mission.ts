@@ -17,7 +17,7 @@ export interface MissionResponse {
   landing_coordinate: PointZ | null;
   default_capture_mode: CaptureMode | null;
   default_buffer_distance: number | null;
-  default_transit_altitude: number | null;
+  transit_agl: number | null;
   has_unsaved_map_changes: boolean;
   inspection_count: number;
   estimated_duration: number | null;
@@ -32,7 +32,6 @@ export interface InspectionConfigResponse {
   speed_override: number | null;
   measurement_density: number | null;
   custom_tolerances: Record<string, number> | null;
-  density: number | null;
   hover_duration: number | null;
   horizontal_distance: number | null;
   sweep_angle: number | null;
@@ -58,7 +57,6 @@ export interface InspectionConfigOverride {
   speed_override?: number | null;
   measurement_density?: number | null;
   custom_tolerances?: Record<string, number> | null;
-  density?: number | null;
   hover_duration?: number | null;
   horizontal_distance?: number | null;
   sweep_angle?: number | null;
@@ -80,7 +78,7 @@ export interface MissionCreate {
   landing_coordinate?: PointZ | null;
   default_capture_mode?: CaptureMode | null;
   default_buffer_distance?: number | null;
-  default_transit_altitude?: number | null;
+  transit_agl?: number | null;
 }
 
 export interface MissionUpdate {
@@ -94,7 +92,7 @@ export interface MissionUpdate {
   landing_coordinate?: PointZ | null;
   default_capture_mode?: CaptureMode | null;
   default_buffer_distance?: number | null;
-  default_transit_altitude?: number | null;
+  transit_agl?: number | null;
 }
 
 export interface InspectionCreate {

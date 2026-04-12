@@ -164,9 +164,6 @@ export default function EditableFeatureInfo({
                     transform={`rotate(${parseFloat(val("heading"))}, 12, 12)`}
                   />
                 </svg>
-                <span className="text-[10px] text-tv-text-muted">
-                  {Math.round(parseFloat(val("heading")))}°
-                </span>
                 <button
                   onClick={() => {
                     const current = parseFloat(val("heading"));
@@ -178,6 +175,9 @@ export default function EditableFeatureInfo({
                   <RotateCcw className="h-3 w-3" />
                   {t("coordinator.detail.opposite")}
                 </button>
+                <span className="text-[10px] text-tv-text-muted">
+                  {Math.round((parseFloat(val("heading")) + 180) % 360)}°
+                </span>
               </div>
             )}
             <div className="grid grid-cols-2 gap-1.5">
@@ -426,6 +426,14 @@ export default function EditableFeatureInfo({
                 <option value="LED">{t("coordinator.detail.lampTypes.led")}</option>
               </select>
             </div>
+            <Input
+              id="feat-tolerance"
+              label={t("coordinator.detail.lhaTolerance")}
+              type="number"
+              step="0.1"
+              value={val("tolerance")}
+              onChange={(e) => handleChange("tolerance", e.target.value === "" ? null : parseFloat(e.target.value))}
+            />
             <PointCoordEditor
               position={(formData.position as PointZ | undefined) ?? null}
               onChange={(coords) => {
@@ -507,7 +515,7 @@ function PointCoordEditor({
   }
 
   return (
-    <div className="grid grid-cols-3 gap-1.5" data-testid="point-coord-editor">
+    <div className="flex flex-col gap-1.5" data-testid="point-coord-editor">
       <Input
         id="feat-lat"
         label={t("map.coordinates.lat")}

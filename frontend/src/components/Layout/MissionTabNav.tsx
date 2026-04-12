@@ -2,9 +2,9 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { NavLink, Outlet, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { Loader2, Pencil, Plus, X, Upload, ChevronDown, Search } from "lucide-react";
+import { Loader2, Pencil, Plus, Copy, X, Upload, ChevronDown, Search } from "lucide-react";
 import { useMission } from "@/contexts/MissionContext";
-import { updateMission } from "@/api/missions";
+import { updateMission, duplicateMission } from "@/api/missions";
 import type { MissionResponse, MissionDetailResponse } from "@/types/mission";
 import Badge from "@/components/common/Badge";
 import DetailSelector from "@/components/common/DetailSelector";
@@ -157,6 +157,20 @@ export default function MissionTabNav() {
     navigate("/operator-center/missions");
   }
 
+  async function handleDuplicate() {
+    /** duplicate the current mission and navigate to the copy. */
+    if (!id) return;
+    try {
+      const copy = await duplicateMission(id);
+      await refreshMissions();
+      const tabMatch = location.pathname.match(/\/missions\/[^/]+\/(.+)/);
+      const tab = tabMatch?.[1] ?? "configuration";
+      navigate(`/operator-center/missions/${copy.id}/${tab}`);
+    } catch (err) {
+      console.error("duplicate failed", err instanceof Error ? err.message : String(err));
+    }
+  }
+
   function startRename() {
     setRenaming(true);
     setRenameValue(currentMission?.name ?? "");
@@ -195,6 +209,7 @@ export default function MissionTabNav() {
       count={missions.length}
       actions={[
         { icon: Plus, onClick: () => navigate("/operator-center/missions"), title: t("mission.createNew"), variant: "accent" },
+        { icon: Copy, onClick: handleDuplicate, title: t("mission.duplicate") },
         { icon: Pencil, onClick: startRename, title: t("common.edit") },
         { icon: X, onClick: handleDeselect, title: t("common.close") },
       ]}
@@ -350,6 +365,7 @@ export default function MissionTabNav() {
                   <Badge status={currentMission.status as MissionStatus} className="flex-shrink-0 ml-2" />
                 )}
                 <div className="flex items-center gap-0.5 ml-2 flex-shrink-0">
+                  <button onClick={(e) => { e.stopPropagation(); handleDuplicate(); }} className="flex items-center justify-center h-5 w-5 rounded-full bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors" title={t("mission.duplicate")}><Copy className="h-3 w-3" /></button>
                   <button onClick={(e) => { e.stopPropagation(); handleDeselect(); }} className="flex items-center justify-center h-5 w-5 rounded-full bg-tv-surface-hover text-tv-text-secondary hover:text-tv-text-primary transition-colors" title={t("common.close")}><X className="h-3 w-3" /></button>
                   <button onClick={(e) => { e.stopPropagation(); setMissionDropdownOpen(!missionDropdownOpen); if (!missionDropdownOpen && compactSelectorRef.current) { const rect = compactSelectorRef.current.getBoundingClientRect(); setCompactDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width }); } }} className="p-1.5 rounded-full hover:bg-tv-surface-hover transition-colors text-tv-text-primary"><ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${missionDropdownOpen ? "rotate-180" : ""}`} /></button>
                 </div>

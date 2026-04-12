@@ -149,6 +149,7 @@ class LHACreate(BaseModel):
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr
     position: PointZ
+    tolerance: float | None = None
 
 
 class LHAUpdate(BaseModel):
@@ -159,6 +160,7 @@ class LHAUpdate(BaseModel):
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr | None = None
     position: PointZ | None = None
+    tolerance: float | None = None
     # transport-only flag - skip ground-altitude renormalization on this update
     preserve_altitude: bool = False
 
@@ -173,6 +175,7 @@ class LHAResponse(BaseModel):
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr
     position: PointZ
+    tolerance: float | None = None
 
     model_config = {"from_attributes": True}
 

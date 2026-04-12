@@ -13,6 +13,7 @@ export interface InspectionConfigResponse {
   lha_ids: string[] | null;
   capture_mode: CaptureMode | null;
   recording_setup_duration: number | null;
+  buffer_distance: number | null;
 }
 
 export interface InspectionTemplateResponse {
