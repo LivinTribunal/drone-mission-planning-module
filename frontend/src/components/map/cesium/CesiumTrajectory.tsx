@@ -200,7 +200,7 @@ function addWaypointDots(
     if (wp.waypoint_type === "TAKEOFF" || wp.waypoint_type === "LANDING") continue;
 
     const [lng, lat, alt] = wp.position.coordinates;
-    const isSelected = selectedWaypointId != null && selectedWaypointId.includes(wp.id);
+    const isSelected = selectedWaypointId != null && selectedWaypointId === wp.id;
     const isHighlighted = highlightSet?.has(wp.id) ?? false;
     const color = getWaypointColor(wp);
     const isMeasurement = wp.waypoint_type === "MEASUREMENT";

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -19,6 +21,8 @@ from app.services.trajectory_types import (
     Violation,
     WaypointData,
 )
+
+logger = logging.getLogger(__name__)
 
 # waypoint types exempt from AGL minimum check - these literally touch the ground
 _GROUND_LEVEL_WAYPOINT_TYPES = (WaypointType.TAKEOFF, WaypointType.LANDING)
@@ -265,8 +269,8 @@ def _obstacle_base_altitude(obstacle: Obstacle) -> float:
         if coords:
             alts = [c[2] for c in coords if len(c) > 2]
             return min(alts) if alts else 0.0
-    except (IndexError, KeyError, ValueError):
-        pass
+    except (IndexError, KeyError, ValueError) as exc:
+        logger.warning("failed to read obstacle base altitude for %s: %s", obstacle.id, exc)
     return 0.0
 
 

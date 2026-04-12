@@ -18,28 +18,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """add transit_agl column to mission table if not already present."""
-    conn = op.get_bind()
-    result = conn.execute(
-        sa.text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'mission' AND column_name = 'transit_agl'"
-        )
-    )
-    if result.fetchone() is not None:
-        return
+    """add transit_agl column to mission table."""
     op.add_column('mission', sa.Column('transit_agl', sa.Float(), nullable=True))
 
 
 def downgrade() -> None:
-    """remove transit_agl column from mission table if it exists."""
-    conn = op.get_bind()
-    result = conn.execute(
-        sa.text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'mission' AND column_name = 'transit_agl'"
-        )
-    )
-    if result.fetchone() is None:
-        return
+    """remove transit_agl column from mission table."""
     op.drop_column('mission', 'transit_agl')

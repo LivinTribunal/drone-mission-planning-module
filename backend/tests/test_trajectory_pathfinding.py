@@ -249,6 +249,6 @@ class TestFastPathBufferOverride:
         # the fast-path _is_segment_blocked call should include buffer_distance
         # prior to fix it was: _is_segment_blocked(db, from_point, to_point, obstacles, zones)
         # after fix: _is_segment_blocked(..., buffer_distance=fast_path_buffer)
-        assert "fast_path_buffer" in source, (
-            "compute_transit_path must resolve buffer_distance_override for fast-path check"
-        )
+        assert (
+            "fast_path_buffer" in source
+        ), "compute_transit_path must resolve buffer_distance_override for fast-path check"

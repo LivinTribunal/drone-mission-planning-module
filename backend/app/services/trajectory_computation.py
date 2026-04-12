@@ -49,6 +49,11 @@ CONFIG_FIELDS = (
 )
 
 
+def _opposite_bearing(heading: Degrees) -> Degrees:
+    """bearing 180 degrees opposite of given heading, wrapped to [0, 360)."""
+    return (heading + 180) % 360
+
+
 def overlay_config(result: ResolvedConfig, config: InspectionConfiguration) -> None:
     """overlay non-None fields from an ORM config onto resolved config."""
     for key in CONFIG_FIELDS:
@@ -181,6 +186,10 @@ def compute_optimal_speed(
     if path_distance <= 0:
         return None
 
+    # explicit guard preserves the density >= 2 invariant right at the division site
+    if density <= 1:
+        return None
+
     waypoint_spacing = path_distance / (density - 1)
     optimal = waypoint_spacing * drone.camera_frame_rate
 
@@ -295,7 +304,7 @@ def determine_start_position(
 ) -> Point3D:
     """compute start position of inspection pass based on method and geometry."""
     # arc sweep is on the approach side (facing the PAPI front)
-    approach = (runway_heading + 180) % 360
+    approach = _opposite_bearing(runway_heading)
 
     match method:
         case InspectionMethod.ANGULAR_SWEEP:
@@ -329,7 +338,7 @@ def determine_end_position(
     glide_slope: Degrees,
 ) -> Point3D:
     """compute end position of inspection pass based on method and geometry."""
-    approach = (runway_heading + 180) % 360
+    approach = _opposite_bearing(runway_heading)
 
     match method:
         case InspectionMethod.ANGULAR_SWEEP:
@@ -371,7 +380,7 @@ def calculate_arc_path(
     arc_alt = center.alt + glide_height + config.altitude_offset
 
     # arc centered on approach heading (facing PAPI front)
-    approach = (runway_heading + 180) % 360
+    approach = _opposite_bearing(runway_heading)
 
     waypoints = []
     for i in range(density):
@@ -430,7 +439,7 @@ def calculate_vertical_path(
         else DEFAULT_HORIZONTAL_DISTANCE
     )
 
-    approach_heading = (runway_heading + 180) % 360
+    approach_heading = _opposite_bearing(runway_heading)
     lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
     heading_to_center = bearing_between(lon, lat, center.lon, center.lat)
 
