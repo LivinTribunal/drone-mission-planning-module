@@ -124,7 +124,7 @@ class MissionCreate(BaseModel):
     landing_coordinate: PointZ | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
-    transit_agl: float | None = Field(default=None, gt=0)
+    transit_agl: float | None = Field(default=None, ge=_MIN_TRANSIT_ALTITUDE_AGL)
 
     @field_validator("transit_agl")
     @classmethod
@@ -146,7 +146,7 @@ class MissionUpdate(BaseModel):
     date_time: datetime | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
-    transit_agl: float | None = Field(default=None, gt=0)
+    transit_agl: float | None = Field(default=None, ge=_MIN_TRANSIT_ALTITUDE_AGL)
 
     @field_validator("transit_agl")
     @classmethod

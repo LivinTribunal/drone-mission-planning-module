@@ -983,6 +983,7 @@
       "selectAglFirst": "Select an AGL system first",
       "lhaUnit": "LHA {{number}}",
       "lhaUnits": "LHA Units",
+      "sideLabel": "{{side}} side",
       "selectAll": "Select all",
       "deselectAll": "Deselect all",
       "configuration": "Configuration",

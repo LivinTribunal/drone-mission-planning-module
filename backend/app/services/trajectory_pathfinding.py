@@ -81,7 +81,7 @@ def _extract_polygon_vertices(geom_data: bytes, buffer_m: float | None = None) -
 
         return vertices
 
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, IndexError) as e:
         raise TrajectoryGenerationError(
             f"failed to extract vertices from obstacle geometry: {e}"
         ) from e
@@ -112,7 +112,7 @@ def _collect_nearby_objects(
             obs_center = center_of_points([v.to_tuple() for v in verts])
         except TrajectoryGenerationError:
             raise
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, IndexError) as e:
             raise TrajectoryGenerationError(
                 f"failed to parse obstacle boundary for obstacle {obs.id}: {e}"
             ) from e
@@ -132,7 +132,7 @@ def _collect_nearby_objects(
             zone_center = center_of_points([v.to_tuple() for v in verts])
         except TrajectoryGenerationError:
             raise
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, IndexError) as e:
             raise TrajectoryGenerationError(
                 f"failed to parse zone geometry for zone {zone.id}: {e}"
             ) from e
@@ -255,7 +255,7 @@ def _collect_graph_nodes_in_circle(
                 continue
             try:
                 geojson = parse_ewkb(surface.geometry.data)
-            except Exception as e:
+            except (ValueError, KeyError, TypeError, IndexError) as e:
                 raise TrajectoryGenerationError(
                     f"corrupted geometry for surface {surface.id}: {e}"
                 ) from e

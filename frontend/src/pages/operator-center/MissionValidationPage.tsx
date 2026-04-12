@@ -94,7 +94,7 @@ export default function MissionValidationPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext]);
+  }, [setComputeContext, t]);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -122,11 +122,11 @@ export default function MissionValidationPage() {
       }
     } catch (err) {
       console.error("failed to load mission:", err instanceof Error ? err.message : String(err));
-      setError("mission.config.loadError");
+      setError(t("mission.config.loadError"));
     } finally {
       setLoading(false);
     }
-  }, [id, refreshMissions, updateMissionFromPage]);
+  }, [id, refreshMissions, updateMissionFromPage, t]);
 
   useEffect(() => {
     fetchData();
@@ -268,7 +268,7 @@ export default function MissionValidationPage() {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-3">
         <p className="text-sm text-tv-error">
-          {t(error ?? "common.error")}
+          {error ?? t("common.error")}
         </p>
         <button
           onClick={fetchData}
