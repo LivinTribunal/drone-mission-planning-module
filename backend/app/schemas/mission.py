@@ -14,7 +14,7 @@ CaptureModeStr = Literal["VIDEO_CAPTURE", "PHOTO_CAPTURE"]
 
 # minimum transit altitude (m AGL) - mirrors trajectory_types.MINIMUM_AGL_ALTITUDE.
 # duplicated here so schemas do not import from services (architectural boundary).
-_MIN_TRANSIT_ALTITUDE_AGL = 30.0
+_MIN_TRANSIT_ALTITUDE_AGL = 5.0
 
 
 def _validate_transit_altitude(value: float | None) -> float | None:
@@ -22,9 +22,7 @@ def _validate_transit_altitude(value: float | None) -> float | None:
     if value is None:
         return None
     if value < _MIN_TRANSIT_ALTITUDE_AGL:
-        raise ValueError(
-            f"default_transit_altitude must be at least {_MIN_TRANSIT_ALTITUDE_AGL:.0f}m AGL"
-        )
+        raise ValueError(f"transit_agl must be at least {_MIN_TRANSIT_ALTITUDE_AGL:.0f}m AGL")
     return value
 
 
@@ -32,12 +30,11 @@ class InspectionConfigOverride(BaseModel):
     """config overrides for an inspection within a mission"""
 
     altitude_offset: float | None = None
-    speed_override: float | None = None
+    speed_override: float | None = Field(default=None, gt=0)
     measurement_density: int | None = Field(default=None, ge=1)
     custom_tolerances: dict[str, float] | None = None
-    density: float | None = None
     hover_duration: float | None = None
-    horizontal_distance: float | None = None
+    horizontal_distance: float | None = Field(default=None, gt=0)
     sweep_angle: float | None = None
     lha_ids: list[UUID] | None = None
     capture_mode: CaptureModeStr | None = None
@@ -76,7 +73,6 @@ class InspectionConfigResponse(BaseModel):
     speed_override: float | None = None
     measurement_density: int | None = None
     custom_tolerances: dict[str, float] | None = None
-    density: float | None = None
     hover_duration: float | None = None
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
@@ -128,9 +124,9 @@ class MissionCreate(BaseModel):
     landing_coordinate: PointZ | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
-    default_transit_altitude: float | None = Field(default=None, gt=0)
+    transit_agl: float | None = Field(default=None, gt=0)
 
-    @field_validator("default_transit_altitude")
+    @field_validator("transit_agl")
     @classmethod
     def _check_transit_altitude(cls, v: float | None) -> float | None:
         """enforce minimum AGL floor on mission-level cruise altitude."""
@@ -150,9 +146,9 @@ class MissionUpdate(BaseModel):
     date_time: datetime | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
-    default_transit_altitude: float | None = Field(default=None, gt=0)
+    transit_agl: float | None = Field(default=None, gt=0)
 
-    @field_validator("default_transit_altitude")
+    @field_validator("transit_agl")
     @classmethod
     def _check_transit_altitude(cls, v: float | None) -> float | None:
         """enforce minimum AGL floor on mission-level cruise altitude."""
@@ -177,7 +173,7 @@ class MissionResponse(BaseModel):
     landing_coordinate: PointZ | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = None
-    default_transit_altitude: float | None = None
+    transit_agl: float | None = None
     has_unsaved_map_changes: bool = False
     inspection_count: int = 0
     estimated_duration: float | None = None

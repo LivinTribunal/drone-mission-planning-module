@@ -158,6 +158,7 @@ export default function InspectionEditPage() {
             lha_ids: cfg.lha_ids,
             capture_mode: cfg.capture_mode,
             recording_setup_duration: cfg.recording_setup_duration,
+            buffer_distance: cfg.buffer_distance,
           }
         : {
             altitude_offset: null,
@@ -171,6 +172,7 @@ export default function InspectionEditPage() {
             lha_ids: null,
             capture_mode: null,
             recording_setup_duration: null,
+            buffer_distance: null,
           },
     );
 
@@ -579,6 +581,7 @@ export default function InspectionEditPage() {
           <div className="flex-1 relative rounded-2xl overflow-hidden border border-tv-border">
             <AirportMap
               airport={airportDetail}
+              helpVariant="preview"
               terrainMode={terrainMode}
               onTerrainChange={setTerrainMode}
               showTerrainToggle={false}

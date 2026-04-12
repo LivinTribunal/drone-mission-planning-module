@@ -10,6 +10,7 @@ interface CoordinatorAGLPanelProps {
   surfaces: SurfaceResponse[];
   onItemClick: (feature: MapFeature) => void;
   onDeleteAgl: (id: string) => Promise<void>;
+  onDeleteLha?: (id: string) => Promise<void>;
   onAdd?: () => void;
 }
 
@@ -17,6 +18,7 @@ export default function CoordinatorAGLPanel({
   surfaces,
   onItemClick,
   onDeleteAgl,
+  onDeleteLha,
   onAdd,
 }: CoordinatorAGLPanelProps) {
   /** collapsible agl list with expandable lha sub-items and delete support. */
@@ -24,6 +26,7 @@ export default function CoordinatorAGLPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [expandedAgls, setExpandedAgls] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<AGLResponse | null>(null);
+  const [deleteLhaTarget, setDeleteLhaTarget] = useState<LHAResponse | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const allAgls = surfaces.flatMap((s) => s.agls);
@@ -194,6 +197,15 @@ export default function CoordinatorAGLPanel({
                                 {lha.position.coordinates[1].toFixed(4)}, {lha.position.coordinates[0].toFixed(4)}
                               </p>
                             </div>
+                            {onDeleteLha && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeleteLhaTarget(lha); }}
+                                className="w-6 h-6 rounded-full flex items-center justify-center transition-colors text-tv-text-secondary hover:bg-tv-error/15 hover:text-tv-error flex-shrink-0"
+                                title={t("common.delete")}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -227,6 +239,30 @@ export default function CoordinatorAGLPanel({
         onCancel={() => {
           setDeleteError(null);
           setDeleteTarget(null);
+        }}
+      />
+
+      <ConfirmDeleteDialog
+        isOpen={deleteLhaTarget !== null}
+        name={deleteLhaTarget ? t("airport.lhaUnit", { number: deleteLhaTarget.unit_number }) : ""}
+        error={deleteError}
+        onConfirm={async () => {
+          if (!deleteLhaTarget || !onDeleteLha) return;
+          setDeleteError(null);
+          try {
+            await onDeleteLha(deleteLhaTarget.id);
+            setDeleteLhaTarget(null);
+          } catch (err) {
+            setDeleteError(
+              err instanceof Error && err.message
+                ? err.message
+                : t("coordinator.detail.deleteError"),
+            );
+          }
+        }}
+        onCancel={() => {
+          setDeleteError(null);
+          setDeleteLhaTarget(null);
         }}
       />
     </>

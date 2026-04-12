@@ -69,7 +69,6 @@ class InspectionConfiguration(Base):
         "speed_override",
         "measurement_density",
         "custom_tolerances",
-        "density",
         "hover_duration",
         "horizontal_distance",
         "sweep_angle",

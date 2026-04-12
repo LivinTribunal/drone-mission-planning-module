@@ -19,13 +19,32 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """add nullable default_transit_altitude column to mission."""
+    """no-op - transit_agl column already exists via eec7d1c63489."""
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'mission' AND column_name = 'transit_agl'"
+        )
+    )
+    if result.fetchone() is not None:
+        return
+
     op.add_column(
         "mission",
-        sa.Column("default_transit_altitude", sa.Float(), nullable=True),
+        sa.Column("transit_agl", sa.Float(), nullable=True),
     )
 
 
 def downgrade() -> None:
-    """drop default_transit_altitude column from mission."""
-    op.drop_column("mission", "default_transit_altitude")
+    """drop transit_agl column from mission if it exists."""
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'mission' AND column_name = 'transit_agl'"
+        )
+    )
+    if result.fetchone() is None:
+        return
+    op.drop_column("mission", "transit_agl")

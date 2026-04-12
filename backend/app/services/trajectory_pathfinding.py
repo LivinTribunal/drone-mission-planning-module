@@ -18,10 +18,10 @@ from app.services.trajectory_types import (
     HARD_ZONE_TYPES,
     MAX_REROUTE_DEVIATION,
     MAX_TURN_ANGLE,
-    MINIMUM_AGL_ALTITUDE,
     REROUTE_SEARCH_RADIUS_MULTIPLIER,
     RUNWAY_CROSSING_PENALTY_PER_METER,
     SURFACE_NODE_SPACING,
+    TRANSIT_AGL,
     Degrees,
     Meters,
     MetersPerSecond,
@@ -149,10 +149,14 @@ def _is_segment_blocked(
     to_pt: Point3D,
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
+    buffer_distance: Meters = 0.0,
 ) -> bool:
     """check if a straight-line segment is blocked by obstacles or hard zones."""
     for obs in obstacles:
-        if segments_intersect_obstacle(db, from_pt.lon, from_pt.lat, to_pt.lon, to_pt.lat, obs):
+        buf = buffer_distance if buffer_distance > 0 else (obs.buffer_distance or 0.0)
+        if segments_intersect_obstacle(
+            db, from_pt.lon, from_pt.lat, to_pt.lon, to_pt.lat, obs, buffer_distance=buf
+        ):
             return True
 
     for zone in zones:
@@ -168,6 +172,7 @@ def _build_visibility_graph(
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface] | None = None,
+    buffer_distance: Meters = 0.0,
 ) -> dict[int, list[tuple[int, float]]]:
     """build adjacency list where edges connect unobstructed node pairs.
 
@@ -179,7 +184,9 @@ def _build_visibility_graph(
 
     for i in range(len(nodes)):
         for j in range(i + 1, len(nodes)):
-            if _is_segment_blocked(db, nodes[i], nodes[j], obstacles, zones):
+            if _is_segment_blocked(
+                db, nodes[i], nodes[j], obstacles, zones, buffer_distance=buffer_distance
+            ):
                 continue
 
             dist = distance_between(nodes[i].lon, nodes[i].lat, nodes[j].lon, nodes[j].lat)
@@ -287,6 +294,34 @@ def _collect_graph_nodes_in_circle(
                 if in_circle(pt_r):
                     nodes.append(pt_r)
 
+            # perpendicular crossing nodes - intersect the from->to line with
+            # the runway centerline so A* always has the shortest-crossing option
+            if len(endpoints) >= 2:
+                p0, p1 = endpoints[0], endpoints[1]
+                rdx = end[0] - start[0]
+                rdy = end[1] - start[1]
+                edx = p1.lon - p0.lon
+                edy = p1.lat - p0.lat
+                denom = edx * rdy - edy * rdx
+                if abs(denom) > 1e-15:
+                    u = ((p0.lat - start[1]) * edx - (p0.lon - start[0]) * edy) / denom
+                    u = max(0.0, min(1.0, u))
+                    proj_lon = start[0] + u * rdx
+                    proj_lat = start[1] + u * rdy
+                    alt_s = start[2] if len(start) > 2 else 0.0
+                    alt_e = end[2] if len(end) > 2 else 0.0
+                    proj_alt = alt_s + (alt_e - alt_s) * u
+
+                    pl_lon, pl_lat = point_at_distance(proj_lon, proj_lat, perp_l, half_w)
+                    pr_lon, pr_lat = point_at_distance(proj_lon, proj_lat, perp_r, half_w)
+                    perp_pt_l = Point3D(lon=pl_lon, lat=pl_lat, alt=proj_alt)
+                    perp_pt_r = Point3D(lon=pr_lon, lat=pr_lat, alt=proj_alt)
+
+                    if in_circle(perp_pt_l):
+                        nodes.append(perp_pt_l)
+                    if in_circle(perp_pt_r):
+                        nodes.append(perp_pt_r)
+
     return nodes
 
 
@@ -323,7 +358,16 @@ def _run_astar(
             radius,
             buffer_distance_override=buffer_distance_override,
         )
-        graph = _build_visibility_graph(db, nodes, obstacles, zones, surfaces)
+        graph = _build_visibility_graph(
+            db,
+            nodes,
+            obstacles,
+            zones,
+            surfaces,
+            buffer_distance=(
+                buffer_distance_override if buffer_distance_override is not None else 0.0
+            ),
+        )
         node_tuples = [n.to_tuple() for n in nodes]
 
         path_indices = astar(graph, 0, 1, node_tuples)
@@ -342,9 +386,12 @@ def has_line_of_sight(
     target: Point3D,
     obstacles: list[Obstacle],
     zones: list[SafetyZone],
+    buffer_distance: Meters = 0.0,
 ) -> bool:
     """check if the line from point to target is clear of obstacles and hard zones."""
-    return not _is_segment_blocked(db, point, target, obstacles, zones)
+    return not _is_segment_blocked(
+        db, point, target, obstacles, zones, buffer_distance=buffer_distance
+    )
 
 
 def _max_turn_angle(waypoints: list[WaypointData]) -> Degrees:
@@ -363,8 +410,13 @@ def _max_effective_buffer(
     obstacles: list[Obstacle],
     buffer_distance_override: float | None,
 ) -> float:
-    """largest effective buffer distance across all obstacles."""
-    if buffer_distance_override is not None:
+    """largest effective buffer distance across all obstacles.
+
+    when an explicit positive override is given, use it (or DEFAULT when there
+    are no obstacles). for a zero or None override fall back to the per-obstacle
+    buffers so the reroute search radius never collapses to zero.
+    """
+    if buffer_distance_override is not None and buffer_distance_override > 0:
         return buffer_distance_override if obstacles else DEFAULT_OBSTACLE_RADIUS
     return max(
         (
@@ -393,7 +445,12 @@ def resolve_inspection_collisions(
     collisions = [False] * len(waypoints)
     for i, wp in enumerate(waypoints):
         for obs in obstacles:
-            if check_obstacle(db, wp, obs):
+            buf = (
+                buffer_distance_override
+                if buffer_distance_override is not None
+                else (obs.buffer_distance or 0.0)
+            )
+            if check_obstacle(db, wp, obs, buffer_distance=buf):
                 collisions[i] = True
                 break
 
@@ -519,26 +576,19 @@ def resolve_inspection_collisions(
 def _adjust_transit_altitude_for_terrain(
     waypoints: list[WaypointData],
     elevation_provider,
-    cruise_altitude_agl: float | None = None,
+    transit_agl: Meters = TRANSIT_AGL,
 ) -> None:
-    """clamp or set transit waypoint altitudes relative to terrain.
-
-    when cruise_altitude_agl is set, each transit waypoint is rewritten to
-    ground + cruise_altitude_agl so the cruise stays on one vertical level.
-    otherwise we fall back to the old behaviour of flooring at MINIMUM_AGL.
-    """
+    """set transit waypoint altitudes to transit_agl above terrain."""
     if not elevation_provider or not waypoints:
         return
 
     points = [(wp.lat, wp.lon) for wp in waypoints]
     elevations = elevation_provider.get_elevations_batch(points)
+    if len(elevations) != len(points):
+        raise TrajectoryGenerationError(f"expected {len(points)} elevations, got {len(elevations)}")
 
-    if cruise_altitude_agl is not None:
-        for wp, ground in zip(waypoints, elevations):
-            wp.alt = ground + cruise_altitude_agl
-    else:
-        for wp, ground in zip(waypoints, elevations):
-            wp.alt = max(wp.alt, ground + MINIMUM_AGL_ALTITUDE)
+    for wp, ground in zip(waypoints, elevations):
+        wp.alt = ground + transit_agl
 
 
 def _check_cruise_clearance(
@@ -574,16 +624,19 @@ def compute_transit_path(
     speed: MetersPerSecond,
     surfaces: list[AirfieldSurface] | None = None,
     elevation_provider=None,
-    cruise_altitude_agl: float | None = None,
+    transit_agl: Meters = TRANSIT_AGL,
+    buffer_distance_override: float | None = None,
 ) -> list[WaypointData]:
     """compute A* transit path - shortest obstacle-free route with runway crossing penalties.
 
-    when cruise_altitude_agl is provided, all returned transit waypoints share
-    ground + cruise_altitude_agl as their altitude so the vertical profile
-    stays flat between inspection passes.
+    all returned transit waypoints share ground + transit_agl as their altitude
+    so the vertical profile stays flat between inspection passes.
     """
     # straight-line if path is clear and doesn't cross runway
-    if not _is_segment_blocked(db, from_point, to_point, obstacles, zones):
+    fast_path_buffer = buffer_distance_override if buffer_distance_override is not None else 0.0
+    if not _is_segment_blocked(
+        db, from_point, to_point, obstacles, zones, buffer_distance=fast_path_buffer
+    ):
         crosses_runway = False
         if surfaces:
             for surface in surfaces:
@@ -614,18 +667,26 @@ def compute_transit_path(
                     camera_action=CameraAction.NONE,
                 )
             ]
-            _adjust_transit_altitude_for_terrain(wps, elevation_provider, cruise_altitude_agl)
-            if cruise_altitude_agl is not None:
-                _check_cruise_clearance(db, wps, obstacles, zones)
+            _adjust_transit_altitude_for_terrain(wps, elevation_provider, transit_agl)
+            _check_cruise_clearance(db, wps, obstacles, zones)
             return wps
 
     # A* through visibility graph with runway penalties
-    path = _run_astar(db, from_point, to_point, obstacles, zones, surfaces)
+    path = _run_astar(
+        db,
+        from_point,
+        to_point,
+        obstacles,
+        zones,
+        surfaces,
+        buffer_distance_override=buffer_distance_override,
+    )
     if path is None:
         raise TrajectoryGenerationError("no obstacle-free transit path found")
 
-    # transit altitude = max of endpoints so drone never goes underground
-    transit_alt = max(from_point.alt, to_point.alt)
+    # initial altitude = max of endpoints so drone never goes underground
+    # when no elevation provider is available; overwritten below when it is.
+    fallback_alt = max(from_point.alt, to_point.alt)
 
     # convert to TRANSIT waypoints (skip from_point at index 0)
     transit_wps = []
@@ -635,7 +696,7 @@ def compute_transit_path(
             WaypointData(
                 lon=cur.lon,
                 lat=cur.lat,
-                alt=transit_alt,
+                alt=fallback_alt,
                 heading=bearing_between(prev.lon, prev.lat, cur.lon, cur.lat),
                 speed=speed,
                 waypoint_type=WaypointType.TRANSIT,
@@ -643,8 +704,8 @@ def compute_transit_path(
             )
         )
 
-    _adjust_transit_altitude_for_terrain(transit_wps, elevation_provider, cruise_altitude_agl)
-    if cruise_altitude_agl is not None:
-        _check_cruise_clearance(db, transit_wps, obstacles, zones)
+    # if provider is available this replaces fallback_alt with ground+transit_agl
+    _adjust_transit_altitude_for_terrain(transit_wps, elevation_provider, transit_agl)
+    _check_cruise_clearance(db, transit_wps, obstacles, zones)
 
     return transit_wps

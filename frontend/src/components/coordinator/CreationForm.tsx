@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Loader2, RotateCcw } from "lucide-react";
 import Input from "@/components/common/Input";
-import type { SurfaceResponse, AGLResponse } from "@/types/airport";
+import type { SurfaceResponse, AGLResponse, ObstacleResponse } from "@/types/airport";
 
 export type PendingGeometryType = "polygon" | "circle" | "point";
 
@@ -33,6 +33,8 @@ interface CreationFormProps {
   prefilledLength?: number;
   prefilledHeading?: number;
   prefilledArea?: number;
+  obstacles?: ObstacleResponse[];
+  airportElevation?: number;
 }
 
 const POLYGON_CATEGORIES: { value: CategoryPolygon; labelKey: string }[] = [
@@ -82,6 +84,8 @@ export default function CreationForm({
   prefilledLength,
   prefilledHeading,
   prefilledArea,
+  obstacles = [],
+  airportElevation = 0,
 }: CreationFormProps) {
   /** creation form shown after drawing a geometry - two-tier type selection, fill fields, create entity. */
   const { t } = useTranslation();
@@ -111,6 +115,7 @@ export default function CreationForm({
   const [lhaAglId, setLhaAglId] = useState("");
   const [lhaSettingAngle, setLhaSettingAngle] = useState("3.0");
   const [lhaLampType, setLhaLampType] = useState("HALOGEN");
+  const [lhaTolerance, setLhaTolerance] = useState("");
 
   // collect all agls from surfaces
   const allAgls = useMemo(() => {
@@ -130,6 +135,46 @@ export default function CreationForm({
     if (!agl) return 1;
     return agl.lhas.length + 1;
   }, [lhaAglId, allAgls]);
+
+  // manual coordinate entry for AGL/LHA
+  const [manualLat, setManualLat] = useState(pointPosition ? String(pointPosition[1]) : "");
+  const [manualLon, setManualLon] = useState(pointPosition ? String(pointPosition[0]) : "");
+  const [manualAlt, setManualAlt] = useState(String(airportElevation));
+
+  // sync map clicks into manual fields
+  useEffect(() => {
+    if (pointPosition) {
+      setManualLat(String(pointPosition[1]));
+      setManualLon(String(pointPosition[0]));
+    }
+  }, [pointPosition]);
+
+  // auto-prefill obstacle name based on type + count
+  useEffect(() => {
+    if (category !== "obstacle") return;
+    const count = obstacles.filter((o) => o.type === obstacleType).length;
+    const sub = OBSTACLE_SUBTYPES.find((s) => s.value === obstacleType);
+    const label = sub ? t(sub.labelKey) : obstacleType;
+    setName(`${label} ${count + 1}`);
+  }, [obstacleType, category, obstacles, t]);
+
+  // auto-prefill AGL name based on connected surface
+  useEffect(() => {
+    if (category !== "agl") return;
+    const surface = surfaces.find((s) => s.id === surfaceId);
+    if (surface) {
+      const prefix = surface.surface_type === "RUNWAY" ? "RWY" : "TWY";
+      setName(`PAPI ${prefix} ${surface.identifier}`);
+    } else {
+      setName("PAPI");
+    }
+  }, [surfaceId, category, surfaces]);
+
+  // auto-prefill LHA name
+  useEffect(() => {
+    if (category !== "lha" || !lhaAglId) return;
+    setName(`LHA Unit ${nextUnitNumber}`);
+  }, [lhaAglId, category, nextUnitNumber]);
 
   const categoryOptions = geometryType === "circle"
     ? CIRCLE_CATEGORIES
@@ -188,7 +233,9 @@ export default function CreationForm({
         if (glideSlopeAngle) data.glide_slope_angle = parseFloat(glideSlopeAngle);
         if (distFromThreshold) data.distance_from_threshold = parseFloat(distFromThreshold);
         data.surface_id = surfaceId;
-        if (pointPosition) data.center = pointPosition;
+        const lat = parseFloat(manualLat);
+        const lon = parseFloat(manualLon);
+        if (!isNaN(lat) && !isNaN(lon)) data.center = [lon, lat];
       }
 
       if (effectiveEntityType === "lha") {
@@ -196,7 +243,10 @@ export default function CreationForm({
         data.unit_number = nextUnitNumber;
         data.setting_angle = lhaSettingAngle ? parseFloat(lhaSettingAngle) : 3.0;
         data.lamp_type = lhaLampType;
-        if (pointPosition) data.center = pointPosition;
+        if (lhaTolerance) data.tolerance = parseFloat(lhaTolerance);
+        const lat = parseFloat(manualLat);
+        const lon = parseFloat(manualLon);
+        if (!isNaN(lat) && !isNaN(lon)) data.center = [lon, lat];
       }
 
       await onCreate(effectiveEntityType, data);
@@ -224,9 +274,11 @@ export default function CreationForm({
     ? effectiveEntityType.replace("safety_zone_", "").toUpperCase().replace("NO_FLY", "TEMPORARY_NO_FLY")
     : "";
 
+  const hasValidCoords = !isNaN(parseFloat(manualLat)) && !isNaN(parseFloat(manualLon));
   const canSubmit = effectiveEntityType && name.trim()
     && (effectiveEntityType !== "lha" || lhaAglId)
-    && (effectiveEntityType !== "agl" || surfaceId);
+    && (effectiveEntityType !== "agl" || surfaceId)
+    && ((effectiveEntityType !== "agl" && effectiveEntityType !== "lha") || hasValidCoords);
 
   return (
     <div
@@ -343,9 +395,6 @@ export default function CreationForm({
                         transform={`rotate(${parseFloat(heading)}, 12, 12)`}
                       />
                     </svg>
-                    <span className="text-[10px] text-tv-text-muted">
-                      {Math.round(parseFloat(heading) * 10) / 10}°
-                    </span>
                     <button
                       type="button"
                       onClick={() => {
@@ -358,6 +407,9 @@ export default function CreationForm({
                       <RotateCcw className="h-3 w-3" />
                       {t("coordinator.detail.opposite")}
                     </button>
+                    <span className="text-[10px] text-tv-text-muted">
+                      {Math.round(((parseFloat(heading) + 180) % 360) * 10) / 10}°
+                    </span>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-1.5">
@@ -464,6 +516,25 @@ export default function CreationForm({
             {/* agl fields */}
             {effectiveEntityType === "agl" && (
               <>
+                {surfaces.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                      {t("coordinator.creation.surface")}
+                    </label>
+                    <select
+                      value={surfaceId}
+                      onChange={(e) => setSurfaceId(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                    >
+                      <option value="">{t("coordinator.creation.selectSurface")}</option>
+                      {surfaces.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.surface_type === "RUNWAY" ? "RWY" : "TWY"} {s.identifier}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
                     {t("coordinator.creation.aglType")}
@@ -504,31 +575,14 @@ export default function CreationForm({
                   value={distFromThreshold}
                   onChange={(e) => setDistFromThreshold(e.target.value)}
                 />
-                {surfaces.length > 0 && (
-                  <div>
-                    <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-                      {t("coordinator.creation.surface")}
-                    </label>
-                    <select
-                      value={surfaceId}
-                      onChange={(e) => setSurfaceId(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
-                    >
-                      <option value="">{t("coordinator.creation.selectSurface")}</option>
-                      {surfaces.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.surface_type === "RUNWAY" ? "RWY" : "TWY"} {s.identifier}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {pointPosition && (
-                  <p className="text-[10px] text-tv-text-muted">
-                    {t("coordinator.creation.position")}:{" "}
-                    {pointPosition[1].toFixed(6)}, {pointPosition[0].toFixed(6)}
-                  </p>
-                )}
+                <div className="flex flex-col gap-1.5">
+                  <Input id="create-lat" label={t("map.coordinates.lat")} type="number" step="0.000001"
+                    value={manualLat} onChange={(e) => setManualLat(e.target.value)} />
+                  <Input id="create-lon" label={t("map.coordinates.lon")} type="number" step="0.000001"
+                    value={manualLon} onChange={(e) => setManualLon(e.target.value)} />
+                  <Input id="create-alt" label={t("map.coordinates.alt")} type="number" step="0.01"
+                    value={manualAlt} onChange={(e) => setManualAlt(e.target.value)} />
+                </div>
               </>
             )}
 
@@ -578,12 +632,22 @@ export default function CreationForm({
                     <option value="LED">{t("coordinator.detail.lampTypes.led")}</option>
                   </select>
                 </div>
-                {pointPosition && (
-                  <p className="text-[10px] text-tv-text-muted">
-                    {t("coordinator.creation.position")}:{" "}
-                    {pointPosition[1].toFixed(6)}, {pointPosition[0].toFixed(6)}
-                  </p>
-                )}
+                <Input
+                  id="create-lha-tolerance"
+                  label={t("coordinator.detail.lhaTolerance")}
+                  type="number"
+                  step="0.1"
+                  value={lhaTolerance}
+                  onChange={(e) => setLhaTolerance(e.target.value)}
+                />
+                <div className="flex flex-col gap-1.5">
+                  <Input id="create-lha-lat" label={t("map.coordinates.lat")} type="number" step="0.000001"
+                    value={manualLat} onChange={(e) => setManualLat(e.target.value)} />
+                  <Input id="create-lha-lon" label={t("map.coordinates.lon")} type="number" step="0.000001"
+                    value={manualLon} onChange={(e) => setManualLon(e.target.value)} />
+                  <Input id="create-lha-alt" label={t("map.coordinates.alt")} type="number" step="0.01"
+                    value={manualAlt} onChange={(e) => setManualAlt(e.target.value)} />
+                </div>
               </>
             )}
 

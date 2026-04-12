@@ -56,6 +56,8 @@ export interface ObstacleResponse {
   boundary: PolygonZ;
   buffer_distance: number;
   type: ObstacleType;
+  position?: PointZ;
+  radius?: number;
 }
 
 export interface SafetyZoneResponse {
@@ -90,6 +92,7 @@ export interface LHAResponse {
   transition_sector_width: number | null;
   lamp_type: LampType;
   position: PointZ;
+  tolerance: number | null;
 }
 
 export interface AirportCreate {
@@ -219,6 +222,7 @@ export interface LHACreate {
   transition_sector_width?: number | null;
   lamp_type: LampType;
   position: PointZ;
+  tolerance?: number | null;
 }
 
 export interface LHAUpdate {
@@ -227,6 +231,7 @@ export interface LHAUpdate {
   transition_sector_width?: number | null;
   lamp_type?: LampType;
   position?: PointZ;
+  tolerance?: number | null;
   preserve_altitude?: boolean;
 }
 

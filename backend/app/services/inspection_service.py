@@ -128,17 +128,15 @@ def delete_inspection(db: Session, mission_id: UUID, inspection_id: UUID):
     """delete inspection and reorder remaining."""
     mission = _get_mission(db, mission_id)
 
-    # terminal-state check before remove - gives 409, not 404
-    if mission.status in Mission._TERMINAL:
-        raise DomainError(
-            "cannot modify mission after export - duplicate to make changes", status_code=409
-        )
-
     _delete_flight_plan_if_exists(db, mission)
     try:
         mission.remove_inspection(inspection_id)
-    except ValueError:
-        raise NotFoundError("inspection not found")
+    except ValueError as e:
+        msg = str(e)
+        # distinguish terminal-state refusal (409) from missing id (404)
+        if "not found" in msg:
+            raise NotFoundError("inspection not found")
+        raise DomainError(msg, status_code=409)
 
     db.flush()
 

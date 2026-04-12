@@ -2,13 +2,15 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.models.enums import WaypointType
 from app.services.elevation_provider import (
     DEMElevationProvider,
     FlatElevationProvider,
     create_elevation_provider,
 )
-from app.services.trajectory_types import MINIMUM_AGL_ALTITUDE, WaypointData
+from app.services.trajectory_types import MINIMUM_ALTITUDE_THRESHOLD, TRANSIT_AGL, WaypointData
 
 
 class TestFlatElevationProvider:
@@ -103,11 +105,11 @@ class TestCreateElevationProvider:
 
 
 class TestMinimumAglConstant:
-    """tests for MINIMUM_AGL_ALTITUDE constant."""
+    """tests for MINIMUM_ALTITUDE_THRESHOLD constant."""
 
     def test_minimum_agl_is_30m(self):
         """minimum AGL altitude is 30 meters per spec."""
-        assert MINIMUM_AGL_ALTITUDE == 30.0
+        assert MINIMUM_ALTITUDE_THRESHOLD == 5.0
 
 
 class TestTerrainDeltaComputation:
@@ -153,6 +155,25 @@ class TestTerrainDeltaComputation:
         # wp2: 360 + (290 - 300) = 350
         assert waypoints[1].alt == 350.0
 
+    def test_apply_terrain_delta_length_mismatch_raises(self):
+        """mismatched elevation count raises TrajectoryGenerationError."""
+        from app.core.exceptions import TrajectoryGenerationError
+        from app.services.trajectory_computation import _apply_terrain_delta
+        from app.services.trajectory_types import Point3D
+
+        provider = MagicMock()
+        # 2 waypoints + 1 center = 3 points expected, return only 2
+        provider.get_elevations_batch.return_value = [310.0, 290.0]
+
+        center = Point3D(lon=14.0, lat=50.0, alt=300.0)
+        waypoints = [
+            WaypointData(lon=14.01, lat=50.01, alt=350.0),
+            WaypointData(lon=14.02, lat=50.02, alt=360.0),
+        ]
+
+        with pytest.raises(TrajectoryGenerationError, match="expected 3 elevations, got 2"):
+            _apply_terrain_delta(waypoints, center, provider)
+
     def test_apply_terrain_delta_no_provider(self):
         """no provider means no altitude change."""
         from app.services.trajectory_computation import _apply_terrain_delta
@@ -187,25 +208,41 @@ class TestTransitAltitudeAdjustment:
         assert waypoints[0].alt == 100.0
 
     def test_adjust_transit_flat_terrain(self):
-        """flat terrain at 300m - transit at 100m gets clamped to 330m."""
+        """flat terrain at 300m - transit set to ground + TRANSIT_AGL."""
         from app.services.trajectory_pathfinding import _adjust_transit_altitude_for_terrain
 
         provider = FlatElevationProvider(300.0)
         waypoints = [WaypointData(lon=14.0, lat=50.0, alt=100.0)]
         _adjust_transit_altitude_for_terrain(waypoints, provider)
-        assert waypoints[0].alt == 300.0 + MINIMUM_AGL_ALTITUDE
+        assert waypoints[0].alt == 300.0 + TRANSIT_AGL
 
-    def test_adjust_transit_already_high_enough(self):
-        """transit already above terrain + min AGL stays unchanged."""
+    def test_adjust_transit_overrides_high_altitude(self):
+        """transit above terrain is lowered to ground + TRANSIT_AGL."""
         from app.services.trajectory_pathfinding import _adjust_transit_altitude_for_terrain
 
         provider = FlatElevationProvider(100.0)
         waypoints = [WaypointData(lon=14.0, lat=50.0, alt=500.0)]
         _adjust_transit_altitude_for_terrain(waypoints, provider)
-        assert waypoints[0].alt == 500.0
+        assert waypoints[0].alt == 100.0 + TRANSIT_AGL
+
+    def test_adjust_transit_length_mismatch_raises(self):
+        """mismatched elevation count raises TrajectoryGenerationError."""
+        from app.core.exceptions import TrajectoryGenerationError
+        from app.services.trajectory_pathfinding import _adjust_transit_altitude_for_terrain
+
+        provider = MagicMock()
+        provider.get_elevations_batch.return_value = [300.0]  # 1 elevation for 2 waypoints
+
+        waypoints = [
+            WaypointData(lon=14.0, lat=50.0, alt=350.0),
+            WaypointData(lon=14.1, lat=50.1, alt=350.0),
+        ]
+
+        with pytest.raises(TrajectoryGenerationError, match="expected 2 elevations, got 1"):
+            _adjust_transit_altitude_for_terrain(waypoints, provider)
 
     def test_adjust_transit_varying_terrain(self):
-        """varying terrain - each waypoint clamped independently."""
+        """varying terrain - each waypoint set to local ground + TRANSIT_AGL."""
         from app.services.trajectory_pathfinding import _adjust_transit_altitude_for_terrain
 
         provider = MagicMock()
@@ -218,9 +255,9 @@ class TestTransitAltitudeAdjustment:
         ]
         _adjust_transit_altitude_for_terrain(waypoints, provider)
 
-        assert waypoints[0].alt == 350.0  # 350 > 300 + 30
-        assert waypoints[1].alt == 430.0  # 400 + 30
-        assert waypoints[2].alt == 350.0  # 350 > 200 + 30
+        assert waypoints[0].alt == 300.0 + TRANSIT_AGL
+        assert waypoints[1].alt == 400.0 + TRANSIT_AGL
+        assert waypoints[2].alt == 200.0 + TRANSIT_AGL
 
 
 class TestSafetyValidatorAglCheck:
@@ -240,7 +277,7 @@ class TestSafetyValidatorAglCheck:
         assert len(violations) == 0
 
     def test_batch_check_minimum_agl_violation(self):
-        """waypoint below minimum AGL produces violation."""
+        """waypoint below AGL warning threshold produces violation."""
         from app.services.safety_validator import _batch_check_minimum_agl
 
         provider = FlatElevationProvider(300.0)
@@ -248,7 +285,7 @@ class TestSafetyValidatorAglCheck:
             WaypointData(
                 lon=14.0,
                 lat=50.0,
-                alt=310.0,
+                alt=303.0,
                 waypoint_type=WaypointType.MEASUREMENT,
             ),
         ]
@@ -256,21 +293,37 @@ class TestSafetyValidatorAglCheck:
         violations = _batch_check_minimum_agl(waypoints, provider)
         assert len(violations) == 1
         assert violations[0].violation_kind == "altitude"
-        assert "10.0m AGL" in violations[0].message
+        assert "3.0m AGL" in violations[0].message
         assert violations[0].waypoint_index == 0
         assert violations[0].is_warning is True
 
     def test_batch_check_minimum_agl_exactly_at_limit(self):
-        """waypoint exactly at minimum AGL - no violation."""
+        """waypoint exactly at AGL warning threshold - no violation."""
         from app.services.safety_validator import _batch_check_minimum_agl
 
         provider = FlatElevationProvider(300.0)
         waypoints = [
-            WaypointData(lon=14.0, lat=50.0, alt=330.0),  # exactly 30m AGL
+            WaypointData(lon=14.0, lat=50.0, alt=305.0),  # exactly 5m AGL
         ]
 
         violations = _batch_check_minimum_agl(waypoints, provider)
         assert len(violations) == 0
+
+    def test_batch_check_minimum_agl_length_mismatch_raises(self):
+        """mismatched elevation count raises TrajectoryGenerationError."""
+        from app.core.exceptions import TrajectoryGenerationError
+        from app.services.safety_validator import _batch_check_minimum_agl
+
+        provider = MagicMock()
+        provider.get_elevations_batch.return_value = [300.0]  # 1 elevation for 2 waypoints
+
+        waypoints = [
+            WaypointData(lon=14.0, lat=50.0, alt=340.0),
+            WaypointData(lon=14.1, lat=50.1, alt=350.0),
+        ]
+
+        with pytest.raises(TrajectoryGenerationError, match="expected 2 elevations, got 1"):
+            _batch_check_minimum_agl(waypoints, provider)
 
     def test_batch_check_minimum_agl_empty(self):
         """empty waypoints returns no violations."""
@@ -280,7 +333,7 @@ class TestSafetyValidatorAglCheck:
         assert _batch_check_minimum_agl([], provider) == []
 
     def test_validate_inspection_pass_with_elevation_provider(self):
-        """waypoint below AGL produces soft warning with waypoint type in message."""
+        """waypoint below AGL threshold produces soft warning with waypoint type in message."""
         from app.services.safety_validator import _batch_check_minimum_agl
 
         provider = MagicMock()
@@ -290,7 +343,7 @@ class TestSafetyValidatorAglCheck:
             WaypointData(
                 lon=14.0,
                 lat=50.0,
-                alt=410.0,
+                alt=403.0,
                 waypoint_type=WaypointType.MEASUREMENT,
             ),
         ]
@@ -477,7 +530,7 @@ class TestAglViolationSeverity:
             WaypointData(
                 lon=14.0,
                 lat=50.0,
-                alt=310.0,
+                alt=303.0,
                 waypoint_type=WaypointType.MEASUREMENT,
             ),
         ]
@@ -496,7 +549,7 @@ class TestAglViolationSeverity:
             WaypointData(
                 lon=14.0,
                 lat=50.0,
-                alt=310.0,
+                alt=303.0,
                 waypoint_type=WaypointType.TRANSIT,
             ),
         ]
@@ -512,9 +565,9 @@ class TestAglViolationSeverity:
 
         provider = FlatElevationProvider(300.0)
         waypoints = [
-            WaypointData(lon=14.0, lat=50.0, alt=310.0, waypoint_type=WaypointType.TRANSIT),
-            WaypointData(lon=14.1, lat=50.1, alt=310.0, waypoint_type=WaypointType.MEASUREMENT),
-            WaypointData(lon=14.2, lat=50.2, alt=310.0, waypoint_type=WaypointType.HOVER),
+            WaypointData(lon=14.0, lat=50.0, alt=303.0, waypoint_type=WaypointType.TRANSIT),
+            WaypointData(lon=14.1, lat=50.1, alt=303.0, waypoint_type=WaypointType.MEASUREMENT),
+            WaypointData(lon=14.2, lat=50.2, alt=303.0, waypoint_type=WaypointType.HOVER),
             WaypointData(lon=14.3, lat=50.3, alt=340.0, waypoint_type=WaypointType.MEASUREMENT),
         ]
 

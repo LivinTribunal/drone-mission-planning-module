@@ -75,6 +75,7 @@ class LHA(Base):
         nullable=False,
     )
     position = Column(Geometry("POINTZ", srid=4326), nullable=False)  # normalized ground elevation
+    tolerance = Column(Float, nullable=True)  # angular tolerance in degrees for PAPI transition
 
     agl = relationship("AGL", back_populates="lhas")
 

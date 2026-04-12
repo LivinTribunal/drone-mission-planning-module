@@ -161,7 +161,7 @@ export default function InspectionTemplateTable({
                     {tpl.name}
                   </td>
                   <td className="py-3 px-3 text-tv-text-secondary">
-                    {agl ? `${agl.name} - ${agl.agl_type}${agl.side ? ` - ${agl.side}` : ""}` : "-"}
+                    {agl ? `${agl.name}${agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}` : "-"}
                   </td>
                   <td className="py-3 px-3">
                     <span

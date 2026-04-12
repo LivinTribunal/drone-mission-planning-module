@@ -105,6 +105,7 @@ export function addObstacleLayers(
         properties: {
           id: o.id,
           color: obstacleColors[o.type] ?? "#6b6b6b",
+          entityType: "obstacle",
         },
         geometry: o.boundary,
       })),

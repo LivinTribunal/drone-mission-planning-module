@@ -32,6 +32,7 @@ import type { MapFeature, MapLayerConfig } from "@/types/map";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
 import AirportMap from "@/components/map/AirportMap";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
+import AirportInfoPanel from "@/components/map/overlays/AirportInfoPanel";
 import WaypointListPanel from "@/components/map/overlays/WaypointListPanel";
 import PoiInfoPanel from "@/components/map/overlays/PoiInfoPanel";
 import InspectionListPanel from "@/components/map/overlays/InspectionListPanel";
@@ -39,6 +40,7 @@ import MapControlsToolbar from "@/components/map/overlays/MapControlsToolbar";
 import MapWarningsPanel from "@/components/map/overlays/MapWarningsPanel";
 import MapStatsPanel from "@/components/map/overlays/MapStatsPanel";
 import useMapTools, { MapTool } from "@/hooks/useMapTools";
+import useFlyAlong from "@/hooks/useFlyAlong";
 import useUndoRedo from "@/hooks/useUndoRedo";
 import useMeasureDistance from "@/hooks/useMeasureDistance";
 import useHeadingTool from "@/hooks/useHeadingTool";
@@ -91,6 +93,7 @@ export default function MissionMapPage() {
 
   // tools
   const { activeTool, is3D, setTool, resetTool, setIs3D } = useMapTools();
+  const { state: flyAlongState, play: flyAlongPlay, pause: flyAlongPause, stop: flyAlongStop, setSpeed: flyAlongSetSpeed } = useFlyAlong(flightPlan?.waypoints?.length ?? 0);
   const {
     push: pushUndo,
     undo: undoFn,
@@ -774,6 +777,7 @@ export default function MissionMapPage() {
             airport={airportDetail}
             terrainMode={terrainMode}
             onTerrainChange={setTerrainMode}
+            is3D={is3D}
             showTerrainToggle={false}
             showLayerPanel={true}
             showLegend={false}
@@ -794,6 +798,7 @@ export default function MissionMapPage() {
             inspectionIndexMap={inspectionIndexMap}
             visibleInspectionIds={visibleInspectionIds}
             onFeatureClick={handleFeatureClick}
+            focusFeature={selectedFeature}
             onLayerChange={handleLayerChange}
             activeTool={activeTool}
             onPlaceTakeoff={handlePlaceTakeoff}
@@ -891,6 +896,12 @@ export default function MissionMapPage() {
               onZoomTo={handleZoomTo}
               bearing={bearing}
               onBearingReset={() => setBearingResetKey((k) => k + 1)}
+              hasTrajectory={!!flightPlan?.waypoints?.length}
+              flyAlongState={flyAlongState}
+              onFlyAlongPlay={flyAlongPlay}
+              onFlyAlongPause={flyAlongPause}
+              onFlyAlongStop={flyAlongStop}
+              onFlyAlongSpeedChange={flyAlongSetSpeed}
             />
 
             {/* right side overlays */}
@@ -904,6 +915,13 @@ export default function MissionMapPage() {
                 hasLanding={!!mission.landing_coordinate}
                 className="w-full rounded-2xl border border-tv-border bg-tv-bg flex-shrink-0"
               />
+
+              {airportDetail && (
+                <AirportInfoPanel
+                  airport={airportDetail}
+                  className="w-full rounded-2xl border border-tv-border bg-tv-bg flex-shrink-0"
+                />
+              )}
 
               {hasFlightPlan && violations.length > 0 && (
                 <MapWarningsPanel

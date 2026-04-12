@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import type maplibregl from "maplibre-gl";
 import type { MapFeature } from "@/types/map";
-import { polygonCentroid, haversineDistance, extractCenterline, computeBearing, EARTH_RADIUS } from "@/utils/geo";
+import { polygonCentroid, haversineDistance, extractCenterline, computeBearing, circleToPolygon, EARTH_RADIUS } from "@/utils/geo";
 import { bufferLineString } from "@/components/map/layers/surfaceLayers";
 import { DEFAULT_TAXIWAY_WIDTH_M } from "@/constants/surface";
 
@@ -29,14 +29,38 @@ function extractEditState(feature: MapFeature): EditState | null {
     const ring = feature.data.geometry.coordinates[0];
     if (!ring || ring.length < 4) return null;
     const corners = ring.slice(0, -1).map(([lng, lat]) => [lng, lat] as [number, number]);
-    return { mode: "polygon", corners, center: polygonCentroid(corners), radius: 0 };
+    const center = polygonCentroid(corners);
+
+    // detect circles
+    if (corners.length >= 16) {
+      const dists = corners.map((c) => haversineDistance(center[0], center[1], c[0], c[1]));
+      const avgDist = dists.reduce((s, d) => s + d, 0) / dists.length;
+      const isCircle = avgDist > 0 && dists.every((d) => Math.abs(d - avgDist) / avgDist < 0.05);
+      if (isCircle) {
+        return { mode: "circle", corners: [], center, radius: avgDist };
+      }
+    }
+
+    return { mode: "polygon", corners, center, radius: 0 };
   }
 
   if (feature.type === "obstacle") {
     const ring = feature.data.boundary?.coordinates[0];
     if (!ring || ring.length < 4) return null;
     const corners = ring.slice(0, -1).map(([lng, lat]) => [lng, lat] as [number, number]);
-    return { mode: "polygon", corners, center: polygonCentroid(corners), radius: 0 };
+    const center = polygonCentroid(corners);
+
+    // detect circles - many vertices (~64) with uniform distance from centroid
+    if (corners.length >= 16) {
+      const dists = corners.map((c) => haversineDistance(center[0], center[1], c[0], c[1]));
+      const avgDist = dists.reduce((s, d) => s + d, 0) / dists.length;
+      const isCircle = avgDist > 0 && dists.every((d) => Math.abs(d - avgDist) / avgDist < 0.05);
+      if (isCircle) {
+        return { mode: "circle", corners: [], center, radius: avgDist };
+      }
+    }
+
+    return { mode: "polygon", corners, center, radius: 0 };
   }
 
   if (feature.type === "surface") {
@@ -278,21 +302,39 @@ export default function useVertexEditor(
     if (!feat || !st) return;
 
     if (feat.type === "safety_zone") {
-      if (st.corners.length < 3) return;
       const elevation = feat.data.geometry.coordinates[0]?.[0]?.[2] ?? 0;
-      const ring = [...st.corners.map(([lng, lat]) => [lng, lat, elevation]), [st.corners[0][0], st.corners[0][1], elevation]];
-      onUpdateRef.current(feat.type, feat.data.id, {
-        geometry: { type: "Polygon", coordinates: [ring] },
-      });
+      if (st.mode === "circle") {
+        const circleRing = circleToPolygon(st.center, st.radius);
+        const ring = circleRing.map(([lng, lat]) => [lng, lat, elevation]);
+        onUpdateRef.current(feat.type, feat.data.id, {
+          geometry: { type: "Polygon", coordinates: [ring] },
+        });
+      } else {
+        if (st.corners.length < 3) return;
+        const ring = [...st.corners.map(([lng, lat]) => [lng, lat, elevation]), [st.corners[0][0], st.corners[0][1], elevation]];
+        onUpdateRef.current(feat.type, feat.data.id, {
+          geometry: { type: "Polygon", coordinates: [ring] },
+        });
+      }
     } else if (feat.type === "obstacle") {
       const elevation = feat.data.boundary?.coordinates[0]?.[0]?.[2] ?? 0;
-      if (st.corners.length < 3) return;
-      const ring = [...st.corners.map(([lng, lat]) => [lng, lat, elevation]), [st.corners[0][0], st.corners[0][1], elevation]];
-      const poly = { type: "Polygon" as const, coordinates: [ring] };
-      onUpdateRef.current(feat.type, feat.data.id, {
-        geometry: poly,
-        boundary: poly,
-      });
+      if (st.mode === "circle") {
+        const circleRing = circleToPolygon(st.center, st.radius);
+        const ring = circleRing.map(([lng, lat]) => [lng, lat, elevation]);
+        const poly = { type: "Polygon" as const, coordinates: [ring] };
+        onUpdateRef.current(feat.type, feat.data.id, {
+          geometry: poly,
+          boundary: poly,
+        });
+      } else {
+        if (st.corners.length < 3) return;
+        const ring = [...st.corners.map(([lng, lat]) => [lng, lat, elevation]), [st.corners[0][0], st.corners[0][1], elevation]];
+        const poly = { type: "Polygon" as const, coordinates: [ring] };
+        onUpdateRef.current(feat.type, feat.data.id, {
+          geometry: poly,
+          boundary: poly,
+        });
+      }
     } else if (feat.type === "surface") {
       if (st.corners.length < 3) return;
       const elevation = feat.data.boundary?.coordinates[0]?.[0]?.[2]

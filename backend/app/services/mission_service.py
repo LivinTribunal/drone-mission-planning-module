@@ -157,7 +157,7 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
     apply_schema_update(mission, schema)
 
     # validate the new cruise altitude against the (possibly updated) drone
-    if "default_transit_altitude" in data or "drone_profile_id" in data:
+    if "transit_agl" in data or "drone_profile_id" in data:
         drone = None
         drone_id = mission.drone_profile_id
         if drone_id:
@@ -174,14 +174,14 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
 
 
 def delete_mission(db: Session, mission_id: UUID):
-    """delete mission - blocked for EXPORTED/COMPLETED status."""
+    """delete mission - blocked for COMPLETED status."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         raise NotFoundError("mission not found")
 
-    if mission.status in ("EXPORTED", "COMPLETED"):
+    if mission.status in Mission._TERMINAL:
         raise DomainError(
-            "cannot delete mission in exported or completed state",
+            "cannot delete mission in completed or cancelled state",
             status_code=409,
         )
 
@@ -216,7 +216,7 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
         landing_coordinate=original.landing_coordinate,
         default_capture_mode=original.default_capture_mode,
         default_buffer_distance=original.default_buffer_distance,
-        default_transit_altitude=original.default_transit_altitude,
+        transit_agl=original.transit_agl,
     )
     db.add(copy)
     db.flush()

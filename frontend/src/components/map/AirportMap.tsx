@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Minus, Flag } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
+const LazyCesiumMapViewer = lazy(() => import("./CesiumMapViewer"));
+
 import type { AirportMapProps, MapFeature, MapLayerConfig } from "@/types/map";
 import type { WaypointResponse } from "@/types/flightPlan";
+import type { PointZ } from "@/types/common";
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
+import useCesiumSync from "@/hooks/useCesiumSync";
 import { MapTool } from "@/hooks/useMapTools";
 import {
   TOOL_CURSOR_MOVE,
@@ -93,6 +97,8 @@ import {
   WAYPOINT_CAMERA_TARGET_LAYER,
   WAYPOINT_WARNING_HIGHLIGHT_LAYER,
   WAYPOINT_SELECTED_LAYER,
+  SIMPLIFIED_TAKEOFF_LAYER,
+  SIMPLIFIED_LANDING_LAYER,
 } from "./layers/waypointLayers";
 import LayerPanel from "./overlays/LayerPanel";
 import LegendPanel from "./overlays/LegendPanel";
@@ -185,7 +191,7 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
   transitWaypoints: [WAYPOINT_TRANSIT_CIRCLE_LAYER],
   measurementWaypoints: [WAYPOINT_MEASUREMENT_CIRCLE_LAYER, WAYPOINT_HOVER_LAYER, WAYPOINT_LABEL_LAYER],
   path: [WAYPOINT_LINE_LAYER],
-  takeoffLanding: [WAYPOINT_TAKEOFF_LAYER, WAYPOINT_LANDING_LAYER],
+  takeoffLanding: [WAYPOINT_TAKEOFF_LAYER, WAYPOINT_LANDING_LAYER, SIMPLIFIED_TAKEOFF_LAYER, SIMPLIFIED_LANDING_LAYER],
   cameraHeading: [WAYPOINT_CAMERA_LINE_LAYER, WAYPOINT_CAMERA_TARGET_LAYER],
   pathHeading: [WAYPOINT_ARROW_LAYER],
   trajectory: [WAYPOINT_WARNING_HIGHLIGHT_LAYER, WAYPOINT_SELECTED_LAYER],
@@ -196,6 +202,7 @@ const INTERACTIVE_LAYERS = [
   RUNWAY_FILL_LAYER,
   TAXIWAY_FILL_LAYER,
   OBSTACLE_ICON_LAYER,
+  OBSTACLE_BOUNDARY_LAYER,
   SAFETY_ZONE_FILL_LAYER,
   AGL_POINT_LAYER,
   LHA_POINT_LAYER,
@@ -209,6 +216,8 @@ const POINTER_LAYERS = [
   WAYPOINT_TAKEOFF_LAYER,
   WAYPOINT_LANDING_LAYER,
   WAYPOINT_HOVER_LAYER,
+  SIMPLIFIED_TAKEOFF_LAYER,
+  SIMPLIFIED_LANDING_LAYER,
 ];
 
 // cursor styles per active tool
@@ -229,6 +238,40 @@ const PENDING_PREVIEW_BORDER_LAYER = "pending-preview-border";
 const PENDING_PREVIEW_POINT_LAYER = "pending-preview-point";
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+/** fly the map to the center of a feature. */
+function flyToFeature(map: maplibregl.Map, feature: MapFeature) {
+  let lon: number | undefined;
+  let lat: number | undefined;
+  let minZoom = 15.5;
+
+  if (feature.type === "waypoint") {
+    const coords = feature.data.position?.coordinates;
+    if (coords) { [lon, lat] = coords; }
+    minZoom = 17;
+  } else if (feature.type === "obstacle") {
+    const ring = feature.data.boundary?.coordinates?.[0];
+    if (ring && ring.length > 0) {
+      lon = ring.reduce((s: number, c: number[]) => s + c[0], 0) / ring.length;
+      lat = ring.reduce((s: number, c: number[]) => s + c[1], 0) / ring.length;
+    }
+  } else if (feature.type === "agl") {
+    [lon, lat] = feature.data.position.coordinates;
+  } else if (feature.type === "lha") {
+    [lon, lat] = feature.data.position.coordinates;
+    minZoom = 18;
+  } else if (feature.type === "surface") {
+    const coords = feature.data.geometry.coordinates;
+    if (coords.length > 0) {
+      lon = coords.reduce((s: number, c: number[]) => s + c[0], 0) / coords.length;
+      lat = coords.reduce((s: number, c: number[]) => s + c[1], 0) / coords.length;
+    }
+  }
+
+  if (lon !== undefined && lat !== undefined) {
+    map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), minZoom), duration: 800 });
+  }
+}
 
 const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   activeTool?: MapTool;
@@ -280,6 +323,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   showZoomControls = true,
   showCompass = true,
   showHelpPanel = true,
+  helpVariant = "full",
   is3D: is3DProp,
   onBearingChange,
   bearingResetKey,
@@ -340,6 +384,29 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   const [internalIs3D] = useState(false);
   const is3D = is3DProp ?? internalIs3D;
 
+  // cesium 3d viewer state
+  const [cesiumLoaded, setCesiumLoaded] = useState(false);
+  const cesiumViewerRef = useRef<import("cesium").Viewer | null>(null);
+  const { syncToCesium, syncToMaplibre } = useCesiumSync(mapRef);
+  // fly-along state placeholder - wired from parent via props
+  // const [flyAlongState] = useState<FlyAlongState>({ status: "idle", currentIndex: 0, speed: 2, progress: 0 });
+
+  const prevIs3DRef = useRef(is3D);
+
+  // load cesium on first 3d toggle, sync cameras on switch
+  useEffect(() => {
+    if (is3D && !cesiumLoaded) {
+      setCesiumLoaded(true);
+    }
+    if (is3D && cesiumViewerRef.current) {
+      syncToCesium(cesiumViewerRef.current);
+    }
+    if (!is3D && prevIs3DRef.current && cesiumViewerRef.current) {
+      syncToMaplibre(cesiumViewerRef.current);
+    }
+    prevIs3DRef.current = is3D;
+  }, [is3D, cesiumLoaded, syncToCesium, syncToMaplibre]);
+
   // track map bearing for compass
   const onBearingChangeRef = useRef(onBearingChange);
   onBearingChangeRef.current = onBearingChange;
@@ -399,6 +466,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
             camera_action: wp.camera_action ?? null,
             camera_target: wp.camera_target ?? null,
             gimbal_pitch: wp.gimbal_pitch ?? null,
+            hover_duration: wp.hover_duration ?? null,
           },
         });
       }
@@ -414,6 +482,10 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   }, [is3D]);
 
   // fly to focused feature and highlight it on the map
+  // track whether a focusFeature change originated from a map click (skip flyTo)
+  // vs an external trigger like a list panel click (do flyTo)
+  const skipFlyRef = useRef(false);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -423,33 +495,13 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
 
     if (!focusFeature) return;
 
-    let lon: number | undefined;
-    let lat: number | undefined;
-
-    let minZoom = 15.5;
-
-    if (focusFeature.type === "obstacle") {
-      const ring = focusFeature.data.boundary?.coordinates?.[0];
-      if (ring && ring.length > 0) {
-        lon = ring.reduce((s: number, c: number[]) => s + c[0], 0) / ring.length;
-        lat = ring.reduce((s: number, c: number[]) => s + c[1], 0) / ring.length;
-      }
-    } else if (focusFeature.type === "agl") {
-      [lon, lat] = focusFeature.data.position.coordinates;
-    } else if (focusFeature.type === "lha") {
-      [lon, lat] = focusFeature.data.position.coordinates;
-      minZoom = 18;
-    } else if (focusFeature.type === "surface") {
-      const coords = focusFeature.data.geometry.coordinates;
-      if (coords.length > 0) {
-        lon = coords.reduce((s, c) => s + c[0], 0) / coords.length;
-        lat = coords.reduce((s, c) => s + c[1], 0) / coords.length;
-      }
+    // skip flyTo when the focus change came from a map single-click
+    if (skipFlyRef.current) {
+      skipFlyRef.current = false;
+      return;
     }
 
-    if (lon !== undefined && lat !== undefined) {
-      map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), minZoom), duration: 800 });
-    }
+    flyToFeature(map, focusFeature);
   }, [focusFeature]);
 
   // sync pending creation preview geometry
@@ -1296,12 +1348,17 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   }, []);
 
   // add or update waypoint layers
-  const addWaypointLayers = useCallback((map: maplibregl.Map, wpsOverride?: WaypointResponse[]) => {
+  const addWaypointLayers = useCallback((
+    map: maplibregl.Map,
+    wpsOverride?: WaypointResponse[],
+    tkOverride?: PointZ | null,
+    ldOverride?: PointZ | null,
+  ) => {
     const wps = wpsOverride ?? waypointsRef.current;
     // keep ref in sync so other code paths see the same data
     waypointsRef.current = wps;
-    const takeoff = takeoffRef.current;
-    const landing = landingRef.current;
+    const takeoff = tkOverride !== undefined ? tkOverride : takeoffRef.current;
+    const landing = ldOverride !== undefined ? ldOverride : landingRef.current;
     const idxMap = indexMapRef.current;
 
     registerAllMapImages(map);
@@ -1333,12 +1390,21 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     const map = mapRef.current;
     if (!map) return;
 
+    const apply = () => addWaypointLayers(map, waypoints ?? undefined, takeoffCoordinate, landingCoordinate);
+
     if (map.isStyleLoaded()) {
-      addWaypointLayers(map, waypoints ?? undefined);
+      apply();
+      map.triggerRepaint();
     } else {
-      const handler = () => addWaypointLayers(map, waypoints ?? undefined);
+      // style may not be loaded yet after mount - fire once then detach from both events
+      const handler = () => {
+        map.off("load", handler);
+        map.off("styledata", handler);
+        apply();
+      };
       map.on("load", handler);
-      return () => { map.off("load", handler); };
+      map.on("styledata", handler);
+      return () => { map.off("load", handler); map.off("styledata", handler); };
     }
   }, [waypoints, takeoffCoordinate, landingCoordinate, inspectionIndexMap, addWaypointLayers]);
 
@@ -1716,6 +1782,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         WAYPOINT_TAKEOFF_LAYER,
         WAYPOINT_LANDING_LAYER,
         WAYPOINT_HOVER_LAYER,
+        SIMPLIFIED_TAKEOFF_LAYER,
+        SIMPLIFIED_LANDING_LAYER,
       ];
       const allQueryLayers = [...INTERACTIVE_LAYERS, ...waypointQueryLayers].filter((id) => {
         try {
@@ -1748,6 +1816,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
           const coords = wpHit.geometry && "coordinates" in wpHit.geometry
             ? (wpHit.geometry as GeoJSON.Point).coordinates
             : [0, 0, 0];
+          // maplibre strips Z from point geometries - read altitude from properties
+          const alt = Number(wpHit.properties.altitude ?? coords[2] ?? 0);
           const stackCount = Number(wpHit.properties.stack_count ?? 1);
           // look up full waypoint data for camera fields (stacked ids are comma-separated)
           const firstId = wpId.includes(",") ? wpId.split(",")[0] : wpId;
@@ -1758,7 +1828,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
               id: wpId,
               waypoint_type: String(wpHit.properties.waypoint_type ?? ""),
               sequence_order: Number(wpHit.properties.sequence_order ?? 0),
-              position: { type: "Point", coordinates: [coords[0], coords[1], coords[2] ?? 0] },
+              position: { type: "Point", coordinates: [coords[0], coords[1], alt] },
               stack_count: stackCount,
               seq_min: stackCount > 1 ? Number(wpHit.properties.seq_min) : undefined,
               seq_max: stackCount > 1 ? Number(wpHit.properties.seq_max) : undefined,
@@ -1769,18 +1839,20 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
               camera_action: fullWp?.camera_action ?? null,
               camera_target: fullWp?.camera_target ?? null,
               gimbal_pitch: fullWp?.gimbal_pitch ?? null,
+              hover_duration: fullWp?.hover_duration ?? null,
             },
           });
           return;
         }
       }
 
-      // prioritize point features over fill layers
+      // prioritize point/icon features over fill layers
       const pointFeature = features.find(
         (f) =>
           f.layer?.id !== SAFETY_ZONE_FILL_LAYER &&
           f.layer?.id !== SAFETY_ZONE_HATCH_LAYER &&
-          f.layer?.id !== SAFETY_ZONE_BORDER_LAYER,
+          f.layer?.id !== SAFETY_ZONE_BORDER_LAYER &&
+          f.layer?.id !== OBSTACLE_BOUNDARY_LAYER,
       );
       const f = pointFeature ?? features[0];
       const props = f.properties;
@@ -1813,22 +1885,57 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
 
       if (mapFeature) {
         setSelectedFeature(mapFeature);
+        // skip flyTo for map clicks - only double-click should fly
+        skipFlyRef.current = true;
         onFeatureClick?.(mapFeature);
       }
     }
 
     function handleDblClick(e: maplibregl.MapMouseEvent) {
       if (!map || tool !== MapTool.SELECT) return;
-      try { if (!map.getLayer(WAYPOINT_TRANSIT_CIRCLE_LAYER)) return; } catch { return; }
 
-      const features = map.queryRenderedFeatures(e.point, { layers: [WAYPOINT_TRANSIT_CIRCLE_LAYER] });
+      // transit waypoint double-click: delete if handler is provided (map editor only)
+      try {
+        if (onTransitDeleteRef.current && map.getLayer(WAYPOINT_TRANSIT_CIRCLE_LAYER)) {
+          const transitHits = map.queryRenderedFeatures(e.point, {
+            layers: [WAYPOINT_TRANSIT_CIRCLE_LAYER],
+          });
+          if (transitHits.length > 0 && transitHits[0].properties?.id) {
+            e.preventDefault();
+            onTransitDeleteRef.current(transitHits[0].properties.id);
+            return;
+          }
+        }
+      } catch { /* layer not ready */ }
+
+      // double-click on any feature or waypoint: fly to it
+      const waypointQueryLayers = [
+        WAYPOINT_TRANSIT_CIRCLE_LAYER,
+        WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
+        WAYPOINT_TAKEOFF_LAYER,
+        WAYPOINT_LANDING_LAYER,
+        WAYPOINT_HOVER_LAYER,
+        SIMPLIFIED_TAKEOFF_LAYER,
+        SIMPLIFIED_LANDING_LAYER,
+      ];
+      const allQueryLayers = [...INTERACTIVE_LAYERS, ...waypointQueryLayers].filter((id) => {
+        try { return map.getLayer(id); } catch { return false; }
+      });
+      const features = map.queryRenderedFeatures(e.point, { layers: allQueryLayers });
       if (features.length === 0) return;
 
-      const wpId = features[0].properties?.id;
-      if (!wpId) return;
-
       e.preventDefault();
-      onTransitDeleteRef.current?.(wpId);
+
+      // get coordinates from the hit feature
+      const hit = features[0];
+      if (hit.geometry && "coordinates" in hit.geometry) {
+        const coords = hit.geometry.coordinates as number[];
+        map.flyTo({
+          center: [coords[0], coords[1]],
+          zoom: Math.max(map.getZoom(), 16),
+          duration: 800,
+        });
+      }
     }
 
     map.on("mousemove", handleMouseMove);
@@ -2150,7 +2257,43 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       style={{ backgroundColor: "var(--tv-map-bg)" }}
       data-testid="airport-map"
     >
-      <div ref={containerRef} className="h-full w-full" />
+      <div ref={containerRef} className="h-full w-full" style={{ display: is3D ? "none" : "block" }} />
+
+      {/* cesium 3d viewer - lazy loaded on first 3d toggle */}
+      {cesiumLoaded && (
+        <div className="absolute inset-0" style={{ display: is3D ? "block" : "none" }}>
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-full w-full text-tv-text-secondary text-sm">
+                {t("map.loading3d")}
+              </div>
+            }
+          >
+            <LazyCesiumMapViewer
+              airport={airport}
+              layers={layerConfig}
+              waypoints={waypoints}
+              selectedWaypointId={selectedWaypointId}
+              takeoffCoordinate={takeoffCoordinate}
+              landingCoordinate={landingCoordinate}
+              visibleInspectionIds={visibleInspectionIds}
+              inspectionIndexMap={inspectionIndexMap}
+              terrainMode={terrainMode}
+              onFeatureClick={(f) => setSelectedFeature(f)}
+              onWaypointClick={onWaypointClick}
+              onBearingChange={setBearing}
+
+              onViewerReady={(viewer) => {
+                cesiumViewerRef.current = viewer;
+                syncToCesium(viewer);
+              }}
+              focusFeature={focusFeature}
+              highlightedWaypointIds={highlightedWaypointIds}
+              highlightSeverity={highlightSeverity}
+            />
+          </Suspense>
+        </div>
+      )}
 
       {/* top-left: layers, waypoints, poi info */}
       {(showLayerPanel || showWaypointList || showPoiInfo || leftPanelChildren) && (
@@ -2230,7 +2373,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       {/* bottom-left: map help */}
       {showHelpPanel && (
         <div className="absolute bottom-3 left-3 z-10">
-          <MapHelpPanel />
+          <MapHelpPanel variant={helpVariant} />
         </div>
       )}
 
@@ -2240,8 +2383,17 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
           {showCompass && (
             <button
               onClick={() => {
-                const map = mapRef.current;
-                if (map) map.easeTo({ bearing: 0, duration: 400 });
+                if (is3D && cesiumViewerRef.current && !cesiumViewerRef.current.isDestroyed()) {
+                  const cam = cesiumViewerRef.current.camera;
+                  cam.flyTo({
+                    destination: cam.positionWC,
+                    orientation: { heading: 0, pitch: cam.pitch, roll: 0 },
+                    duration: 0.4,
+                  });
+                } else {
+                  const map = mapRef.current;
+                  if (map) map.easeTo({ bearing: 0, duration: 400 });
+                }
               }}
               title={t("map.resetNorth")}
               className="relative flex items-center justify-center w-11 h-11 rounded-full border border-tv-border bg-tv-surface hover:bg-tv-surface-hover transition-colors"

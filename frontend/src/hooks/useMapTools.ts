@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 export enum MapTool {
   SELECT = "SELECT",
@@ -20,9 +20,27 @@ interface MapToolsReturn {
   setIs3D: (val: boolean) => void;
 }
 
+// editing tools that are disabled in 3d mode
+const EDITING_TOOLS = new Set([
+  MapTool.MOVE_WAYPOINT,
+  MapTool.MEASURE,
+  MapTool.HEADING,
+  MapTool.PLACE_TAKEOFF,
+  MapTool.PLACE_LANDING,
+]);
+
+export { EDITING_TOOLS };
+
 export default function useMapTools(): MapToolsReturn {
   const [activeTool, setActiveTool] = useState<MapTool>(MapTool.SELECT);
-  const [is3D, setIs3D] = useState(false);
+  const [is3D, setIs3DInternal] = useState(false);
+
+  const setIs3D = useCallback((val: boolean) => {
+    setIs3DInternal(val);
+    if (val) {
+      setActiveTool((prev) => (EDITING_TOOLS.has(prev) ? MapTool.SELECT : prev));
+    }
+  }, []);
 
   const setTool = useCallback((tool: MapTool) => {
     if (tool === MapTool.ZOOM_RESET) return; // one-shot action handled by toolbar, not a persistent tool
@@ -33,30 +51,38 @@ export default function useMapTools(): MapToolsReturn {
     setActiveTool(MapTool.SELECT);
   }, []);
 
+  const is3DRef = useRef(is3D);
+  is3DRef.current = is3D;
+
   // keyboard shortcuts
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
+      const trySet = (tool: MapTool) => {
+        if (is3DRef.current && EDITING_TOOLS.has(tool)) return;
+        setActiveTool(tool);
+      };
+
       switch (e.key.toLowerCase()) {
         case "s":
-          if (!e.ctrlKey && !e.metaKey) setActiveTool(MapTool.SELECT);
+          if (!e.ctrlKey && !e.metaKey) trySet(MapTool.SELECT);
           break;
         case "p":
-          setActiveTool(MapTool.PAN);
+          trySet(MapTool.PAN);
           break;
         case "w":
-          setActiveTool(MapTool.MOVE_WAYPOINT);
+          trySet(MapTool.MOVE_WAYPOINT);
           break;
         case "m":
-          setActiveTool(MapTool.MEASURE);
+          trySet(MapTool.MEASURE);
           break;
         case "h":
-          setActiveTool(MapTool.HEADING);
+          trySet(MapTool.HEADING);
           break;
         case "z":
-          if (!e.ctrlKey && !e.metaKey) setActiveTool(MapTool.ZOOM);
+          if (!e.ctrlKey && !e.metaKey) trySet(MapTool.ZOOM);
           break;
         case "r":
           // zoom reset is handled by the toolbar/page

@@ -407,14 +407,14 @@ function createPathArrowIcon(size: number): ImageData {
   return ctx.getImageData(0, 0, size, size);
 }
 
-/** safely adds an image, removing any existing one first. */
+/** safely adds an image, skipping if it already exists. */
 function safeAddImage(
   map: MaplibreMap,
   name: string,
   data: ImageData,
   opts?: { pixelRatio?: number },
 ): void {
-  try { if (map.hasImage(name)) map.removeImage(name); } catch { /* noop */ }
+  if (map.hasImage(name)) return;
   map.addImage(name, data, opts);
 }
 
