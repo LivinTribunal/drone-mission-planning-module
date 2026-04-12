@@ -519,16 +519,50 @@ def resolve_inspection_collisions(
 def _adjust_transit_altitude_for_terrain(
     waypoints: list[WaypointData],
     elevation_provider,
+    cruise_altitude_agl: float | None = None,
 ) -> None:
-    """clamp transit waypoint altitudes to maintain minimum AGL above terrain."""
+    """clamp or set transit waypoint altitudes relative to terrain.
+
+    when cruise_altitude_agl is set, each transit waypoint is rewritten to
+    ground + cruise_altitude_agl so the cruise stays on one vertical level.
+    otherwise we fall back to the old behaviour of flooring at MINIMUM_AGL.
+    """
     if not elevation_provider or not waypoints:
         return
 
     points = [(wp.lat, wp.lon) for wp in waypoints]
     elevations = elevation_provider.get_elevations_batch(points)
 
-    for wp, ground in zip(waypoints, elevations):
-        wp.alt = max(wp.alt, ground + MINIMUM_AGL_ALTITUDE)
+    if cruise_altitude_agl is not None:
+        for wp, ground in zip(waypoints, elevations):
+            wp.alt = ground + cruise_altitude_agl
+    else:
+        for wp, ground in zip(waypoints, elevations):
+            wp.alt = max(wp.alt, ground + MINIMUM_AGL_ALTITUDE)
+
+
+def _check_cruise_clearance(
+    db: Session,
+    waypoints: list[WaypointData],
+    obstacles: list[Obstacle],
+    zones: list[SafetyZone],
+) -> None:
+    """re-validate transit segments after altitude rewrite.
+
+    after we rewrite transit altitudes to the cruise level, the segments
+    could in principle cross an obstacle/zone that was fine at the old
+    altitude. run a lightweight segment check and raise a clear error if
+    the cruise level conflicts with obstacle clearance.
+    """
+    if not waypoints:
+        return
+
+    for k in range(1, len(waypoints)):
+        prev, cur = waypoints[k - 1], waypoints[k]
+        from_pt = Point3D(lon=prev.lon, lat=prev.lat, alt=prev.alt)
+        to_pt = Point3D(lon=cur.lon, lat=cur.lat, alt=cur.alt)
+        if _is_segment_blocked(db, from_pt, to_pt, obstacles, zones):
+            raise TrajectoryGenerationError("cruise altitude conflicts with obstacle clearance")
 
 
 def compute_transit_path(
@@ -540,8 +574,14 @@ def compute_transit_path(
     speed: MetersPerSecond,
     surfaces: list[AirfieldSurface] | None = None,
     elevation_provider=None,
+    cruise_altitude_agl: float | None = None,
 ) -> list[WaypointData]:
-    """compute A* transit path - shortest obstacle-free route with runway crossing penalties."""
+    """compute A* transit path - shortest obstacle-free route with runway crossing penalties.
+
+    when cruise_altitude_agl is provided, all returned transit waypoints share
+    ground + cruise_altitude_agl as their altitude so the vertical profile
+    stays flat between inspection passes.
+    """
     # straight-line if path is clear and doesn't cross runway
     if not _is_segment_blocked(db, from_point, to_point, obstacles, zones):
         crosses_runway = False
@@ -574,7 +614,9 @@ def compute_transit_path(
                     camera_action=CameraAction.NONE,
                 )
             ]
-            _adjust_transit_altitude_for_terrain(wps, elevation_provider)
+            _adjust_transit_altitude_for_terrain(wps, elevation_provider, cruise_altitude_agl)
+            if cruise_altitude_agl is not None:
+                _check_cruise_clearance(db, wps, obstacles, zones)
             return wps
 
     # A* through visibility graph with runway penalties
@@ -601,6 +643,8 @@ def compute_transit_path(
             )
         )
 
-    _adjust_transit_altitude_for_terrain(transit_wps, elevation_provider)
+    _adjust_transit_altitude_for_terrain(transit_wps, elevation_provider, cruise_altitude_agl)
+    if cruise_altitude_agl is not None:
+        _check_cruise_clearance(db, transit_wps, obstacles, zones)
 
     return transit_wps

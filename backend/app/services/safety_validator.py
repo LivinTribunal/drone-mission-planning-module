@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
-from app.models.enums import ConstraintType, SurfaceType
+from app.models.enums import ConstraintType, SurfaceType, WaypointType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
 from app.models.value_objects import Speed
@@ -18,6 +18,9 @@ from app.services.trajectory_types import (
     Violation,
     WaypointData,
 )
+
+# waypoint types exempt from AGL minimum check - these literally touch the ground
+_GROUND_LEVEL_WAYPOINT_TYPES = (WaypointType.TAKEOFF, WaypointType.LANDING)
 
 # spatial queries use parameterized text() with PostGIS functions
 # all inputs are bound parameters - no sql injection risk
@@ -197,12 +200,13 @@ def _batch_check_minimum_agl(
     elevation_provider,
     min_agl: float = MINIMUM_AGL_ALTITUDE,
 ) -> list[Violation]:
-    """check all waypoints maintain minimum height above ground level.
+    """check in-flight waypoints maintain minimum height above ground level.
 
     all AGL violations are soft warnings - PAPI approach paths inherently
     place measurement waypoints below 30m AGL by design (3 deg glide slope
     at ~400m distance = ~21m AGL). transit waypoints are already hard-clamped
-    in _adjust_transit_altitude_for_terrain.
+    in _adjust_transit_altitude_for_terrain. TAKEOFF and LANDING waypoints
+    are exempt by design - they sit on the ground.
     """
     if not waypoints:
         return []
@@ -212,6 +216,9 @@ def _batch_check_minimum_agl(
 
     violations = []
     for i, (wp, ground) in enumerate(zip(waypoints, elevations)):
+        if wp.waypoint_type in _GROUND_LEVEL_WAYPOINT_TYPES:
+            continue
+
         agl = wp.alt - ground
         if agl < min_agl:
             violations.append(

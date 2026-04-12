@@ -513,18 +513,29 @@ def _generate_trajectory_inner(
     # terrain helper
     provider = data.elevation_provider
 
-    # takeoff + climb to safe altitude before transit
+    # resolve per-mission cruise altitude (AGL). falls back to a safe default
+    # derived from takeoff_safe_altitude when the operator did not configure one.
+    transit_alt_agl = (
+        mission.default_transit_altitude
+        if mission.default_transit_altitude is not None
+        else max(MINIMUM_AGL_ALTITUDE, settings.takeoff_safe_altitude)
+    )
+
+    # takeoff + climb to cruise altitude before transit
     if mission.takeoff_coordinate:
         tc = _parse_coordinate(mission.takeoff_coordinate.data, "takeoff")
         if not inspection_passes[0].waypoints:
             raise TrajectoryGenerationError("first inspection produced no waypoints")
         first_wp = inspection_passes[0].waypoints[0]
 
-        # clamp takeoff alt to terrain + minimum AGL
+        # takeoff waypoint sits at operator-supplied altitude (or ground from
+        # the elevation provider when no explicit altitude is given). no AGL
+        # clamp here - the drone is literally on the ground.
         takeoff_alt = tc[2]
-        if provider:
-            ground = provider.get_elevation(tc[1], tc[0])
-            takeoff_alt = max(takeoff_alt, ground + MINIMUM_AGL_ALTITUDE)
+        if takeoff_alt is None and provider:
+            takeoff_alt = provider.get_elevation(tc[1], tc[0])
+        if takeoff_alt is None:
+            takeoff_alt = 0.0
 
         all_waypoints.append(
             WaypointData(
@@ -538,12 +549,15 @@ def _generate_trajectory_inner(
             )
         )
 
-        safe_alt = takeoff_alt + settings.takeoff_safe_altitude
+        # climb to cruise altitude (ground + transit AGL) so the following
+        # transit stays on the same vertical level instead of drifting.
+        ground_at_takeoff = provider.get_elevation(tc[1], tc[0]) if provider else takeoff_alt
+        climb_alt = ground_at_takeoff + transit_alt_agl
         all_waypoints.append(
             WaypointData(
                 lon=tc[0],
                 lat=tc[1],
-                alt=safe_alt,
+                alt=climb_alt,
                 heading=bearing_between(tc[0], tc[1], first_wp.lon, first_wp.lat),
                 speed=default_speed,
                 waypoint_type=WaypointType.TRANSIT,
@@ -568,25 +582,31 @@ def _generate_trajectory_inner(
                 default_speed,
                 data.surfaces,
                 elevation_provider=provider,
+                cruise_altitude_agl=transit_alt_agl,
             )
             all_waypoints.extend(transit_wps)
 
         all_waypoints.extend(ipass.waypoints)
 
-    # landing: transit to safe altitude above landing spot, then descend
+    # landing: transit at cruise altitude above landing spot, then descend
     if mission.landing_coordinate:
         lc = _parse_coordinate(mission.landing_coordinate.data, "landing")
 
-        # clamp landing alt to terrain + minimum AGL
+        # landing waypoint sits at operator-supplied altitude (or ground from
+        # the elevation provider). no AGL clamp here - the drone touches down.
         landing_alt = lc[2]
-        if provider:
-            ground = provider.get_elevation(lc[1], lc[0])
-            landing_alt = max(landing_alt, ground + MINIMUM_AGL_ALTITUDE)
+        if landing_alt is None and provider:
+            landing_alt = provider.get_elevation(lc[1], lc[0])
+        if landing_alt is None:
+            landing_alt = 0.0
 
-        safe_alt = landing_alt + settings.landing_safe_altitude
+        # descend-above-landing target uses cruise altitude (ground + transit AGL)
+        # to match the rest of the transit profile.
+        ground_at_landing = provider.get_elevation(lc[1], lc[0]) if provider else landing_alt
+        descent_alt = ground_at_landing + transit_alt_agl
         last = all_waypoints[-1]
         from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)
-        above_landing = Point3D(lon=lc[0], lat=lc[1], alt=safe_alt)
+        above_landing = Point3D(lon=lc[0], lat=lc[1], alt=descent_alt)
 
         # transit to point above landing spot
         landing_transit = compute_transit_path(
@@ -598,6 +618,7 @@ def _generate_trajectory_inner(
             default_speed,
             data.surfaces,
             elevation_provider=provider,
+            cruise_altitude_agl=transit_alt_agl,
         )
         all_waypoints.extend(landing_transit)
 

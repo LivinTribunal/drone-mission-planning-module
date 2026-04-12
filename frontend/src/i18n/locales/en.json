@@ -396,6 +396,8 @@
       "defaultAltitudeOffset": "Default Altitude Offset (m)",
       "defaultBufferDistance": "Default Buffer Distance (m)",
       "defaultBufferDistanceHint": "Leave empty to keep object-level values",
+      "defaultTransitAltitude": "Default Transit Altitude (m AGL)",
+      "defaultTransitAltitudeHint": "Minimum 30 m - leave empty for safe default",
       "takeoffCoordinate": "Takeoff Coordinate",
       "landingCoordinate": "Landing Coordinate",
       "operatorNotes": "Operator Notes",

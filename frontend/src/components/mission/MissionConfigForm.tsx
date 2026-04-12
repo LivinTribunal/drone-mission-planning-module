@@ -155,6 +155,10 @@ export default function MissionConfigForm({
     values.default_buffer_distance !== undefined
       ? values.default_buffer_distance
       : mission.default_buffer_distance;
+  const defaultTransitAltitude =
+    values.default_transit_altitude !== undefined
+      ? values.default_transit_altitude
+      : mission.default_transit_altitude;
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -262,6 +266,27 @@ export default function MissionConfigForm({
           placeholder={t("mission.config.defaultBufferDistanceHint")}
           className="w-full px-3 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
           data-testid="default-buffer-distance-input"
+        />
+      </div>
+
+      {/* default transit altitude */}
+      <div>
+        <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+          {t("mission.config.defaultTransitAltitude")}
+        </label>
+        <input
+          type="number"
+          step="1"
+          min="30"
+          value={defaultTransitAltitude ?? ""}
+          onChange={(e) =>
+            onChange({
+              default_transit_altitude: e.target.value ? parseFloat(e.target.value) : null,
+            })
+          }
+          placeholder={t("mission.config.defaultTransitAltitudeHint")}
+          className="w-full px-3 py-2.5 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+          data-testid="default-transit-altitude-input"
         />
       </div>
 
