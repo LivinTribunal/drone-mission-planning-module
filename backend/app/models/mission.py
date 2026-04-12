@@ -41,7 +41,13 @@ TRAJECTORY_FIELDS = {
     "landing_coordinate",
     "default_capture_mode",
     "default_buffer_distance",
+    "default_transit_altitude",
 }
+
+# minimum allowable cruise altitude (AGL meters) - kept in sync with
+# app.services.trajectory_types.MINIMUM_AGL_ALTITUDE to avoid a schema->services
+# import from validators.
+MIN_TRANSIT_ALTITUDE_AGL = 30.0
 
 
 class DroneProfile(Base):
@@ -95,6 +101,7 @@ class Mission(Base):
     landing_coordinate = Column(Geometry("POINTZ", srid=4326))
     default_capture_mode = Column(String(20), nullable=True, default="VIDEO_CAPTURE")
     default_buffer_distance = Column(Float, nullable=True)
+    default_transit_altitude = Column(Float, nullable=True)
     has_unsaved_map_changes = Column(Boolean, nullable=False, default=False, server_default="false")
 
     airport = relationship("Airport")
@@ -180,3 +187,26 @@ class Mission(Base):
         """
         self.invalidate_trajectory()
         self.drone_profile_id = drone_profile_id
+
+    def validate_transit_altitude(self, drone: "DroneProfile | None" = None):
+        """enforce transit altitude business rules.
+
+        rules: positive, >= MIN_TRANSIT_ALTITUDE_AGL, <= drone max altitude
+        when a drone profile is attached. raises ValueError on failure; no-op
+        when the field is not set.
+        """
+        value = self.default_transit_altitude
+        if value is None:
+            return
+
+        if value <= 0:
+            raise ValueError("default_transit_altitude must be greater than 0")
+        if value < MIN_TRANSIT_ALTITUDE_AGL:
+            raise ValueError(
+                f"default_transit_altitude must be at least {MIN_TRANSIT_ALTITUDE_AGL:.0f}m AGL"
+            )
+        if drone and drone.max_altitude is not None and value > drone.max_altitude:
+            raise ValueError(
+                f"default_transit_altitude {value:.0f}m exceeds drone max altitude "
+                f"{drone.max_altitude:.0f}m"
+            )
