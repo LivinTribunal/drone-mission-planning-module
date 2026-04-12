@@ -257,3 +257,42 @@ export interface ObstacleRecalculateResponse {
   current: ObstacleDimensions;
   recalculated: ObstacleDimensions;
 }
+
+// openaip lookup suggestions
+export interface RunwaySuggestion {
+  identifier: string;
+  heading: number;
+  length: number;
+  width: number;
+  threshold_position: PointZ;
+  end_position: PointZ;
+  geometry: LineStringZ;
+  boundary: PolygonZ;
+}
+
+export interface ObstacleSuggestion {
+  name: string;
+  type: ObstacleType;
+  height: number;
+  boundary: PolygonZ;
+}
+
+export interface SafetyZoneSuggestion {
+  name: string;
+  type: SafetyZoneType;
+  geometry: PolygonZ;
+  altitude_floor: number | null;
+  altitude_ceiling: number | null;
+}
+
+export interface AirportLookupResponse {
+  icao_code: string;
+  name: string;
+  city: string | null;
+  country: string | null;
+  elevation: number;
+  location: PointZ;
+  runways: RunwaySuggestion[];
+  obstacles: ObstacleSuggestion[];
+  safety_zones: SafetyZoneSuggestion[];
+}

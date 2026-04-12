@@ -734,7 +734,19 @@
       "lonRequired": "Valid longitude required (-180 to 180)",
       "altRequired": "Altitude is required",
       "createError": "Failed to create airport",
-      "icaoConflict": "An airport with this ICAO code already exists"
+      "icaoConflict": "An airport with this ICAO code already exists",
+      "lookup": {
+        "button": "Lookup",
+        "looking": "Looking up...",
+        "notFound": "No airport found for this ICAO code",
+        "noApiKey": "OpenAIP lookup is not configured",
+        "apiDown": "OpenAIP lookup is unavailable. You can still enter data manually.",
+        "noSuggestions": "No runways, airspaces, or obstacles found near this airport",
+        "previewTitle": "Suggested infrastructure to create",
+        "runways": "Runways",
+        "safetyZones": "Safety zones",
+        "obstacles": "Obstacles"
+      }
     },
     "detail": {
       "backToList": "Back to Airports",
