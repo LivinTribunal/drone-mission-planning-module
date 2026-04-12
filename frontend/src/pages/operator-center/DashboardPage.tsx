@@ -10,13 +10,14 @@ import {
   Battery,
   Map,
   Download,
+  Copy,
   Pencil,
   Trash2,
 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { useMission } from "@/contexts/MissionContext";
 import { listAirportSummaries } from "@/api/airports";
-import { updateMission, deleteMission } from "@/api/missions";
+import { updateMission, deleteMission, duplicateMission } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { AirportSummaryResponse } from "@/types/airport";
 import type { MissionResponse } from "@/types/mission";
@@ -34,6 +35,7 @@ import {
 } from "@/components/common/ListPageLayout";
 import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
+import type { MapFeature } from "@/types/map";
 import CreateMissionDialog from "@/components/mission/CreateMissionDialog";
 
 type SortKey =
@@ -287,6 +289,16 @@ function MissionListSection({
     return missions.filter((m) => m.name.toLowerCase().includes(q));
   }, [missions, search]);
 
+  async function handleDuplicate(mission: MissionResponse) {
+    /** duplicate a mission and refresh the list. */
+    try {
+      await duplicateMission(mission.id);
+      onRefresh();
+    } catch (err) {
+      console.error("duplicate mission failed:", err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function handleRename(missionId: string) {
     if (!renameValue.trim()) return;
     try {
@@ -356,10 +368,13 @@ function MissionListSection({
             const terminal = isTerminal(mission.status);
             return (
               <div key={mission.id}>
-                <button
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => navigate(`/operator-center/missions/${mission.id}/overview`)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate(`/operator-center/missions/${mission.id}/overview`); }}
                   className="w-full text-left rounded-xl border border-tv-border bg-tv-bg p-3
-                    hover:bg-tv-surface-hover transition-colors"
+                    hover:bg-tv-surface-hover transition-colors cursor-pointer"
                   data-testid={`mission-row-${mission.id}`}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -379,6 +394,11 @@ function MissionListSection({
                             onClick: () => navigate(`/operator-center/missions/${mission.id}/validation-export`),
                             disabled: terminal,
                             title: t("dashboard.exportAction"),
+                          },
+                          {
+                            icon: Copy,
+                            onClick: () => handleDuplicate(mission),
+                            title: t("dashboard.duplicateAction"),
                           },
                           {
                             icon: Pencil,
@@ -412,7 +432,7 @@ function MissionListSection({
                       <span className="text-xs" style={{ color: "var(--tv-text-secondary)" }}>{new Date(mission.updated_at).toLocaleDateString()}</span>
                     </span>
                   </div>
-                </button>
+                </div>
 
                 {/* rename dialog */}
                 {renamingId === mission.id && (
@@ -657,11 +677,15 @@ function DroneProfilesSection({
           )}
 
           {/* expanded: all other drone profiles */}
-          {expanded && rest.map((dp) => (
-            <div key={dp.id} className="border-t border-tv-border">
-              <DroneProfileRow dp={dp} missionCount={missionCounts[dp.id] || 0} />
+          {expanded && (
+            <div className="max-h-60 overflow-y-auto">
+              {rest.map((dp) => (
+                <div key={dp.id} className="border-t border-tv-border">
+                  <DroneProfileRow dp={dp} missionCount={missionCounts[dp.id] || 0} />
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </>
       )}
     </div>
@@ -690,6 +714,7 @@ function DashboardView() {
   const [droneProfilesError, setDroneProfilesError] = useState(false);
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
   const [is3D, setIs3D] = useState(false);
+  const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
 
   const fetchMissions = useCallback(() => {
     setMissionsError(false);
@@ -764,6 +789,9 @@ function DashboardView() {
               onTerrainChange={setTerrainMode}
               is3D={is3D}
               onToggle3D={setIs3D}
+              onFeatureClick={setSelectedFeature}
+              focusFeature={selectedFeature}
+              helpVariant="preview"
             />
             <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">
               <div className="flex rounded-full border border-tv-border bg-tv-surface p-1">

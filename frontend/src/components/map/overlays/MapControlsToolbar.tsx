@@ -5,13 +5,17 @@ import {
   Hand,
   Move,
   Ruler,
-  Compass,
+  Navigation,
   Search,
   Maximize,
   Undo2,
   Redo2,
+  Play,
+  Pause,
+  Square,
 } from "lucide-react";
-import { MapTool } from "@/hooks/useMapTools";
+import { MapTool, EDITING_TOOLS } from "@/hooks/useMapTools";
+import type { FlyAlongState, FlyAlongSpeed } from "@/types/map";
 
 interface MapControlsToolbarProps {
   activeTool: MapTool;
@@ -29,9 +33,16 @@ interface MapControlsToolbarProps {
   onZoomTo: (percent: number) => void;
   bearing?: number;
   onBearingReset?: () => void;
+  hasTrajectory?: boolean;
+  flyAlongState?: FlyAlongState;
+  onFlyAlongPlay?: () => void;
+  onFlyAlongPause?: () => void;
+  onFlyAlongStop?: () => void;
+  onFlyAlongSpeedChange?: (speed: FlyAlongSpeed) => void;
 }
 
 const ZOOM_PRESETS = [50, 75, 100, 150, 200, 300, 500];
+const FLY_ALONG_SPEEDS: FlyAlongSpeed[] = [1, 2, 5, 10];
 
 interface ToolDef {
   tool: MapTool;
@@ -44,7 +55,7 @@ const mainTools: ToolDef[] = [
   { tool: MapTool.PAN, icon: Hand, tooltipKey: "map.tools.pan" },
   { tool: MapTool.MOVE_WAYPOINT, icon: Move, tooltipKey: "map.tools.moveWaypoint" },
   { tool: MapTool.MEASURE, icon: Ruler, tooltipKey: "map.tools.measure" },
-  { tool: MapTool.HEADING, icon: Compass, tooltipKey: "map.tools.heading" },
+  { tool: MapTool.HEADING, icon: Navigation, tooltipKey: "map.tools.heading" },
 ];
 
 const zoomTools: ToolDef[] = [
@@ -67,6 +78,12 @@ export default function MapControlsToolbar({
   onZoomTo,
   bearing = 0,
   onBearingReset,
+  hasTrajectory,
+  flyAlongState,
+  onFlyAlongPlay,
+  onFlyAlongPause,
+  onFlyAlongStop,
+  onFlyAlongSpeedChange,
 }: MapControlsToolbarProps) {
   const { t } = useTranslation();
   const [zoomDropdownOpen, setZoomDropdownOpen] = useState(false);
@@ -96,16 +113,22 @@ export default function MapControlsToolbar({
 
   function renderToolButton(def: ToolDef) {
     const isActive = activeTool === def.tool;
+    const isDisabled = is3D && EDITING_TOOLS.has(def.tool);
     const Icon = def.icon;
+    const tooltip = isDisabled ? t("map.editIn2d") : t(def.tooltipKey);
+
     return (
       <button
         key={def.tool}
-        onClick={() => onToolChange(def.tool)}
-        title={t(def.tooltipKey)}
+        onClick={() => !isDisabled && onToolChange(def.tool)}
+        title={tooltip}
+        disabled={isDisabled}
         className={`flex items-center justify-center rounded-full w-9 h-9 transition-colors ${
-          isActive
-            ? "bg-tv-accent text-tv-accent-text"
-            : "text-tv-text-primary hover:bg-tv-surface-hover"
+          isDisabled
+            ? "text-tv-text-muted opacity-40 cursor-not-allowed"
+            : isActive
+              ? "bg-tv-accent text-tv-accent-text"
+              : "text-tv-text-primary hover:bg-tv-surface-hover"
         }`}
         data-testid={`tool-${def.tool.toLowerCase()}`}
       >
@@ -113,6 +136,8 @@ export default function MapControlsToolbar({
       </button>
     );
   }
+
+  const showFlyAlong = is3D && hasTrajectory && flyAlongState;
 
   return (
     <div
@@ -181,8 +206,8 @@ export default function MapControlsToolbar({
             viewBox="0 0 28 28"
             style={{ transform: `rotate(${-bearing}deg)` }}
           >
-            <text x="14" y="5.5" textAnchor="middle" dominantBaseline="middle" fill="#e54545" fontSize="5.5" fontWeight="bold">N</text>
-            <polygon points="14,8 12.8,14 15.2,14" fill="#e54545" />
+            <text x="14" y="5.5" textAnchor="middle" dominantBaseline="middle" fill="var(--tv-accent)" fontSize="5.5" fontWeight="bold">N</text>
+            <polygon points="14,8 12.8,14 15.2,14" fill="var(--tv-accent)" />
             <polygon points="14,20 12.8,14 15.2,14" fill="var(--tv-text-muted)" />
           </svg>
         </button>
@@ -199,7 +224,7 @@ export default function MapControlsToolbar({
               !is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
             }`}
           >
-            2D
+            {t("common.2d")}
           </button>
           <button
             onClick={() => onToggle3D(true)}
@@ -208,7 +233,7 @@ export default function MapControlsToolbar({
               is3D ? "bg-tv-accent text-tv-accent-text" : "text-tv-text-secondary"
             }`}
           >
-            3D
+            {t("common.3d")}
           </button>
         </div>
 
@@ -232,6 +257,74 @@ export default function MapControlsToolbar({
           </button>
         </div>
       </div>
+
+      {/* fly-along controls - only in 3d with trajectory */}
+      {showFlyAlong && (
+        <div className="flex items-center gap-1 rounded-full border border-tv-border bg-tv-bg px-1 py-1">
+          {flyAlongState.status === "playing" ? (
+            <button
+              onClick={onFlyAlongPause}
+              title={t("map.pause")}
+              className="flex items-center justify-center rounded-full w-9 h-9 text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+              data-testid="fly-along-pause"
+            >
+              <Pause className="h-4 w-4" />
+            </button>
+          ) : (
+            <button
+              onClick={onFlyAlongPlay}
+              title={t("map.play")}
+              className="flex items-center justify-center rounded-full w-9 h-9 text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+              data-testid="fly-along-play"
+            >
+              <Play className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={onFlyAlongStop}
+            title={t("map.stop")}
+            disabled={flyAlongState.status === "idle"}
+            className={`flex items-center justify-center rounded-full w-9 h-9 transition-colors ${
+              flyAlongState.status === "idle"
+                ? "text-tv-text-muted opacity-40 cursor-not-allowed"
+                : "text-tv-text-primary hover:bg-tv-surface-hover"
+            }`}
+            data-testid="fly-along-stop"
+          >
+            <Square className="h-3.5 w-3.5" />
+          </button>
+
+          {/* speed selector */}
+          <div className="flex rounded-full bg-tv-surface border border-tv-border p-0.5">
+            {FLY_ALONG_SPEEDS.map((speed) => (
+              <button
+                key={speed}
+                onClick={() => onFlyAlongSpeedChange?.(speed)}
+                className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
+                  flyAlongState.speed === speed
+                    ? "bg-tv-accent text-tv-accent-text"
+                    : "text-tv-text-secondary"
+                }`}
+              >
+                {t("map.speedMultiplier", { value: speed })}
+              </button>
+            ))}
+          </div>
+
+          {/* progress bar */}
+          {flyAlongState.status !== "idle" && (
+            <div className="w-20 h-1.5 rounded-full bg-tv-surface overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${flyAlongState.progress}%`,
+                  backgroundColor: "var(--tv-accent)",
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* undo / redo pill */}
       <div className="flex items-center gap-1 rounded-full border border-tv-border bg-tv-bg px-1 py-1">

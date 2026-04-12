@@ -78,6 +78,7 @@ export function waypointsToGeoJSON(
           color: resolveWaypointColor(wp.waypoint_type),
           has_camera_target: wp.camera_target ? "yes" : "no",
           stack_count: 1,
+          altitude: wp.position.coordinates[2] ?? 0,
         },
         geometry: { type: "Point", coordinates: wp.position.coordinates },
       });
@@ -114,6 +115,7 @@ export function waypointsToGeoJSON(
           color: resolveWaypointColor(wp.waypoint_type),
           has_camera_target: wp.camera_target ? "yes" : "no",
           stack_count: 1,
+          altitude: wp.position.coordinates[2] ?? 0,
         },
         geometry: { type: "Point", coordinates: wp.position.coordinates },
       });
@@ -145,9 +147,21 @@ export function waypointsToGeoJSON(
     }
   }
 
-  // standalone takeoff/landing when no trajectory waypoints
-  if (waypoints.length === 0) {
-    if (takeoff) {
+  // standalone takeoff/landing from mission coordinates - always shown so the map
+  // updates immediately when the user places or deletes a point, even before
+  // trajectory regeneration. override any stale flight-plan TAKEOFF/LANDING.
+  const hasTakeoffWp = features.some((f) => f.properties?.waypoint_type === "TAKEOFF");
+  const hasLandingWp = features.some((f) => f.properties?.waypoint_type === "LANDING");
+
+  if (takeoff) {
+    if (hasTakeoffWp) {
+      // override flight plan takeoff position with current mission coordinate
+      const idx = features.findIndex((f) => f.properties?.waypoint_type === "TAKEOFF");
+      if (idx >= 0) {
+        (features[idx].geometry as GeoJSON.Point).coordinates = takeoff.coordinates;
+        features[idx].properties!.altitude = takeoff.coordinates[2] ?? 0;
+      }
+    } else {
       features.push({
         type: "Feature",
         properties: {
@@ -156,23 +170,43 @@ export function waypointsToGeoJSON(
           waypoint_type: "TAKEOFF",
           color: "#4595e5",
           stack_count: 1,
+          altitude: takeoff.coordinates[2] ?? 0,
         },
         geometry: { type: "Point", coordinates: takeoff.coordinates },
       });
     }
-    if (landing) {
+  }
+  if (landing) {
+    if (hasLandingWp) {
+      const idx = features.findIndex((f) => f.properties?.waypoint_type === "LANDING");
+      if (idx >= 0) {
+        (features[idx].geometry as GeoJSON.Point).coordinates = landing.coordinates;
+        features[idx].properties!.altitude = landing.coordinates[2] ?? 0;
+      }
+    } else {
       features.push({
         type: "Feature",
         properties: {
           id: "landing",
-          sequence_order: 1,
+          sequence_order: 0,
           waypoint_type: "LANDING",
           color: "#e54545",
           stack_count: 1,
+          altitude: landing.coordinates[2] ?? 0,
         },
         geometry: { type: "Point", coordinates: landing.coordinates },
       });
     }
+  }
+
+  // remove stale flight-plan takeoff/landing when mission coordinate is cleared
+  if (!takeoff && hasTakeoffWp && waypoints.length > 0) {
+    const idx = features.findIndex((f) => f.properties?.waypoint_type === "TAKEOFF");
+    if (idx >= 0) features.splice(idx, 1);
+  }
+  if (!landing && hasLandingWp && waypoints.length > 0) {
+    const idx = features.findIndex((f) => f.properties?.waypoint_type === "LANDING");
+    if (idx >= 0) features.splice(idx, 1);
   }
 
   return { type: "FeatureCollection", features };
@@ -369,7 +403,7 @@ export function addWaypointLayers(
   const cameraData = waypointsToCameraLineGeoJSON(waypoints);
   const cameraTargetData = waypointsToCameraTargetGeoJSON(waypoints);
 
-  // update existing sources if present
+  // update existing sources if present, otherwise clean up and recreate
   const existingSource = map.getSource(WAYPOINT_SOURCE) as
     | maplibregl.GeoJSONSource
     | undefined;
@@ -392,6 +426,9 @@ export function addWaypointLayers(
     updateSelectedFilter(map, selectedWaypointId);
     return;
   }
+
+  // ensure clean slate before creating - remove any stale partial state
+  removeWaypointLayers(map);
 
   // add sources
   map.addSource(WAYPOINT_SOURCE, { type: "geojson", data: pointData });
@@ -596,17 +633,20 @@ export function addWaypointLayers(
   });
 
   // selected waypoint highlight ring
+  // uses "in" operator so a single UUID matches comma-joined stacked IDs
   map.addLayer({
     id: WAYPOINT_SELECTED_LAYER,
     type: "circle",
     source: WAYPOINT_SOURCE,
-    filter: ["==", ["get", "id"], selectedWaypointId ?? ""],
+    filter: selectedWaypointId
+      ? ["in", selectedWaypointId, ["get", "id"]]
+      : ["==", ["get", "id"], ""],
     paint: {
-      "circle-radius": 14,
+      "circle-radius": 16,
       "circle-color": "transparent",
       "circle-stroke-color": "#ffffff",
-      "circle-stroke-width": 3,
-      "circle-stroke-opacity": 0.8,
+      "circle-stroke-width": 3.5,
+      "circle-stroke-opacity": 0.9,
     },
   });
 }
@@ -618,11 +658,12 @@ export function updateSelectedFilter(
 ): void {
   try {
     if (map.getLayer(WAYPOINT_SELECTED_LAYER)) {
-      map.setFilter(WAYPOINT_SELECTED_LAYER, [
-        "==",
-        ["get", "id"],
-        selectedWaypointId ?? "",
-      ]);
+      map.setFilter(
+        WAYPOINT_SELECTED_LAYER,
+        selectedWaypointId
+          ? ["in", selectedWaypointId, ["get", "id"]]
+          : ["==", ["get", "id"], ""],
+      );
     }
   } catch {
     // layer may not exist
@@ -906,7 +947,15 @@ export function addSimplifiedTrajectoryLayers(
       ? [
           {
             type: "Feature",
-            properties: { waypoint_type: "TAKEOFF" },
+            properties: {
+              id: takeoffWp?.id ?? "takeoff",
+              sequence_order: takeoffWp?.sequence_order ?? 0,
+              waypoint_type: "TAKEOFF",
+              camera_action: "NONE",
+              color: "#4595e5",
+              stack_count: 1,
+              altitude: takeoffCoords[2] ?? 0,
+            },
             geometry: { type: "Point", coordinates: takeoffCoords },
           },
         ]
@@ -919,7 +968,15 @@ export function addSimplifiedTrajectoryLayers(
       ? [
           {
             type: "Feature",
-            properties: { waypoint_type: "LANDING" },
+            properties: {
+              id: landingWp?.id ?? "landing",
+              sequence_order: landingWp?.sequence_order ?? 0,
+              waypoint_type: "LANDING",
+              camera_action: "NONE",
+              color: "#e54545",
+              stack_count: 1,
+              altitude: landingCoords[2] ?? 0,
+            },
             geometry: { type: "Point", coordinates: landingCoords },
           },
         ]
@@ -950,6 +1007,9 @@ export function addSimplifiedTrajectoryLayers(
     if (measSrc) measSrc.setData(measurementData);
     return;
   }
+
+  // ensure clean slate before creating
+  removeSimplifiedTrajectoryLayers(map);
 
   // add sources
   map.addSource(SIMPLIFIED_LINE_SOURCE, { type: "geojson", data: lineData });

@@ -41,7 +41,9 @@ import WarningsPanel from "@/components/mission/WarningsPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
 import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
+import PoiInfoPanel from "@/components/map/overlays/PoiInfoPanel";
 import Modal from "@/components/common/Modal";
+import type { MapFeature } from "@/types/map";
 
 const STATUS_ORDER = [
   "DRAFT",
@@ -52,7 +54,7 @@ const STATUS_ORDER = [
   "CANCELLED",
 ];
 
-const TERMINAL_STATUSES = ["EXPORTED", "COMPLETED", "CANCELLED"];
+const TERMINAL_STATUSES = ["COMPLETED", "CANCELLED"];
 
 export default function MissionConfigPage() {
   const { id } = useParams<{ id: string }>();
@@ -87,6 +89,7 @@ export default function MissionConfigPage() {
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(
     null,
   );
+  const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
   const [selectedWarning, setSelectedWarning] = useState<ValidationViolation | null>(null);
 
   // terrain mode lifted from map for bottom bar toggle
@@ -686,6 +689,7 @@ export default function MissionConfigPage() {
                   if (!selectedInspectionId) return;
                   handleToggleLha(selectedInspectionId, lhaId);
                 }}
+                disabled={!canModify}
               />
             </div>
           )}
@@ -700,6 +704,7 @@ export default function MissionConfigPage() {
               pickingCoord={pickingCoord}
               onPickCoord={setPickingCoord}
               defaultAltitude={airportDetail?.elevation ?? 0}
+              disabled={!canModify}
             />
           </div>
 
@@ -731,6 +736,7 @@ export default function MissionConfigPage() {
           <div className={`flex-1 relative rounded-2xl overflow-hidden border border-tv-border ${pickingCoord ? "cursor-crosshair" : ""}`}>
             <AirportMap
               airport={airportDetail}
+              helpVariant="preview"
               terrainMode={terrainMode}
               onTerrainChange={setTerrainMode}
               showTerrainToggle={false}
@@ -745,11 +751,23 @@ export default function MissionConfigPage() {
               landingCoordinate={currentLanding}
               inspectionIndexMap={inspectionIndexMap}
               visibleInspectionIds={visibleInspectionIds}
+              onFeatureClick={setSelectedFeature}
+              focusFeature={selectedFeature}
               highlightedWaypointIds={selectedWarning?.waypoint_ids}
               highlightSeverity={selectedWarning?.severity}
               selectedWarning={selectedWarning}
               onWarningClose={() => setSelectedWarning(null)}
             >
+              {/* feature info panel */}
+              {selectedFeature && (
+                <div className="absolute top-3 right-3 z-10 w-56">
+                  <PoiInfoPanel
+                    feature={selectedFeature}
+                    onClose={() => setSelectedFeature(null)}
+                  />
+                </div>
+              )}
+
               {/* pick-on-map banner */}
               {pickingCoord && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-tv-accent text-tv-accent-text text-sm font-semibold">

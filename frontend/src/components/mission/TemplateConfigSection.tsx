@@ -58,7 +58,7 @@ export default function TemplateConfigSection({
           <option value="">{t("coordinator.inspections.selectAgl")}</option>
           {allAgls.map((agl) => (
             <option key={agl.id} value={agl.id}>
-              {agl.name} - {agl.agl_type}{agl.side ? ` - ${agl.side}` : ""}
+              {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
             </option>
           ))}
         </select>
@@ -181,6 +181,32 @@ export default function TemplateConfigSection({
           step="0.5"
         />
       )}
+
+      <Input
+        label={t("mission.config.horizontalDistance")}
+        type="number"
+        value={config?.horizontal_distance ?? ""}
+        onChange={(e) => handleNumber("horizontal_distance", e.target.value)}
+        step="1"
+      />
+
+      {method === "ANGULAR_SWEEP" && (
+        <Input
+          label={t("mission.config.sweepAngle")}
+          type="number"
+          value={config?.sweep_angle ?? ""}
+          onChange={(e) => handleNumber("sweep_angle", e.target.value)}
+          step="0.5"
+        />
+      )}
+
+      <Input
+        label={t("mission.config.bufferDistanceOverride")}
+        type="number"
+        value={config?.buffer_distance ?? ""}
+        onChange={(e) => handleNumber("buffer_distance", e.target.value)}
+        step="0.5"
+      />
     </div>
   );
 }

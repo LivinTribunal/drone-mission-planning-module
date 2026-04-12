@@ -78,6 +78,7 @@ export interface MapFeatureWaypoint {
     camera_action?: string | null;
     camera_target?: PointZ | null;
     gimbal_pitch?: number | null;
+    hover_duration?: number | null;
   };
 }
 
@@ -147,10 +148,22 @@ export interface AirportMapProps {
   onBearingChange?: (bearing: number) => void;
   bearingResetKey?: number;
   showHelpPanel?: boolean;
+  helpVariant?: "full" | "preview";
   highlightedWaypointIds?: string[];
   highlightSeverity?: string;
   selectedWarning?: import("./flightPlan").ValidationViolation | null;
   onWarningClose?: () => void;
+}
+
+export type FlyAlongSpeed = 1 | 2 | 5 | 10;
+
+export type FlyAlongStatus = "idle" | "playing" | "paused";
+
+export interface FlyAlongState {
+  status: FlyAlongStatus;
+  currentIndex: number;
+  speed: FlyAlongSpeed;
+  progress: number;
 }
 
 export type DrawingTool =

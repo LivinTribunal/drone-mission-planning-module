@@ -58,7 +58,7 @@ export default function PoiInfoPanel({
         return (
           <>
             <InfoRow label={t("dashboard.poiName")} value={o.name} />
-            <InfoRow label={t("dashboard.poiType")} value={o.type} />
+            <InfoRow label={t("dashboard.poiType")} value={o.type.replace(/_/g, " ")} />
             <InfoRow label={t("dashboard.poiHeight")} value={`${o.height}${t("common.units.m")}`} />
             <InfoRow label={t("dashboard.bufferDistance")} value={`${o.buffer_distance}${t("common.units.m")}`} />
             <PolygonCoordRows polygon={o.boundary} label={t("dashboard.poiCoordinates")} />
@@ -70,7 +70,7 @@ export default function PoiInfoPanel({
         return (
           <>
             <InfoRow label={t("dashboard.poiName")} value={z.name} />
-            <InfoRow label={t("dashboard.poiType")} value={z.type} />
+            <InfoRow label={t("dashboard.poiType")} value={z.type.replace(/_/g, " ")} />
             <InfoRow label={t("dashboard.poiActive")} value={z.is_active ? t("common.yes") : t("common.no")} />
             {z.altitude_floor != null && (
               <InfoRow label={t("dashboard.poiFloor")} value={`${z.altitude_floor}${t("common.units.m")}`} />
@@ -88,7 +88,7 @@ export default function PoiInfoPanel({
         return (
           <>
             <InfoRow label={t("dashboard.poiName")} value={formatAglDisplayName(a, parentSurface)} />
-            <InfoRow label={t("dashboard.poiType")} value={a.agl_type} />
+            <InfoRow label={t("dashboard.poiType")} value={a.agl_type.replace(/_/g, " ")} />
             {a.side && <InfoRow label={t("dashboard.poiSide")} value={a.side} />}
             <CoordRows position={a.position} label={t("dashboard.poiCoordinates")} />
           </>
@@ -104,6 +104,12 @@ export default function PoiInfoPanel({
               label={t("dashboard.poiSettingAngle")}
               value={`${l.setting_angle}\u00B0`}
             />
+            {l.tolerance != null && (
+              <InfoRow
+                label={t("dashboard.poiTolerance")}
+                value={`${l.tolerance}\u00B0`}
+              />
+            )}
             <CoordRows position={l.position} label={t("dashboard.poiCoordinates")} />
           </>
         );

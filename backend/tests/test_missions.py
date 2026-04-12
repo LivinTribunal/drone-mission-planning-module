@@ -202,3 +202,128 @@ def test_delete_inspection(client):
 
     response = client.delete(f"/api/v1/missions/{mission_id}/inspections/{insp_id}")
     assert response.status_code == 200
+
+
+def test_create_mission_accepts_valid_transit_agl(client, airport_id):
+    """mission create persists transit_agl when above the 5m AGL floor."""
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Cruise Mission",
+            "airport_id": airport_id,
+            "transit_agl": 80.0,
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["transit_agl"] == 80.0
+
+
+def test_create_mission_rejects_transit_agl_below_minimum(client, airport_id):
+    """mission create with transit_agl < MIN_AGL returns 422."""
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Too Low",
+            "airport_id": airport_id,
+            "transit_agl": 3.0,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_create_mission_rejects_non_positive_transit_agl(client, airport_id):
+    """mission create with transit_agl <= 0 returns 422 via schema Field(gt=0)."""
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Zero Cruise",
+            "airport_id": airport_id,
+            "transit_agl": 0,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_create_mission_rejects_transit_agl_above_drone_max(client, airport_id):
+    """mission create with transit_agl above drone.max_altitude returns 422."""
+    drone = client.post(
+        "/api/v1/drone-profiles",
+        json={
+            "name": "Low Ceiling Drone",
+            "max_speed": 20.0,
+            "max_altitude": 100.0,
+            "endurance_minutes": 40.0,
+            "camera_frame_rate": 30,
+            "sensor_fov": 84.0,
+        },
+    ).json()
+
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Above Ceiling",
+            "airport_id": airport_id,
+            "drone_profile_id": drone["id"],
+            "transit_agl": 200.0,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_update_mission_transit_agl_invalidates_trajectory(client, airport_id, db_session):
+    """updating transit_agl on a PLANNED mission regresses it to DRAFT."""
+    from app.models.enums import MissionStatus
+    from app.models.mission import Mission
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Invalidate Cruise Test",
+            "airport_id": airport_id,
+            "transit_agl": 60.0,
+        },
+    ).json()
+    mission_id = mission["id"]
+
+    # flip status directly so we don't need a full inspection fixture
+    db_mission = db_session.query(Mission).filter(Mission.id == mission_id).first()
+    db_mission.status = MissionStatus.PLANNED
+    db_session.commit()
+
+    response = client.put(
+        f"/api/v1/missions/{mission_id}",
+        json={"transit_agl": 90.0},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "DRAFT"
+    assert response.json()["transit_agl"] == 90.0
+
+
+def test_update_mission_rejects_invalid_transit_agl(client, airport_id):
+    """updating transit_agl below MIN_AGL returns 422."""
+    mission = client.post(
+        "/api/v1/missions",
+        json={"name": "Update Reject", "airport_id": airport_id},
+    ).json()
+
+    response = client.put(
+        f"/api/v1/missions/{mission['id']}",
+        json={"transit_agl": 3.0},
+    )
+    assert response.status_code == 422
+
+
+def test_duplicate_mission_preserves_transit_agl(client, airport_id):
+    """duplicate carries transit_agl over to the new draft."""
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Dup Cruise",
+            "airport_id": airport_id,
+            "transit_agl": 75.0,
+        },
+    ).json()
+
+    dup = client.post(f"/api/v1/missions/{mission['id']}/duplicate")
+    assert dup.status_code == 201
+    assert dup.json()["transit_agl"] == 75.0

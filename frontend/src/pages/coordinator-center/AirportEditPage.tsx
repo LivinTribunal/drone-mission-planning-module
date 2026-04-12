@@ -8,6 +8,7 @@ import {
   deleteObstacle,
   deleteSafetyZone,
   deleteAGL,
+  deleteLHA,
   updateSurface,
   updateObstacle,
   updateSafetyZone,
@@ -62,7 +63,7 @@ import useHeadingTool from "@/hooks/useHeadingTool";
 import MeasureInfoCard from "@/components/map/overlays/MeasureInfoCard";
 import HeadingInfoCard from "@/components/map/overlays/HeadingInfoCard";
 import type maplibregl from "maplibre-gl";
-import { extractCenterline, circleToPolygon, haversineDistance, computeBearing } from "@/utils/geo";
+import { extractCenterline, circleToPolygon, haversineDistance, computeBearing, computePolygonMedianWidth } from "@/utils/geo";
 import type { DrawingTool } from "@/types/map";
 import { MapTool } from "@/hooks/useMapTools";
 
@@ -373,16 +374,22 @@ export default function AirportEditPage() {
           ? ring.slice(0, -1) : ring;
         let drawnWidth: number | undefined;
         let drawnLength: number | undefined;
+
+        // length from centerline
+        if (centerline.length >= 2) {
+          drawnLength = haversineDistance(centerline[0][0], centerline[0][1], centerline[1][0], centerline[1][1]);
+        }
+
         if (pts.length === 4) {
           const d01 = haversineDistance(pts[0][0], pts[0][1], pts[1][0], pts[1][1]);
           const d12 = haversineDistance(pts[1][0], pts[1][1], pts[2][0], pts[2][1]);
           if (d01 >= d12) {
-            drawnLength = d01;
             drawnWidth = (d12 + haversineDistance(pts[3][0], pts[3][1], pts[0][0], pts[0][1])) / 2;
           } else {
-            drawnLength = d12;
             drawnWidth = (d01 + haversineDistance(pts[2][0], pts[2][1], pts[3][0], pts[3][1])) / 2;
           }
+        } else if (pts.length > 4 && centerline.length >= 2) {
+          drawnWidth = computePolygonMedianWidth(ring, centerline);
         }
         // geographic bearing - naive atan2 on lng/lat deltas is off by several
         // degrees at non-equatorial latitudes
@@ -472,6 +479,7 @@ export default function AirportEditPage() {
           setting_angle: (data.setting_angle as number) ?? 3.0,
           lamp_type: (data.lamp_type as "HALOGEN" | "LED") ?? "HALOGEN",
           position: { type: "Point", coordinates: [pos[0], pos[1], elevation] },
+          tolerance: data.tolerance != null ? (data.tolerance as number) : undefined,
         });
       } else {
         throw new Error(`unknown entity type: ${entityType}`);
@@ -693,6 +701,29 @@ export default function AirportEditPage() {
     [id, airport, fetchAirport],
   );
 
+  const handleDeleteLha = useCallback(
+    async (lhaId: string) => {
+      /** delete an lha unit and refresh. */
+      if (!id || !airport) return;
+      for (const surface of airport.surfaces) {
+        for (const agl of surface.agls) {
+          if (agl.lhas.some((l) => l.id === lhaId)) {
+            setDeleteError(false);
+            try {
+              await deleteLHA(id, surface.id, agl.id, lhaId);
+              await fetchAirport();
+            } catch (e) {
+              setDeleteError(true);
+              throw e;
+            }
+            return;
+          }
+        }
+      }
+    },
+    [id, airport, fetchAirport],
+  );
+
   const handleFeatureDelete = useCallback(
     async (featureType: string, featureId: string) => {
       /** dispatch delete by feature type from the feature info panel. */
@@ -709,10 +740,13 @@ export default function AirportEditPage() {
         case "agl":
           await handleDeleteAgl(featureId);
           break;
+        case "lha":
+          await handleDeleteLha(featureId);
+          break;
       }
       setSelectedFeature(null);
     },
-    [handleDeleteSurface, handleDeleteObstacle, handleDeleteSafetyZone, handleDeleteAgl],
+    [handleDeleteSurface, handleDeleteObstacle, handleDeleteSafetyZone, handleDeleteAgl, handleDeleteLha],
   );
 
   const handleZoomTo = useCallback((percent: number) => {
@@ -834,22 +868,25 @@ export default function AirportEditPage() {
     let length: number | undefined;
     let heading: number | undefined;
 
-    if (pts.length === 4) {
-      const d01 = haversineDistance(pts[0][0], pts[0][1], pts[1][0], pts[1][1]);
-      const d12 = haversineDistance(pts[1][0], pts[1][1], pts[2][0], pts[2][1]);
-      if (d01 >= d12) {
-        length = d01;
-        width = (d12 + haversineDistance(pts[3][0], pts[3][1], pts[0][0], pts[0][1])) / 2;
-      } else {
-        length = d12;
-        width = (d01 + haversineDistance(pts[2][0], pts[2][1], pts[3][0], pts[3][1])) / 2;
-      }
-    }
-
-    // heading from centerline - use proper geographic bearing
+    // heading and length from centerline
     const centerline = extractCenterline(ring);
     if (centerline.length >= 2) {
       heading = computeBearing(centerline[0][0], centerline[0][1], centerline[1][0], centerline[1][1]);
+      length = haversineDistance(centerline[0][0], centerline[0][1], centerline[1][0], centerline[1][1]);
+    }
+
+    if (pts.length === 4) {
+      // rectangle - average opposite edge pairs for width
+      const d01 = haversineDistance(pts[0][0], pts[0][1], pts[1][0], pts[1][1]);
+      const d12 = haversineDistance(pts[1][0], pts[1][1], pts[2][0], pts[2][1]);
+      if (d01 >= d12) {
+        width = (d12 + haversineDistance(pts[3][0], pts[3][1], pts[0][0], pts[0][1])) / 2;
+      } else {
+        width = (d01 + haversineDistance(pts[2][0], pts[2][1], pts[3][0], pts[3][1])) / 2;
+      }
+    } else if (pts.length > 4 && centerline.length >= 2) {
+      // free-form polygon - median perpendicular cross-section width
+      width = computePolygonMedianWidth(ring, centerline);
     }
 
     // area via shoelace on projected coordinates
@@ -1096,6 +1133,8 @@ export default function AirportEditPage() {
                 surfaces={surfaces}
                 onItemClick={handleFeatureClick}
                 onDeleteAgl={handleDeleteAgl}
+                onDeleteLha={handleDeleteLha}
+                onAdd={() => setActiveTool("placePoint")}
               />
             </div>
           }
@@ -1153,6 +1192,8 @@ export default function AirportEditPage() {
                 prefilledLength={prefilledGeometry.length}
                 prefilledHeading={prefilledGeometry.heading}
                 prefilledArea={prefilledGeometry.area}
+                obstacles={obstacles}
+                airportElevation={airport?.elevation}
               />
             ) : measure.isComplete ? (
               <MeasureInfoCard

@@ -572,6 +572,22 @@ def test_validated_mission_auto_regresses_on_regeneration(client):
     assert mission["status"] == "PLANNED"
 
 
+def test_buffer_distance_override_respected_in_trajectory(client):
+    """mission with default_buffer_distance generates trajectory using the override."""
+    mission_id, _ = _create_mission_with_inspection(
+        client,
+        "BUFD",
+        default_buffer_distance=15.0,
+    )
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    fp = response.json()["flight_plan"]
+    assert fp["total_distance"] > 0
+    assert len(fp["waypoints"]) > 0
+
+
 def test_has_unsaved_map_changes_set_on_batch_update(client):
     """batch_update_waypoints sets has_unsaved_map_changes to True."""
     takeoff = {"type": "Point", "coordinates": [14.24, 50.10, 300]}
@@ -610,6 +626,99 @@ def test_has_unsaved_map_changes_set_on_batch_update(client):
 
     mission = client.get(f"/api/v1/missions/{mission_id}").json()
     assert mission["has_unsaved_map_changes"] is True
+
+
+def test_takeoff_landing_waypoints_sit_at_ground_level(client):
+    """TAKEOFF and LANDING waypoints use the operator-supplied altitude, not ground + 30m AGL."""
+    # airport ground elevation = 300 (flat provider), operator-supplied alt = 300
+    takeoff = {"type": "Point", "coordinates": [14.24, 50.10, 300]}
+    landing = {"type": "Point", "coordinates": [14.28, 50.09, 300]}
+
+    mission_id, _ = _create_mission_with_inspection(
+        client,
+        "TKLG",
+        takeoff_coordinate=takeoff,
+        landing_coordinate=landing,
+    )
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    wps = response.json()["flight_plan"]["waypoints"]
+
+    takeoff_wp = next(w for w in wps if w["waypoint_type"] == "TAKEOFF")
+    landing_wp = next(w for w in wps if w["waypoint_type"] == "LANDING")
+
+    # ground level, not clamped to ground + MINIMUM_AGL_ALTITUDE (330)
+    assert takeoff_wp["position"]["coordinates"][2] == pytest.approx(300.0, abs=1e-6)
+    assert landing_wp["position"]["coordinates"][2] == pytest.approx(300.0, abs=1e-6)
+
+
+def test_transit_waypoints_still_enforce_minimum_agl(client):
+    """transit waypoints sit at ground + TRANSIT_AGL when no explicit transit_agl is set."""
+    mission_id, _ = _create_mission_with_inspection(client, "AGLF")
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    wps = response.json()["flight_plan"]["waypoints"]
+    # ground elevation = 300; fallback cruise = 300 + TRANSIT_AGL (30) = 330 AMSL
+    transit_wps = [w for w in wps if w["waypoint_type"] == "TRANSIT"]
+    assert transit_wps, "expected at least one transit waypoint"
+    for wp in transit_wps:
+        assert wp["position"]["coordinates"][2] >= 330.0 - 1e-6
+
+
+def test_transit_agl_forces_shared_cruise_level(client):
+    """all transit waypoints share ground + transit_agl when the field is set."""
+    takeoff = {"type": "Point", "coordinates": [14.24, 50.10, 300]}
+    landing = {"type": "Point", "coordinates": [14.28, 50.09, 300]}
+
+    mission_id, _ = _create_mission_with_inspection(
+        client,
+        "CRUI",
+        takeoff_coordinate=takeoff,
+        landing_coordinate=landing,
+        transit_agl=120.0,
+    )
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    wps = response.json()["flight_plan"]["waypoints"]
+    # expected cruise altitude = airport elevation (300) + 120 AGL
+    expected_cruise = 420.0
+
+    transit_wps = [w for w in wps if w["waypoint_type"] == "TRANSIT"]
+    assert transit_wps, "expected transit waypoints between takeoff and inspection pass"
+
+    for wp in transit_wps:
+        assert wp["position"]["coordinates"][2] == pytest.approx(expected_cruise, abs=1e-3)
+
+
+def test_transit_agl_fallback_without_field(client):
+    """transit waypoints fall back to ground + TRANSIT_AGL when field is unset."""
+    takeoff = {"type": "Point", "coordinates": [14.24, 50.10, 300]}
+    landing = {"type": "Point", "coordinates": [14.28, 50.09, 300]}
+
+    mission_id, _ = _create_mission_with_inspection(
+        client,
+        "FBCR",
+        takeoff_coordinate=takeoff,
+        landing_coordinate=landing,
+    )
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    wps = response.json()["flight_plan"]["waypoints"]
+    # fallback cruise = 300 + TRANSIT_AGL (30) = 330
+    expected_fallback = 330.0
+
+    transit_wps = [w for w in wps if w["waypoint_type"] == "TRANSIT"]
+    assert transit_wps, "expected transit waypoints"
+    for wp in transit_wps:
+        assert wp["position"]["coordinates"][2] == pytest.approx(expected_fallback, abs=1e-3)
 
 
 def test_has_unsaved_map_changes_cleared_after_generate(client):

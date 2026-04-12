@@ -173,6 +173,7 @@ describe("InspectionConfigForm LHA toggle", () => {
         transition_sector_width: null,
         lamp_type: "HALOGEN" as const,
         position: { type: "Point" as const, coordinates: [17.21, 48.17, 133] as [number, number, number] },
+        tolerance: null,
       },
       {
         id: "lha-2",
@@ -182,6 +183,7 @@ describe("InspectionConfigForm LHA toggle", () => {
         transition_sector_width: null,
         lamp_type: "HALOGEN" as const,
         position: { type: "Point" as const, coordinates: [17.22, 48.18, 133] as [number, number, number] },
+        tolerance: null,
       },
     ],
   };

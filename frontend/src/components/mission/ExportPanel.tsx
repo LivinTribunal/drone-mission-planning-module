@@ -6,7 +6,7 @@ import type { MissionDetailResponse } from "@/types/mission";
 import Button from "@/components/common/Button";
 import Modal from "@/components/common/Modal";
 
-interface ExportPanelProps {
+export interface ExportPanelProps {
   mission: MissionDetailResponse;
   onExport: (formats: string[]) => void;
   onComplete: () => void;
@@ -139,7 +139,7 @@ export default function ExportPanel({
         {!exportCollapsed && (
           <div className="mt-3 flex flex-col gap-3">
             {/* format checkboxes */}
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 max-h-[240px] overflow-y-auto">
               {EXPORT_FORMATS.map((fmt) => (
                 <label
                   key={fmt.value}

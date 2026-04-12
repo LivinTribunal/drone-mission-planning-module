@@ -127,7 +127,7 @@ export default function OperatorDroneDetailPage() {
     Promise.all([
       getDroneProfile(id),
       listDroneProfiles({ limit: 200 }),
-      listMissions({ drone_profile_id: id, limit: 200 }),
+      listMissions({ drone_profile_id: id, airport_id: selectedAirport?.id, limit: 200 }),
     ])
       .then(([droneData, listData, missionsData]) => {
         setDrone(droneData);
@@ -136,7 +136,7 @@ export default function OperatorDroneDetailPage() {
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, selectedAirport?.id]);
 
   useEffect(() => {
     fetchDrone();
@@ -291,11 +291,11 @@ export default function OperatorDroneDetailPage() {
                     {t("operatorDrones.defaultBadge")}
                   </span>
                 )}
-                {(drone.mission_count ?? 0) > 0 && (
+                {missions.length > 0 && (
                   <span className="flex items-center gap-0.5 text-tv-text-secondary">
                     <Layers className="h-3 w-3" />
                     <span className="text-xs font-medium">
-                      {drone.mission_count}
+                      {missions.length}
                     </span>
                   </span>
                 )}
@@ -383,7 +383,7 @@ export default function OperatorDroneDetailPage() {
                     {t("operatorDrones.noMissionsForDrone")}
                   </p>
                 ) : (
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1 max-h-[280px] overflow-y-auto">
                     {missions.map((m) => (
                       <div
                         key={m.id}

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
-from app.models.enums import ConstraintType, SurfaceType
+from app.models.enums import ConstraintType, SurfaceType, WaypointType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
 from app.models.value_objects import Speed
@@ -14,10 +14,14 @@ from app.services.geometry_converter import geojson_to_ewkt
 from app.services.trajectory_types import (
     DEFAULT_RUNWAY_BUFFER,
     HARD_ZONE_TYPES,
-    MINIMUM_AGL_ALTITUDE,
+    MINIMUM_ALTITUDE_THRESHOLD,
+    Meters,
     Violation,
     WaypointData,
 )
+
+# waypoint types exempt from AGL minimum check - these literally touch the ground
+_GROUND_LEVEL_WAYPOINT_TYPES = (WaypointType.TAKEOFF, WaypointType.LANDING)
 
 # spatial queries use parameterized text() with PostGIS functions
 # all inputs are bound parameters - no sql injection risk
@@ -37,12 +41,14 @@ def validate_inspection_pass(
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface],
     elevation_provider=None,
+    buffer_distance: Meters = 0.0,
 ) -> list[Violation]:
     """validate all waypoints in an inspection pass.
 
     drone and constraint checks run per-waypoint (no spatial queries).
     obstacle and zone checks use batched spatial queries - one query each.
     AGL altitude check uses elevation provider for terrain-aware validation.
+    buffer_distance inflates obstacle boundaries by this many meters.
     """
     violations = []
 
@@ -59,7 +65,9 @@ def validate_inspection_pass(
                 violation.waypoint_index = i
                 violations.append(violation)
 
-    violations.extend(_batch_check_obstacles(db, waypoints, obstacles))
+    violations.extend(
+        _batch_check_obstacles(db, waypoints, obstacles, buffer_distance=buffer_distance)
+    )
     violations.extend(_batch_check_zones(db, waypoints, zones))
 
     # AGL altitude check against terrain
@@ -73,8 +81,14 @@ def _batch_check_obstacles(
     db: Session,
     waypoints: list[WaypointData],
     obstacles: list[Obstacle],
+    buffer_distance: Meters = 0.0,
 ) -> list[Violation]:
-    """batch obstacle containment - one query for all waypoints against all obstacles."""
+    """batch obstacle containment - one query for all waypoints against all obstacles.
+
+    when buffer_distance > 0, obstacle boundaries are inflated by that many meters
+    using ST_Buffer with geography cast for accurate meter-based buffering.
+    falls back to per-obstacle buffer_distance when no override is provided.
+    """
     valid_obs = [(i, obs) for i, obs in enumerate(obstacles) if obs.boundary]
     if not valid_obs or not waypoints:
         return []
@@ -82,24 +96,30 @@ def _batch_check_obstacles(
     wp_ewkts = [_wp_to_ewkt(wp) for wp in waypoints]
     obs_ewkts = [(i, _geom_to_ewkt(obs.boundary)) for i, obs in valid_obs]
 
-    # build VALUES clauses with bind parameters
+    # build VALUES clauses with bind parameters - include per-obstacle buffer
     wp_values = ", ".join(f"(:wp_idx_{i}, :wp_geom_{i})" for i in range(len(waypoints)))
-    obs_values = ", ".join(f"(:obs_idx_{i}, :obs_geom_{i})" for i, _ in enumerate(obs_ewkts))
+    obs_values = ", ".join(
+        f"(:obs_idx_{i}, :obs_geom_{i}, :obs_buf_{i})" for i, _ in enumerate(obs_ewkts)
+    )
 
     params: dict[str, object] = {}
     for i, ewkt in enumerate(wp_ewkts):
         params[f"wp_idx_{i}"] = i
         params[f"wp_geom_{i}"] = ewkt
     for i, (orig_idx, ewkt) in enumerate(obs_ewkts):
+        obs = obstacles[orig_idx]
         params[f"obs_idx_{i}"] = orig_idx
         params[f"obs_geom_{i}"] = ewkt
+        params[f"obs_buf_{i}"] = (
+            buffer_distance if buffer_distance > 0 else (obs.buffer_distance or 0.0)
+        )
 
     sql = (
         f"SELECT wp.idx, obs.idx "  # noqa: S608
         f"FROM (VALUES {wp_values}) AS wp(idx, geom), "
-        f"(VALUES {obs_values}) AS obs(idx, geom) "
+        f"(VALUES {obs_values}) AS obs(idx, geom, buf) "
         f"WHERE ST_Contains("
-        f"ST_Force2D(ST_GeomFromEWKT(obs.geom)), "
+        f"ST_Buffer(ST_Force2D(ST_GeomFromEWKT(obs.geom))::geography, obs.buf)::geometry, "
         f"ST_Force2D(ST_GeomFromEWKT(wp.geom)))"
     )
 
@@ -195,23 +215,29 @@ def _batch_check_zones(
 def _batch_check_minimum_agl(
     waypoints: list[WaypointData],
     elevation_provider,
-    min_agl: float = MINIMUM_AGL_ALTITUDE,
+    min_agl: float = MINIMUM_ALTITUDE_THRESHOLD,
 ) -> list[Violation]:
-    """check all waypoints maintain minimum height above ground level.
+    """check in-flight waypoints maintain minimum height above ground level.
 
     all AGL violations are soft warnings - PAPI approach paths inherently
     place measurement waypoints below 30m AGL by design (3 deg glide slope
     at ~400m distance = ~21m AGL). transit waypoints are already hard-clamped
-    in _adjust_transit_altitude_for_terrain.
+    in _adjust_transit_altitude_for_terrain. TAKEOFF and LANDING waypoints
+    are exempt by design - they sit on the ground.
     """
     if not waypoints:
         return []
 
     points = [(wp.lat, wp.lon) for wp in waypoints]
     elevations = elevation_provider.get_elevations_batch(points)
+    if len(elevations) != len(points):
+        raise TrajectoryGenerationError(f"expected {len(points)} elevations, got {len(elevations)}")
 
     violations = []
     for i, (wp, ground) in enumerate(zip(waypoints, elevations)):
+        if wp.waypoint_type in _GROUND_LEVEL_WAYPOINT_TYPES:
+            continue
+
         agl = wp.alt - ground
         if agl < min_agl:
             violations.append(
@@ -276,21 +302,27 @@ def check_drone_constraints(wp: WaypointData, drone: DroneProfile) -> Violation 
     return None
 
 
-def check_obstacle(db: Session, wp: WaypointData, obstacle: Obstacle) -> Violation | None:
-    """check if waypoint is inside an obstacle's boundary below its height."""
+def check_obstacle(
+    db: Session,
+    wp: WaypointData,
+    obstacle: Obstacle,
+    buffer_distance: Meters = 0.0,
+) -> Violation | None:
+    """check if waypoint is inside an obstacle's buffered boundary below its height."""
     if not obstacle.boundary:
         return None
 
     wp_ewkt = _wp_to_ewkt(wp)
     obs_ewkt = _geom_to_ewkt(obstacle.boundary)
+    buf = buffer_distance if buffer_distance > 0 else (obstacle.buffer_distance or 0.0)
 
     contained = db.execute(
         text(
             "SELECT ST_Contains("
-            "ST_Force2D(ST_GeomFromEWKT(:obs_geom)), "
+            "ST_Buffer(ST_Force2D(ST_GeomFromEWKT(:obs_geom))::geography, :buffer)::geometry, "
             "ST_Force2D(ST_GeomFromEWKT(:point)))"
         ),
-        {"obs_geom": obs_ewkt, "point": wp_ewkt},
+        {"obs_geom": obs_ewkt, "point": wp_ewkt, "buffer": buf},
     ).scalar()
 
     if contained is not True:
@@ -377,20 +409,22 @@ def segments_intersect_obstacle(
     to_lon: float,
     to_lat: float,
     obstacle: Obstacle,
+    buffer_distance: Meters = 0.0,
 ) -> bool:
-    """check if a line segment intersects an obstacle's 2D boundary."""
+    """check if a line segment intersects an obstacle's buffered 2D boundary."""
     if not obstacle.boundary:
         return False
 
     line_ewkt = _line_ewkt(from_lon, from_lat, to_lon, to_lat)
+    buf = buffer_distance if buffer_distance > 0 else (obstacle.buffer_distance or 0.0)
 
     result = db.execute(
         text(
             "SELECT ST_Intersects("
-            "ST_Force2D(ST_GeomFromEWKT(:obs_geom)), "
+            "ST_Buffer(ST_Force2D(ST_GeomFromEWKT(:obs_geom))::geography, :buffer)::geometry, "
             "ST_Force2D(ST_GeomFromEWKT(:line)))"
         ),
-        {"obs_geom": _geom_to_ewkt(obstacle.boundary), "line": line_ewkt},
+        {"obs_geom": _geom_to_ewkt(obstacle.boundary), "line": line_ewkt, "buffer": buf},
     ).scalar()
 
     return bool(result)

@@ -2,6 +2,7 @@ import logging
 import math
 from uuid import UUID
 
+from app.core.exceptions import TrajectoryGenerationError
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
 from app.models.inspection import InspectionConfiguration
 from app.models.mission import DroneProfile
@@ -39,7 +40,6 @@ CONFIG_FIELDS = (
     "speed_override",
     "measurement_density",
     "custom_tolerances",
-    "density",
     "hover_duration",
     "horizontal_distance",
     "sweep_angle",
@@ -261,18 +261,29 @@ def resolve_speed(
 ) -> tuple[MetersPerSecond, str | None, MetersPerSecond | None]:
     """resolve measurement speed from override, optimal calculation, or default.
 
+    optimal speed is the max that still captures one frame per waypoint spacing,
+    clamped to default_speed so measurement passes stay slow and precise.
     returns (final_speed, optional_warning, optimal_speed).
     """
     optimal = compute_optimal_speed(path_distance, density, drone)
 
     if config.speed_override is not None:
-        return config.speed_override, None, optimal
+        chosen = config.speed_override
+    elif optimal is not None:
+        # use optimal for frame rate but never exceed default speed
+        chosen = min(optimal, default_speed)
+    else:
+        chosen = default_speed
 
-    if optimal is not None:
-        warning = f"speed auto-set to {optimal:.1f} m/s based on path geometry and frame rate"
-        return optimal, warning, optimal
+    # warn if chosen speed exceeds camera frame rate ceiling
+    warning = None
+    if optimal is not None and chosen > optimal:
+        warning = (
+            f"speed {chosen:.1f} m/s exceeds camera frame rate ceiling "
+            f"{optimal:.1f} m/s - frames may be missed"
+        )
 
-    return default_speed, None, optimal
+    return chosen, warning, optimal
 
 
 def determine_start_position(
@@ -531,6 +542,8 @@ def _apply_terrain_delta(
     points = [(wp.lat, wp.lon) for wp in waypoints]
     points.append((center.lat, center.lon))
     elevations = elevation_provider.get_elevations_batch(points)
+    if len(elevations) != len(points):
+        raise TrajectoryGenerationError(f"expected {len(points)} elevations, got {len(elevations)}")
 
     ground_at_center = elevations[-1]
     for i, wp in enumerate(waypoints):

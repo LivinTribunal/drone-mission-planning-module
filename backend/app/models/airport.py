@@ -7,11 +7,17 @@ from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 from app.core.geometry import parse_ewkb
+from app.models.enums import ObstacleType, SafetyZoneType
 from app.utils.geo import (
     bearing_between,
     linestring_length,
     polygon_oriented_dimensions,
 )
+
+# enum values rendered inline into CheckConstraint bodies so schema stays in
+# sync when a new member is added to the python enum.
+_OBSTACLE_TYPE_VALUES = ", ".join(f"'{m.value}'" for m in ObstacleType)
+_SAFETY_ZONE_TYPE_VALUES = ", ".join(f"'{m.value}'" for m in SafetyZoneType)
 
 
 class Airport(Base):
@@ -166,7 +172,9 @@ class Obstacle(Base):
     airport_id = Column(UUID, ForeignKey("airport.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)
     height = Column(Float, nullable=False)
-    boundary = Column(Geometry("POLYGONZ", srid=4326), nullable=False)
+    boundary = Column("geometry", Geometry("POLYGONZ", srid=4326), nullable=False)
+    position = Column(Geometry("POINTZ", srid=4326), nullable=True)
+    radius = Column(Float, nullable=True)
     buffer_distance = Column(Float, nullable=False, default=5.0)
     type = Column(
         String(20),
@@ -177,7 +185,7 @@ class Obstacle(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "type IN ('BUILDING', 'TOWER', 'ANTENNA', 'VEGETATION', 'OTHER')",
+            f"type IN ({_OBSTACLE_TYPE_VALUES})",
             name="ck_obstacle_type",
         ),
     )
@@ -229,7 +237,7 @@ class SafetyZone(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "type IN ('CTR', 'RESTRICTED', 'PROHIBITED', 'TEMPORARY_NO_FLY')",
+            f"type IN ({_SAFETY_ZONE_TYPE_VALUES})",
             name="ck_safety_zone_type",
         ),
     )

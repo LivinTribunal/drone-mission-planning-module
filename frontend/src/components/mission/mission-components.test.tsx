@@ -297,6 +297,24 @@ describe("MissionConfigForm", () => {
     renderForm({ values: { default_speed: 99 } });
     expect(screen.getByTestId("default-speed-input")).toHaveValue(99);
   });
+
+  it("calls onChange when transit AGL changes", () => {
+    /** verify onChange fires with the new transit_agl value. */
+    const { onChange } = renderForm();
+    fireEvent.change(screen.getByTestId("transit-agl-input"), {
+      target: { value: "120" },
+    });
+    expect(onChange).toHaveBeenCalledWith({ transit_agl: 120 });
+  });
+
+  it("clears transit AGL when emptied", () => {
+    /** verify emptying the field sends null. */
+    const { onChange } = renderForm({ values: { transit_agl: 80 } });
+    fireEvent.change(screen.getByTestId("transit-agl-input"), {
+      target: { value: "" },
+    });
+    expect(onChange).toHaveBeenCalledWith({ transit_agl: null });
+  });
 });
 
 /* ------------------------------------------------------------------ */

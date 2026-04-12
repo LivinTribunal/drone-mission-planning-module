@@ -111,11 +111,11 @@ class TestMissionInvalidateTrajectory:
         m.invalidate_trajectory()
         assert m.status == "DRAFT"
 
-    def test_exported_raises(self):
-        """EXPORTED rejects modification."""
+    def test_exported_allows_modification(self):
+        """EXPORTED allows modification - regresses to DRAFT."""
         m = self._make_mission("EXPORTED")
-        with pytest.raises(ValueError, match="cannot modify"):
-            m.invalidate_trajectory()
+        m.invalidate_trajectory()
+        assert m.status == "DRAFT"
 
     def test_completed_raises(self):
         """COMPLETED rejects modification."""
@@ -128,6 +128,58 @@ class TestMissionInvalidateTrajectory:
         m = self._make_mission("CANCELLED")
         with pytest.raises(ValueError, match="cannot modify"):
             m.invalidate_trajectory()
+
+
+class TestMissionValidateTransitAltitude:
+    """tests for Mission.validate_transit_altitude business rules."""
+
+    @dataclass
+    class _Drone:
+        max_altitude: float | None = None
+
+    def _make_mission(self, value):
+        """create a mission with given transit_agl."""
+        m = Mission(id=uuid4(), name="test", status="DRAFT", airport_id=uuid4())
+        m.transit_agl = value
+        return m
+
+    def test_none_is_noop(self):
+        """unset field passes validation."""
+        m = self._make_mission(None)
+        m.validate_transit_altitude(None)
+
+    def test_rejects_zero(self):
+        """zero altitude is rejected."""
+        m = self._make_mission(0.0)
+        with pytest.raises(ValueError, match="greater than 0"):
+            m.validate_transit_altitude(None)
+
+    def test_rejects_below_minimum_agl(self):
+        """below 5m AGL is rejected."""
+        m = self._make_mission(3.0)
+        with pytest.raises(ValueError, match="at least 5m AGL"):
+            m.validate_transit_altitude(None)
+
+    def test_accepts_exactly_minimum(self):
+        """exactly 5m AGL is accepted."""
+        m = self._make_mission(5.0)
+        m.validate_transit_altitude(None)
+
+    def test_rejects_above_drone_max(self):
+        """value above drone.max_altitude is rejected."""
+        m = self._make_mission(150.0)
+        with pytest.raises(ValueError, match="exceeds drone max altitude"):
+            m.validate_transit_altitude(self._Drone(max_altitude=100.0))
+
+    def test_accepts_within_drone_max(self):
+        """value within drone.max_altitude is accepted."""
+        m = self._make_mission(80.0)
+        m.validate_transit_altitude(self._Drone(max_altitude=100.0))
+
+    def test_ignores_drone_without_max_altitude(self):
+        """drone without max_altitude does not cap cruise altitude."""
+        m = self._make_mission(200.0)
+        m.validate_transit_altitude(self._Drone(max_altitude=None))
 
 
 class TestMissionInspections:
@@ -171,12 +223,13 @@ class TestMissionInspections:
         m.add_inspection(insp)
         assert m.status == "DRAFT"
 
-    def test_add_inspection_blocked_after_exported(self):
-        """cannot add inspection after mission is exported."""
+    def test_add_inspection_exported_regresses_to_draft(self):
+        """adding inspection to EXPORTED mission regresses to DRAFT."""
         m = self._make_mission("EXPORTED")
         insp = self._make_inspection()
-        with pytest.raises(ValueError, match="cannot modify"):
-            m.add_inspection(insp)
+        m.add_inspection(insp)
+        assert m.status == "DRAFT"
+        assert len(m.inspections) == 1
 
     def test_add_inspection_max_limit(self):
         """cannot exceed max 10 inspections."""
@@ -202,12 +255,13 @@ class TestMissionInspections:
         assert len(m.inspections) == 0
         assert m.status == "DRAFT"
 
-    def test_remove_inspection_blocked_after_exported(self):
-        """cannot remove inspection after mission is exported."""
+    def test_remove_inspection_exported_regresses_to_draft(self):
+        """removing inspection from EXPORTED mission regresses to DRAFT."""
         insp = self._make_inspection()
         m = self._make_mission("EXPORTED", inspections=[insp])
-        with pytest.raises(ValueError, match="cannot modify"):
-            m.remove_inspection(insp.id)
+        m.remove_inspection(insp.id)
+        assert len(m.inspections) == 0
+        assert m.status == "DRAFT"
 
     def test_remove_inspection_not_found(self):
         """removing nonexistent inspection raises ValueError."""
@@ -250,11 +304,13 @@ class TestMissionChangeDroneProfile:
         assert m.drone_profile_id == new_id
         assert m.status == "DRAFT"
 
-    def test_change_drone_profile_blocked_after_exported(self):
-        """cannot change drone profile after mission is exported."""
+    def test_change_drone_profile_exported_regresses_to_draft(self):
+        """changing drone profile in EXPORTED regresses to DRAFT."""
         m = self._make_mission("EXPORTED")
-        with pytest.raises(ValueError, match="cannot modify"):
-            m.change_drone_profile(uuid4())
+        new_id = uuid4()
+        m.change_drone_profile(new_id)
+        assert m.drone_profile_id == new_id
+        assert m.status == "DRAFT"
 
 
 class TestInspectionLhaIds:
@@ -547,3 +603,25 @@ class TestMeasurementDensityValidation:
 
         schema = InspectionConfigOverride(measurement_density=None)
         assert schema.measurement_density is None
+
+
+class TestTrajectoryFieldsCompleteness:
+    """tests that TRAJECTORY_FIELDS includes all fields that affect trajectory generation."""
+
+    def test_capture_mode_in_trajectory_fields(self):
+        """default_capture_mode is a trajectory-affecting field."""
+        from app.models.mission import TRAJECTORY_FIELDS
+
+        assert "default_capture_mode" in TRAJECTORY_FIELDS
+
+    def test_buffer_distance_in_trajectory_fields(self):
+        """default_buffer_distance is a trajectory-affecting field."""
+        from app.models.mission import TRAJECTORY_FIELDS
+
+        assert "default_buffer_distance" in TRAJECTORY_FIELDS
+
+    def test_transit_agl_in_trajectory_fields(self):
+        """transit_agl is a trajectory-affecting field."""
+        from app.models.mission import TRAJECTORY_FIELDS
+
+        assert "transit_agl" in TRAJECTORY_FIELDS
