@@ -1,112 +1,76 @@
 ---
 name: check-docs
-description: Always check project docs and Claude Code documentation before implementing, reviewing, or planning. Load at the start of every coding task to find the right docs section for your work type.
+description: Read project docs, specs, and agent prompts before implementing, reviewing, or planning. Ensures alignment with domain model, conventions, design system, and automation workflows.
 ---
 
 # Check Documentation First
 
-**Before starting ANY implementation, review, or planning task, you MUST check the relevant documentation.** This keeps you aligned with current APIs, patterns, and conventions — and prevents you from implementing something that already exists or contradicts established architecture.
+**Before starting ANY implementation, review, or planning task, read the relevant documentation.** This prevents implementing something that contradicts the domain model, duplicates existing patterns, or breaks automation workflows.
 
-## Step 1: Check the Project Docs
+## Step 1: Read CLAUDE.md
 
-Start with the local project documentation:
+Always start here. It contains build commands, code style rules, architecture overview, dependency rules, DDD patterns, risk tiers, branching strategy, and security constraints.
 
-| File                   | Contents                                                                                                                |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `CLAUDE.md`            | **Read this first.** Critical conventions, build commands, code style, architecture overview, and security constraints. |
-| `docs/architecture.md` | System architecture, component diagrams, and data flow.                                                                 |
-| `docs/conventions.md`  | Code conventions, naming rules, and patterns to follow.                                                                 |
-| `docs/layers.md`       | Architectural layers and dependency rules (what can import what).                                                       |
-| `docs/harness-gaps.md` | Known gaps and planned improvements to the harness system.                                                              |
-| `harness.config.json`  | Risk tiers, architectural boundaries, and harness module registry.                                                      |
+## Step 2: Read the Relevant Spec Docs
 
-## Step 2: Find the Right Claude Code Docs Section
+Pick the docs that match your task — you don't need all of them every time.
 
-The Claude Code documentation index is at:
+| File | When to read | What it contains |
+|------|-------------|-----------------|
+| `docs/specs/SPEC.md` | **Any feature work** | Complete domain model (19 tables), all enums, trajectory formulas, mission state machine, page wireframe summaries |
+| `docs/specs/WIREFRAME.md` | **Any frontend page** | Every field, interaction, and edge case for each UI page |
+| `docs/specs/DESIGN-SYSTEM.md` | **Any UI component** | CSS variables (`--tv-*`), color tokens, spacing, typography, component patterns |
+| `docs/specs/CHAPTER3-SYSTEM-DESIGN.md` | **Architecture questions** | Full system design chapter — the authoritative design reference |
+| `docs/specs/TRAJECTORY-CONTEXT.md` | **Trajectory/flight work** | Trajectory generation context and formulas |
+| `docs/conventions.md` | **Code style questions** | Coding standards, git workflow, quality gates |
+| `harness.config.json` | **Risk assessment** | Risk tier definitions and architectural boundaries |
 
-```
-https://code.claude.com/docs/llms.txt
-```
+**Rule of thumb:**
+- Backend feature → read `SPEC.md` (domain model + enums)
+- Frontend page → read `SPEC.md` + `WIREFRAME.md` + `DESIGN-SYSTEM.md`
+- Trajectory/flight plan → read `SPEC.md` + `TRAJECTORY-CONTEXT.md`
+- Architecture decision → read `CHAPTER3-SYSTEM-DESIGN.md`
 
-Fetch this first to discover all available pages, then navigate to the section most relevant to your task. The base URL for all docs is `https://code.claude.com/docs/en/`.
+## Step 3: Read Agent Prompts (for automation and review tasks)
 
-### If You Are Implementing
+The `.codefactory/prompts/` folder defines how the CodeFactory automation pipeline works. Read the relevant prompt before working on or modifying any automation workflow.
 
-| Task type                             | Docs to check                                              |
-| ------------------------------------- | ---------------------------------------------------------- |
-| Building a new feature                | `common-workflows.md` — patterns for everyday coding tasks |
-| Working with skills or slash commands | `skills.md` — full skills reference                        |
-| Delegating to subagents               | `sub-agents.md` — how to create and use subagents          |
-| Automating around tool events         | `hooks.md` and `hooks-guide.md`                            |
-| Connecting to external tools          | `mcp.md` — Model Context Protocol integration              |
-| Running Claude programmatically       | `headless.md` — Agent SDK usage                            |
-| Controlling permissions               | `permissions.md` — tool and skill access control           |
-| Managing memory and CLAUDE.md         | `memory.md` — persistent context across sessions           |
+| File | When to read | What it defines |
+|------|-------------|----------------|
+| `.codefactory/prompts/agent-system.md` | **Any agent work** | Identity rules, OPSEC constraints, commit style for all agents |
+| `.codefactory/prompts/issue-triage.md` | **Triage workflow** | How issues get evaluated for actionability and labeled |
+| `.codefactory/prompts/issue-planner.md` | **Planning workflow** | How implementation plans are structured and posted |
+| `.codefactory/prompts/issue-implementer.md` | **Implementation workflow** | How the coding agent creates branches, writes code, opens PRs |
+| `.codefactory/prompts/review-agent.md` | **Review workflow** | How PRs get auto-reviewed (APPROVE / REQUEST_CHANGES / ESCALATE) |
 
-### If You Are Reviewing
+**When to check these:**
+- Creating or modifying a GitHub issue → read `issue-triage.md`
+- Writing or reviewing an implementation plan → read `issue-planner.md`
+- Implementing from a plan → read `issue-implementer.md`
+- Reviewing a PR or understanding review feedback → read `review-agent.md`
+- Changing any agent behavior → read `agent-system.md` first, then the specific prompt
 
-| Task type                  | Docs to check                                                  |
-| -------------------------- | -------------------------------------------------------------- |
-| Security review            | `security.md` — safeguards and best practices                  |
-| Code quality review        | `best-practices.md` — recommended patterns                     |
-| Understanding agentic loop | `how-claude-code-works.md` — built-in tools and agent behavior |
-| Checking permissions model | `permissions.md`                                               |
+## Step 4: Check Claude Code Docs (for tooling and extension work)
 
-### If You Are Planning or Triaging
+Only needed when working on Claude Code configuration, skills, hooks, MCP, or CI/CD integration — not for regular feature work.
 
-| Task type                              | Docs to check                                                                                    |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Choosing the right extension mechanism | `features-overview.md` — when to use CLAUDE.md vs Skills vs Subagents vs Hooks vs MCP vs Plugins |
-| Coordinating multiple agents           | `agent-teams.md`                                                                                 |
-| CI/CD integration                      | `github-actions.md` or `gitlab-ci-cd.md`                                                         |
-| Plugin architecture                    | `plugins.md` and `plugins-reference.md`                                                          |
-| Understanding settings                 | `settings.md`                                                                                    |
+The documentation index is at `https://code.claude.com/docs/llms.txt`. Fetch it to discover available pages. Base URL: `https://code.claude.com/docs/en/`.
 
-## Step 3: Apply What You Found
+| Task type | Docs to check |
+|-----------|--------------|
+| Skills or slash commands | `skills.md` |
+| Subagents | `sub-agents.md` |
+| Hooks (tool event automation) | `hooks.md`, `hooks-guide.md` |
+| MCP integration | `mcp.md` |
+| Permissions | `permissions.md` |
+| Memory and CLAUDE.md | `memory.md` |
+| CI/CD | `github-actions.md` or `gitlab-ci-cd.md` |
+| Headless / Agent SDK | `headless.md` |
 
-After reading the relevant docs:
+## Step 5: Apply What You Found
 
-1. **Note any API or pattern changes** since you last worked in this area.
-2. **Check if your task is already covered** by a documented workflow or built-in feature.
-3. **Identify the architectural layer** your change belongs to (see `docs/layers.md` and `harness.config.json`).
-4. **Verify risk tier** — Tier 3 (critical paths) requires extra test coverage and human review.
+1. **Identify the risk tier** — T3 paths (trajectory, safety_validator, flight_plan, migrations) require extra tests and human review.
+2. **Check if your task overlaps** with documented patterns or existing implementations.
+3. **Follow DDD rules** — business logic on models, services handle DB access only.
+4. **Use the design system** — every component must use `--tv-*` CSS variables.
 5. **Proceed with implementation/review/planning** using the documented patterns.
-
-## Quick Reference: Doc Structure
-
-```
-code.claude.com/docs/en/
-├── Getting started
-│   ├── quickstart.md          — Install and first steps
-│   ├── overview.md            — What Claude Code is
-│   └── setup.md               — Installation and auth
-├── Using Claude Code
-│   ├── common-workflows.md    — Everyday coding patterns
-│   ├── best-practices.md      — Tips for quality output
-│   ├── interactive-mode.md    — Keyboard shortcuts and modes
-│   └── how-claude-code-works.md — Agentic loop internals
-├── Extensions
-│   ├── skills.md              — Custom slash commands and skills
-│   ├── sub-agents.md          — Specialized subagents
-│   ├── hooks.md               — Lifecycle hook events
-│   ├── mcp.md                 — Model Context Protocol
-│   ├── plugins.md             — Packaging extensions
-│   └── features-overview.md  — When to use each mechanism
-├── Configuration
-│   ├── settings.md            — Global and project settings
-│   ├── permissions.md         — Access control
-│   ├── memory.md              — CLAUDE.md and persistent context
-│   └── model-config.md        — Model selection
-├── CI/CD Integration
-│   ├── github-actions.md
-│   ├── gitlab-ci-cd.md
-│   └── headless.md            — Agent SDK (programmatic use)
-├── Browser
-│   └── chrome.md              — Chrome DevTools integration
-└── Reference
-    ├── cli-reference.md
-    ├── security.md
-    └── troubleshooting.md
-```
-
-> **Tip:** If unsure which doc to check, fetch `https://code.claude.com/docs/llms.txt` and scan the descriptions — each page has a one-line summary.
