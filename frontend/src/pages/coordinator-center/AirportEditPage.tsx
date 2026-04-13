@@ -63,10 +63,11 @@ import useMeasureDistance from "@/hooks/useMeasureDistance";
 import useHeadingTool from "@/hooks/useHeadingTool";
 import MeasureInfoCard from "@/components/map/overlays/MeasureInfoCard";
 import HeadingInfoCard from "@/components/map/overlays/HeadingInfoCard";
-import type maplibregl from "maplibre-gl";
+import maplibregl from "maplibre-gl";
 import { extractCenterline, circleToPolygon, haversineDistance, computeBearing, computePolygonMedianWidth } from "@/utils/geo";
 import type { DrawingTool } from "@/types/map";
 import { MapTool } from "@/hooks/useMapTools";
+import { buildLhaCreatePayload } from "./buildLhaCreatePayload";
 
 // tracks current feature collections per source for live geometry preview updates
 const sourceDataCache = new Map<string, GeoJSON.FeatureCollection>();
@@ -156,6 +157,19 @@ export default function AirportEditPage() {
   const isDrawingActive = DRAWING_TOOLS.includes(activeTool);
   const [pendingNav, setPendingNav] = useState<string | null>(null);
   const [pendingLhaParentAglId, setPendingLhaParentAglId] = useState<string | null>(null);
+  const [pickingTouchpoint, setPickingTouchpoint] = useState(false);
+  const [pickedTouchpointCoord, setPickedTouchpointCoord] = useState<
+    { lat: number; lon: number; alt: number } | null
+  >(null);
+  const [touchpointPickedMarker, setTouchpointPickedMarker] = useState<[number, number] | null>(null);
+  const [pickingLha, setPickingLha] = useState<"first" | "last" | null>(null);
+  const [pickedLhaCoord, setPickedLhaCoord] = useState<
+    { which: "first" | "last"; lat: number; lon: number; alt: number } | null
+  >(null);
+  const [lhaPickedMarkers, setLhaPickedMarkers] = useState<{
+    first: [number, number] | null;
+    last: [number, number] | null;
+  }>({ first: null, last: null });
 
   // fetch airport data - declared early so drawing hooks can reference it
   const initialLoadDone = useRef(false);
@@ -318,7 +332,37 @@ export default function AirportEditPage() {
   headingRef.current = heading;
   const handleMapClick = useCallback(
     (lngLat: { lng: number; lat: number }) => {
-      /** handle map click for measurement and heading tools. */
+      /** handle map click for measurement, heading, and touchpoint pick tools. */
+      if (pickingLha && selectedFeature?.type === "agl") {
+        const agl = selectedFeature.data as { position: { coordinates: [number, number, number] } };
+        const aglAlt = agl.position?.coordinates?.[2] ?? airport?.elevation ?? 0;
+        setPickedLhaCoord({
+          which: pickingLha,
+          lat: lngLat.lat,
+          lon: lngLat.lng,
+          alt: aglAlt,
+        });
+        setLhaPickedMarkers((prev) => ({
+          ...prev,
+          [pickingLha]: [lngLat.lng, lngLat.lat] as [number, number],
+        }));
+        setPickingLha(null);
+        return;
+      }
+
+      if (pickingTouchpoint && selectedFeature?.type === "surface") {
+        const surface = selectedFeature.data as { surface_type: string; touchpoint_altitude?: number | null };
+        if (surface.surface_type === "RUNWAY") {
+          const lat = Math.round(lngLat.lat * 1e6) / 1e6;
+          const lon = Math.round(lngLat.lng * 1e6) / 1e6;
+          const alt = surface.touchpoint_altitude ?? airport?.elevation ?? 0;
+          setPickedTouchpointCoord({ lat, lon, alt });
+          setTouchpointPickedMarker([lon, lat]);
+          setPickingTouchpoint(false);
+        }
+        return;
+      }
+
       const m = measureRef.current;
       const h = headingRef.current;
       if (mapTool === MapTool.MEASURE && (m.isDrawing || !m.hasPoints)) {
@@ -327,8 +371,61 @@ export default function AirportEditPage() {
         h.addPoint(lngLat.lng, lngLat.lat);
       }
     },
-    [mapTool],
+    [mapTool, pickingTouchpoint, pickingLha, selectedFeature, airport],
   );
+
+  // cancel touchpoint picking when selection changes or panel closes
+  useEffect(() => {
+    if (!selectedFeature || selectedFeature.type !== "surface") {
+      setPickingTouchpoint(false);
+      setPickedTouchpointCoord(null);
+      setTouchpointPickedMarker(null);
+    }
+  }, [selectedFeature]);
+
+  // cancel LHA picking when selection changes away from agl
+  useEffect(() => {
+    if (!selectedFeature || selectedFeature.type !== "agl") {
+      setPickingLha(null);
+      setPickedLhaCoord(null);
+      setLhaPickedMarkers({ first: null, last: null });
+    }
+  }, [selectedFeature]);
+
+  // render preview markers for picked first/last LHA positions and touchpoint
+  useEffect(() => {
+    const m = getMap();
+    if (!m) return;
+    const markers: maplibregl.Marker[] = [];
+
+    function makeDot(color: string, title: string, pos: [number, number]) {
+      /** create a small colored dot marker at the given position. */
+      const el = document.createElement("div");
+      el.style.width = "14px";
+      el.style.height = "14px";
+      el.style.borderRadius = "50%";
+      el.style.background = color;
+      el.style.border = "2px solid white";
+      el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.4)";
+      el.title = title;
+      const marker = new maplibregl.Marker({ element: el }).setLngLat(pos).addTo(m as maplibregl.Map);
+      markers.push(marker);
+    }
+
+    (["first", "last"] as const).forEach((which) => {
+      const pos = lhaPickedMarkers[which];
+      if (!pos) return;
+      makeDot("var(--tv-accent)", which === "first" ? "First LHA" : "Last LHA", pos);
+    });
+
+    if (touchpointPickedMarker) {
+      makeDot("#ffd166", "Touchpoint", touchpointPickedMarker);
+    }
+
+    return () => {
+      markers.forEach((mk) => mk.remove());
+    };
+  }, [lhaPickedMarkers, touchpointPickedMarker, getMap]);
 
   // cancel pending creation when user picks another drawing tool, clear tools on switch
   const SAFE_TOOLS: DrawingTool[] = ["select", "pan", "zoom", "zoomReset", "measurement", "heading"];
@@ -433,6 +530,9 @@ export default function AirportEditPage() {
           heading: formHeading ?? roundedDrawnHeading,
           length: formLength ?? roundedDrawnLength,
           width: entityType === "runway" ? (formWidth ?? roundedDrawnWidth) : undefined,
+          touchpoint_latitude: data.touchpoint_latitude as number | undefined,
+          touchpoint_longitude: data.touchpoint_longitude as number | undefined,
+          touchpoint_altitude: data.touchpoint_altitude as number | undefined,
         });
       } else if (entityType.startsWith("safety_zone_")) {
         if (!pendingGeometry) throw new Error("missing geometry");
@@ -481,8 +581,11 @@ export default function AirportEditPage() {
         if (!pos) throw new Error("missing position");
         const sid = data.surface_id as string;
         if (!sid) throw new Error("missing surface");
+        const aglTypeValue = String(data.agl_type ?? "PAPI");
+        const normalizedAglType: "PAPI" | "RUNWAY_EDGE_LIGHTS" =
+          aglTypeValue === "RUNWAY_EDGE_LIGHTS" ? "RUNWAY_EDGE_LIGHTS" : "PAPI";
         await createAGL(id, sid, {
-          agl_type: String(data.agl_type ?? "PAPI"),
+          agl_type: normalizedAglType,
           name: String(data.name ?? ""),
           position: { type: "Point", coordinates: [pos[0], pos[1], elevation] },
           side: data.side as "LEFT" | "RIGHT" | undefined,
@@ -499,13 +602,7 @@ export default function AirportEditPage() {
           s.agls.some((a) => a.id === aglId),
         );
         if (!parentSurface) throw new Error("missing parent surface");
-        await createLHA(id, parentSurface.id, aglId, {
-          unit_number: (data.unit_number as number) ?? 1,
-          setting_angle: (data.setting_angle as number) ?? 3.0,
-          lamp_type: (data.lamp_type as "HALOGEN" | "LED") ?? "HALOGEN",
-          position: { type: "Point", coordinates: [pos[0], pos[1], elevation] },
-          tolerance: data.tolerance != null ? (data.tolerance as number) : undefined,
-        });
+        await createLHA(id, parentSurface.id, aglId, buildLhaCreatePayload(data, pos, elevation));
       } else {
         throw new Error(`unknown entity type: ${entityType}`);
       }
@@ -556,6 +653,9 @@ export default function AirportEditPage() {
           headingRef.current.dismiss();
           return;
         }
+        // clear in-progress heading/measure so the live line disappears too
+        if (headingRef.current.hasPoints) headingRef.current.clear();
+        if (measureRef.current.hasPoints) measureRef.current.clear();
         handleCreationCancel();
         setActiveTool("select");
         setSelectedFeature(null);
@@ -616,10 +716,11 @@ export default function AirportEditPage() {
   );
 
   const handleFeatureClick = useCallback((feature: MapFeature | null) => {
-    /** set selected feature when clicked on map or list panel - skip during drawing. */
+    /** set selected feature when clicked on map or list panel - skip during drawing or picking. */
     if (isDrawingActive) return;
+    if (pickingTouchpoint || pickingLha) return;
     setSelectedFeature(feature);
-  }, [isDrawingActive]);
+  }, [isDrawingActive, pickingTouchpoint, pickingLha]);
 
   const handleLayerChange = useCallback((layers: MapLayerConfig) => {
     /** sync layer config from map component. */
@@ -977,7 +1078,7 @@ export default function AirportEditPage() {
   return (
     <div className="relative w-full h-full" data-testid="airport-edit-page">
       {/* map */}
-      <div className="w-full h-full px-4 py-3">
+      <div className={`w-full h-full px-4 py-3 ${pickingTouchpoint || pickingLha ? "cursor-crosshair" : ""}`}>
         <AirportMap
           ref={mapHandleRef}
           airport={airport}
@@ -1000,7 +1101,7 @@ export default function AirportEditPage() {
           is3D={is3D}
           onToggle3D={setIs3D}
           activeTool={mapTool}
-          onMapClick={mapTool === MapTool.MEASURE || mapTool === MapTool.HEADING ? handleMapClick : undefined}
+          onMapClick={mapTool === MapTool.MEASURE || mapTool === MapTool.HEADING || pickingTouchpoint || pickingLha ? handleMapClick : undefined}
           measureData={{
             points: measure.pointsGeoJSON,
             lines: measure.linesGeoJSON,
@@ -1072,7 +1173,7 @@ export default function AirportEditPage() {
                       </div>
                       {s.length != null && s.width != null && (
                         <p className="text-[10px] text-tv-text-secondary mt-0.5">
-                          {s.length}m × {s.width}m
+                          {s.length.toFixed(2)}m × {s.width.toFixed(2)}m
                         </p>
                       )}
                     </div>
@@ -1105,7 +1206,7 @@ export default function AirportEditPage() {
                           </span>
                         </div>
                         <p className="text-[10px] text-tv-text-secondary mt-0.5">
-                          {t("dashboard.poiHeight")}: {o.height}m
+                          {t("dashboard.poiHeight")}: {o.height.toFixed(2)}m
                         </p>
                       </div>
                     </div>
@@ -1168,7 +1269,7 @@ export default function AirportEditPage() {
                         <div className="flex items-center gap-2 mt-0.5">
                           {z.altitude_floor != null && z.altitude_ceiling != null && (
                             <span className="text-[10px] text-tv-text-secondary">
-                              {z.altitude_floor}m - {z.altitude_ceiling}m
+                              {z.altitude_floor.toFixed(2)}m - {z.altitude_ceiling.toFixed(2)}m
                             </span>
                           )}
                           <span className="flex items-center gap-1 text-[10px]">
@@ -1280,6 +1381,23 @@ export default function AirportEditPage() {
                     : undefined
                 }
                 onAddLha={selectedFeature.type === "agl" ? handleAddLha : undefined}
+                onLhasGenerated={selectedFeature.type === "agl" ? async () => { await fetchAirport(); } : undefined}
+                pickingTouchpoint={selectedFeature.type === "surface" ? pickingTouchpoint : false}
+                onPickTouchpointToggle={
+                  selectedFeature.type === "surface"
+                    ? () => setPickingTouchpoint((v) => !v)
+                    : undefined
+                }
+                pickedTouchpointCoord={selectedFeature.type === "surface" ? pickedTouchpointCoord : null}
+                onPickedTouchpointConsumed={() => setPickedTouchpointCoord(null)}
+                pickingLha={selectedFeature.type === "agl" ? pickingLha : null}
+                onPickLhaToggle={
+                  selectedFeature.type === "agl"
+                    ? (which) => setPickingLha((v) => (v === which ? null : which))
+                    : undefined
+                }
+                pickedLhaCoord={selectedFeature.type === "agl" ? pickedLhaCoord : null}
+                onPickedLhaConsumed={() => setPickedLhaCoord(null)}
               />
             ) : null}
           </div>

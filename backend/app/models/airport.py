@@ -102,6 +102,11 @@ class AirfieldSurface(Base):
     threshold_position = Column(Geometry("POINTZ", srid=4326))
     end_position = Column(Geometry("POINTZ", srid=4326))
 
+    # touchpoint - stored for future video post-processing, runway-only
+    touchpoint_latitude = Column(Float, nullable=True)
+    touchpoint_longitude = Column(Float, nullable=True)
+    touchpoint_altitude = Column(Float, nullable=True)
+
     airport = relationship("Airport", back_populates="surfaces")
     agls = relationship("AGL", back_populates="surface", cascade="all, delete-orphan")
 
