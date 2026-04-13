@@ -266,8 +266,8 @@ export default function CreationForm({
       }
 
       await onCreate(effectiveEntityType, data);
-    } catch {
-      setError(t("coordinator.creation.createError"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("coordinator.creation.createError"));
     } finally {
       setSubmitting(false);
     }

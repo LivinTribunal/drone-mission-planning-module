@@ -34,6 +34,15 @@ class SurfaceCreate(BaseModel):
     touchpoint_longitude: float | None = None
     touchpoint_altitude: float | None = None
 
+    @model_validator(mode="after")
+    def _validate_touchpoint_completeness(self) -> "SurfaceCreate":
+        """touchpoint fields are all-or-nothing to avoid partial state."""
+        fields = (self.touchpoint_latitude, self.touchpoint_longitude, self.touchpoint_altitude)
+        provided = sum(1 for f in fields if f is not None)
+        if 0 < provided < 3:
+            raise ValueError("touchpoint requires all three coordinates or none")
+        return self
+
 
 class SurfaceUpdate(BaseModel):
     """surface update schema"""
@@ -50,6 +59,15 @@ class SurfaceUpdate(BaseModel):
     touchpoint_latitude: float | None = None
     touchpoint_longitude: float | None = None
     touchpoint_altitude: float | None = None
+
+    @model_validator(mode="after")
+    def _validate_touchpoint_completeness(self) -> "SurfaceUpdate":
+        """touchpoint fields are all-or-nothing to avoid partial state."""
+        fields = (self.touchpoint_latitude, self.touchpoint_longitude, self.touchpoint_altitude)
+        provided = sum(1 for f in fields if f is not None)
+        if 0 < provided < 3:
+            raise ValueError("touchpoint requires all three coordinates or none")
+        return self
 
 
 class SurfaceResponse(BaseModel):

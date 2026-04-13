@@ -57,3 +57,28 @@ def test_surface_without_touchpoint_null(client):
     assert data["touchpoint_latitude"] is None
     assert data["touchpoint_longitude"] is None
     assert data["touchpoint_altitude"] is None
+
+
+def test_surface_partial_touchpoint_rejected(client):
+    """providing only some touchpoint fields is a 422."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZTX"},
+    ).json()
+    payload = {**SURFACE_PAYLOAD, "touchpoint_latitude": 50.1}
+    r = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=payload)
+    assert r.status_code == 422
+
+
+def test_surface_update_partial_touchpoint_rejected(client):
+    """updating with only some touchpoint fields is a 422."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZTY"},
+    ).json()
+    surface = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD).json()
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}",
+        json={"touchpoint_latitude": 50.1, "touchpoint_longitude": 14.2},
+    )
+    assert r.status_code == 422

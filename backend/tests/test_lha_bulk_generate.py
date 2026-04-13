@@ -75,3 +75,22 @@ def test_bulk_generate_rejects_same_position(client):
         json=body,
     )
     assert r.status_code == 422
+
+
+def test_bulk_generate_caps_at_200(client):
+    """distance that would produce >200 LHAs is silently capped at 200."""
+    apt_id, surface_id, agl_id = _setup(client, "LZCP")
+
+    # ~2200m at 1m spacing - far exceeds the 200 cap
+    body = {
+        "first_position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
+        "last_position": {"type": "Point", "coordinates": [14.3000, 50.1000, 380.0]},
+        "spacing_m": 1.0,
+    }
+    r = client.post(
+        f"/api/v1/airports/{apt_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/bulk",
+        json=body,
+    )
+    assert r.status_code == 201
+    generated = r.json()["generated"]
+    assert len(generated) == 200

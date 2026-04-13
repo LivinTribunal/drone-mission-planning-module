@@ -29,6 +29,13 @@ class AGL(Base):
     surface = relationship("AirfieldSurface", back_populates="agls")
     lhas = relationship("LHA", back_populates="agl", cascade="all, delete-orphan")
 
+    __table_args__ = (
+        CheckConstraint(
+            "agl_type IN ('PAPI', 'RUNWAY_EDGE_LIGHTS')",
+            name="ck_agl_agl_type",
+        ),
+    )
+
     def calculate_lha_center_point(self) -> tuple[float, float, float]:
         """compute centroid (lon, lat, alt) of all LHA positions."""
         from app.core.geometry import parse_ewkb

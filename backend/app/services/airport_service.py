@@ -5,7 +5,8 @@ from uuid import UUID
 
 import httpx
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import func
+from sqlalchemy import cast, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import TERRAIN_DIR, settings
@@ -778,14 +779,17 @@ def delete_lha(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, lh
         if item.unit_number != idx:
             item.unit_number = idx
 
-    # drop deleted id from any inspection configs that reference it
+    # drop deleted id from any inspection configs that reference it.
+    # scoped by jsonb containment so we only touch configs that actually hold this id -
+    # avoids the full-table scan we'd get from loading every config with non-null lha_ids.
     configs = (
-        db.query(InspectionConfiguration).filter(InspectionConfiguration.lha_ids.isnot(None)).all()
+        db.query(InspectionConfiguration)
+        .filter(InspectionConfiguration.lha_ids.op("@>")(cast([deleted_id_str], JSONB)))
+        .all()
     )
     for cfg in configs:
         ids = cfg.lha_ids or []
-        if deleted_id_str in ids:
-            cfg.lha_ids = [i for i in ids if i != deleted_id_str]
+        cfg.lha_ids = [i for i in ids if i != deleted_id_str]
 
     db.commit()
 
@@ -843,7 +847,8 @@ def bulk_generate_lhas(
 
     created: list[LHA] = []
     for i in range(count):
-        t = i / (count - 1) if count > 1 else 0.0
+        # count is bounded to >= 2 above, so (count - 1) is always positive
+        t = i / (count - 1)
         lon = first[0] + (last[0] - first[0]) * t
         lat = first[1] + (last[1] - first[1]) * t
         alt = first[2] + (last[2] - first[2]) * t

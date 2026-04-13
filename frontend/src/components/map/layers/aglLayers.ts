@@ -72,9 +72,7 @@ export function addAglLayers(
   // lha markers - visible only when zoomed in. edge-light LHAs render smaller
   // and have a thin connecting line drawn across the full row.
   if (lhas.length > 0) {
-    const edgeLightAglIds = new Set(
-      agls.filter((a) => a.agl_type === "RUNWAY_EDGE_LIGHTS").map((a) => a.id),
-    );
+    const aglTypeMap = new Map(agls.map((a) => [a.id, a.agl_type]));
     map.addSource(LHA_SOURCE, {
       type: "geojson",
       data: {
@@ -86,7 +84,7 @@ export function addAglLayers(
             unitNumber: l.unit_number,
             settingAngle: l.setting_angle,
             lampType: l.lamp_type,
-            aglType: edgeLightAglIds.has(l.agl_id) ? "RUNWAY_EDGE_LIGHTS" : "PAPI",
+            aglType: aglTypeMap.get(l.agl_id) ?? "PAPI",
             entityType: "lha",
           },
           geometry: l.position,
