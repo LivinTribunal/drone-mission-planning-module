@@ -55,6 +55,16 @@ export default function CreateAirportDialog({
   const [lookupEmpty, setLookupEmpty] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestionState | null>(null);
   const [createdAirportId, setCreatedAirportId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<{ runways: boolean; safetyZones: boolean; obstacles: boolean }>({
+    runways: true,
+    safetyZones: true,
+    obstacles: true,
+  });
+
+  function toggleSection(key: "runways" | "safetyZones" | "obstacles") {
+    /** toggle expanded state for a suggestion section. */
+    setExpanded((s) => ({ ...s, [key]: !s[key] }));
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -173,6 +183,34 @@ export default function CreateAirportDialog({
             obstacles: s.obstacles.map((o, i) =>
               i === index ? { ...o, checked: !o.checked } : o,
             ),
+          }
+        : s,
+    );
+  }
+
+  function setSectionChecked(
+    key: "runways" | "obstacles" | "safetyZones",
+    checked: boolean,
+  ) {
+    /** set checked state on every item in a section. */
+    setSuggestions((s) =>
+      s
+        ? {
+            ...s,
+            [key]: s[key].map((item) => ({ ...item, checked })),
+          }
+        : s,
+    );
+  }
+
+  function setAllChecked(checked: boolean) {
+    /** set checked state on every suggestion across all sections. */
+    setSuggestions((s) =>
+      s
+        ? {
+            runways: s.runways.map((r) => ({ ...r, checked })),
+            obstacles: s.obstacles.map((o) => ({ ...o, checked })),
+            safetyZones: s.safetyZones.map((z) => ({ ...z, checked })),
           }
         : s,
     );
@@ -429,82 +467,186 @@ export default function CreateAirportDialog({
             (suggestions.runways.length > 0 ||
               suggestions.obstacles.length > 0 ||
               suggestions.safetyZones.length > 0) && (
-              <div
-                className="border border-tv-border rounded p-2 flex flex-col gap-2"
-                data-testid="lookup-suggestions"
-              >
-                <p className="text-xs font-medium text-tv-text-secondary">
-                  {t("coordinator.createAirport.lookup.previewTitle")}
-                </p>
-
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-tv-text-secondary">
+                    {t("coordinator.createAirport.lookup.previewTitle")}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setAllChecked(true)}
+                      className="text-tv-accent hover:underline"
+                    >
+                      {t("coordinator.createAirport.lookup.selectAll")}
+                    </button>
+                    <span className="text-tv-text-secondary">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setAllChecked(false)}
+                      className="text-tv-accent hover:underline"
+                    >
+                      {t("coordinator.createAirport.lookup.deselectAll")}
+                    </button>
+                  </div>
+                </div>
+                <div
+                  className="border border-tv-border rounded p-2 flex flex-col gap-2 max-h-64 overflow-y-auto"
+                  data-testid="lookup-suggestions"
+                >
                 {suggestions.runways.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-tv-text-secondary">
-                      {t("coordinator.createAirport.lookup.runways")}
-                    </p>
-                    <ul className="text-xs flex flex-col gap-1">
-                      {suggestions.runways.map((r, i) => (
-                        <li key={`rw-${i}`} className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={r.checked}
-                            onChange={() => toggleRunway(i)}
-                            data-testid={`runway-suggestion-${i}`}
-                          />
-                          <span>
-                            {r.identifier} ({r.length.toFixed(0)}m x {r.width.toFixed(0)}m)
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => toggleSection("runways")}
+                        className="text-xs font-semibold text-tv-text-secondary flex items-center gap-1 text-left"
+                      >
+                        <span>{expanded.runways ? "▾" : "▸"}</span>
+                        <span>
+                          {t("coordinator.createAirport.lookup.runways")} ({suggestions.runways.length})
+                        </span>
+                      </button>
+                      <div className="flex items-center gap-1 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setSectionChecked("runways", true)}
+                          className="text-tv-accent hover:underline"
+                        >
+                          {t("coordinator.createAirport.lookup.all")}
+                        </button>
+                        <span className="text-tv-text-secondary">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setSectionChecked("runways", false)}
+                          className="text-tv-accent hover:underline"
+                        >
+                          {t("coordinator.createAirport.lookup.none")}
+                        </button>
+                      </div>
+                    </div>
+                    {expanded.runways && (
+                      <ul className="text-xs flex flex-col gap-1 mt-1">
+                        {suggestions.runways.map((r, i) => (
+                          <li key={`rw-${i}`} className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={r.checked}
+                              onChange={() => toggleRunway(i)}
+                              data-testid={`runway-suggestion-${i}`}
+                            />
+                            <span>
+                              {r.identifier} ({r.length.toFixed(0)}m x {r.width.toFixed(0)}m)
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
 
                 {suggestions.safetyZones.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-tv-text-secondary">
-                      {t("coordinator.createAirport.lookup.safetyZones")}
-                    </p>
-                    <ul className="text-xs flex flex-col gap-1">
-                      {suggestions.safetyZones.map((z, i) => (
-                        <li key={`sz-${i}`} className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={z.checked}
-                            onChange={() => toggleSafetyZone(i)}
-                            data-testid={`safety-zone-suggestion-${i}`}
-                          />
-                          <span>
-                            {z.type} {z.name}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => toggleSection("safetyZones")}
+                        className="text-xs font-semibold text-tv-text-secondary flex items-center gap-1 text-left"
+                      >
+                        <span>{expanded.safetyZones ? "▾" : "▸"}</span>
+                        <span>
+                          {t("coordinator.createAirport.lookup.safetyZones")} ({suggestions.safetyZones.length})
+                        </span>
+                      </button>
+                      <div className="flex items-center gap-1 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setSectionChecked("safetyZones", true)}
+                          className="text-tv-accent hover:underline"
+                        >
+                          {t("coordinator.createAirport.lookup.all")}
+                        </button>
+                        <span className="text-tv-text-secondary">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setSectionChecked("safetyZones", false)}
+                          className="text-tv-accent hover:underline"
+                        >
+                          {t("coordinator.createAirport.lookup.none")}
+                        </button>
+                      </div>
+                    </div>
+                    {expanded.safetyZones && (
+                      <ul className="text-xs flex flex-col gap-1 mt-1">
+                        {suggestions.safetyZones.map((z, i) => (
+                          <li key={`sz-${i}`} className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={z.checked}
+                              onChange={() => toggleSafetyZone(i)}
+                              data-testid={`safety-zone-suggestion-${i}`}
+                            />
+                            <span>
+                              {z.type} {z.name}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
 
                 {suggestions.obstacles.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-tv-text-secondary">
-                      {t("coordinator.createAirport.lookup.obstacles")}
-                    </p>
-                    <ul className="text-xs flex flex-col gap-1">
-                      {suggestions.obstacles.map((o, i) => (
-                        <li key={`ob-${i}`} className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={o.checked}
-                            onChange={() => toggleObstacle(i)}
-                            data-testid={`obstacle-suggestion-${i}`}
-                          />
-                          <span>
-                            {o.type} {o.name} ({o.height.toFixed(0)}m)
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => toggleSection("obstacles")}
+                        className="text-xs font-semibold text-tv-text-secondary flex items-center gap-1 text-left"
+                      >
+                        <span>{expanded.obstacles ? "▾" : "▸"}</span>
+                        <span>
+                          {t("coordinator.createAirport.lookup.obstacles")} ({suggestions.obstacles.length})
+                        </span>
+                      </button>
+                      <div className="flex items-center gap-1 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setSectionChecked("obstacles", true)}
+                          className="text-tv-accent hover:underline"
+                        >
+                          {t("coordinator.createAirport.lookup.all")}
+                        </button>
+                        <span className="text-tv-text-secondary">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setSectionChecked("obstacles", false)}
+                          className="text-tv-accent hover:underline"
+                        >
+                          {t("coordinator.createAirport.lookup.none")}
+                        </button>
+                      </div>
+                    </div>
+                    {expanded.obstacles && (
+                      <ul className="text-xs flex flex-col gap-1 mt-1">
+                        {suggestions.obstacles.map((o, i) => (
+                          <li key={`ob-${i}`} className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={o.checked}
+                              onChange={() => toggleObstacle(i)}
+                              data-testid={`obstacle-suggestion-${i}`}
+                            />
+                            <span>
+                              {o.type} {o.name} ({o.height.toFixed(0)}m)
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
+                </div>
               </div>
             )}
 

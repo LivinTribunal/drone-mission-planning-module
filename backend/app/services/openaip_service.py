@@ -297,8 +297,17 @@ def _extract_elevation(elev: dict | float | int | None) -> float | None:
     return None
 
 
-def _parse_runway(rw: dict, fallback_elevation: float) -> RunwaySuggestion | None:
-    """parse a single openaip runway into a suggestion, returning None if incomplete."""
+def _parse_runway(
+    rw: dict,
+    fallback_elevation: float,
+    airport_center: tuple[float, float] | None = None,
+) -> RunwaySuggestion | None:
+    """parse a single openaip runway into a suggestion, returning None if incomplete.
+
+    when the runway payload has no threshold coords (common for openaip), fall back
+    to the airport center and project the threshold back by length/2 along -heading,
+    so the centerline ends up centered on the airport.
+    """
     designator = rw.get("designator") or rw.get("name")
     dimensions = rw.get("dimension") or {}
     length = _convert_length(
@@ -313,15 +322,19 @@ def _parse_runway(rw: dict, fallback_elevation: float) -> RunwaySuggestion | Non
     if heading_field is None:
         heading_field = rw.get("heading")
 
-    threshold = _extract_point(rw.get("thresholdLocation") or rw.get("location"))
-
     if not designator or length is None or width is None or heading_field is None:
         return None
+
+    heading = float(heading_field)
+    threshold = _extract_point(rw.get("thresholdLocation") or rw.get("location"))
     if threshold is None:
-        return None
+        if airport_center is None:
+            return None
+        center_lon, center_lat = airport_center
+        back_bearing = (heading + 180.0) % 360.0
+        threshold = _point_at_distance(center_lon, center_lat, back_bearing, float(length) / 2.0)
 
     threshold_lon, threshold_lat = threshold
-    heading = float(heading_field)
 
     geoms = _compute_runway_geometry(
         threshold_lat=threshold_lat,
@@ -463,7 +476,7 @@ def lookup_airport_by_icao(icao_code: str) -> AirportLookupResponse:
         runways_raw = airport.get("runways") or []
         runways: list[RunwaySuggestion] = []
         for rw in runways_raw:
-            parsed = _parse_runway(rw, elevation)
+            parsed = _parse_runway(rw, elevation, airport_center=(lon, lat))
             if parsed is not None:
                 runways.append(parsed)
 

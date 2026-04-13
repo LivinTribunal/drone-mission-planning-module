@@ -747,6 +747,10 @@
         "runways": "Runways",
         "safetyZones": "Safety zones",
         "obstacles": "Obstacles",
+        "selectAll": "Select all",
+        "deselectAll": "Deselect all",
+        "all": "All",
+        "none": "None",
         "partialFailure": "Airport created, but {{count}} suggested item(s) could not be added. You can add them manually from the airport detail page."
       }
     },
