@@ -146,6 +146,8 @@ class SafetyZoneUpdate(BaseModel):
     @model_validator(mode="after")
     def _validate_altitude_range(self) -> "SafetyZoneUpdate":
         """reject inverted altitude envelopes and boundary zones with altitude bounds."""
+        # partial patches (no type field) skip the boundary check here;
+        # the service layer re-checks against the persisted zone type.
         if self.type == "AIRPORT_BOUNDARY" and (
             self.altitude_floor is not None or self.altitude_ceiling is not None
         ):

@@ -233,7 +233,7 @@ def _batch_check_boundary_zones(
     waypoints: list[WaypointData],
     boundary_zones: list[SafetyZone],
 ) -> list[Violation]:
-    """hard-violate every waypoint not contained in each airport boundary polygon."""
+    """soft-warn every waypoint not contained in each airport boundary polygon."""
     if not boundary_zones or not waypoints:
         return []
 

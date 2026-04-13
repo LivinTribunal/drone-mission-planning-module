@@ -9,9 +9,8 @@ export const SAFETY_ZONE_HATCH_LAYER = "safety-zones-hatch";
 export const SAFETY_ZONE_BORDER_LAYER = "safety-zones-border";
 export const SAFETY_ZONE_LABEL_LAYER = "safety-zones-label";
 
-// airport boundary layers - rendered as inverted polygon (dark outside, transparent inside)
+// airport boundary rendered as a dashed outline only
 export const AIRPORT_BOUNDARY_SOURCE = "airport-boundary";
-export const AIRPORT_BOUNDARY_FILL_LAYER = "airport-boundary-fill";
 export const AIRPORT_BOUNDARY_LINE_LAYER = "airport-boundary-line";
 
 const zoneBorderColors: Record<Exclude<SafetyZoneType, "AIRPORT_BOUNDARY">, string> = {
@@ -20,38 +19,6 @@ const zoneBorderColors: Record<Exclude<SafetyZoneType, "AIRPORT_BOUNDARY">, stri
   PROHIBITED: "#e54545",
   TEMPORARY_NO_FLY: "#e5e545",
 };
-
-type Ring = number[][];
-
-/** reverse a ring's winding order (required for MapLibre polygon holes). */
-function reverseRing(ring: Ring): Ring {
-  return [...ring].reverse();
-}
-
-/** build a world-covering polygon with the boundary's outer ring carved out as a hole. */
-export function buildInvertedPolygon(boundaryGeometry: SafetyZoneResponse["geometry"]) {
-  const worldRing: Ring = [
-    [-180, -90],
-    [180, -90],
-    [180, 90],
-    [-180, 90],
-    [-180, -90],
-  ];
-
-  // boundary outer ring, stripped to 2D, winding reversed to form a hole
-  const outerRing: Ring = (boundaryGeometry.coordinates[0] ?? []).map(
-    (c) => [c[0], c[1]] as [number, number],
-  );
-
-  return {
-    type: "Feature" as const,
-    properties: { entityType: "airport_boundary", role: "mask" },
-    geometry: {
-      type: "Polygon" as const,
-      coordinates: [worldRing, reverseRing(outerRing)],
-    },
-  };
-}
 
 /** adds safety zone layers with hatch pattern fills and labels. */
 export function addSafetyZoneLayers(
@@ -69,7 +36,11 @@ export function addSafetyZoneLayers(
   // register hatch patterns per zone type
   for (const [type, color] of Object.entries(zoneBorderColors)) {
     const imgName = `hatch-${type.toLowerCase()}`;
-    try { if (map.hasImage(imgName)) map.removeImage(imgName); } catch { /* noop */ }
+    try {
+      if (map.hasImage(imgName)) map.removeImage(imgName);
+    } catch (e) {
+      console.warn(`failed to remove hatch image ${imgName}`, e);
+    }
     map.addImage(imgName, createHatchPattern(color));
   }
 
