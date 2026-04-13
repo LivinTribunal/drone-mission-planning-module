@@ -82,6 +82,7 @@ drone-mission-planning-module/
 │   │   ├── models/         # SQLAlchemy + GeoAlchemy2 ORM models
 │   │   ├── schemas/        # Pydantic v2 request/response DTOs
 │   │   ├── services/       # All business logic
+│   │   ├── utils/          # shared utility helpers
 │   │   └── main.py         # FastAPI app + CORS + middleware
 │   ├── migrations/         # Alembic migration files
 │   ├── tests/              # pytest test files
@@ -92,7 +93,7 @@ drone-mission-planning-module/
 │   │   ├── components/     # Reusable React components
 │   │   │   ├── common/     # Button, Input, Modal, Badge, Card, Dropdown, etc.
 │   │   │   ├── mission/    # MissionConfigForm, InspectionList, TemplatePicker, etc.
-│   │   │   ├── map/        # AirportMap + layers/ + overlays/
+│   │   │   ├── map/        # AirportMap + layers/ + overlays/ + cesium/
 │   │   │   ├── coordinator/ # coordinator-specific panels and dialogs
 │   │   │   ├── drone/      # DroneModelSelector, DroneModelViewer, BulkChangeDroneDialog
 │   │   │   ├── Layout/     # NavBar, MissionTabNav, OperatorLayout, etc.
@@ -101,7 +102,10 @@ drone-mission-planning-module/
 │   │   ├── hooks/          # custom React hooks (map drawing, tools, undo/redo, etc.)
 │   │   ├── api/            # Axios client + API functions
 │   │   ├── i18n/           # i18next config + locale JSON files
-│   │   └── types/          # TypeScript interfaces matching Pydantic schemas
+│   │   ├── types/          # TypeScript interfaces matching Pydantic schemas
+│   │   ├── config/         # static config (drone models, surfaces)
+│   │   ├── constants/      # shared constants (AGL, cursors, geo, violations)
+│   │   └── utils/          # shared utility helpers
 │   └── package.json
 ├── .codefactory/prompts/   # Agent prompt files
 ├── .github/workflows/      # CI + agent automation workflows
@@ -126,6 +130,7 @@ frontend/src/ → Axios client → /api/v1/* → FastAPI routers → services �
 - `frontend/src/pages/` — operator-center, coordinator-center, and super-admin routes
 - `frontend/src/components/map/layers/` — MapLibre GL layer modules (surfaceLayers, obstacleLayers, safetyZoneLayers, aglLayers, waypointLayers, mapImages)
 - `frontend/src/components/map/overlays/` — map UI overlays (LayerPanel, LegendPanel, PoiInfoPanel, WaypointListPanel, WaypointInfoPanel, TerrainToggle, MapHelpPanel, etc.)
+- `frontend/src/components/map/cesium/` — CesiumJS 3D components (CesiumFlyAlong, CesiumInfrastructure, CesiumTrajectory)
 
 **Dependency rule**: routes → services → models/schemas. Routes never import models directly.
 
@@ -213,7 +218,7 @@ Defined in `harness.config.json`:
 |------|----------|-----------|
 | T1 (low) | `docs/**`, `*.md` | lint |
 | T2 (medium) | `backend/app/**`, `frontend/src/**`, tests | lint, test, build, structural-tests |
-| T3 (high) | `**/trajectory*`, `**/safety_validator*`, `**/flight_plan*`, `**/migrations/*` | all T2 + manual approval |
+| T3 (high) | `**/trajectory*`, `**/safety_validator*`, `**/flight_plan*`, `**/migrations/versions/*` | all T2 + manual approval |
 
 ### Protected Files
 
@@ -252,7 +257,7 @@ Before implementing any issue, read the relevant spec files:
 Business logic belongs on model methods, not in services. Services handle DB access and HTTP concerns only.
 
 ### Aggregate Roots
-- **Mission** — owns inspections, controls status transitions via `transition_to()`. Enforces DRAFT-only for inspection add/remove, max 10 inspections, auto-regresses VALIDATED→PLANNED on trajectory-affecting changes.
+- **Mission** — owns inspections, controls status transitions via `transition_to()`. Inspection add/remove works from any non-terminal state (regresses to DRAFT), max 10 inspections, auto-regresses to DRAFT on trajectory-affecting changes.
 - **Airport** — owns surfaces, obstacles, safety zones via `add_surface()`, `add_obstacle()`, `add_safety_zone()`.
 
 ### Value Objects (`backend/app/models/value_objects.py`)
@@ -263,7 +268,7 @@ Business logic belongs on model methods, not in services. Services handle DB acc
 
 ### Key Entity Methods
 - `Mission.transition_to(status)` — enforces state machine
-- `Mission.add_inspection()` / `remove_inspection()` — DRAFT-only, max 10
+- `Mission.add_inspection()` / `remove_inspection()` — regresses to DRAFT, blocked in terminal states, max 10
 - `InspectionConfiguration.resolve_with_defaults(template_config)`
 - `AGL.calculate_lha_center_point()` — centroid of LHA positions
 - `Inspection.is_speed_compatible_with_frame_rate(drone, speed)`
