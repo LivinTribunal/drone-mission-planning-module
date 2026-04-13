@@ -31,17 +31,18 @@ client.interceptors.response.use(
   (error) => {
     if (error.response) {
       const status = error.response.status;
-      const message =
-        error.response.data?.detail ||
-        error.response.data?.message ||
-        "An error occurred";
+      const detail = error.response.data?.detail ?? error.response.data?.message ?? "An error occurred";
 
       if (status === 401) {
         localStorage.removeItem(TOKEN_KEY);
         onUnauthorized?.();
       }
 
-      console.error(`API error ${status}: ${message}`);
+      if (typeof detail === "string") {
+        console.error(`API error ${status}: ${detail}`);
+      } else {
+        console.error(`API error ${status}:`, detail);
+      }
     }
     return Promise.reject(error);
   },

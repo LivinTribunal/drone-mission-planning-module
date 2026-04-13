@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from app.core.exceptions import ConflictError
 from app.core.geometry import parse_ewkb
 from app.models.enums import ObstacleType, SafetyZoneType
 from app.utils.geo import (
@@ -68,7 +69,15 @@ class Airport(Base):
         self.obstacles.append(obstacle)
 
     def add_safety_zone(self, zone):
-        """add safety zone to this airport."""
+        """add safety zone to this airport; enforces max-one airport boundary invariant."""
+        if zone.type == SafetyZoneType.AIRPORT_BOUNDARY.value:
+            existing = [
+                z for z in self.safety_zones if z.type == SafetyZoneType.AIRPORT_BOUNDARY.value
+            ]
+            if existing:
+                raise ConflictError(
+                    "Airport boundary already exists. Delete the existing one first."
+                )
         zone.airport_id = self.id
         self.safety_zones.append(zone)
 

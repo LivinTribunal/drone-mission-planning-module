@@ -9,7 +9,11 @@ export const SAFETY_ZONE_HATCH_LAYER = "safety-zones-hatch";
 export const SAFETY_ZONE_BORDER_LAYER = "safety-zones-border";
 export const SAFETY_ZONE_LABEL_LAYER = "safety-zones-label";
 
-const zoneBorderColors: Record<SafetyZoneType, string> = {
+// airport boundary rendered as a dashed outline only
+export const AIRPORT_BOUNDARY_SOURCE = "airport-boundary";
+export const AIRPORT_BOUNDARY_LINE_LAYER = "airport-boundary-line";
+
+const zoneBorderColors: Record<Exclude<SafetyZoneType, "AIRPORT_BOUNDARY">, string> = {
   CTR: "#4595e5",
   RESTRICTED: "#e5a545",
   PROHIBITED: "#e54545",
@@ -21,12 +25,22 @@ export function addSafetyZoneLayers(
   map: MaplibreMap,
   zones: SafetyZoneResponse[],
 ): string[] {
-  const activeZones = zones.filter((z) => z.is_active);
+  // split boundary zones from regular zones
+  const regularZones = zones.filter(
+    (z) => z.is_active && z.type !== "AIRPORT_BOUNDARY",
+  );
+  const boundaryZone = zones.find(
+    (z) => z.type === "AIRPORT_BOUNDARY" && z.is_active,
+  );
 
   // register hatch patterns per zone type
   for (const [type, color] of Object.entries(zoneBorderColors)) {
     const imgName = `hatch-${type.toLowerCase()}`;
-    try { if (map.hasImage(imgName)) map.removeImage(imgName); } catch { /* noop */ }
+    try {
+      if (map.hasImage(imgName)) map.removeImage(imgName);
+    } catch (e) {
+      console.warn(`failed to remove hatch image ${imgName}`, e);
+    }
     map.addImage(imgName, createHatchPattern(color));
   }
 
@@ -34,13 +48,13 @@ export function addSafetyZoneLayers(
     type: "geojson",
     data: {
       type: "FeatureCollection",
-      features: activeZones.map((z) => ({
+      features: regularZones.map((z) => ({
         type: "Feature" as const,
         properties: {
           id: z.id,
           name: z.name,
           zoneType: z.type,
-          borderColor: zoneBorderColors[z.type],
+          borderColor: zoneBorderColors[z.type as keyof typeof zoneBorderColors] ?? "#888888",
           hatchImage: `hatch-${z.type.toLowerCase()}`,
           entityType: "safety_zone",
         },
@@ -102,10 +116,48 @@ export function addSafetyZoneLayers(
     },
   });
 
-  return [
+  const layerIds = [
     SAFETY_ZONE_FILL_LAYER,
     SAFETY_ZONE_HATCH_LAYER,
     SAFETY_ZONE_BORDER_LAYER,
     SAFETY_ZONE_LABEL_LAYER,
   ];
+
+  // airport boundary: dashed outline only (no fill/mask)
+  if (boundaryZone && boundaryZone.geometry) {
+    const outlineFeature = {
+      type: "Feature" as const,
+      properties: {
+        id: boundaryZone.id,
+        name: boundaryZone.name,
+        entityType: "airport_boundary",
+        role: "outline",
+      },
+      geometry: boundaryZone.geometry,
+    };
+
+    map.addSource(AIRPORT_BOUNDARY_SOURCE, {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [outlineFeature],
+      },
+    });
+
+    map.addLayer({
+      id: AIRPORT_BOUNDARY_LINE_LAYER,
+      type: "line",
+      source: AIRPORT_BOUNDARY_SOURCE,
+      filter: ["==", ["get", "role"], "outline"],
+      paint: {
+        "line-color": "#ffffff",
+        "line-width": 2,
+        "line-dasharray": [4, 4],
+      },
+    });
+
+    layerIds.push(AIRPORT_BOUNDARY_LINE_LAYER);
+  }
+
+  return layerIds;
 }
