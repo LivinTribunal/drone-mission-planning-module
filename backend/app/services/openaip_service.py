@@ -1,13 +1,14 @@
 import logging
 import math
 import re
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
 from app.core.config import settings
 from app.core.exceptions import DomainError, NotFoundError
 from app.schemas.geometry import LineStringZ, PointZ, PolygonZ
+from app.schemas.infrastructure import ObstacleTypeStr, SafetyZoneTypeStr
 from app.schemas.openaip import (
     AirportLookupResponse,
     ObstacleSuggestion,
@@ -89,18 +90,23 @@ def _convert_length(value: float | None, unit: int | None) -> float | None:
     if value is None:
         return None
 
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+
     if unit is None or unit == 0:
-        return float(value)
+        return v
     if unit == 1:
-        return float(value) * _METERS_PER_FOOT
+        return v * _METERS_PER_FOOT
     if unit == 6:
-        return float(value) * _METERS_PER_KM
+        return v * _METERS_PER_KM
     if unit == 7:
-        return float(value) * _METERS_PER_NM
+        return v * _METERS_PER_NM
 
     # unrecognized unit - log and treat as meters so callers can still see the value
     logger.warning("openaip: unrecognized length unit code %r; treating as meters", unit)
-    return float(value)
+    return v
 
 
 def _convert_altitude_limit(limit: dict | None) -> float | None:
@@ -412,7 +418,7 @@ def _parse_airspace(item: dict) -> SafetyZoneSuggestion | None:
 
     return SafetyZoneSuggestion(
         name=str(name),
-        type=mapped,  # type: ignore[arg-type]
+        type=cast(SafetyZoneTypeStr, mapped),
         geometry=polygon,
         altitude_floor=floor,
         altitude_ceiling=ceiling,
@@ -437,7 +443,7 @@ def _parse_obstacle(item: dict, fallback_elevation: float) -> ObstacleSuggestion
 
     return ObstacleSuggestion(
         name=str(name),
-        type=mapped,  # type: ignore[arg-type]
+        type=cast(ObstacleTypeStr, mapped),
         height=float(height),
         boundary=_generate_obstacle_boundary(lat, lon, elevation),
     )

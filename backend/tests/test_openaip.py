@@ -119,6 +119,14 @@ def test_convert_length_units():
     assert math.isclose(openaip_service._convert_length(1, 7), 1852.0)
 
 
+def test_convert_length_invalid_value_returns_none():
+    """non-numeric length value yields None rather than raising."""
+    assert openaip_service._convert_length("N/A", 0) is None
+    assert openaip_service._convert_length("N/A", 1) is None
+    assert openaip_service._convert_length("abc", 99) is None
+    assert openaip_service._convert_length({}, 0) is None
+
+
 def test_convert_altitude_limit_flight_level():
     """flight level converts to meters."""
     v = openaip_service._convert_altitude_limit({"value": 50, "unit": 2})
