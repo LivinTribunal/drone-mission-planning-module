@@ -194,7 +194,7 @@ export default function CoordinatorAGLPanel({
                                 {t("airport.lhaUnit", { number: lha.unit_number })}
                               </span>
                               <span className="text-xs text-tv-text-secondary ml-2">
-                                {lha.setting_angle}°
+                                {lha.setting_angle != null ? `${lha.setting_angle}°` : "—"}
                               </span>
                               <p className="text-[10px] text-tv-text-muted mt-0.5">
                                 {lha.position.coordinates[1].toFixed(4)}, {lha.position.coordinates[0].toFixed(4)}

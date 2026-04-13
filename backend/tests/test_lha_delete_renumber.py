@@ -100,3 +100,49 @@ def test_delete_lha_cleans_inspection_configs(client, db_session):
     assert deleted_id not in refreshed.lha_ids
     assert lhas[0]["id"] in refreshed.lha_ids
     assert lhas[2]["id"] in refreshed.lha_ids
+
+
+def test_delete_lha_cleans_inspection_template_default_config(client, db_session):
+    """deleting an LHA also cleans the default_config of any InspectionTemplate that references it.
+
+    InspectionTemplate.targets is a many-to-many to AGL, not LHA - the LHA reference chain
+    from templates goes through InspectionTemplate.default_config.lha_ids.
+    """
+    from app.models.inspection import InspectionConfiguration, InspectionTemplate
+
+    _, _, _, base, lhas = _setup(client, "LZTM")
+    deleted_id = lhas[1]["id"]
+
+    # seed a template whose default_config references the lha about to be deleted
+    cfg = InspectionConfiguration(lha_ids=[lhas[0]["id"], deleted_id, lhas[2]["id"]])
+    db_session.add(cfg)
+    db_session.flush()
+    tpl = InspectionTemplate(
+        name="edge-lights-template",
+        description="template referencing lhas for test",
+        default_config_id=cfg.id,
+    )
+    db_session.add(tpl)
+    db_session.commit()
+    tpl_id = tpl.id
+    cfg_id = cfg.id
+
+    r = client.delete(f"{base}/{deleted_id}")
+    assert r.status_code == 200
+
+    db_session.expire_all()
+    refreshed_cfg = (
+        db_session.query(InspectionConfiguration)
+        .filter(InspectionConfiguration.id == cfg_id)
+        .first()
+    )
+    assert deleted_id not in refreshed_cfg.lha_ids
+    assert lhas[0]["id"] in refreshed_cfg.lha_ids
+    assert lhas[2]["id"] in refreshed_cfg.lha_ids
+
+    # template row itself is unchanged
+    refreshed_tpl = (
+        db_session.query(InspectionTemplate).filter(InspectionTemplate.id == tpl_id).first()
+    )
+    assert refreshed_tpl.name == "edge-lights-template"
+    assert refreshed_tpl.default_config_id == cfg_id

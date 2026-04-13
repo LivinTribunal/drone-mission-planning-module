@@ -33,6 +33,7 @@ import {
   TAXIWAY_CENTERLINE_LAYER,
   TAXIWAY_LABEL_LAYER,
   TAXIWAY_POLYGON_SOURCE,
+  TOUCHPOINT_SOURCE,
 } from "./layers/surfaceLayers";
 import {
   addObstacleLayers,
@@ -66,6 +67,8 @@ import {
   LHA_SOURCE,
   LHA_POINT_LAYER,
   LHA_LABEL_LAYER,
+  EDGE_LIGHTS_LINE_SOURCE,
+  EDGE_LIGHTS_LINE_LAYER,
 } from "./layers/aglLayers";
 import {
   addWaypointLayers as addWaypointLayersFn,
@@ -187,7 +190,7 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
     SAFETY_ZONE_BORDER_LAYER,
     SAFETY_ZONE_LABEL_LAYER,
   ],
-  aglSystems: [AGL_POINT_LAYER, AGL_LABEL_LAYER, LHA_POINT_LAYER, LHA_LABEL_LAYER],
+  aglSystems: [AGL_POINT_LAYER, AGL_LABEL_LAYER, LHA_POINT_LAYER, LHA_LABEL_LAYER, EDGE_LIGHTS_LINE_LAYER],
   transitWaypoints: [WAYPOINT_TRANSIT_CIRCLE_LAYER],
   measurementWaypoints: [WAYPOINT_MEASUREMENT_CIRCLE_LAYER, WAYPOINT_HOVER_LAYER, WAYPOINT_LABEL_LAYER],
   path: [WAYPOINT_LINE_LAYER],
@@ -1172,6 +1175,9 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     TAXIWAY_SOURCE, TAXIWAY_POLYGON_SOURCE, OBSTACLE_SOURCE,
     OBSTACLE_BOUNDARY_SOURCE, OBSTACLE_BUFFER_SOURCE, SURFACE_BUFFER_SOURCE,
     AGL_SOURCE, LHA_SOURCE,
+    // edge-light connector line + runway touchpoints - conditionally added by their
+    // layer modules, but still must be torn down so the next addSource() doesn't collide
+    EDGE_LIGHTS_LINE_SOURCE, TOUCHPOINT_SOURCE,
   ];
 
   function removeInfraLayers(map: maplibregl.Map) {

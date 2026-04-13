@@ -183,6 +183,28 @@ export default function CreationForm({
     setName(`LHA Unit ${nextUnitNumber}`);
   }, [lhaAglId, category, nextUnitNumber]);
 
+  // pre-fill lha fields from most recent lha on the selected agl (highest unit_number).
+  // position intentionally stays blank - user places each lha on the map.
+  useEffect(() => {
+    if (category !== "lha" || !lhaAglId) return;
+    const agl = allAgls.find((a) => a.id === lhaAglId);
+    if (!agl) return;
+    const recent = [...agl.lhas].sort((a, b) => b.unit_number - a.unit_number)[0];
+    if (recent) {
+      setLhaTolerance(recent.tolerance != null ? String(recent.tolerance) : "0.2");
+      setLhaLampType(recent.lamp_type);
+      if (agl.agl_type === "PAPI") {
+        setLhaSettingAngle("");
+      } else {
+        setLhaSettingAngle(recent.setting_angle != null ? String(recent.setting_angle) : "");
+      }
+    } else {
+      setLhaTolerance("0.2");
+      setLhaLampType("HALOGEN");
+      setLhaSettingAngle(agl.agl_type === "PAPI" ? "" : "0.0");
+    }
+  }, [lhaAglId, allAgls, category]);
+
   const categoryOptions = geometryType === "circle"
     ? CIRCLE_CATEGORIES
     : geometryType === "point"
@@ -245,8 +267,11 @@ export default function CreationForm({
 
       if (effectiveEntityType === "agl") {
         data.agl_type = aglType;
-        data.side = aglSide;
-        if (glideSlopeAngle) data.glide_slope_angle = parseFloat(glideSlopeAngle);
+        // side + glide slope are PAPI-only concepts; skip them for edge lights
+        if (aglType === "PAPI") {
+          data.side = aglSide;
+          if (glideSlopeAngle) data.glide_slope_angle = parseFloat(glideSlopeAngle);
+        }
         if (distFromThreshold) data.distance_from_threshold = parseFloat(distFromThreshold);
         data.surface_id = surfaceId;
         const lat = parseFloat(manualLat);
@@ -257,7 +282,15 @@ export default function CreationForm({
       if (effectiveEntityType === "lha") {
         data.agl_id = lhaAglId;
         data.unit_number = nextUnitNumber;
-        data.setting_angle = lhaSettingAngle ? parseFloat(lhaSettingAngle) : 3.0;
+        // parent agl type decides whether a blank setting_angle is allowed (PAPI -> null)
+        const parentAgl = allAgls.find((a) => a.id === lhaAglId);
+        if (lhaSettingAngle) {
+          data.setting_angle = parseFloat(lhaSettingAngle);
+        } else if (parentAgl?.agl_type === "PAPI") {
+          data.setting_angle = null;
+        } else {
+          data.setting_angle = 0.0;
+        }
         data.lamp_type = lhaLampType;
         if (lhaTolerance) data.tolerance = parseFloat(lhaTolerance);
         const lat = parseFloat(manualLat);
@@ -601,27 +634,32 @@ export default function CreationForm({
                     <option value="RUNWAY_EDGE_LIGHTS">{t("coordinator.agl.runwayEdgeLights")}</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-                    {t("coordinator.creation.aglSide")}
-                  </label>
-                  <select
-                    value={aglSide}
-                    onChange={(e) => setAglSide(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
-                  >
-                    <option value="LEFT">{t("coordinator.detail.aglSides.left")}</option>
-                    <option value="RIGHT">{t("coordinator.detail.aglSides.right")}</option>
-                  </select>
-                </div>
-                <Input
-                  id="create-glide"
-                  label={t("coordinator.creation.glideSlopeAngle")}
-                  type="number"
-                  step="0.1"
-                  value={glideSlopeAngle}
-                  onChange={(e) => setGlideSlopeAngle(e.target.value)}
-                />
+                {/* side/glide-slope are PAPI-only - edge lights have neither */}
+                {aglType === "PAPI" && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                        {t("coordinator.creation.aglSide")}
+                      </label>
+                      <select
+                        value={aglSide}
+                        onChange={(e) => setAglSide(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                      >
+                        <option value="LEFT">{t("coordinator.detail.aglSides.left")}</option>
+                        <option value="RIGHT">{t("coordinator.detail.aglSides.right")}</option>
+                      </select>
+                    </div>
+                    <Input
+                      id="create-glide"
+                      label={t("coordinator.creation.glideSlopeAngle")}
+                      type="number"
+                      step="0.1"
+                      value={glideSlopeAngle}
+                      onChange={(e) => setGlideSlopeAngle(e.target.value)}
+                    />
+                  </>
+                )}
                 <Input
                   id="create-dist"
                   label={t("coordinator.creation.distanceFromThreshold")}

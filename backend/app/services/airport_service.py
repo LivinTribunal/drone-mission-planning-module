@@ -833,14 +833,14 @@ def bulk_generate_lhas(
     count = max(2, int(round(total_distance / schema.spacing_m)) + 1)
     count = min(count, 200)
 
-    # default angle: RUNWAY_EDGE_LIGHTS uses 0, PAPI requires manual fill-in
+    # default angle: RUNWAY_EDGE_LIGHTS uses 0, PAPI stays null for coordinator fill-in
     is_edge_lights = agl.agl_type == "RUNWAY_EDGE_LIGHTS"
     if schema.setting_angle is not None:
         setting_angle = schema.setting_angle
     elif is_edge_lights:
         setting_angle = 0.0
     else:
-        setting_angle = 0.0  # placeholder - coordinator edits manually for PAPI
+        setting_angle = None
 
     # start numbering after any existing LHAs
     existing_count = db.query(LHA).filter(LHA.agl_id == agl_id).count()

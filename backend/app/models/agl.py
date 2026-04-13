@@ -75,7 +75,8 @@ class LHA(Base):
     id = Column(UUID, primary_key=True, default=uuid4)
     agl_id = Column(UUID, ForeignKey("agl.id", ondelete="CASCADE"), nullable=False)
     unit_number = Column(Integer, nullable=False)
-    setting_angle = Column(Float, nullable=False)
+    # nullable: PAPI bulk generation leaves this blank for coordinator fill-in per lha
+    setting_angle = Column(Float, nullable=True)
     transition_sector_width = Column(Float)
     lamp_type = Column(
         String(10),

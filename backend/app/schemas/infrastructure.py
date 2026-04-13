@@ -195,7 +195,7 @@ class LHACreate(BaseModel):
     """lha create schema"""
 
     unit_number: int
-    setting_angle: float
+    setting_angle: float | None = None
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr
     position: PointZ
@@ -221,7 +221,7 @@ class LHAResponse(BaseModel):
     id: UUID
     agl_id: UUID
     unit_number: int
-    setting_angle: float
+    setting_angle: float | None = None
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr
     position: PointZ

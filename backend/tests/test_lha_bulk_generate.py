@@ -77,6 +77,46 @@ def test_bulk_generate_rejects_same_position(client):
     assert r.status_code == 422
 
 
+def test_bulk_generate_papi_lhas_have_null_setting_angle(client):
+    """PAPI bulk-generate leaves setting_angle null for coordinator fill-in per lha."""
+    apt_id, surface_id, agl_id = _setup(client, "LZPN", agl_type="PAPI")
+
+    body = {
+        "first_position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
+        "last_position": {"type": "Point", "coordinates": [14.2704, 50.1000, 380.0]},
+        "spacing_m": 10.0,
+    }
+    r = client.post(
+        f"/api/v1/airports/{apt_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/bulk",
+        json=body,
+    )
+    assert r.status_code == 201
+    generated = r.json()["generated"]
+    assert len(generated) >= 2
+    for lha in generated:
+        assert lha["setting_angle"] is None
+        assert lha["lamp_type"] == "HALOGEN"
+
+
+def test_bulk_generate_edge_lights_setting_angle_is_zero_not_null(client):
+    """RUNWAY_EDGE_LIGHTS bulk-generate uses 0.0 (not null) as the default setting_angle."""
+    apt_id, surface_id, agl_id = _setup(client, "LZEZ", agl_type="RUNWAY_EDGE_LIGHTS")
+
+    body = {
+        "first_position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
+        "last_position": {"type": "Point", "coordinates": [14.2704, 50.1000, 380.0]},
+        "spacing_m": 10.0,
+    }
+    r = client.post(
+        f"/api/v1/airports/{apt_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/bulk",
+        json=body,
+    )
+    assert r.status_code == 201
+    generated = r.json()["generated"]
+    for lha in generated:
+        assert lha["setting_angle"] == 0.0
+
+
 def test_bulk_generate_caps_at_200(client):
     """distance that would produce >200 LHAs is silently capped at 200."""
     apt_id, surface_id, agl_id = _setup(client, "LZCP")

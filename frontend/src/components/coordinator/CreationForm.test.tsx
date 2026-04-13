@@ -193,8 +193,10 @@ describe("CreationForm", () => {
 
       fireEvent.click(screen.getByTestId("creation-submit"));
 
+      // Error instances surface their own message verbatim; the t() fallback is
+      // only used for non-Error rejections.
       await waitFor(() => {
-        expect(screen.getByText("coordinator.creation.createError")).toBeInTheDocument();
+        expect(screen.getByText("fail")).toBeInTheDocument();
       });
     });
 
@@ -262,6 +264,128 @@ describe("CreationForm", () => {
       expect(headingInput).toBeInTheDocument();
       expect(screen.getByDisplayValue("3000")).toBeInTheDocument();
       expect(screen.getByDisplayValue("45")).toBeInTheDocument();
+    });
+  });
+
+  describe("lha pre-fill from most recent lha", () => {
+    const papiAgl = {
+      id: "agl-papi",
+      surface_id: "s1",
+      name: "PAPI 09L-L",
+      agl_type: "PAPI" as const,
+      side: "LEFT" as const,
+      glide_slope_angle: 3.0,
+      distance_from_threshold: 300,
+      offset_from_centerline: null,
+      position: { type: "Point" as const, coordinates: [17.0, 48.0, 0] as [number, number, number] },
+      lhas: [
+        {
+          id: "lha-1",
+          agl_id: "agl-papi",
+          unit_number: 1,
+          setting_angle: 2.5,
+          transition_sector_width: null,
+          lamp_type: "LED" as const,
+          position: { type: "Point" as const, coordinates: [17.0, 48.0, 0] as [number, number, number] },
+          tolerance: 0.35,
+        },
+        {
+          id: "lha-2",
+          agl_id: "agl-papi",
+          unit_number: 3,
+          setting_angle: 3.5,
+          transition_sector_width: null,
+          lamp_type: "LED" as const,
+          position: { type: "Point" as const, coordinates: [17.001, 48.0, 0] as [number, number, number] },
+          tolerance: 0.45,
+        },
+      ],
+    };
+
+    const edgeAgl = {
+      id: "agl-edge",
+      surface_id: "s1",
+      name: "EDGE LIGHTS RWY 09L",
+      agl_type: "RUNWAY_EDGE_LIGHTS" as const,
+      side: null,
+      glide_slope_angle: null,
+      distance_from_threshold: null,
+      offset_from_centerline: null,
+      position: { type: "Point" as const, coordinates: [17.0, 48.0, 0] as [number, number, number] },
+      lhas: [
+        {
+          id: "lha-e1",
+          agl_id: "agl-edge",
+          unit_number: 2,
+          setting_angle: 0.0,
+          transition_sector_width: null,
+          lamp_type: "HALOGEN" as const,
+          position: { type: "Point" as const, coordinates: [17.002, 48.0, 0] as [number, number, number] },
+          tolerance: 0.2,
+        },
+      ],
+    };
+
+    function makeSurface(agls: SurfaceResponse["agls"]): SurfaceResponse {
+      /** surface fixture wrapping given agls. */
+      return { ...baseSurface, agls };
+    }
+
+    it("pre-fills PAPI LHA form: blank setting_angle, tolerance + lamp from most recent", () => {
+      render(<CreationForm {...defaultProps} surfaces={[makeSurface([papiAgl])]} />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "lha" },
+      });
+      const aglSelect = screen.getByText("coordinator.creation.selectAgl").parentElement as HTMLSelectElement;
+      fireEvent.change(aglSelect, { target: { value: "agl-papi" } });
+
+      // most recent lha has unit_number=3, tolerance=0.45, lamp=LED
+      const toleranceInput = screen.getByDisplayValue("0.45");
+      expect(toleranceInput).toBeInTheDocument();
+
+      // setting_angle must be blank for PAPI
+      const angleInput = document.getElementById("create-lha-angle") as HTMLInputElement;
+      expect(angleInput.value).toBe("");
+
+      // lamp_type copied from recent (LED)
+      const lampSelect = screen.getByDisplayValue("coordinator.detail.lampTypes.led");
+      expect(lampSelect).toBeInTheDocument();
+    });
+
+    it("pre-fills edge-lights LHA form: setting_angle copied from most recent", () => {
+      render(<CreationForm {...defaultProps} surfaces={[makeSurface([edgeAgl])]} />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "lha" },
+      });
+      const aglSelect = screen.getByText("coordinator.creation.selectAgl").parentElement as HTMLSelectElement;
+      fireEvent.change(aglSelect, { target: { value: "agl-edge" } });
+
+      const angleInput = document.getElementById("create-lha-angle") as HTMLInputElement;
+      expect(angleInput.value).toBe("0");
+
+      const toleranceInput = screen.getByDisplayValue("0.2");
+      expect(toleranceInput).toBeInTheDocument();
+
+      // lamp carried from recent (HALOGEN) - default state is HALOGEN, but confirm it stuck
+      const lampSelect = screen.getByDisplayValue("coordinator.detail.lampTypes.halogen");
+      expect(lampSelect).toBeInTheDocument();
+    });
+
+    it("falls back to defaults when the AGL has no existing LHAs", () => {
+      const emptyAgl = { ...papiAgl, id: "agl-empty", lhas: [] };
+      render(<CreationForm {...defaultProps} surfaces={[makeSurface([emptyAgl])]} />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "lha" },
+      });
+      const aglSelect = screen.getByText("coordinator.creation.selectAgl").parentElement as HTMLSelectElement;
+      fireEvent.change(aglSelect, { target: { value: "agl-empty" } });
+
+      const toleranceInput = screen.getByDisplayValue("0.2");
+      expect(toleranceInput).toBeInTheDocument();
+
+      const angleInput = document.getElementById("create-lha-angle") as HTMLInputElement;
+      // PAPI with no existing lhas -> blank setting_angle (coordinator fills in per lha)
+      expect(angleInput.value).toBe("");
     });
   });
 
