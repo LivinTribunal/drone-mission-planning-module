@@ -30,6 +30,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """restore not-null on lha.setting_angle."""
+    # back-fill any null rows (from papi bulk-generate) before re-enforcing not-null
+    op.execute("UPDATE lha SET setting_angle = 0.0 WHERE setting_angle IS NULL")
     op.alter_column(
         "lha",
         "setting_angle",

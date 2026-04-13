@@ -63,9 +63,12 @@ class SurfaceUpdate(BaseModel):
     @model_validator(mode="after")
     def _validate_touchpoint_completeness(self) -> "SurfaceUpdate":
         """touchpoint fields are all-or-nothing to avoid partial state."""
-        fields = (self.touchpoint_latitude, self.touchpoint_longitude, self.touchpoint_altitude)
-        provided = sum(1 for f in fields if f is not None)
-        if 0 < provided < 3:
+        # check model_fields_set to catch explicit nulls - apply_schema_update
+        # uses exclude_unset, so an unsent field is safe but a partial payload
+        # with explicit nulls would otherwise slip through
+        tp_fields = {"touchpoint_latitude", "touchpoint_longitude", "touchpoint_altitude"}
+        set_tp = tp_fields & self.model_fields_set
+        if 0 < len(set_tp) < 3:
             raise ValueError("touchpoint requires all three coordinates or none")
         return self
 

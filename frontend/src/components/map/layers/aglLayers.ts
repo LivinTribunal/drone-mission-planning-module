@@ -82,7 +82,8 @@ export function addAglLayers(
           properties: {
             id: l.id,
             unitNumber: l.unit_number,
-            settingAngle: l.setting_angle,
+            settingAngle: l.setting_angle ?? 0,
+            hasSettingAngle: l.setting_angle != null,
             lampType: l.lamp_type,
             aglType: aglTypeMap.get(l.agl_id) ?? "PAPI",
             entityType: "lha",
@@ -118,13 +119,22 @@ export function addAglLayers(
       source: LHA_SOURCE,
       filter: ["!=", ["get", "aglType"], "RUNWAY_EDGE_LIGHTS"],
       layout: {
+        // hide "(°)" for papi lhas with no setting_angle set yet
         "text-field": [
           "concat",
           "LHA ",
           ["to-string", ["get", "unitNumber"]],
-          " (",
-          ["to-string", ["get", "settingAngle"]],
-          "\u00B0)",
+          [
+            "case",
+            ["get", "hasSettingAngle"],
+            [
+              "concat",
+              " (",
+              ["to-string", ["get", "settingAngle"]],
+              "\u00B0)",
+            ],
+            "",
+          ],
         ],
         "text-size": 10,
         "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
