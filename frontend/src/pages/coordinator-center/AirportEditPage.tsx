@@ -459,8 +459,11 @@ export default function AirportEditPage() {
         if (!pos) throw new Error("missing position");
         const sid = data.surface_id as string;
         if (!sid) throw new Error("missing surface");
+        const aglTypeValue = String(data.agl_type ?? "PAPI");
+        const normalizedAglType: "PAPI" | "RUNWAY_EDGE_LIGHTS" =
+          aglTypeValue === "RUNWAY_EDGE_LIGHTS" ? "RUNWAY_EDGE_LIGHTS" : "PAPI";
         await createAGL(id, sid, {
-          agl_type: String(data.agl_type ?? "PAPI"),
+          agl_type: normalizedAglType,
           name: String(data.name ?? ""),
           position: { type: "Point", coordinates: [pos[0], pos[1], elevation] },
           side: data.side as "LEFT" | "RIGHT" | undefined,

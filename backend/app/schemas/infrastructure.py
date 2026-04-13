@@ -261,7 +261,7 @@ class AGLResponse(BaseModel):
 
     id: UUID
     surface_id: UUID
-    agl_type: str
+    agl_type: AglTypeStr
     name: str
     position: PointZ
     side: PAPISideStr | None = None
@@ -283,6 +283,13 @@ class LHABulkGenerateRequest(BaseModel):
     setting_angle: float | None = None
     tolerance: float | None = 0.2
     lamp_type: LampTypeStr = "HALOGEN"
+
+    @model_validator(mode="after")
+    def _validate_positions_differ(self) -> "LHABulkGenerateRequest":
+        """first and last positions must not be identical - zero-length interpolation is invalid."""
+        if self.first_position.coordinates == self.last_position.coordinates:
+            raise ValueError("first and last positions must differ")
+        return self
 
 
 class LHABulkGenerateResponse(BaseModel):

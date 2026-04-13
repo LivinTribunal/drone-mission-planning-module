@@ -79,7 +79,7 @@ export interface SafetyZoneResponse {
 export interface AGLResponse {
   id: string;
   surface_id: string;
-  agl_type: string;
+  agl_type: AglType;
   name: string;
   position: PointZ;
   side: PAPISide | null;
@@ -220,7 +220,7 @@ export interface SafetyZoneUpdate {
 }
 
 export interface AGLCreate {
-  agl_type: string;
+  agl_type: AglType;
   name: string;
   position: PointZ;
   side?: PAPISide | null;
@@ -230,7 +230,7 @@ export interface AGLCreate {
 }
 
 export interface AGLUpdate {
-  agl_type?: string;
+  agl_type?: AglType;
   name?: string;
   position?: PointZ;
   side?: PAPISide | null;

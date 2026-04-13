@@ -116,7 +116,7 @@ describe("QuickLhaSetup", () => {
     const mockBulk = bulkCreateLHAs as unknown as ReturnType<typeof vi.fn>;
     mockBulk.mockResolvedValue({ generated: [{ id: "l1" }] });
 
-    const papiAgl = { ...agl, agl_type: "PAPI", name: "PAPI RWY 06/24" };
+    const papiAgl: AGLResponse = { ...agl, agl_type: "PAPI", name: "PAPI RWY 06/24" };
     const papiSurface = { ...surface, agls: [papiAgl] };
 
     render(

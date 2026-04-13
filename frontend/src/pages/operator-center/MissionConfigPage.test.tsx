@@ -157,7 +157,7 @@ describe("InspectionConfigForm LHA toggle", () => {
   const mockAgl = {
     id: "agl-1",
     surface_id: "srf-1",
-    agl_type: "PAPI",
+    agl_type: "PAPI" as const,
     name: "PAPI 09L",
     position: { type: "Point" as const, coordinates: [17.21, 48.17, 133] as [number, number, number] },
     side: null,
