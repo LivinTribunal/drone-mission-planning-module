@@ -62,7 +62,9 @@ export function addSafetyZoneLayers(
   const regularZones = zones.filter(
     (z) => z.is_active && z.type !== "AIRPORT_BOUNDARY",
   );
-  const boundaryZone = zones.find((z) => z.type === "AIRPORT_BOUNDARY");
+  const boundaryZone = zones.find(
+    (z) => z.type === "AIRPORT_BOUNDARY" && z.is_active,
+  );
 
   // register hatch patterns per zone type
   for (const [type, color] of Object.entries(zoneBorderColors)) {
