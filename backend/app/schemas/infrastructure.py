@@ -30,8 +30,8 @@ class SurfaceCreate(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
-    touchpoint_latitude: float | None = None
-    touchpoint_longitude: float | None = None
+    touchpoint_latitude: float | None = Field(default=None, ge=-90, le=90)
+    touchpoint_longitude: float | None = Field(default=None, ge=-180, le=180)
     touchpoint_altitude: float | None = None
 
     @model_validator(mode="after")
@@ -56,8 +56,8 @@ class SurfaceUpdate(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
-    touchpoint_latitude: float | None = None
-    touchpoint_longitude: float | None = None
+    touchpoint_latitude: float | None = Field(default=None, ge=-90, le=90)
+    touchpoint_longitude: float | None = Field(default=None, ge=-180, le=180)
     touchpoint_altitude: float | None = None
 
     @model_validator(mode="after")

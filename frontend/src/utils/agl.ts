@@ -8,10 +8,10 @@ export function formatAglDisplayName(
   const isRunway = surface?.surface_type === "RUNWAY" && !!surface.identifier;
 
   if (agl.agl_type === "PAPI" && isRunway) {
-    return `PAPI RWY ${surface!.identifier}`;
+    return `PAPI RWY ${surface.identifier}`;
   }
   if (agl.agl_type === "RUNWAY_EDGE_LIGHTS" && isRunway) {
-    return `EDGE LIGHTS RWY ${surface!.identifier}`;
+    return `EDGE LIGHTS RWY ${surface.identifier}`;
   }
   return agl.name;
 }

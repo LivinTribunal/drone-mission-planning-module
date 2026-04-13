@@ -842,36 +842,44 @@ def bulk_generate_lhas(
     else:
         setting_angle = None
 
-    # start numbering after any existing LHAs
+    # start numbering after any existing LHAs - append-only semantics: calling
+    # this twice on the same AGL extends numbering past existing units and
+    # counts toward the 200-cap on subsequent calls
     existing_count = db.query(LHA).filter(LHA.agl_id == agl_id).count()
 
-    created: list[LHA] = []
-    for i in range(count):
-        # count is bounded to >= 2 above, so (count - 1) is always positive
-        t = i / (count - 1)
-        lon = first[0] + (last[0] - first[0]) * t
-        lat = first[1] + (last[1] - first[1]) * t
-        alt = first[2] + (last[2] - first[2]) * t
-        coords = [lon, lat, alt]
-        _normalize_position_altitude(coords, airport)
+    # reuse one provider across the loop - DEM-backed providers open a
+    # rasterio handle per instance, so creating one per iteration would
+    # re-open the file up to 200 times in a single request
+    provider = create_elevation_provider(airport)
+    try:
+        created: list[LHA] = []
+        for i in range(count):
+            # count is bounded to >= 2 above, so (count - 1) is always positive
+            t = i / (count - 1)
+            lon = first[0] + (last[0] - first[0]) * t
+            lat = first[1] + (last[1] - first[1]) * t
+            ground = provider.get_elevation(lat, lon)
 
-        wkt = f"SRID=4326;POINTZ({coords[0]} {coords[1]} {coords[2]})"
-        lha = LHA(
-            agl_id=agl_id,
-            unit_number=existing_count + i + 1,
-            setting_angle=setting_angle,
-            lamp_type=schema.lamp_type,
-            position=WKTElement(wkt, srid=4326),
-            tolerance=schema.tolerance if schema.tolerance is not None else 0.2,
-        )
-        db.add(lha)
-        created.append(lha)
+            wkt = f"SRID=4326;POINTZ({lon} {lat} {ground})"
+            lha = LHA(
+                agl_id=agl_id,
+                unit_number=existing_count + i + 1,
+                setting_angle=setting_angle,
+                lamp_type=schema.lamp_type,
+                position=WKTElement(wkt, srid=4326),
+                tolerance=schema.tolerance if schema.tolerance is not None else 0.2,
+            )
+            db.add(lha)
+            created.append(lha)
 
-    db.commit()
-    for lha in created:
-        db.refresh(lha)
+        db.commit()
+        for lha in created:
+            db.refresh(lha)
 
-    return created
+        return created
+    finally:
+        if hasattr(provider, "close"):
+            provider.close()
 
 
 # terrain
