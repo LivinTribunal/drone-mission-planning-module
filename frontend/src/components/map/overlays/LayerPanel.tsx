@@ -33,7 +33,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 const baseLayerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
   { key: "runways", i18nKey: "dashboard.runways" },
   { key: "taxiways", i18nKey: "dashboard.taxiways" },
-  { key: "safetyZones", i18nKey: "dashboard.safetyZones" },
+  { key: "safetyZones", i18nKey: "layers.safetyZonesAndBoundary" },
   { key: "obstacles", i18nKey: "dashboard.obstacles" },
   { key: "aglSystems", i18nKey: "dashboard.aglSystems" },
   { key: "bufferZones", i18nKey: "dashboard.bufferZones" },

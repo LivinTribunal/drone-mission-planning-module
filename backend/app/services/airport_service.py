@@ -9,10 +9,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import TERRAIN_DIR, settings
-from app.core.exceptions import DomainError, NotFoundError
+from app.core.exceptions import ConflictError, DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
-from app.models.enums import MissionStatus
+from app.models.enums import MissionStatus, SafetyZoneType
 from app.models.mission import DroneProfile, Mission
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
 from app.schemas.geometry import PolygonZ, parse_ewkb
@@ -554,6 +554,33 @@ def update_safety_zone(
     )
     if not zone:
         raise NotFoundError("safety zone not found")
+
+    # enforce max-one-boundary invariant when switching a non-boundary zone to AIRPORT_BOUNDARY
+    if (
+        schema.type == SafetyZoneType.AIRPORT_BOUNDARY.value
+        and zone.type != SafetyZoneType.AIRPORT_BOUNDARY.value
+    ):
+        existing = (
+            db.query(SafetyZone)
+            .filter(
+                SafetyZone.airport_id == airport_id,
+                SafetyZone.type == SafetyZoneType.AIRPORT_BOUNDARY.value,
+                SafetyZone.id != zone_id,
+            )
+            .first()
+        )
+        if existing:
+            raise ConflictError("Airport boundary already exists. Delete the existing one first.")
+
+    # determine target type - schema.type may be None on partial update
+    target_type = schema.type if schema.type is not None else zone.type
+
+    # boundary zones ignore altitude band - reject altitude payload for clarity
+    if target_type == SafetyZoneType.AIRPORT_BOUNDARY.value:
+        if schema.altitude_floor is not None or schema.altitude_ceiling is not None:
+            raise DomainError(
+                "altitude_floor and altitude_ceiling are not allowed for AIRPORT_BOUNDARY zones"
+            )
 
     apply_schema_update(zone, schema)
     db.commit()

@@ -30,7 +30,8 @@ export type SafetyZoneType =
   | "CTR"
   | "RESTRICTED"
   | "PROHIBITED"
-  | "TEMPORARY_NO_FLY";
+  | "TEMPORARY_NO_FLY"
+  | "AIRPORT_BOUNDARY";
 
 export type ObstacleType =
   | "BUILDING"

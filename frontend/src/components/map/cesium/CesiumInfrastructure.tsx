@@ -184,7 +184,9 @@ export default function CesiumInfrastructure({
   const safetyZones = useMemo(() => {
     if (!layers.safetyZones) return [];
     const result: JSX.Element[] = [];
-    for (const zone of (airport.safety_zones ?? []).filter((z) => z.is_active)) {
+    for (const zone of (airport.safety_zones ?? []).filter(
+      (z) => z.is_active && z.type !== "AIRPORT_BOUNDARY",
+    )) {
       if (!zone.geometry) continue;
       const positions = polygonToCartesian3(zone.geometry);
       const isZoneSelected = selectedFeatureKey === `safety_zone:${zone.id}`;
@@ -237,6 +239,38 @@ export default function CesiumInfrastructure({
         );
     }
     return result;
+  }, [airport.safety_zones, layers.safetyZones, selectedFeatureKey, t]);
+
+  // airport boundary - dashed outline only (no fill)
+  const airportBoundary = useMemo(() => {
+    if (!layers.safetyZones) return [];
+    const boundary = (airport.safety_zones ?? []).find(
+      (z) => z.type === "AIRPORT_BOUNDARY" && z.is_active && z.geometry,
+    );
+    if (!boundary || !boundary.geometry) return [];
+
+    const outerRing = boundary.geometry.coordinates[0];
+    if (!outerRing?.length) return [];
+
+    const outlinePositions = outerRing.map(([lng, lat]) => Cartesian3.fromDegrees(lng, lat, 0));
+    const isSelected = selectedFeatureKey === `safety_zone:${boundary.id}`;
+
+    return [
+      <Entity
+        key={`airport-boundary-outline-${boundary.id}`}
+        name={boundary.name || t("boundary.airportBoundary", { defaultValue: "Airport Boundary" })}
+        polyline={{
+          positions: outlinePositions,
+          width: isSelected ? 4 : 2,
+          material: new PolylineDashMaterialProperty({
+            color: isSelected ? Color.WHITE : Color.WHITE.withAlpha(0.9),
+            dashLength: 16,
+          }),
+          clampToGround: true,
+        }}
+        properties={{ featureType: "safety_zone", featureId: boundary.id }}
+      />,
+    ];
   }, [airport.safety_zones, layers.safetyZones, selectedFeatureKey, t]);
 
   const obstacles = useMemo(() => {
@@ -456,6 +490,7 @@ export default function CesiumInfrastructure({
     <>
       {surfaces}
       {safetyZones}
+      {airportBoundary}
       {obstacles}
       {bufferZones}
       {aglSystems}

@@ -57,6 +57,8 @@ import {
   SAFETY_ZONE_HATCH_LAYER,
   SAFETY_ZONE_BORDER_LAYER,
   SAFETY_ZONE_LABEL_LAYER,
+  AIRPORT_BOUNDARY_SOURCE,
+  AIRPORT_BOUNDARY_LINE_LAYER,
 } from "./layers/safetyZoneLayers";
 import {
   addAglLayers,
@@ -186,6 +188,7 @@ const layerGroupMap: Partial<Record<keyof MapLayerConfig, string[]>> = {
     SAFETY_ZONE_HATCH_LAYER,
     SAFETY_ZONE_BORDER_LAYER,
     SAFETY_ZONE_LABEL_LAYER,
+    AIRPORT_BOUNDARY_LINE_LAYER,
   ],
   aglSystems: [AGL_POINT_LAYER, AGL_LABEL_LAYER, LHA_POINT_LAYER, LHA_LABEL_LAYER],
   transitWaypoints: [WAYPOINT_TRANSIT_CIRCLE_LAYER],
@@ -204,6 +207,7 @@ const INTERACTIVE_LAYERS = [
   OBSTACLE_ICON_LAYER,
   OBSTACLE_BOUNDARY_LAYER,
   SAFETY_ZONE_FILL_LAYER,
+  AIRPORT_BOUNDARY_LINE_LAYER,
   AGL_POINT_LAYER,
   LHA_POINT_LAYER,
 ];
@@ -1168,7 +1172,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   // shared helper to add all infrastructure layers
   // infrastructure source/layer names for cleanup
   const INFRA_SOURCES = [
-    SAFETY_ZONE_SOURCE, RUNWAY_SOURCE, RUNWAY_POLYGON_SOURCE,
+    SAFETY_ZONE_SOURCE, AIRPORT_BOUNDARY_SOURCE, RUNWAY_SOURCE, RUNWAY_POLYGON_SOURCE,
     TAXIWAY_SOURCE, TAXIWAY_POLYGON_SOURCE, OBSTACLE_SOURCE,
     OBSTACLE_BOUNDARY_SOURCE, OBSTACLE_BUFFER_SOURCE, SURFACE_BUFFER_SOURCE,
     AGL_SOURCE, LHA_SOURCE,
@@ -1852,6 +1856,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
           f.layer?.id !== SAFETY_ZONE_FILL_LAYER &&
           f.layer?.id !== SAFETY_ZONE_HATCH_LAYER &&
           f.layer?.id !== SAFETY_ZONE_BORDER_LAYER &&
+          f.layer?.id !== AIRPORT_BOUNDARY_LINE_LAYER &&
           f.layer?.id !== OBSTACLE_BOUNDARY_LAYER,
       );
       const f = pointFeature ?? features[0];
@@ -1868,6 +1873,9 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         const obstacle = airport.obstacles.find((o) => o.id === props.id);
         if (obstacle) mapFeature = { type: "obstacle", data: obstacle };
       } else if (entityType === "safety_zone") {
+        const zone = airport.safety_zones.find((z) => z.id === props.id);
+        if (zone) mapFeature = { type: "safety_zone", data: zone };
+      } else if (entityType === "airport_boundary") {
         const zone = airport.safety_zones.find((z) => z.id === props.id);
         if (zone) mapFeature = { type: "safety_zone", data: zone };
       } else if (entityType === "agl") {

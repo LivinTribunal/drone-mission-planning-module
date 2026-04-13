@@ -12,6 +12,7 @@ type SwatchType =
   | "circle-border"
   | "triangle"
   | "dashed-hatch"
+  | "dashed-rectangle"
   | "tower"
   | "antenna"
   | "tree"
@@ -40,6 +41,7 @@ const zoneItems: LegendItem[] = [
   { key: "restricted", i18nKey: "dashboard.restricted", swatch: "dashed-hatch", color: "#e5a545" },
   { key: "prohibited", i18nKey: "dashboard.prohibited", swatch: "dashed-hatch", color: "#e54545" },
   { key: "temporaryNoFly", i18nKey: "dashboard.temporaryNoFly", swatch: "dashed-hatch", color: "#e5e545" },
+  { key: "airportBoundary", i18nKey: "boundary.airportBoundary", swatch: "dashed-rectangle", color: "#ffffff" },
 ];
 
 // obstacles - per-type icons matching map symbology
@@ -125,6 +127,20 @@ function Swatch({ item }: { item: LegendItem }) {
       <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 10 10">
         <rect x="1" y="0" width="8" height="10" rx="1" fill={item.color} />
         <line x1="5" y1="1" x2="5" y2="9" stroke="#1a1a1a" strokeWidth="0.7" strokeDasharray="1.5 1" />
+      </svg>
+    );
+  }
+
+  if (item.swatch === "dashed-rectangle") {
+    return (
+      <svg className={s} viewBox="0 0 10 10">
+        <rect
+          x="0.5" y="0.5" width="9" height="9" rx="1"
+          fill="none"
+          stroke={item.color}
+          strokeWidth="1.2"
+          strokeDasharray="2.5 1.5"
+        />
       </svg>
     );
   }
@@ -361,7 +377,7 @@ export default function LegendPanel({
           )}
           {showZones && (
             <LegendSection
-              title={t("dashboard.safetyZones")}
+              title={t("layers.safetyZonesAndBoundary")}
               items={zoneItems}
               defaultOpen={false}
             />

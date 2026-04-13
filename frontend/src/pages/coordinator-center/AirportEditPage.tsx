@@ -31,13 +31,14 @@ import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import AirportMap from "@/components/map/AirportMap";
 import type { AirportMapHandle } from "@/components/map/AirportMap";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
+import { AIRPORT_BOUNDARY_SOURCE } from "@/components/map/layers/safetyZoneLayers";
 import InfrastructureListPanel from "@/components/coordinator/InfrastructureListPanel";
 import CoordinatorAGLPanel from "@/components/coordinator/CoordinatorAGLPanel";
 import AirportInfoPanel from "@/components/coordinator/AirportInfoPanel";
 import TerrainSettingsCard from "@/components/coordinator/TerrainSettingsCard";
 import EditableFeatureInfo from "@/components/coordinator/EditableFeatureInfo";
 import CreationForm from "@/components/coordinator/CreationForm";
-import type { PendingGeometryType } from "@/components/coordinator/CreationForm";
+import type { PendingGeometryType, EntityType } from "@/components/coordinator/CreationForm";
 import UnsavedChangesDialog from "@/components/coordinator/UnsavedChangesDialog";
 import MapDrawingToolbar from "@/components/coordinator/MapDrawingToolbar";
 import CoordinatorMapHelpPanel from "@/components/coordinator/CoordinatorMapHelpPanel";
@@ -253,7 +254,22 @@ export default function AirportEditPage() {
       if (!m) return;
 
       if (featureType === "safety_zone") {
-        updateSourceFeatureGeometry(m, "safety-zones", featureId, update.geometry);
+        const zoneData = airport?.safety_zones.find((z) => z.id === featureId);
+        if (zoneData?.type === "AIRPORT_BOUNDARY") {
+          // update boundary outline live
+          const src = m.getSource(AIRPORT_BOUNDARY_SOURCE) as maplibregl.GeoJSONSource | undefined;
+          if (src && update.geometry.type === "Polygon") {
+            const poly = update.geometry as GeoJSON.Polygon;
+            const outlineFeature: GeoJSON.Feature = {
+              type: "Feature",
+              properties: { id: featureId, name: zoneData.name, entityType: "airport_boundary", role: "outline" },
+              geometry: poly,
+            };
+            src.setData({ type: "FeatureCollection", features: [outlineFeature] });
+          }
+        } else {
+          updateSourceFeatureGeometry(m, "safety-zones", featureId, update.geometry);
+        }
       } else if (featureType === "obstacle") {
         // update boundary polygon
         if (update.boundary) {
@@ -334,6 +350,8 @@ export default function AirportEditPage() {
     setPendingLhaParentAglId(null);
   }, [setActiveTool, pendingGeometry, pendingPointPosition]);
 
+  const [boundaryEntityOverride, setBoundaryEntityOverride] = useState<EntityType | null>(null);
+
   const handleCreationCancel = useCallback(() => {
     /** cancel pending creation and clear geometry. */
     setPendingGeometry(null);
@@ -341,6 +359,7 @@ export default function AirportEditPage() {
     setPendingCircleCenter(undefined);
     setPendingCircleRadius(undefined);
     setPendingLhaParentAglId(null);
+    setBoundaryEntityOverride(null);
   }, []);
 
   const handleAddLha = useCallback((aglId: string) => {
@@ -423,14 +442,20 @@ export default function AirportEditPage() {
         const zoneType = entityType
           .replace("safety_zone_", "")
           .toUpperCase()
-          .replace("NO_FLY", "TEMPORARY_NO_FLY") as "CTR" | "RESTRICTED" | "PROHIBITED" | "TEMPORARY_NO_FLY";
+          .replace("NO_FLY", "TEMPORARY_NO_FLY") as
+          | "CTR"
+          | "RESTRICTED"
+          | "PROHIBITED"
+          | "TEMPORARY_NO_FLY"
+          | "AIRPORT_BOUNDARY";
+        const isBoundary = zoneType === "AIRPORT_BOUNDARY";
         await createSafetyZone(id, {
           name: String(data.name ?? ""),
           type: zoneType,
           geometry: { type: "Polygon", coordinates: polyCoords },
-          altitude_floor: data.altitude_floor as number | undefined,
-          altitude_ceiling: data.altitude_ceiling as number | undefined,
-          is_active: data.is_active as boolean | undefined,
+          altitude_floor: isBoundary ? undefined : (data.altitude_floor as number | undefined),
+          altitude_ceiling: isBoundary ? undefined : (data.altitude_ceiling as number | undefined),
+          is_active: isBoundary ? true : (data.is_active as boolean | undefined),
         });
       } else if (entityType === "obstacle") {
         const bufferDist = (data.buffer_distance as number) ?? 5.0;
@@ -918,6 +943,14 @@ export default function AirportEditPage() {
   const surfaces = useMemo(() => airport?.surfaces ?? [], [airport]);
   const obstacles = useMemo(() => airport?.obstacles ?? [], [airport]);
   const safetyZones = useMemo(() => airport?.safety_zones ?? [], [airport]);
+  const boundaryZone = useMemo(
+    () => safetyZones.find((z) => z.type === "AIRPORT_BOUNDARY"),
+    [safetyZones],
+  );
+  const regularSafetyZones = useMemo(
+    () => safetyZones.filter((z) => z.type !== "AIRPORT_BOUNDARY"),
+    [safetyZones],
+  );
 
   if (loading) {
     return (
@@ -1081,8 +1114,33 @@ export default function AirportEditPage() {
               />
 
               <InfrastructureListPanel
+                title={t("boundary.airportBoundary")}
+                items={boundaryZone ? [boundaryZone] : []}
+                getId={(z) => z.id}
+                getName={(z) => z.name}
+                onEdit={(z) => handleFeatureClick({ type: "safety_zone", data: z })}
+                onDelete={handleDeleteSafetyZone}
+                addLabel={t("boundary.addBoundary")}
+                onAdd={boundaryZone ? undefined : () => {
+                  setBoundaryEntityOverride("safety_zone_airport_boundary");
+                  handleToolChange("drawPolygon");
+                }}
+                renderItem={(z) => (
+                  <div className="flex items-center gap-2">
+                    <svg className="h-2.5 w-2.5 flex-shrink-0" viewBox="0 0 10 10">
+                      <rect x="0.5" y="0.5" width="9" height="9" rx="1"
+                        fill="none" stroke="#ffffff" strokeWidth="1.2" strokeDasharray="2.5 1.5" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-tv-text-primary truncate">{z.name}</span>
+                    </div>
+                  </div>
+                )}
+              />
+
+              <InfrastructureListPanel
                 title={t("airport.safetyZones")}
-                items={safetyZones}
+                items={regularSafetyZones}
                 getId={(z) => z.id}
                 getName={(z) => z.name}
                 onEdit={(z) => handleFeatureClick({ type: "safety_zone", data: z })}
@@ -1194,6 +1252,7 @@ export default function AirportEditPage() {
                 prefilledArea={prefilledGeometry.area}
                 obstacles={obstacles}
                 airportElevation={airport?.elevation}
+                prefilledEntityType={boundaryEntityOverride ?? undefined}
               />
             ) : measure.isComplete ? (
               <MeasureInfoCard

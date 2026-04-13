@@ -203,7 +203,7 @@ def test_batch_check_zones_empty_waypoints():
     """no waypoints returns empty list"""
     from app.services.safety_validator import _batch_check_zones
 
-    zone = type("Z", (), {"geometry": MagicMock()})()
+    zone = type("Z", (), {"geometry": MagicMock(), "type": "CTR"})()
     result = _batch_check_zones(None, [], [zone])
     assert result == []
 
@@ -213,7 +213,7 @@ def test_batch_check_zones_no_geometry():
     from app.services.safety_validator import _batch_check_zones
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
-    zone = type("Z", (), {"geometry": None})()
+    zone = type("Z", (), {"geometry": None, "type": "CTR"})()
     result = _batch_check_zones(None, [wp], [zone])
     assert result == []
 
