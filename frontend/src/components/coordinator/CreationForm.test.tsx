@@ -16,6 +16,9 @@ const baseSurface: SurfaceResponse = {
   buffer_distance: 5.0,
   threshold_position: null,
   end_position: null,
+  touchpoint_latitude: null,
+  touchpoint_longitude: null,
+  touchpoint_altitude: null,
   agls: [
     {
       id: "agl1",

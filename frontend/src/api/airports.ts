@@ -23,6 +23,8 @@ import type {
   LHAResponse,
   LHACreate,
   LHAUpdate,
+  LHABulkGenerateRequest,
+  LHABulkGenerateResponse,
   TerrainUploadResponse,
   TerrainDownloadResponse,
 } from "@/types/airport";
@@ -347,6 +349,19 @@ export async function deleteLHA(
 ): Promise<DeleteResponse> {
   const res = await client.delete(
     `/airports/${airportId}/surfaces/${surfaceId}/agls/${aglId}/lhas/${id}`,
+  );
+  return res.data;
+}
+
+export async function bulkCreateLHAs(
+  airportId: string,
+  surfaceId: string,
+  aglId: string,
+  data: LHABulkGenerateRequest,
+): Promise<LHABulkGenerateResponse> {
+  const res = await client.post(
+    `/airports/${airportId}/surfaces/${surfaceId}/agls/${aglId}/lhas/bulk`,
+    data,
   );
   return res.data;
 }

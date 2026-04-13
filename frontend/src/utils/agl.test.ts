@@ -20,9 +20,15 @@ describe("formatAglDisplayName", () => {
     expect(formatAglDisplayName(agl, surface)).toBe("PAPI 1");
   });
 
-  it("falls back to agl.name when agl is not a PAPI", () => {
-    const agl = { agl_type: "REIL", name: "REIL 1" };
+  it("falls back to agl.name when agl_type is unknown", () => {
+    const agl = { agl_type: "CUSTOM", name: "Custom 1" };
     const surface = { surface_type: "RUNWAY" as SurfaceType, identifier: "06L/24R" };
-    expect(formatAglDisplayName(agl, surface)).toBe("REIL 1");
+    expect(formatAglDisplayName(agl, surface)).toBe("Custom 1");
+  });
+
+  it("formats RUNWAY_EDGE_LIGHTS on a runway as 'EDGE LIGHTS RWY {designator}'", () => {
+    const agl = { agl_type: "RUNWAY_EDGE_LIGHTS", name: "Edge Left" };
+    const surface = { surface_type: "RUNWAY" as SurfaceType, identifier: "06/24" };
+    expect(formatAglDisplayName(agl, surface)).toBe("EDGE LIGHTS RWY 06/24");
   });
 });

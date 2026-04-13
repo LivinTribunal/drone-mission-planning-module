@@ -1,0 +1,59 @@
+from tests.data.airports import AIRPORT_PAYLOAD, SURFACE_PAYLOAD
+
+
+def test_surface_create_with_touchpoint(client):
+    """create a surface with touchpoint coordinates."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZTP"},
+    ).json()
+
+    payload = {
+        **SURFACE_PAYLOAD,
+        "touchpoint_latitude": 50.095,
+        "touchpoint_longitude": 14.265,
+        "touchpoint_altitude": 380.0,
+    }
+    r = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=payload)
+    assert r.status_code == 201
+    data = r.json()
+    assert data["touchpoint_latitude"] == 50.095
+    assert data["touchpoint_longitude"] == 14.265
+    assert data["touchpoint_altitude"] == 380.0
+
+
+def test_surface_update_touchpoint(client):
+    """update touchpoint on an existing surface."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZTU"},
+    ).json()
+    surface = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD).json()
+
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}",
+        json={
+            "touchpoint_latitude": 50.100,
+            "touchpoint_longitude": 14.270,
+            "touchpoint_altitude": 381.5,
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["touchpoint_latitude"] == 50.100
+    assert data["touchpoint_longitude"] == 14.270
+    assert data["touchpoint_altitude"] == 381.5
+
+
+def test_surface_without_touchpoint_null(client):
+    """touchpoint fields default to null when not provided."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LZTN"},
+    ).json()
+    r = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD)
+    assert r.status_code == 201
+    data = r.json()
+    assert data["touchpoint_latitude"] is None
+    assert data["touchpoint_longitude"] is None
+    assert data["touchpoint_altitude"] is None

@@ -105,11 +105,16 @@ export default function CreationForm({
   const [obstacleType, setObstacleType] = useState("BUILDING");
   const [obstacleHeight, setObstacleHeight] = useState("");
   const [bufferDistance, setBufferDistance] = useState("5");
-  const [aglType] = useState("PAPI");
+  const [aglType, setAglType] = useState<"PAPI" | "RUNWAY_EDGE_LIGHTS">("PAPI");
   const [aglSide, setAglSide] = useState("LEFT");
   const [glideSlopeAngle, setGlideSlopeAngle] = useState("3.0");
   const [distFromThreshold, setDistFromThreshold] = useState("");
   const [surfaceId, setSurfaceId] = useState(surfaces.length > 0 ? surfaces[0].id : "");
+
+  // runway touchpoint fields
+  const [touchpointLat, setTouchpointLat] = useState("");
+  const [touchpointLon, setTouchpointLon] = useState("");
+  const [touchpointAlt, setTouchpointAlt] = useState("");
 
   // lha fields
   const [lhaAglId, setLhaAglId] = useState("");
@@ -158,17 +163,19 @@ export default function CreationForm({
     setName(`${label} ${count + 1}`);
   }, [obstacleType, category, obstacles, t]);
 
-  // auto-prefill AGL name based on connected surface
+  // auto-prefill AGL name based on connected surface and type
   useEffect(() => {
     if (category !== "agl") return;
     const surface = surfaces.find((s) => s.id === surfaceId);
+    const isRunway = surface?.surface_type === "RUNWAY";
+    const typeLabel = aglType === "RUNWAY_EDGE_LIGHTS" ? "EDGE LIGHTS" : "PAPI";
     if (surface) {
-      const prefix = surface.surface_type === "RUNWAY" ? "RWY" : "TWY";
-      setName(`PAPI ${prefix} ${surface.identifier}`);
+      const prefix = isRunway ? "RWY" : "TWY";
+      setName(`${typeLabel} ${prefix} ${surface.identifier}`);
     } else {
-      setName("PAPI");
+      setName(typeLabel);
     }
-  }, [surfaceId, category, surfaces]);
+  }, [surfaceId, category, surfaces, aglType]);
 
   // auto-prefill LHA name
   useEffect(() => {
@@ -211,6 +218,15 @@ export default function CreationForm({
         if (heading) data.heading = parseFloat(heading);
         if (length) data.length = parseFloat(length);
         if (width) data.width = parseFloat(width);
+      }
+
+      if (effectiveEntityType === "runway") {
+        const tpLat = parseFloat(touchpointLat);
+        const tpLon = parseFloat(touchpointLon);
+        const tpAlt = parseFloat(touchpointAlt);
+        if (!isNaN(tpLat)) data.touchpoint_latitude = tpLat;
+        if (!isNaN(tpLon)) data.touchpoint_longitude = tpLon;
+        if (!isNaN(tpAlt)) data.touchpoint_altitude = tpAlt;
       }
 
       if (effectiveEntityType.startsWith("safety_zone_")) {
@@ -428,6 +444,42 @@ export default function CreationForm({
                     onChange={(e) => setWidth(e.target.value)}
                   />
                 </div>
+                {effectiveEntityType === "runway" && (
+                  <div
+                    className="mt-1 rounded-lg border border-tv-border bg-tv-bg p-2 space-y-1.5"
+                    data-testid="creation-touchpoint-section"
+                  >
+                    <p className="text-[10px] font-semibold text-tv-text-secondary uppercase tracking-wide">
+                      {t("coordinator.creation.touchpoint")}
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <Input
+                        id="create-tp-lat"
+                        label={t("map.coordinates.lat")}
+                        type="number"
+                        step="0.000001"
+                        value={touchpointLat}
+                        onChange={(e) => setTouchpointLat(e.target.value)}
+                      />
+                      <Input
+                        id="create-tp-lon"
+                        label={t("map.coordinates.lon")}
+                        type="number"
+                        step="0.000001"
+                        value={touchpointLon}
+                        onChange={(e) => setTouchpointLon(e.target.value)}
+                      />
+                    </div>
+                    <Input
+                      id="create-tp-alt"
+                      label={t("map.coordinates.alt")}
+                      type="number"
+                      step="0.01"
+                      value={touchpointAlt}
+                      onChange={(e) => setTouchpointAlt(e.target.value)}
+                    />
+                  </div>
+                )}
               </>
             )}
 
@@ -540,11 +592,13 @@ export default function CreationForm({
                     {t("coordinator.creation.aglType")}
                   </label>
                   <select
-                    disabled
                     value={aglType}
-                    className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-muted"
+                    onChange={(e) => setAglType(e.target.value as "PAPI" | "RUNWAY_EDGE_LIGHTS")}
+                    className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                    data-testid="creation-agl-type-select"
                   >
                     <option value="PAPI">PAPI</option>
+                    <option value="RUNWAY_EDGE_LIGHTS">{t("coordinator.agl.runwayEdgeLights")}</option>
                   </select>
                 </div>
                 <div>

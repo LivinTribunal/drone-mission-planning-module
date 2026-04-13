@@ -414,6 +414,9 @@ export default function AirportEditPage() {
           heading: formHeading ?? roundedDrawnHeading,
           length: formLength ?? roundedDrawnLength,
           width: entityType === "runway" ? (formWidth ?? roundedDrawnWidth) : undefined,
+          touchpoint_latitude: data.touchpoint_latitude as number | undefined,
+          touchpoint_longitude: data.touchpoint_longitude as number | undefined,
+          touchpoint_altitude: data.touchpoint_altitude as number | undefined,
         });
       } else if (entityType.startsWith("safety_zone_")) {
         if (!pendingGeometry) throw new Error("missing geometry");
@@ -1221,6 +1224,7 @@ export default function AirportEditPage() {
                     : undefined
                 }
                 onAddLha={selectedFeature.type === "agl" ? handleAddLha : undefined}
+                onLhasGenerated={selectedFeature.type === "agl" ? async () => { await fetchAirport(); } : undefined}
               />
             ) : null}
           </div>

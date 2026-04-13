@@ -45,8 +45,13 @@ export interface SurfaceResponse {
   width: number | null;
   threshold_position: PointZ | null;
   end_position: PointZ | null;
+  touchpoint_latitude: number | null;
+  touchpoint_longitude: number | null;
+  touchpoint_altitude: number | null;
   agls: AGLResponse[];
 }
+
+export type AglType = "PAPI" | "RUNWAY_EDGE_LIGHTS";
 
 export interface ObstacleResponse {
   id: string;
@@ -145,6 +150,9 @@ export interface SurfaceCreate {
   width?: number | null;
   threshold_position?: PointZ | null;
   end_position?: PointZ | null;
+  touchpoint_latitude?: number | null;
+  touchpoint_longitude?: number | null;
+  touchpoint_altitude?: number | null;
 }
 
 export interface SurfaceUpdate {
@@ -158,6 +166,22 @@ export interface SurfaceUpdate {
   width?: number | null;
   threshold_position?: PointZ | null;
   end_position?: PointZ | null;
+  touchpoint_latitude?: number | null;
+  touchpoint_longitude?: number | null;
+  touchpoint_altitude?: number | null;
+}
+
+export interface LHABulkGenerateRequest {
+  first_position: PointZ;
+  last_position: PointZ;
+  spacing_m: number;
+  setting_angle?: number | null;
+  tolerance?: number | null;
+  lamp_type?: "HALOGEN" | "LED";
+}
+
+export interface LHABulkGenerateResponse {
+  generated: LHAResponse[];
 }
 
 export interface ObstacleCreate {

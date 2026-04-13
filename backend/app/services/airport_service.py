@@ -13,12 +13,14 @@ from app.core.exceptions import DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.enums import MissionStatus
+from app.models.inspection import InspectionConfiguration
 from app.models.mission import DroneProfile, Mission
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
 from app.schemas.geometry import PolygonZ, parse_ewkb
 from app.schemas.infrastructure import (
     AGLCreate,
     AGLUpdate,
+    LHABulkGenerateRequest,
     LHACreate,
     LHAUpdate,
     ObstacleCreate,
@@ -749,7 +751,7 @@ def update_lha(
 
 
 def delete_lha(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, lha_id: UUID):
-    """delete LHA, validates surface belongs to airport and LHA belongs to AGL."""
+    """delete LHA, renumber remaining LHAs, and clean up inspection config refs."""
     surface = (
         db.query(AirfieldSurface)
         .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
@@ -766,8 +768,105 @@ def delete_lha(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, lh
     if not lha:
         raise NotFoundError("lha not found")
 
+    deleted_id_str = str(lha.id)
     db.delete(lha)
+    db.flush()
+
+    # renumber remaining LHAs to keep unit_number contiguous
+    remaining = db.query(LHA).filter(LHA.agl_id == agl_id).order_by(LHA.unit_number.asc()).all()
+    for idx, item in enumerate(remaining, start=1):
+        if item.unit_number != idx:
+            item.unit_number = idx
+
+    # drop deleted id from any inspection configs that reference it
+    configs = (
+        db.query(InspectionConfiguration).filter(InspectionConfiguration.lha_ids.isnot(None)).all()
+    )
+    for cfg in configs:
+        ids = cfg.lha_ids or []
+        if deleted_id_str in ids:
+            cfg.lha_ids = [i for i in ids if i != deleted_id_str]
+
     db.commit()
+
+
+def bulk_generate_lhas(
+    db: Session,
+    airport_id: UUID,
+    surface_id: UUID,
+    agl_id: UUID,
+    schema: LHABulkGenerateRequest,
+) -> list[LHA]:
+    """linearly interpolate LHAs between two points spaced by spacing_m meters."""
+    from app.utils.geo import distance_between
+
+    surface = (
+        db.query(AirfieldSurface)
+        .filter(AirfieldSurface.id == surface_id, AirfieldSurface.airport_id == airport_id)
+        .first()
+    )
+    if not surface:
+        raise NotFoundError("surface not found")
+
+    agl = db.query(AGL).filter(AGL.id == agl_id, AGL.surface_id == surface_id).first()
+    if not agl:
+        raise NotFoundError("agl not found")
+
+    airport = db.query(Airport).filter(Airport.id == airport_id).first()
+    if not airport:
+        raise NotFoundError("airport not found")
+
+    first = schema.first_position.coordinates
+    last = schema.last_position.coordinates
+    if len(first) < 3 or len(last) < 3:
+        raise DomainError("positions must include lon, lat, and altitude", status_code=422)
+
+    total_distance = distance_between(first[0], first[1], last[0], last[1])
+    if total_distance <= 0:
+        raise DomainError("first and last positions must differ", status_code=422)
+
+    # number of LHAs, bounded to avoid runaway generation
+    count = max(2, int(round(total_distance / schema.spacing_m)) + 1)
+    count = min(count, 200)
+
+    # default angle: RUNWAY_EDGE_LIGHTS uses 0, PAPI requires manual fill-in
+    is_edge_lights = agl.agl_type == "RUNWAY_EDGE_LIGHTS"
+    if schema.setting_angle is not None:
+        setting_angle = schema.setting_angle
+    elif is_edge_lights:
+        setting_angle = 0.0
+    else:
+        setting_angle = 0.0  # placeholder - coordinator edits manually for PAPI
+
+    # start numbering after any existing LHAs
+    existing_count = db.query(LHA).filter(LHA.agl_id == agl_id).count()
+
+    created: list[LHA] = []
+    for i in range(count):
+        t = i / (count - 1) if count > 1 else 0.0
+        lon = first[0] + (last[0] - first[0]) * t
+        lat = first[1] + (last[1] - first[1]) * t
+        alt = first[2] + (last[2] - first[2]) * t
+        coords = [lon, lat, alt]
+        _normalize_position_altitude(coords, airport)
+
+        wkt = f"SRID=4326;POINTZ({coords[0]} {coords[1]} {coords[2]})"
+        lha = LHA(
+            agl_id=agl_id,
+            unit_number=existing_count + i + 1,
+            setting_angle=setting_angle,
+            lamp_type=schema.lamp_type,
+            position=WKTElement(wkt, srid=4326),
+            tolerance=schema.tolerance if schema.tolerance is not None else 0.2,
+        )
+        db.add(lha)
+        created.append(lha)
+
+    db.commit()
+    for lha in created:
+        db.refresh(lha)
+
+    return created
 
 
 # terrain

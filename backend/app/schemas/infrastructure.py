@@ -13,6 +13,7 @@ ObstacleTypeStr = Literal["BUILDING", "TOWER", "ANTENNA", "VEGETATION", "OTHER"]
 SafetyZoneTypeStr = Literal["CTR", "RESTRICTED", "PROHIBITED", "TEMPORARY_NO_FLY"]
 LampTypeStr = Literal["HALOGEN", "LED"]
 PAPISideStr = Literal["LEFT", "RIGHT"]
+AglTypeStr = Literal["PAPI", "RUNWAY_EDGE_LIGHTS"]
 
 
 # surfaces for airport
@@ -29,6 +30,9 @@ class SurfaceCreate(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
+    touchpoint_latitude: float | None = None
+    touchpoint_longitude: float | None = None
+    touchpoint_altitude: float | None = None
 
 
 class SurfaceUpdate(BaseModel):
@@ -43,6 +47,9 @@ class SurfaceUpdate(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
+    touchpoint_latitude: float | None = None
+    touchpoint_longitude: float | None = None
+    touchpoint_altitude: float | None = None
 
 
 class SurfaceResponse(BaseModel):
@@ -60,6 +67,9 @@ class SurfaceResponse(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
+    touchpoint_latitude: float | None = None
+    touchpoint_longitude: float | None = None
+    touchpoint_altitude: float | None = None
     agls: list["AGLResponse"] = []
 
     model_config = {"from_attributes": True}
@@ -205,7 +215,7 @@ class LHAResponse(BaseModel):
 class AGLCreate(BaseModel):
     """agl create schema"""
 
-    agl_type: str
+    agl_type: AglTypeStr
     name: str
     position: PointZ
     side: PAPISideStr | None = None
@@ -217,7 +227,7 @@ class AGLCreate(BaseModel):
 class AGLUpdate(BaseModel):
     """agl update schema"""
 
-    agl_type: str | None = None
+    agl_type: AglTypeStr | None = None
     name: str | None = None
     position: PointZ | None = None
     side: PAPISideStr | None = None
@@ -243,6 +253,24 @@ class AGLResponse(BaseModel):
     lhas: list[LHAResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+# bulk LHA generation
+class LHABulkGenerateRequest(BaseModel):
+    """bulk LHA generation request - linearly interpolate between two points."""
+
+    first_position: PointZ
+    last_position: PointZ
+    spacing_m: float = Field(gt=0, le=1000)
+    setting_angle: float | None = None
+    tolerance: float | None = 0.2
+    lamp_type: LampTypeStr = "HALOGEN"
+
+
+class LHABulkGenerateResponse(BaseModel):
+    """bulk LHA generation response."""
+
+    generated: list[LHAResponse]
 
 
 # recalculate dimensions responses

@@ -73,9 +73,10 @@ class LHA(Base):
     lamp_type = Column(
         String(10),
         nullable=False,
+        default="HALOGEN",
     )
     position = Column(Geometry("POINTZ", srid=4326), nullable=False)  # normalized ground elevation
-    tolerance = Column(Float, nullable=True)  # angular tolerance in degrees for PAPI transition
+    tolerance = Column(Float, nullable=True, default=0.2)  # angular tolerance in degrees
 
     agl = relationship("AGL", back_populates="lhas")
 

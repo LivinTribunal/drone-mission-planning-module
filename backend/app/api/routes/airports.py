@@ -32,6 +32,8 @@ from app.schemas.infrastructure import (
     AGLListResponse,
     AGLResponse,
     AGLUpdate,
+    LHABulkGenerateRequest,
+    LHABulkGenerateResponse,
     LHACreate,
     LHAListResponse,
     LHAResponse,
@@ -483,6 +485,24 @@ def update_lha(
 ):
     """update LHA"""
     return airport_service.update_lha(db, airport_id, surface_id, agl_id, lha_id, body)
+
+
+@router.post(
+    "/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/bulk",
+    status_code=201,
+    response_model=LHABulkGenerateResponse,
+)
+def bulk_generate_lhas(
+    airport_id: UUID,
+    surface_id: UUID,
+    agl_id: UUID,
+    body: LHABulkGenerateRequest,
+    db: Session = Depends(get_db),
+):
+    """generate evenly-spaced LHAs between two points via linear interpolation."""
+    created = airport_service.bulk_generate_lhas(db, airport_id, surface_id, agl_id, body)
+
+    return LHABulkGenerateResponse(generated=created)
 
 
 @router.delete(
