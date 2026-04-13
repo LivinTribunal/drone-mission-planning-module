@@ -29,7 +29,7 @@ function reverseRing(ring: Ring): Ring {
 }
 
 /** build a world-covering polygon with the boundary's outer ring carved out as a hole. */
-function buildInvertedPolygon(boundaryGeometry: SafetyZoneResponse["geometry"]) {
+export function buildInvertedPolygon(boundaryGeometry: SafetyZoneResponse["geometry"]) {
   const worldRing: Ring = [
     [-180, -90],
     [180, -90],
@@ -83,7 +83,7 @@ export function addSafetyZoneLayers(
           id: z.id,
           name: z.name,
           zoneType: z.type,
-          borderColor: zoneBorderColors[z.type as keyof typeof zoneBorderColors],
+          borderColor: zoneBorderColors[z.type as keyof typeof zoneBorderColors] ?? "#888888",
           hatchImage: `hatch-${z.type.toLowerCase()}`,
           entityType: "safety_zone",
         },

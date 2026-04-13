@@ -45,9 +45,12 @@ hole), so the dashed border tracks the boundary edges only.
 
 ### 3D view (CesiumJS)
 
-Not wired yet in this repo. When Cesium integration lands, mirror the concept:
-either a polygon-with-hole over the terrain, or Cesium clipping planes to darken
-everything outside the boundary footprint.
+Mirrors the MapLibre approach. `CesiumInfrastructure` renders a polygon whose
+outer ring covers the world and whose inner hole is the boundary polygon, with
+`ClassificationType.TERRAIN` so the dark shade drapes over the ground outside
+the boundary. A `PolylineDashMaterialProperty` draws the dashed white outline
+on the boundary edge. Regular safety zones are filtered to skip
+`AIRPORT_BOUNDARY` so they do not double-render.
 
 ### Layer panel / legend
 

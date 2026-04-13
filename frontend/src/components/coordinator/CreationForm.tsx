@@ -10,7 +10,7 @@ type CategoryPolygon = "surface" | "safety_zone" | "obstacle";
 type CategoryPoint = "agl" | "lha";
 type Category = CategoryPolygon | CategoryPoint;
 
-type EntityType =
+export type EntityType =
   | "runway"
   | "taxiway"
   | "safety_zone_ctr"
@@ -36,6 +36,7 @@ interface CreationFormProps {
   prefilledArea?: number;
   obstacles?: ObstacleResponse[];
   airportElevation?: number;
+  prefilledEntityType?: EntityType;
 }
 
 const POLYGON_CATEGORIES: { value: CategoryPolygon; labelKey: string }[] = [
@@ -91,11 +92,23 @@ export default function CreationForm({
   prefilledArea,
   obstacles = [],
   airportElevation = 0,
+  prefilledEntityType,
 }: CreationFormProps) {
   /** creation form shown after drawing a geometry - two-tier type selection, fill fields, create entity. */
   const { t } = useTranslation();
-  const [category, setCategory] = useState<Category | "">("");
-  const [entityType, setEntityType] = useState<EntityType | "">("");
+  const initialCategory: Category | "" = prefilledEntityType?.startsWith("safety_zone_")
+    ? "safety_zone"
+    : prefilledEntityType === "runway" || prefilledEntityType === "taxiway"
+      ? "surface"
+      : prefilledEntityType === "obstacle"
+        ? "obstacle"
+        : prefilledEntityType === "agl"
+          ? "agl"
+          : prefilledEntityType === "lha"
+            ? "lha"
+            : "";
+  const [category, setCategory] = useState<Category | "">(initialCategory);
+  const [entityType, setEntityType] = useState<EntityType | "">(prefilledEntityType ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

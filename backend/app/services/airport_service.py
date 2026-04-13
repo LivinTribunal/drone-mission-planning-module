@@ -12,7 +12,7 @@ from app.core.config import TERRAIN_DIR, settings
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
-from app.models.enums import MissionStatus
+from app.models.enums import MissionStatus, SafetyZoneType
 from app.models.mission import DroneProfile, Mission
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
 from app.schemas.geometry import PolygonZ, parse_ewkb
@@ -554,6 +554,11 @@ def update_safety_zone(
     )
     if not zone:
         raise NotFoundError("safety zone not found")
+
+    # boundary zones ignore altitude band - strip any payload values defensively
+    if zone.type == SafetyZoneType.AIRPORT_BOUNDARY.value:
+        schema.altitude_floor = None
+        schema.altitude_ceiling = None
 
     apply_schema_update(zone, schema)
     db.commit()

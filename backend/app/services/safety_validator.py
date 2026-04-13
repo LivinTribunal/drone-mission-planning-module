@@ -248,9 +248,9 @@ def _batch_check_boundary_zones(
 
         sql = (
             f"SELECT wp.idx FROM (VALUES {wp_values}) AS wp(idx, geom) "  # noqa: S608
-            f"WHERE NOT ST_Contains("
+            f"WHERE NOT COALESCE(ST_Contains("
             f"ST_Force2D(ST_GeomFromEWKT(:boundary)), "
-            f"ST_Force2D(ST_GeomFromEWKT(wp.geom)))"
+            f"ST_Force2D(ST_GeomFromEWKT(wp.geom))), FALSE)"
         )
         rows = db.execute(text(sql), params).fetchall()
         for (wp_idx,) in rows:

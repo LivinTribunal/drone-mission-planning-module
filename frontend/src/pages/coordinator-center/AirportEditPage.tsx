@@ -37,7 +37,7 @@ import AirportInfoPanel from "@/components/coordinator/AirportInfoPanel";
 import TerrainSettingsCard from "@/components/coordinator/TerrainSettingsCard";
 import EditableFeatureInfo from "@/components/coordinator/EditableFeatureInfo";
 import CreationForm from "@/components/coordinator/CreationForm";
-import type { PendingGeometryType } from "@/components/coordinator/CreationForm";
+import type { PendingGeometryType, EntityType } from "@/components/coordinator/CreationForm";
 import UnsavedChangesDialog from "@/components/coordinator/UnsavedChangesDialog";
 import MapDrawingToolbar from "@/components/coordinator/MapDrawingToolbar";
 import CoordinatorMapHelpPanel from "@/components/coordinator/CoordinatorMapHelpPanel";
@@ -334,6 +334,8 @@ export default function AirportEditPage() {
     setPendingLhaParentAglId(null);
   }, [setActiveTool, pendingGeometry, pendingPointPosition]);
 
+  const [boundaryEntityOverride, setBoundaryEntityOverride] = useState<EntityType | null>(null);
+
   const handleCreationCancel = useCallback(() => {
     /** cancel pending creation and clear geometry. */
     setPendingGeometry(null);
@@ -341,6 +343,7 @@ export default function AirportEditPage() {
     setPendingCircleCenter(undefined);
     setPendingCircleRadius(undefined);
     setPendingLhaParentAglId(null);
+    setBoundaryEntityOverride(null);
   }, []);
 
   const handleAddLha = useCallback((aglId: string) => {
@@ -924,6 +927,14 @@ export default function AirportEditPage() {
   const surfaces = useMemo(() => airport?.surfaces ?? [], [airport]);
   const obstacles = useMemo(() => airport?.obstacles ?? [], [airport]);
   const safetyZones = useMemo(() => airport?.safety_zones ?? [], [airport]);
+  const boundaryZone = useMemo(
+    () => safetyZones.find((z) => z.type === "AIRPORT_BOUNDARY"),
+    [safetyZones],
+  );
+  const regularSafetyZones = useMemo(
+    () => safetyZones.filter((z) => z.type !== "AIRPORT_BOUNDARY"),
+    [safetyZones],
+  );
 
   if (loading) {
     return (
@@ -1086,9 +1097,66 @@ export default function AirportEditPage() {
                 }}
               />
 
+              <div
+                className="rounded-2xl border border-tv-border bg-tv-bg px-3 py-2"
+                data-testid="boundary-card"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <svg className="h-3 w-3 flex-shrink-0" viewBox="0 0 10 10">
+                    <rect x="0.5" y="0.5" width="9" height="9" rx="1"
+                      fill="none" stroke="#ffffff" strokeWidth="1.2" strokeDasharray="2.5 1.5" />
+                  </svg>
+                  <span className="text-xs font-semibold text-tv-text-primary">
+                    {t("boundary.airportBoundary")}
+                  </span>
+                </div>
+                {boundaryZone ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-tv-text-primary truncate flex-1">
+                      {boundaryZone.name}
+                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleFeatureClick({ type: "safety_zone", data: boundaryZone })}
+                        className="px-2 py-0.5 rounded-full text-[10px] border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+                        data-testid="boundary-edit"
+                      >
+                        {t("common.edit")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSafetyZone(boundaryZone.id)}
+                        className="px-2 py-0.5 rounded-full text-[10px] border border-tv-border text-tv-error hover:bg-tv-surface-hover transition-colors"
+                        data-testid="boundary-delete"
+                      >
+                        {t("common.delete")}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs italic text-tv-text-muted truncate flex-1">
+                      {t("boundary.noBoundary")}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBoundaryEntityOverride("safety_zone_airport_boundary");
+                        handleToolChange("drawPolygon");
+                      }}
+                      className="px-2 py-0.5 rounded-full text-[10px] bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover transition-colors flex-shrink-0"
+                      data-testid="boundary-add"
+                    >
+                      {t("boundary.addBoundary")}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <InfrastructureListPanel
                 title={t("airport.safetyZones")}
-                items={safetyZones}
+                items={regularSafetyZones}
                 getId={(z) => z.id}
                 getName={(z) => z.name}
                 onEdit={(z) => handleFeatureClick({ type: "safety_zone", data: z })}
@@ -1200,6 +1268,7 @@ export default function AirportEditPage() {
                 prefilledArea={prefilledGeometry.area}
                 obstacles={obstacles}
                 airportElevation={airport?.elevation}
+                prefilledEntityType={boundaryEntityOverride ?? undefined}
               />
             ) : measure.isComplete ? (
               <MeasureInfoCard
