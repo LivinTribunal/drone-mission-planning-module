@@ -139,6 +139,18 @@ def test_convert_altitude_limit_feet_and_meters():
     assert openaip_service._convert_altitude_limit({}) is None
 
 
+def test_convert_altitude_limit_missing_unit_defaults_to_meters():
+    """absent unit key is treated as meters - matches _convert_length contract."""
+    assert openaip_service._convert_altitude_limit({"value": 100}) == 100.0
+    assert openaip_service._convert_altitude_limit({"value": 250.5, "unit": None}) == 250.5
+
+
+def test_convert_altitude_limit_invalid_value_returns_none():
+    """non-numeric value yields None."""
+    assert openaip_service._convert_altitude_limit({"value": "abc", "unit": 0}) is None
+    assert openaip_service._convert_altitude_limit({"value": None, "unit": 0}) is None
+
+
 # parse helpers
 def test_parse_runway_skips_incomplete():
     """missing dimension or threshold returns None."""
@@ -400,15 +412,57 @@ def test_lookup_route_invalid_icao_returns_400(client, monkeypatch):
     assert r.status_code == 400
 
 
-def test_pick_matching_airport_logs_when_no_exact_match(caplog):
-    """fallback path emits a warning so bad lookups can be diagnosed."""
+def test_pick_matching_airport_returns_none_when_no_exact_match(caplog):
+    """no-match returns None and logs - never falls back to an unrelated airport."""
     items = [{"icaoCode": "ZZZZ", "name": "wrong"}]
 
     with caplog.at_level("WARNING", logger="app.services.openaip_service"):
         result = openaip_service._pick_matching_airport(items, "LZIB")
 
-    assert result is items[0]
+    assert result is None
     assert any("no exact icao match" in rec.message for rec in caplog.records)
+
+
+def test_pick_matching_airport_returns_none_for_empty_list():
+    """empty result list yields None without logging."""
+    assert openaip_service._pick_matching_airport([], "LZIB") is None
+
+
+def test_pick_matching_airport_picks_exact_icao_match():
+    """exact icao match wins over other items in the list."""
+    items = [
+        {"icaoCode": "ZZZZ", "name": "wrong"},
+        {"icaoCode": "LZIB", "name": "right"},
+        {"icaoCode": "YYYY", "name": "also wrong"},
+    ]
+    result = openaip_service._pick_matching_airport(items, "LZIB")
+    assert result is items[1]
+
+
+def test_pick_matching_airport_accepts_alt_icao_field():
+    """the legacy `icao` key is also recognized for matching."""
+    items = [{"icao": "lzib", "name": "lowercase legacy"}]
+    result = openaip_service._pick_matching_airport(items, "LZIB")
+    assert result is items[0]
+
+
+def test_lookup_airport_raises_not_found_when_no_exact_icao_match(monkeypatch):
+    """fuzzy search results without an icao match must raise NotFoundError, not silently use one."""
+    monkeypatch.setattr(settings, "openaip_api_key", "testkey")
+
+    fuzzy_results = {
+        "items": [
+            {
+                "icaoCode": "ZZZZ",
+                "name": "Unrelated airport",
+                "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
+            }
+        ]
+    }
+
+    with patch.object(openaip_service, "_get", return_value=fuzzy_results):
+        with pytest.raises(NotFoundError):
+            openaip_service.lookup_airport_by_icao("LZIB")
 
 
 def test_convert_altitude_limit_unknown_unit_returns_none(caplog):

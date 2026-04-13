@@ -109,8 +109,8 @@ def _convert_altitude_limit(limit: dict | None) -> float | None:
     openaip shape: {"value": <num>, "unit": <code>, "referenceDatum": <code>}
     - unit 2 (flight level) -> value * 100 ft -> meters
     - unit 1 (feet) -> meters
-    - unit 0 (meters) -> as-is
-    returns None if shape is missing or unrecognized.
+    - unit 0 or missing (meters) -> as-is
+    returns None if value is missing or the unit code is unrecognized.
     """
     if not limit or "value" not in limit:
         return None
@@ -125,13 +125,14 @@ def _convert_altitude_limit(limit: dict | None) -> float | None:
     except (TypeError, ValueError):
         return None
 
+    # absent unit defaults to meters - matches _convert_length behavior
+    if unit is None or unit == 0:
+        return v
     if unit == 2:
         # flight level - 1 FL = 100 ft
         return v * 100.0 * _METERS_PER_FOOT
     if unit == 1:
         return v * _METERS_PER_FOOT
-    if unit == 0:
-        return v
 
     # unrecognized unit - safer to drop than silently mis-scale
     logger.warning("openaip: unrecognized altitude unit code %r; skipping limit", unit)
@@ -514,24 +515,22 @@ def _extract_items(payload: Any) -> list[dict]:
 
 
 def _pick_matching_airport(items: list[dict], icao: str) -> dict | None:
-    """choose the airport whose icao code matches exactly, falling back to first."""
+    """choose the airport whose icao code matches exactly, or None if no match."""
     for item in items:
         code = (item.get("icaoCode") or item.get("icao") or "").upper()
         if code == icao:
             return item
 
-    if not items:
-        return None
+    if items:
+        # openaip search is fuzzy - returning the first result risks pre-filling the
+        # form with the wrong airport. log and let the caller raise NotFoundError.
+        logger.warning(
+            "openaip: no exact icao match for %s; %d unrelated result(s) discarded",
+            icao,
+            len(items),
+        )
 
-    # no exact icao match - log so operators can spot bad lookups
-    fallback_code = (items[0].get("icaoCode") or items[0].get("icao") or "").upper()
-    logger.warning(
-        "openaip: no exact icao match for %s; falling back to first result (icao=%s)",
-        icao,
-        fallback_code or "<unknown>",
-    )
-
-    return items[0]
+    return None
 
 
 def _fetch_nearby_airspaces(
