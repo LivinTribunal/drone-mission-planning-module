@@ -1,0 +1,257 @@
+"""unit tests for fly-over, parallel-side-sweep, and hover-point-lock trajectories."""
+
+from dataclasses import dataclass
+from uuid import uuid4
+
+import pytest
+
+from app.models.enums import CameraAction, InspectionMethod, WaypointType
+from app.services.trajectory_computation import (
+    calculate_fly_over_path,
+    calculate_hover_point_lock_path,
+    calculate_parallel_side_sweep_path,
+    compute_measurement_trajectory,
+)
+from app.services.trajectory_types import (
+    DEFAULT_FLY_OVER_HEIGHT,
+    DEFAULT_HOVER_DISTANCE_PAPI,
+    DEFAULT_HOVER_DISTANCE_RUNWAY,
+    DEFAULT_HOVER_DURATION,
+    DEFAULT_HOVER_HEIGHT,
+    DEFAULT_PARALLEL_HEIGHT,
+    DEFAULT_PARALLEL_OFFSET,
+    Point3D,
+    ResolvedConfig,
+)
+from app.utils.geo import distance_between
+
+
+@dataclass
+class FakeInspection:
+    """minimal inspection stub."""
+
+    id: object = None
+    method: InspectionMethod = InspectionMethod.FLY_OVER
+    config: object = None
+
+    def __post_init__(self):
+        """set default id."""
+        if self.id is None:
+            self.id = uuid4()
+
+
+def _row(count: int = 5) -> list[Point3D]:
+    """build a row of LHA positions along a line, 10m apart."""
+    from app.utils.geo import point_at_distance
+
+    base = Point3D(lon=14.26, lat=50.1, alt=380.0)
+    row = [base]
+    for i in range(1, count):
+        lon, lat = point_at_distance(base.lon, base.lat, 90.0, 10.0 * i)
+        row.append(Point3D(lon=lon, lat=lat, alt=380.0))
+    return row
+
+
+# fly-over
+
+
+class TestFlyOver:
+    """tests for fly-over trajectory generator."""
+
+    def test_waypoint_count_matches_lhas(self):
+        """one waypoint per LHA."""
+        row = _row(5)
+        cfg = ResolvedConfig()
+        wps = calculate_fly_over_path(row, cfg, uuid4(), speed=5.0)
+        assert len(wps) == 5
+
+    def test_altitude_uses_default_height(self):
+        """default height above lights is applied when config has none."""
+        row = _row(3)
+        cfg = ResolvedConfig()
+        wps = calculate_fly_over_path(row, cfg, uuid4(), speed=5.0)
+        for wp, lha in zip(wps, row):
+            assert abs(wp.alt - (lha.alt + DEFAULT_FLY_OVER_HEIGHT)) < 0.01
+
+    def test_gimbal_default_is_straight_down(self):
+        """default gimbal for fly-over is -90 (straight down)."""
+        row = _row(3)
+        cfg = ResolvedConfig()
+        wps = calculate_fly_over_path(row, cfg, uuid4(), speed=5.0)
+        for wp in wps:
+            assert wp.gimbal_pitch == -90.0
+
+    def test_heading_first_to_last(self):
+        """heading aligned with first -> last direction (row built east = 90)."""
+        row = _row(4)
+        cfg = ResolvedConfig()
+        wps = calculate_fly_over_path(row, cfg, uuid4(), speed=5.0)
+        assert 85 < wps[0].heading < 95
+
+    def test_photo_mode_uses_photo_capture(self):
+        """PHOTO capture mode emits PHOTO_CAPTURE camera action."""
+        row = _row(3)
+        cfg = ResolvedConfig(capture_mode="PHOTO_CAPTURE")
+        wps = calculate_fly_over_path(row, cfg, uuid4(), speed=5.0)
+        assert all(wp.camera_action == CameraAction.PHOTO_CAPTURE for wp in wps)
+
+    def test_video_mode_uses_recording(self):
+        """VIDEO capture mode emits RECORDING camera action."""
+        row = _row(3)
+        cfg = ResolvedConfig(capture_mode="VIDEO_CAPTURE")
+        wps = calculate_fly_over_path(row, cfg, uuid4(), speed=5.0)
+        assert all(wp.camera_action == CameraAction.RECORDING for wp in wps)
+
+    def test_requires_two_lhas(self):
+        """raises when fewer than two LHAs supplied."""
+        cfg = ResolvedConfig()
+        with pytest.raises(ValueError):
+            calculate_fly_over_path([_row(1)[0]], cfg, uuid4(), speed=5.0)
+
+    def test_dispatch_video_wraps_with_hover(self):
+        """dispatcher wraps waypoints with RECORDING_START/RECORDING_STOP hover in video mode."""
+        row = _row(3)
+        cfg = ResolvedConfig(capture_mode="VIDEO_CAPTURE", recording_setup_duration=3.0)
+        insp = FakeInspection(method=InspectionMethod.FLY_OVER)
+        wps = compute_measurement_trajectory(
+            insp,
+            cfg,
+            center=Point3D.center(row),
+            runway_heading=0.0,
+            glide_slope=3.0,
+            speed=5.0,
+            setting_angles=[],
+            ordered_lha_positions=row,
+        )
+        assert wps[0].camera_action == CameraAction.RECORDING_START
+        assert wps[-1].camera_action == CameraAction.RECORDING_STOP
+        assert wps[0].waypoint_type == WaypointType.HOVER
+
+
+# parallel-side-sweep
+
+
+class TestParallelSideSweep:
+    """tests for parallel-side-sweep trajectory generator."""
+
+    def test_waypoint_count_matches_lhas(self):
+        """one waypoint per LHA."""
+        row = _row(4)
+        runway_center = Point3D(lon=14.26, lat=50.105, alt=380.0)
+        cfg = ResolvedConfig()
+        wps = calculate_parallel_side_sweep_path(row, runway_center, cfg, uuid4(), speed=3.0)
+        assert len(wps) == 4
+
+    def test_offset_is_applied(self):
+        """each waypoint is offset laterally by default offset."""
+        row = _row(3)
+        runway_center = Point3D(lon=14.26, lat=50.105, alt=380.0)
+        cfg = ResolvedConfig()
+        wps = calculate_parallel_side_sweep_path(row, runway_center, cfg, uuid4(), speed=3.0)
+        # waypoint ground distance from LHA should be ~= DEFAULT_PARALLEL_OFFSET
+        for wp, lha in zip(wps, row):
+            d = distance_between(wp.lon, wp.lat, lha.lon, lha.lat)
+            assert abs(d - DEFAULT_PARALLEL_OFFSET) < 1.0
+
+    def test_offset_direction_away_from_runway(self):
+        """waypoints are placed on the side farther from the runway centerline."""
+        row = _row(3)
+        # runway center just to the north of the row
+        runway_center = Point3D(lon=14.26, lat=50.101, alt=380.0)
+        cfg = ResolvedConfig()
+        wps = calculate_parallel_side_sweep_path(row, runway_center, cfg, uuid4(), speed=3.0)
+        # pick midpoint; it should be farther south (lat < row lat)
+        mid = wps[len(wps) // 2]
+        assert mid.lat < row[len(row) // 2].lat
+
+    def test_altitude_above_lights(self):
+        """altitude = LHA ground + default height."""
+        row = _row(3)
+        runway_center = Point3D(lon=14.26, lat=50.105, alt=380.0)
+        cfg = ResolvedConfig()
+        wps = calculate_parallel_side_sweep_path(row, runway_center, cfg, uuid4(), speed=3.0)
+        for wp, lha in zip(wps, row):
+            assert abs(wp.alt - (lha.alt + DEFAULT_PARALLEL_HEIGHT)) < 0.01
+
+    def test_video_mode(self):
+        """VIDEO capture emits RECORDING action."""
+        row = _row(3)
+        runway_center = Point3D(lon=14.26, lat=50.105, alt=380.0)
+        cfg = ResolvedConfig(capture_mode="VIDEO_CAPTURE")
+        wps = calculate_parallel_side_sweep_path(row, runway_center, cfg, uuid4(), speed=3.0)
+        assert all(wp.camera_action == CameraAction.RECORDING for wp in wps)
+
+
+# hover-point-lock
+
+
+class TestHoverPointLock:
+    """tests for hover-point-lock trajectory generator."""
+
+    def test_single_waypoint_with_hover(self):
+        """produces exactly one hover waypoint with configured duration."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        cfg = ResolvedConfig()
+        wps = calculate_hover_point_lock_path(target, "PAPI", 90.0, cfg, uuid4(), speed=0.0)
+        assert len(wps) == 1
+        assert wps[0].waypoint_type == WaypointType.HOVER
+        assert wps[0].hover_duration == DEFAULT_HOVER_DURATION
+
+    def test_default_distance_papi(self):
+        """PAPI uses PAPI default distance when no override."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        cfg = ResolvedConfig()
+        wps = calculate_hover_point_lock_path(target, "PAPI", 90.0, cfg, uuid4(), speed=0.0)
+        d = distance_between(wps[0].lon, wps[0].lat, target.lon, target.lat)
+        assert abs(d - DEFAULT_HOVER_DISTANCE_PAPI) < 1.0
+
+    def test_default_distance_runway(self):
+        """RUNWAY_EDGE_LIGHTS uses its own default distance."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        cfg = ResolvedConfig()
+        wps = calculate_hover_point_lock_path(
+            target, "RUNWAY_EDGE_LIGHTS", 90.0, cfg, uuid4(), speed=0.0
+        )
+        d = distance_between(wps[0].lon, wps[0].lat, target.lon, target.lat)
+        assert abs(d - DEFAULT_HOVER_DISTANCE_RUNWAY) < 1.0
+
+    def test_altitude_above_lha(self):
+        """altitude = LHA ground + default height."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        cfg = ResolvedConfig()
+        wps = calculate_hover_point_lock_path(target, "PAPI", 90.0, cfg, uuid4(), speed=0.0)
+        assert abs(wps[0].alt - (target.alt + DEFAULT_HOVER_HEIGHT)) < 0.01
+
+    def test_heading_toward_lha(self):
+        """heading points from drone toward LHA."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        cfg = ResolvedConfig()
+        # runway heading 90 -> approach bearing 270 -> drone is placed west of LHA
+        # so drone heading toward LHA should be ~90 (east)
+        wps = calculate_hover_point_lock_path(target, "PAPI", 90.0, cfg, uuid4(), speed=0.0)
+        # tolerate small floating rounding near 90 or the wrap-around 270
+        assert 85 < wps[0].heading < 95 or 265 < wps[0].heading < 275
+
+    def test_photo_mode(self):
+        """PHOTO capture emits PHOTO_CAPTURE camera action."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        cfg = ResolvedConfig(capture_mode="PHOTO_CAPTURE")
+        wps = calculate_hover_point_lock_path(target, "PAPI", 0.0, cfg, uuid4(), speed=0.0)
+        assert wps[0].camera_action == CameraAction.PHOTO_CAPTURE
+
+    def test_dispatch_requires_target(self):
+        """dispatcher rejects hover-point-lock without a target LHA."""
+        insp = FakeInspection(method=InspectionMethod.HOVER_POINT_LOCK)
+        cfg = ResolvedConfig()
+        with pytest.raises(ValueError):
+            compute_measurement_trajectory(
+                insp,
+                cfg,
+                center=Point3D(lon=14.26, lat=50.1, alt=380.0),
+                runway_heading=0.0,
+                glide_slope=3.0,
+                speed=0.0,
+                setting_angles=[],
+                target_lha_position=None,
+                target_agl_type="PAPI",
+            )

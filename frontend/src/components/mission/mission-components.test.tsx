@@ -594,4 +594,254 @@ describe("TemplatePicker", () => {
       screen.queryByTestId("template-picker-list"),
     ).not.toBeInTheDocument();
   });
+
+  describe("2-step AGL grouping", () => {
+    /** tests for the AGL-type-first workflow when agls prop is provided. */
+
+    const papiAgl = {
+      id: "agl-papi",
+      surface_id: "s-1",
+      agl_type: "PAPI",
+      name: "PAPI RWY 09",
+      position: { lat: 0, lng: 0, alt: 0 },
+      side: null,
+      glide_slope_angle: null,
+      distance_from_threshold: null,
+      offset_from_centerline: null,
+      lhas: [],
+    };
+    const runwayAgl = {
+      id: "agl-runway",
+      surface_id: "s-1",
+      agl_type: "RUNWAY_EDGE_LIGHTS",
+      name: "RWY EDGE 09",
+      position: { lat: 0, lng: 0, alt: 0 },
+      side: null,
+      glide_slope_angle: null,
+      distance_from_threshold: null,
+      offset_from_centerline: null,
+      lhas: [],
+    };
+
+    const groupedTemplates = [
+      {
+        id: "t-papi",
+        name: "PAPI Angular",
+        description: null,
+        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP", "HOVER_POINT_LOCK"],
+        target_agl_ids: ["agl-papi"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      },
+      {
+        id: "t-runway",
+        name: "Runway Fly-over",
+        description: null,
+        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP", "HOVER_POINT_LOCK"],
+        target_agl_ids: ["agl-runway"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      },
+    ];
+
+    it("shows AGL type step when agls provided", () => {
+      renderPicker({
+        templates: groupedTemplates as never,
+        agls: [papiAgl, runwayAgl] as never,
+      });
+      expect(screen.getByTestId("agl-type-step")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("agl-type-option-PAPI"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("agl-type-option-RUNWAY_EDGE_LIGHTS"),
+      ).toBeInTheDocument();
+    });
+
+    it("drills into template list after selecting AGL type", () => {
+      renderPicker({
+        templates: groupedTemplates as never,
+        agls: [papiAgl, runwayAgl] as never,
+      });
+      fireEvent.click(screen.getByTestId("agl-type-option-PAPI"));
+      expect(screen.getByTestId("template-step")).toBeInTheDocument();
+      expect(screen.getByTestId("template-option-t-papi")).toBeInTheDocument();
+      // runway template should not appear under PAPI
+      expect(
+        screen.queryByTestId("template-option-t-runway"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("back button returns to AGL type step", () => {
+      renderPicker({
+        templates: groupedTemplates as never,
+        agls: [papiAgl, runwayAgl] as never,
+      });
+      fireEvent.click(screen.getByTestId("agl-type-option-PAPI"));
+      fireEvent.click(screen.getByTestId("back-to-agl-step"));
+      expect(screen.getByTestId("agl-type-step")).toBeInTheDocument();
+    });
+
+    it("filters methods in dropdown to those compatible with AGL", () => {
+      renderPicker({
+        templates: groupedTemplates as never,
+        agls: [papiAgl, runwayAgl] as never,
+      });
+      fireEvent.click(screen.getByTestId("agl-type-option-PAPI"));
+      const select = screen.getByTestId(
+        "method-select-t-papi",
+      ) as HTMLSelectElement;
+      const values = Array.from(select.options).map((o) => o.value);
+      // FLY_OVER and PARALLEL_SIDE_SWEEP must NOT appear for PAPI
+      expect(values).not.toContain("FLY_OVER");
+      expect(values).not.toContain("PARALLEL_SIDE_SWEEP");
+      expect(values).toContain("VERTICAL_PROFILE");
+    });
+
+    it("falls back to flat list when no agls provided", () => {
+      renderPicker({ templates: groupedTemplates as never });
+      // flat mode: both templates rendered, no AGL step
+      expect(
+        screen.queryByTestId("agl-type-step"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByTestId("template-option-t-papi"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("template-option-t-runway"),
+      ).toBeInTheDocument();
+    });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  InspectionList method dropdown                                    */
+/* ------------------------------------------------------------------ */
+
+describe("InspectionList method dropdown", () => {
+  /** tests for the per-row method dropdown. */
+
+  const runwayAgl = {
+    id: "agl-runway",
+    surface_id: "s-1",
+    agl_type: "RUNWAY_EDGE_LIGHTS",
+    name: "RWY EDGE 09",
+    position: { lat: 0, lng: 0, alt: 0 },
+    side: null,
+    glide_slope_angle: null,
+    distance_from_threshold: null,
+    offset_from_centerline: null,
+    lhas: [],
+  };
+
+  const inspections = [
+    {
+      id: "i-1",
+      mission_id: "m-1",
+      template_id: "t-1",
+      config_id: null,
+      method: "FLY_OVER",
+      sequence_order: 1,
+      lha_ids: null,
+      config: null,
+    },
+  ];
+
+  const templates = new Map([
+    [
+      "t-1",
+      {
+        id: "t-1",
+        name: "Runway Inspection",
+        description: null,
+        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP", "HOVER_POINT_LOCK"],
+        target_agl_ids: ["agl-runway"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      },
+    ],
+  ]);
+
+  it("does not render dropdown when onChangeMethod is omitted", () => {
+    render(
+      <InspectionList
+        inspections={inspections as never}
+        templates={templates as never}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onReorder={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        isDraft={true}
+        canReorder={true}
+        visibleIds={new Set(["i-1"])}
+        onToggleVisibility={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByTestId("inspection-method-select-i-1"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders dropdown filtered to AGL-compatible methods", () => {
+    const onChangeMethod = vi.fn();
+    render(
+      <InspectionList
+        inspections={inspections as never}
+        templates={templates as never}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onReorder={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        isDraft={true}
+        canReorder={true}
+        visibleIds={new Set(["i-1"])}
+        onToggleVisibility={vi.fn()}
+        agls={[runwayAgl] as never}
+        onChangeMethod={onChangeMethod}
+      />,
+    );
+    const select = screen.getByTestId(
+      "inspection-method-select-i-1",
+    ) as HTMLSelectElement;
+    const values = Array.from(select.options).map((o) => o.value);
+    expect(values).toContain("FLY_OVER");
+    expect(values).toContain("PARALLEL_SIDE_SWEEP");
+    expect(values).toContain("HOVER_POINT_LOCK");
+    // PAPI-only methods must NOT appear
+    expect(values).not.toContain("VERTICAL_PROFILE");
+    expect(values).not.toContain("ANGULAR_SWEEP");
+  });
+
+  it("calls onChangeMethod when selection changes", () => {
+    const onChangeMethod = vi.fn();
+    render(
+      <InspectionList
+        inspections={inspections as never}
+        templates={templates as never}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onReorder={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        isDraft={true}
+        canReorder={true}
+        visibleIds={new Set(["i-1"])}
+        onToggleVisibility={vi.fn()}
+        agls={[runwayAgl] as never}
+        onChangeMethod={onChangeMethod}
+      />,
+    );
+    fireEvent.change(screen.getByTestId("inspection-method-select-i-1"), {
+      target: { value: "PARALLEL_SIDE_SWEEP" },
+    });
+    expect(onChangeMethod).toHaveBeenCalledWith("i-1", "PARALLEL_SIDE_SWEEP");
+  });
 });

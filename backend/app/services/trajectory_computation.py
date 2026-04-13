@@ -8,9 +8,17 @@ from app.models.inspection import InspectionConfiguration
 from app.models.mission import DroneProfile
 from app.schemas.geometry import parse_ewkb
 from app.services.trajectory_types import (
+    DEFAULT_FLY_OVER_GIMBAL,
+    DEFAULT_FLY_OVER_HEIGHT,
     DEFAULT_GLIDE_SLOPE,
     DEFAULT_HEADING,
     DEFAULT_HORIZONTAL_DISTANCE,
+    DEFAULT_HOVER_DISTANCE_PAPI,
+    DEFAULT_HOVER_DISTANCE_RUNWAY,
+    DEFAULT_HOVER_DURATION,
+    DEFAULT_HOVER_HEIGHT,
+    DEFAULT_PARALLEL_HEIGHT,
+    DEFAULT_PARALLEL_OFFSET,
     DEFAULT_SWEEP_ANGLE,
     HOVER_ANGLE_TOLERANCE,
     MAX_ELEVATION_ANGLE,
@@ -28,6 +36,7 @@ from app.services.trajectory_types import (
 from app.utils.geo import (
     angular_span_at_distance,
     bearing_between,
+    distance_between,
     elevation_angle,
     point_at_distance,
 )
@@ -46,6 +55,12 @@ CONFIG_FIELDS = (
     "capture_mode",
     "recording_setup_duration",
     "buffer_distance",
+    "height_above_lights",
+    "lateral_offset",
+    "distance_from_lha",
+    "height_above_lha",
+    "camera_gimbal_angle",
+    "selected_lha_id",
 )
 
 
@@ -75,6 +90,54 @@ def resolve_with_defaults(inspection, template) -> ResolvedConfig:
         overlay_config(result, template.default_config)
 
     return result
+
+
+def get_ordered_lha_positions(template, lha_ids: list | None = None) -> list[Point3D]:
+    """extract LHA positions sorted by unit_number within each AGL."""
+    lha_id_set = {str(i) for i in lha_ids} if lha_ids else None
+
+    positions = []
+    for agl in template.targets:
+        ordered = sorted(
+            (lha for lha in agl.lhas if lha.position),
+            key=lambda lha: lha.unit_number if lha.unit_number is not None else 0,
+        )
+        for lha in ordered:
+            if lha_id_set and str(lha.id) not in lha_id_set:
+                continue
+            try:
+                c = parse_ewkb(lha.position.data).get("coordinates")
+                if not c or len(c) < 3:
+                    continue
+            except (KeyError, ValueError, TypeError):
+                logger.warning("failed to parse LHA position for lha %s", lha.id)
+                continue
+            positions.append(Point3D(lon=c[0], lat=c[1], alt=c[2]))
+
+    return positions
+
+
+def find_lha_by_id(template, lha_id) -> tuple[Point3D, object] | None:
+    """locate a single LHA position by id across all template AGLs.
+
+    returns (position, parent_agl) or None when not found.
+    """
+    target = str(lha_id)
+    for agl in template.targets:
+        for lha in agl.lhas:
+            if str(lha.id) != target:
+                continue
+            if not lha.position:
+                return None
+            try:
+                c = parse_ewkb(lha.position.data).get("coordinates")
+                if not c or len(c) < 3:
+                    return None
+            except (KeyError, ValueError, TypeError):
+                return None
+            return Point3D(lon=c[0], lat=c[1], alt=c[2]), agl
+
+    return None
 
 
 def get_lha_positions(template, lha_ids: list | None = None) -> list[Point3D]:
@@ -571,6 +634,189 @@ def _apply_terrain_delta(
             )
 
 
+def calculate_fly_over_path(
+    lha_positions: list[Point3D],
+    config: ResolvedConfig,
+    inspection_id: UUID | None,
+    speed: MetersPerSecond,
+) -> list[WaypointData]:
+    """generate fly-over path: drone flies directly over a row of lights end-to-end."""
+    if len(lha_positions) < 2:
+        raise ValueError("fly-over requires at least two LHA positions")
+
+    height = (
+        config.height_above_lights
+        if config.height_above_lights is not None
+        else DEFAULT_FLY_OVER_HEIGHT
+    )
+    gimbal = (
+        config.camera_gimbal_angle
+        if config.camera_gimbal_angle is not None
+        else DEFAULT_FLY_OVER_GIMBAL
+    )
+
+    first = lha_positions[0]
+    last = lha_positions[-1]
+    heading = bearing_between(first.lon, first.lat, last.lon, last.lat)
+
+    cam_action = (
+        CameraAction.RECORDING
+        if config.capture_mode == "VIDEO_CAPTURE"
+        else CameraAction.PHOTO_CAPTURE
+    )
+
+    waypoints = []
+    for lha in lha_positions:
+        waypoints.append(
+            WaypointData(
+                lon=lha.lon,
+                lat=lha.lat,
+                alt=lha.alt + height,
+                heading=heading,
+                speed=speed,
+                waypoint_type=WaypointType.MEASUREMENT,
+                camera_action=cam_action,
+                camera_target=lha,
+                inspection_id=inspection_id,
+                gimbal_pitch=gimbal,
+            )
+        )
+
+    return waypoints
+
+
+def calculate_parallel_side_sweep_path(
+    lha_positions: list[Point3D],
+    runway_center: Point3D,
+    config: ResolvedConfig,
+    inspection_id: UUID | None,
+    speed: MetersPerSecond,
+) -> list[WaypointData]:
+    """generate parallel side-sweep path offset perpendicular from a row of lights.
+
+    offset direction is perpendicular to first->last line, AWAY from the runway
+    centerline. each waypoint is laterally offset and elevated above its LHA.
+    """
+    if len(lha_positions) < 2:
+        raise ValueError("parallel-side-sweep requires at least two LHA positions")
+
+    offset = config.lateral_offset if config.lateral_offset is not None else DEFAULT_PARALLEL_OFFSET
+    height = (
+        config.height_above_lights
+        if config.height_above_lights is not None
+        else DEFAULT_PARALLEL_HEIGHT
+    )
+
+    first = lha_positions[0]
+    last = lha_positions[-1]
+    row_heading = bearing_between(first.lon, first.lat, last.lon, last.lat)
+
+    # two perpendicular candidates; pick the one farther from runway centerline
+    perp_a = (row_heading + 90) % 360
+    perp_b = (row_heading - 90 + 360) % 360
+    row_center_lon = (first.lon + last.lon) / 2
+    row_center_lat = (first.lat + last.lat) / 2
+    a_lon, a_lat = point_at_distance(row_center_lon, row_center_lat, perp_a, offset)
+    b_lon, b_lat = point_at_distance(row_center_lon, row_center_lat, perp_b, offset)
+
+    dist_a = distance_between(a_lon, a_lat, runway_center.lon, runway_center.lat)
+    dist_b = distance_between(b_lon, b_lat, runway_center.lon, runway_center.lat)
+    perp = perp_a if dist_a >= dist_b else perp_b
+
+    # default gimbal angle aims at lights: atan(height / offset) downward
+    if config.camera_gimbal_angle is not None:
+        gimbal = config.camera_gimbal_angle
+    else:
+        gimbal = -math.degrees(math.atan2(height, max(offset, 0.01)))
+
+    cam_action = (
+        CameraAction.RECORDING
+        if config.capture_mode == "VIDEO_CAPTURE"
+        else CameraAction.PHOTO_CAPTURE
+    )
+
+    waypoints = []
+    for lha in lha_positions:
+        lon, lat = point_at_distance(lha.lon, lha.lat, perp, offset)
+        waypoints.append(
+            WaypointData(
+                lon=lon,
+                lat=lat,
+                alt=lha.alt + height,
+                heading=row_heading,
+                speed=speed,
+                waypoint_type=WaypointType.MEASUREMENT,
+                camera_action=cam_action,
+                camera_target=lha,
+                inspection_id=inspection_id,
+                gimbal_pitch=gimbal,
+            )
+        )
+
+    return waypoints
+
+
+def calculate_hover_point_lock_path(
+    target_lha: Point3D,
+    agl_type: str,
+    runway_heading: Degrees,
+    config: ResolvedConfig,
+    inspection_id: UUID | None,
+    speed: MetersPerSecond,
+) -> list[WaypointData]:
+    """generate hover-point-lock path at a single LHA.
+
+    places the drone at a standoff distance on the approach side (toward runway
+    centerline from the LHA), elevated above the LHA ground, and hovers to
+    capture. runway_heading is the runway's own heading; approach = +180.
+    """
+    default_distance = (
+        DEFAULT_HOVER_DISTANCE_PAPI if agl_type == "PAPI" else DEFAULT_HOVER_DISTANCE_RUNWAY
+    )
+    distance = (
+        config.distance_from_lha if config.distance_from_lha is not None else default_distance
+    )
+    height = (
+        config.height_above_lha if config.height_above_lha is not None else DEFAULT_HOVER_HEIGHT
+    )
+    hover_dur = (
+        config.hover_duration if config.hover_duration is not None else DEFAULT_HOVER_DURATION
+    )
+
+    approach = _opposite_bearing(runway_heading)
+    lon, lat = point_at_distance(target_lha.lon, target_lha.lat, approach, distance)
+    alt = target_lha.alt + height
+    heading_to_lha = bearing_between(lon, lat, target_lha.lon, target_lha.lat)
+
+    # default gimbal: look downward at LHA
+    if config.camera_gimbal_angle is not None:
+        gimbal = config.camera_gimbal_angle
+    else:
+        gimbal = elevation_angle(lon, lat, alt, target_lha.lon, target_lha.lat, target_lha.alt)
+
+    cam_action = (
+        CameraAction.RECORDING
+        if config.capture_mode == "VIDEO_CAPTURE"
+        else CameraAction.PHOTO_CAPTURE
+    )
+
+    return [
+        WaypointData(
+            lon=lon,
+            lat=lat,
+            alt=alt,
+            heading=heading_to_lha,
+            speed=speed,
+            waypoint_type=WaypointType.HOVER,
+            camera_action=cam_action,
+            camera_target=target_lha,
+            inspection_id=inspection_id,
+            hover_duration=hover_dur,
+            gimbal_pitch=gimbal,
+        )
+    ]
+
+
 def compute_measurement_trajectory(
     inspection,
     config: ResolvedConfig,
@@ -580,8 +826,11 @@ def compute_measurement_trajectory(
     speed: MetersPerSecond,
     setting_angles: list[Degrees],
     elevation_provider=None,
+    ordered_lha_positions: list[Point3D] | None = None,
+    target_lha_position: Point3D | None = None,
+    target_agl_type: str | None = None,
 ) -> list[WaypointData]:
-    """dispatch to arc or vertical path computation based on inspection method."""
+    """dispatch to the path computation matching the inspection method."""
     if inspection.method == InspectionMethod.ANGULAR_SWEEP:
         waypoints = calculate_arc_path(
             center, runway_heading, glide_slope, config, inspection.id, speed
@@ -590,11 +839,34 @@ def compute_measurement_trajectory(
         waypoints = calculate_vertical_path(
             center, runway_heading, config, inspection.id, speed, setting_angles
         )
+    elif inspection.method == InspectionMethod.FLY_OVER:
+        if not ordered_lha_positions:
+            raise ValueError("fly-over requires ordered LHA positions")
+        waypoints = calculate_fly_over_path(ordered_lha_positions, config, inspection.id, speed)
+    elif inspection.method == InspectionMethod.PARALLEL_SIDE_SWEEP:
+        if not ordered_lha_positions:
+            raise ValueError("parallel-side-sweep requires ordered LHA positions")
+        waypoints = calculate_parallel_side_sweep_path(
+            ordered_lha_positions, center, config, inspection.id, speed
+        )
+    elif inspection.method == InspectionMethod.HOVER_POINT_LOCK:
+        if target_lha_position is None:
+            raise ValueError("hover-point-lock requires a target LHA position")
+        waypoints = calculate_hover_point_lock_path(
+            target_lha_position,
+            target_agl_type or "",
+            runway_heading,
+            config,
+            inspection.id,
+            speed,
+        )
     else:
         raise ValueError(f"unsupported inspection method: {inspection.method}")
 
-    # terrain correction before video wrapper
-    _apply_terrain_delta(waypoints, center, elevation_provider)
+    # terrain correction before video wrapper - skip for new methods that already
+    # use per-LHA ground elevations baked into lha.position.alt
+    if inspection.method in (InspectionMethod.ANGULAR_SWEEP, InspectionMethod.VERTICAL_PROFILE):
+        _apply_terrain_delta(waypoints, center, elevation_provider)
 
     # video mode - wrap with recording start/stop hover waypoints
     if config.capture_mode == "VIDEO_CAPTURE":

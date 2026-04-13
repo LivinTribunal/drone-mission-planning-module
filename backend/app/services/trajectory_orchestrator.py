@@ -26,9 +26,11 @@ from app.services.trajectory_computation import (
     compute_measurement_trajectory,
     determine_end_position,
     determine_start_position,
+    find_lha_by_id,
     get_glide_slope_angle,
     get_lha_positions,
     get_lha_setting_angles,
+    get_ordered_lha_positions,
     get_runway_heading,
     resolve_density,
     resolve_speed,
@@ -40,6 +42,8 @@ from app.services.trajectory_pathfinding import (
     resolve_inspection_collisions,
 )
 from app.services.trajectory_types import (
+    DEFAULT_FLY_OVER_SPEED,
+    DEFAULT_PARALLEL_SPEED,
     DEFAULT_RESERVE_MARGIN,
     DEFAULT_SPEED,
     MIN_ARC_RADIUS,
@@ -349,6 +353,33 @@ def _generate_trajectory_inner(
         rwy_heading = get_runway_heading(template, data.surfaces)
         setting_angles = get_lha_setting_angles(template, lha_ids)
 
+        # ordered LHA positions are used by fly-over and parallel-side-sweep
+        ordered_lhas = get_ordered_lha_positions(template, lha_ids)
+
+        # hover-point-lock needs a single operator-selected LHA
+        target_lha_pos: Point3D | None = None
+        target_agl_type: str | None = None
+        is_new_method = inspection.method in (
+            InspectionMethod.FLY_OVER,
+            InspectionMethod.PARALLEL_SIDE_SWEEP,
+            InspectionMethod.HOVER_POINT_LOCK,
+        )
+        if inspection.method == InspectionMethod.HOVER_POINT_LOCK:
+            selected_id = config.selected_lha_id
+            if selected_id is None:
+                raise TrajectoryGenerationError(
+                    f"{template.name} #{inspection.sequence_order}: "
+                    "hover-point-lock requires a selected LHA"
+                )
+            match = find_lha_by_id(template, selected_id)
+            if match is None:
+                raise TrajectoryGenerationError(
+                    f"{template.name} #{inspection.sequence_order}: "
+                    f"selected LHA {selected_id} not found in template targets"
+                )
+            target_lha_pos, target_agl = match
+            target_agl_type = target_agl.agl_type
+
         # compute optimal density if not overridden
         density, density_warning = resolve_density(inspection.method, setting_angles, config)
         if density_warning:
@@ -360,17 +391,38 @@ def _generate_trajectory_inner(
                 )
             )
 
-        # compute optimal speed from path geometry and camera frame rate
-        start_pos = determine_start_position(
-            center, config, inspection.method, rwy_heading, glide_slope
-        )
-        end_pos = determine_end_position(
-            center, config, inspection.method, rwy_heading, glide_slope
-        )
-        path_dist = distance_between(start_pos.lon, start_pos.lat, end_pos.lon, end_pos.lat)
+        # compute path distance for speed/framerate check
+        if is_new_method:
+            if inspection.method == InspectionMethod.HOVER_POINT_LOCK:
+                path_dist = 0.0
+            else:
+                path_dist = 0.0
+                for k in range(1, len(ordered_lhas)):
+                    path_dist += distance_between(
+                        ordered_lhas[k - 1].lon,
+                        ordered_lhas[k - 1].lat,
+                        ordered_lhas[k].lon,
+                        ordered_lhas[k].lat,
+                    )
+        else:
+            start_pos = determine_start_position(
+                center, config, inspection.method, rwy_heading, glide_slope
+            )
+            end_pos = determine_end_position(
+                center, config, inspection.method, rwy_heading, glide_slope
+            )
+            path_dist = distance_between(start_pos.lon, start_pos.lat, end_pos.lon, end_pos.lat)
+
+        # method-specific default speed overrides mission default for new methods
+        if inspection.method == InspectionMethod.FLY_OVER:
+            method_default_speed = DEFAULT_FLY_OVER_SPEED
+        elif inspection.method == InspectionMethod.PARALLEL_SIDE_SWEEP:
+            method_default_speed = DEFAULT_PARALLEL_SPEED
+        else:
+            method_default_speed = default_speed
 
         speed, speed_warning, optimal_speed = resolve_speed(
-            config, path_dist, config.measurement_density, drone, default_speed
+            config, path_dist, config.measurement_density, drone, method_default_speed
         )
         if speed_warning:
             warnings.append(
@@ -403,6 +455,9 @@ def _generate_trajectory_inner(
                 speed,
                 setting_angles,
                 elevation_provider=data.elevation_provider,
+                ordered_lha_positions=ordered_lhas,
+                target_lha_position=target_lha_pos,
+                target_agl_type=target_agl_type,
             )
         except ValueError as e:
             raise TrajectoryGenerationError(str(e))

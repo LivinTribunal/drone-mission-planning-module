@@ -547,7 +547,31 @@
       "setCoordinatesFirst": "Set Takeoff & Landing First",
       "setCoordinatesTooltip": "Set takeoff and landing coordinates first",
       "warningsMessage": "Message",
-      "warningsWaypoint": "WP"
+      "warningsWaypoint": "WP",
+      "pickAglType": "Select AGL system type",
+      "otherTemplates": "Other templates",
+      "templatesCount_one": "{{count}} template",
+      "templatesCount_other": "{{count}} templates",
+      "back": "Back",
+      "aglType": {
+        "PAPI": "PAPI",
+        "RUNWAY_EDGE_LIGHTS": "Runway Edge Lights"
+      },
+      "heightAboveLights": "Height Above Lights (m)",
+      "heightAboveLightsHint": "Default: 15 m",
+      "heightAboveLha": "Height Above LHA (m)",
+      "heightAboveLhaHint": "Default: 5 m",
+      "distanceFromLha": "Distance from LHA (m)",
+      "distanceFromLhaHint": "PAPI: 50 m / Runway: 10 m",
+      "lateralOffset": "Lateral Offset (m)",
+      "lateralOffsetHint": "Default: 30 m",
+      "cameraGimbalAngle": "Gimbal Angle (°)",
+      "cameraGimbalAngleHint": "-90 = straight down",
+      "targetLha": "Target LHA",
+      "targetLhaSelect": "Select an LHA...",
+      "angleLock": "Lock Angle",
+      "angleLockOn": "Locked",
+      "angleLockOff": "Unlocked"
     },
     "validationExportPage": {
       "validationResults": "Validation Results",

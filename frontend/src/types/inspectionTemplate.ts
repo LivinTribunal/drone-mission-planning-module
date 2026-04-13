@@ -14,6 +14,12 @@ export interface InspectionConfigResponse {
   capture_mode: CaptureMode | null;
   recording_setup_duration: number | null;
   buffer_distance: number | null;
+  height_above_lights: number | null;
+  lateral_offset: number | null;
+  distance_from_lha: number | null;
+  height_above_lha: number | null;
+  camera_gimbal_angle: number | null;
+  selected_lha_id: string | null;
 }
 
 export interface InspectionTemplateResponse {

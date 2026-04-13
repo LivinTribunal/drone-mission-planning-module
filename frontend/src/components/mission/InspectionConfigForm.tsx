@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Lock, Unlock } from "lucide-react";
 import type { InspectionResponse, InspectionConfigOverride } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { DroneProfileResponse } from "@/types/droneProfile";
 import type { AGLResponse } from "@/types/airport";
 import type { CaptureMode } from "@/types/enums";
+import { solveTriangle } from "@/utils/angleLock";
 
 interface InspectionConfigFormProps {
   inspection: InspectionResponse;
@@ -56,6 +57,26 @@ export default function InspectionConfigForm({
       : savedCfg?.capture_mode ?? defaultCfg?.capture_mode ?? null;
   const recordingSetupDuration =
     configOverride.recording_setup_duration ?? savedCfg?.recording_setup_duration ?? defaultCfg?.recording_setup_duration ?? "";
+
+  // method-specific fields
+  const heightAboveLights =
+    configOverride.height_above_lights ?? savedCfg?.height_above_lights ?? defaultCfg?.height_above_lights ?? "";
+  const lateralOffset =
+    configOverride.lateral_offset ?? savedCfg?.lateral_offset ?? defaultCfg?.lateral_offset ?? "";
+  const distanceFromLha =
+    configOverride.distance_from_lha ?? savedCfg?.distance_from_lha ?? defaultCfg?.distance_from_lha ?? "";
+  const heightAboveLha =
+    configOverride.height_above_lha ?? savedCfg?.height_above_lha ?? defaultCfg?.height_above_lha ?? "";
+  const cameraGimbalAngle =
+    configOverride.camera_gimbal_angle ?? savedCfg?.camera_gimbal_angle ?? defaultCfg?.camera_gimbal_angle ?? "";
+  const selectedLhaId =
+    configOverride.selected_lha_id !== undefined
+      ? configOverride.selected_lha_id
+      : savedCfg?.selected_lha_id ?? defaultCfg?.selected_lha_id ?? null;
+
+  // angle-lock toggle: when on, editing one of {height, distance, angle}
+  // recomputes the third so the triangle stays consistent.
+  const [angleLocked, setAngleLocked] = useState(false);
 
   // effective capture mode for conditional display
   const effectiveCaptureMode = captureMode ?? "VIDEO_CAPTURE";
@@ -332,6 +353,254 @@ export default function InspectionConfigForm({
           data-testid="inspection-buffer-distance"
         />
       </div>
+
+      {/* fly-over specific */}
+      {inspection.method === "FLY_OVER" && (
+        <div className="grid grid-cols-2 gap-3" data-testid="fly-over-fields">
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.heightAboveLights")}
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              value={heightAboveLights}
+              onChange={(e) =>
+                handleNumberChange("height_above_lights", e.target.value)
+              }
+              placeholder={t("mission.config.heightAboveLightsHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-height-above-lights"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraGimbalAngle")}
+            </label>
+            <input
+              type="number"
+              step="1"
+              min="-90"
+              max="0"
+              value={cameraGimbalAngle}
+              onChange={(e) =>
+                handleNumberChange("camera_gimbal_angle", e.target.value)
+              }
+              placeholder={t("mission.config.cameraGimbalAngleHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-camera-gimbal-angle"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* parallel side sweep specific */}
+      {inspection.method === "PARALLEL_SIDE_SWEEP" && (
+        <div
+          className="grid grid-cols-2 gap-3"
+          data-testid="parallel-side-sweep-fields"
+        >
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.lateralOffset")}
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              value={lateralOffset}
+              onChange={(e) =>
+                handleNumberChange("lateral_offset", e.target.value)
+              }
+              placeholder={t("mission.config.lateralOffsetHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-lateral-offset"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.heightAboveLights")}
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              value={heightAboveLights}
+              onChange={(e) =>
+                handleNumberChange("height_above_lights", e.target.value)
+              }
+              placeholder={t("mission.config.heightAboveLightsHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-height-above-lights"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* hover-point-lock specific */}
+      {inspection.method === "HOVER_POINT_LOCK" && (
+        <div className="space-y-3" data-testid="hover-point-lock-fields">
+          {/* target LHA picker */}
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.targetLha")}
+            </label>
+            <select
+              value={selectedLhaId ?? ""}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                onChange({ ...configOverride, selected_lha_id: v });
+              }}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-selected-lha"
+            >
+              <option value="">{t("mission.config.targetLhaSelect")}</option>
+              {targetAgls.flatMap((agl) =>
+                agl.lhas.map((lha) => (
+                  <option key={lha.id} value={lha.id}>
+                    {agl.name} - {t("mission.config.unitNumber")}{" "}
+                    {lha.unit_number}
+                  </option>
+                )),
+              )}
+            </select>
+          </div>
+
+          {/* angle lock toggle */}
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-tv-text-secondary">
+              {t("mission.config.angleLock")}
+            </label>
+            <button
+              type="button"
+              onClick={() => setAngleLocked((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                angleLocked
+                  ? "bg-tv-accent text-tv-accent-text"
+                  : "border border-tv-border bg-tv-bg text-tv-text-primary"
+              }`}
+              data-testid="angle-lock-toggle"
+              aria-pressed={angleLocked}
+            >
+              {angleLocked ? (
+                <Lock className="h-3 w-3" />
+              ) : (
+                <Unlock className="h-3 w-3" />
+              )}
+              {angleLocked
+                ? t("mission.config.angleLockOn")
+                : t("mission.config.angleLockOff")}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("mission.config.distanceFromLha")}
+              </label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={distanceFromLha}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const val = raw === "" ? null : parseFloat(raw);
+                  const next: InspectionConfigOverride = {
+                    ...configOverride,
+                    distance_from_lha: val,
+                  };
+                  if (
+                    angleLocked &&
+                    val != null &&
+                    typeof cameraGimbalAngle === "number"
+                  ) {
+                    const { height } = solveTriangle({
+                      distance: val,
+                      angle: cameraGimbalAngle,
+                    });
+                    if (height != null) next.height_above_lha = height;
+                  }
+                  onChange(next);
+                }}
+                placeholder={t("mission.config.distanceFromLhaHint")}
+                className="w-full px-2 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                data-testid="inspection-distance-from-lha"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("mission.config.heightAboveLha")}
+              </label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={heightAboveLha}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const val = raw === "" ? null : parseFloat(raw);
+                  const next: InspectionConfigOverride = {
+                    ...configOverride,
+                    height_above_lha: val,
+                  };
+                  if (
+                    angleLocked &&
+                    val != null &&
+                    typeof distanceFromLha === "number"
+                  ) {
+                    const { angle } = solveTriangle({
+                      height: val,
+                      distance: distanceFromLha,
+                    });
+                    if (angle != null) next.camera_gimbal_angle = angle;
+                  }
+                  onChange(next);
+                }}
+                placeholder={t("mission.config.heightAboveLhaHint")}
+                className="w-full px-2 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                data-testid="inspection-height-above-lha"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("mission.config.cameraGimbalAngle")}
+              </label>
+              <input
+                type="number"
+                step="1"
+                min="-90"
+                max="0"
+                value={cameraGimbalAngle}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const val = raw === "" ? null : parseFloat(raw);
+                  const next: InspectionConfigOverride = {
+                    ...configOverride,
+                    camera_gimbal_angle: val,
+                  };
+                  if (
+                    angleLocked &&
+                    val != null &&
+                    typeof distanceFromLha === "number"
+                  ) {
+                    const { height } = solveTriangle({
+                      distance: distanceFromLha,
+                      angle: val,
+                    });
+                    if (height != null) next.height_above_lha = height;
+                  }
+                  onChange(next);
+                }}
+                placeholder={t("mission.config.cameraGimbalAngleHint")}
+                className="w-full px-2 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                data-testid="inspection-camera-gimbal-angle"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* speed/framerate warning */}
       {speedWarning && (

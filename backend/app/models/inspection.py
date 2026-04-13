@@ -59,6 +59,13 @@ class InspectionConfiguration(Base):
     capture_mode = Column(String(20), nullable=True)
     recording_setup_duration = Column(Float, nullable=True)
     buffer_distance = Column(Float, nullable=True)
+    # method-specific parameters for FLY_OVER / PARALLEL_SIDE_SWEEP / HOVER_POINT_LOCK
+    height_above_lights = Column(Float, nullable=True)
+    lateral_offset = Column(Float, nullable=True)
+    distance_from_lha = Column(Float, nullable=True)
+    height_above_lha = Column(Float, nullable=True)
+    camera_gimbal_angle = Column(Float, nullable=True)
+    selected_lha_id = Column(UUID, nullable=True)
 
     # config fields that can be overridden per-inspection.
     # lha_ids is included for duplication support (duplicate_mission copies it)
@@ -76,6 +83,12 @@ class InspectionConfiguration(Base):
         "capture_mode",
         "recording_setup_duration",
         "buffer_distance",
+        "height_above_lights",
+        "lateral_offset",
+        "distance_from_lha",
+        "height_above_lha",
+        "camera_gimbal_angle",
+        "selected_lha_id",
     )
 
     def resolve_with_defaults(self, template_config: InspectionConfiguration | None):
@@ -109,6 +122,31 @@ class InspectionTemplate(Base):
 
     default_config = relationship("InspectionConfiguration")
     targets = relationship("AGL", secondary=insp_template_targets)
+
+    def validate_method_agl_compat(self, methods: list[str] | None = None) -> None:
+        """enforce method/AGL-type compatibility matrix.
+
+        raises ValueError on incompatible combos.
+        if methods is None, reads self.methods (set by service/_enrich).
+        """
+        from app.models.enums import METHOD_AGL_COMPAT, InspectionMethod
+
+        effective = methods if methods is not None else getattr(self, "methods", [])
+        if not effective or not self.targets:
+            return
+
+        target_types = {agl.agl_type for agl in self.targets}
+        for raw in effective:
+            try:
+                m = InspectionMethod(raw)
+            except ValueError as e:
+                raise ValueError(f"unknown inspection method: {raw}") from e
+
+            allowed = METHOD_AGL_COMPAT.get(m, set())
+            bad = target_types - allowed
+            if bad:
+                bad_str = ", ".join(sorted(bad))
+                raise ValueError(f"method {m.value} is not compatible with AGL type(s): {bad_str}")
 
 
 class Inspection(Base):

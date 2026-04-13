@@ -8,7 +8,13 @@ from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
 
 # inspection method values - mirrors InspectionMethod enum
-InspectionMethodStr = Literal["VERTICAL_PROFILE", "ANGULAR_SWEEP"]
+InspectionMethodStr = Literal[
+    "VERTICAL_PROFILE",
+    "ANGULAR_SWEEP",
+    "FLY_OVER",
+    "PARALLEL_SIDE_SWEEP",
+    "HOVER_POINT_LOCK",
+]
 # capture mode values - used by trajectory_computation to choose camera_action
 CaptureModeStr = Literal["VIDEO_CAPTURE", "PHOTO_CAPTURE"]
 
@@ -40,6 +46,13 @@ class InspectionConfigOverride(BaseModel):
     capture_mode: CaptureModeStr | None = None
     recording_setup_duration: float | None = None
     buffer_distance: float | None = Field(default=None, ge=0)
+    # new method-specific config fields
+    height_above_lights: float | None = Field(default=None, gt=0)
+    lateral_offset: float | None = Field(default=None, gt=0)
+    distance_from_lha: float | None = Field(default=None, gt=0)
+    height_above_lha: float | None = Field(default=None, gt=0)
+    camera_gimbal_angle: float | None = None
+    selected_lha_id: UUID | None = None
 
     @field_validator("lha_ids", mode="before")
     @classmethod
@@ -80,6 +93,12 @@ class InspectionConfigResponse(BaseModel):
     capture_mode: CaptureModeStr | None = None
     recording_setup_duration: float | None = None
     buffer_distance: float | None = None
+    height_above_lights: float | None = None
+    lateral_offset: float | None = None
+    distance_from_lha: float | None = None
+    height_above_lha: float | None = None
+    camera_gimbal_angle: float | None = None
+    selected_lha_id: UUID | None = None
 
     model_config = {"from_attributes": True}
 

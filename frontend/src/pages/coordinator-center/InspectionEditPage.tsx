@@ -159,6 +159,12 @@ export default function InspectionEditPage() {
             capture_mode: cfg.capture_mode,
             recording_setup_duration: cfg.recording_setup_duration,
             buffer_distance: cfg.buffer_distance,
+            height_above_lights: cfg.height_above_lights,
+            lateral_offset: cfg.lateral_offset,
+            distance_from_lha: cfg.distance_from_lha,
+            height_above_lha: cfg.height_above_lha,
+            camera_gimbal_angle: cfg.camera_gimbal_angle,
+            selected_lha_id: cfg.selected_lha_id,
           }
         : {
             altitude_offset: null,
@@ -173,6 +179,12 @@ export default function InspectionEditPage() {
             capture_mode: null,
             recording_setup_duration: null,
             buffer_distance: null,
+            height_above_lights: null,
+            lateral_offset: null,
+            distance_from_lha: null,
+            height_above_lha: null,
+            camera_gimbal_angle: null,
+            selected_lha_id: null,
           },
     );
 

@@ -18,7 +18,19 @@ The trajectory generation algorithm is a sequential 5-phase pipeline that transf
 
 ## Inspection Methods and Trajectory Geometry
 
-Two methods are supported, corresponding to ZEPHYR UAS PAPI inspection maneuvers.
+Five methods are supported. The first two (ANGULAR_SWEEP, VERTICAL_PROFILE) are the ZEPHYR UAS PAPI inspection maneuvers. FLY_OVER, PARALLEL_SIDE_SWEEP, and HOVER_POINT_LOCK were added to support runway edge light inspections.
+
+**Method / AGL-type compatibility matrix:**
+
+| Method              | PAPI | RUNWAY_EDGE_LIGHTS |
+|---------------------|:----:|:------------------:|
+| VERTICAL_PROFILE    |  ✓   |                    |
+| ANGULAR_SWEEP       |  ✓   |                    |
+| FLY_OVER            |      |         ✓          |
+| PARALLEL_SIDE_SWEEP |      |         ✓          |
+| HOVER_POINT_LOCK    |  ✓   |         ✓          |
+
+The matrix is enforced both in the backend (`InspectionTemplate.validate_method_agl_compat()` — returns 400 on mismatch) and in the frontend (`methodAglCompatibility.ts` narrows the pickable methods by the template's target AGL types).
 
 ### ANGULAR_SWEEP
 
@@ -70,6 +82,46 @@ Where:
 3. Camera heading oriented toward PAPI installation throughout both maneuvers
 4. Gimbal pitch angle at each waypoint = elevation angle from drone position to LHA center point
 
+### FLY_OVER
+
+Runway-edge-light variant. Drone overflies the light row, one waypoint per LHA, camera pointed straight down.
+
+- One waypoint per LHA in the template, ordered by `unit_number`
+- Drone altitude = LHA ground altitude + `height_above_lights` (default 15 m)
+- Heading aligned with the first → last LHA bearing (same heading applied to every waypoint)
+- Default gimbal pitch = -90° (straight down); operator can override via `camera_gimbal_angle`
+- In VIDEO capture mode the orchestrator wraps the pass in RECORDING_START / RECORDING_STOP hover waypoints
+- Requires ≥ 2 LHAs
+
+Config: `height_above_lights`, `camera_gimbal_angle`, `capture_mode`, `recording_setup_duration`. Default speed 5 m/s.
+
+### PARALLEL_SIDE_SWEEP
+
+Drone flies parallel to the light row, offset laterally to the side farther from the runway centerline. One waypoint per LHA, camera pointed toward the lights.
+
+- For each LHA, waypoint is laterally offset perpendicular to the first→last LHA direction
+- Offset distance = `lateral_offset` (default 30 m)
+- Offset direction is chosen as whichever perpendicular candidate is farther from the runway centerline
+- Altitude = LHA ground + `height_above_lights` (default 10 m)
+- Heading and gimbal oriented toward the corresponding LHA
+- Video/photo capture modes supported
+
+Config: `lateral_offset`, `height_above_lights`, `camera_gimbal_angle`, `capture_mode`. Default speed 3 m/s.
+
+### HOVER_POINT_LOCK
+
+Drone hovers at a single point, camera locked on one specific LHA for the full dwell.
+
+- Produces exactly one `HOVER` waypoint
+- Drone position offset from `selected_lha_id` along the approach bearing (`runway_heading + 180°`)
+- Default `distance_from_lha`: 50 m for PAPI, 10 m for RUNWAY_EDGE_LIGHTS
+- Altitude = target LHA ground + `height_above_lha` (default 5 m)
+- Heading points from drone toward the LHA; gimbal toward the LHA
+- Dwell = `hover_duration` (default 10 s)
+- PHOTO mode emits `PHOTO_CAPTURE`; VIDEO mode emits `RECORDING`
+- **Angle Lock**: the UI can couple `height_above_lha`, `distance_from_lha`, and `camera_gimbal_angle` via `angle = -atan2(height, distance)`. When locked, editing any of the three derives the third so the geometry stays consistent.
+- Requires a `selected_lha_id` — orchestrator raises if missing
+
 ---
 
 ## Phase 1 — Mission Data Loading
@@ -92,7 +144,7 @@ For each inspection:
 2. Check `isSpeedCompatibleWithFrameRate()` — if configured speed too high for camera to capture usable frames at required measurement density → add warning
 3. Verify sensor FOV is sufficient to capture all 4 LHA units in single frame at configured distance. If angular span of LHA array exceeds camera sensorFOV → add warning
 4. Load inspection targets, compute LHA center point for each PAPI target
-5. Branch by inspection method: ANGULAR_SWEEP → `calculateArcPath()`, VERTICAL_PROFILE → `calculateVerticalPath()`
+5. Branch by inspection method: ANGULAR_SWEEP → `calculateArcPath()`, VERTICAL_PROFILE → `calculateVerticalPath()`, FLY_OVER → `calculate_fly_over_path()`, PARALLEL_SIDE_SWEEP → `calculate_parallel_side_sweep_path()`, HOVER_POINT_LOCK → `calculate_hover_point_lock_path()`
 6. Each pass produces ordered list of waypoints
 7. Waypoints immediately validated before proceeding to next target
 
