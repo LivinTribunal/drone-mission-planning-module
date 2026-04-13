@@ -66,6 +66,7 @@ import maplibregl from "maplibre-gl";
 import { extractCenterline, circleToPolygon, haversineDistance, computeBearing, computePolygonMedianWidth } from "@/utils/geo";
 import type { DrawingTool } from "@/types/map";
 import { MapTool } from "@/hooks/useMapTools";
+import { buildLhaCreatePayload } from "./buildLhaCreatePayload";
 
 // tracks current feature collections per source for live geometry preview updates
 const sourceDataCache = new Map<string, GeoJSON.FeatureCollection>();
@@ -576,13 +577,7 @@ export default function AirportEditPage() {
           s.agls.some((a) => a.id === aglId),
         );
         if (!parentSurface) throw new Error("missing parent surface");
-        await createLHA(id, parentSurface.id, aglId, {
-          unit_number: (data.unit_number as number) ?? 1,
-          setting_angle: (data.setting_angle as number) ?? 3.0,
-          lamp_type: (data.lamp_type as "HALOGEN" | "LED") ?? "HALOGEN",
-          position: { type: "Point", coordinates: [pos[0], pos[1], elevation] },
-          tolerance: data.tolerance != null ? (data.tolerance as number) : undefined,
-        });
+        await createLHA(id, parentSurface.id, aglId, buildLhaCreatePayload(data, pos, elevation));
       } else {
         throw new Error(`unknown entity type: ${entityType}`);
       }

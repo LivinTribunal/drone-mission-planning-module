@@ -45,7 +45,10 @@ def upgrade() -> None:
         )
 
     op.execute(
-        "UPDATE agl SET agl_type = 'PAPI' WHERE agl_type NOT IN ('PAPI', 'RUNWAY_EDGE_LIGHTS')"
+        text(
+            "UPDATE agl SET agl_type = 'PAPI' "
+            "WHERE agl_type NOT IN ('PAPI', 'RUNWAY_EDGE_LIGHTS')"
+        )
     )
 
     op.create_check_constraint(
