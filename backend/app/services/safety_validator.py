@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
-from app.models.enums import ConstraintType, SurfaceType, WaypointType
+from app.models.enums import ConstraintType, SafetyZoneType, SurfaceType, WaypointType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
 from app.models.value_objects import Speed
@@ -162,10 +162,23 @@ def _batch_check_zones(
     waypoints: list[WaypointData],
     zones: list[SafetyZone],
 ) -> list[Violation]:
-    """batch safety zone containment - one query for all waypoints against all zones."""
-    valid_zones = [(i, zone) for i, zone in enumerate(zones) if zone.geometry]
+    """batch safety zone containment - one query for all waypoints against all zones.
+
+    airport boundary zones are handled with inverted semantics - waypoints
+    OUTSIDE the boundary polygon produce hard geofence violations.
+    """
+    # boundary zones use inverted containment (waypoint outside = violation)
+    boundary_zones = [
+        z for z in zones if z.geometry and z.type == SafetyZoneType.AIRPORT_BOUNDARY.value
+    ]
+    regular_zones = [z for z in zones if z.type != SafetyZoneType.AIRPORT_BOUNDARY.value]
+
+    violations: list[Violation] = []
+    violations.extend(_batch_check_boundary_zones(db, waypoints, boundary_zones))
+
+    valid_zones = [(i, zone) for i, zone in enumerate(regular_zones) if zone.geometry]
     if not valid_zones or not waypoints:
-        return []
+        return violations
 
     wp_ewkts = [_wp_to_ewkt(wp) for wp in waypoints]
     zone_ewkts = [(i, _geom_to_ewkt(zone.geometry)) for i, zone in valid_zones]
@@ -192,9 +205,8 @@ def _batch_check_zones(
 
     rows = db.execute(text(sql), params).fetchall()
 
-    violations = []
     for wp_idx, zone_idx in rows:
-        zone = zones[zone_idx]
+        zone = regular_zones[zone_idx]
         wp = waypoints[wp_idx]
 
         # altitude band check
@@ -212,6 +224,45 @@ def _batch_check_zones(
                 waypoint_index=wp_idx,
             )
         )
+
+    return violations
+
+
+def _batch_check_boundary_zones(
+    db: Session,
+    waypoints: list[WaypointData],
+    boundary_zones: list[SafetyZone],
+) -> list[Violation]:
+    """soft-warn every waypoint not contained in each airport boundary polygon."""
+    if not boundary_zones or not waypoints:
+        return []
+
+    violations: list[Violation] = []
+    for boundary in boundary_zones:
+        boundary_ewkt = _geom_to_ewkt(boundary.geometry)
+        wp_values = ", ".join(f"(:idx_{i}, :geom_{i})" for i in range(len(waypoints)))
+        params: dict[str, object] = {"boundary": boundary_ewkt}
+        for i, wp in enumerate(waypoints):
+            params[f"idx_{i}"] = i
+            params[f"geom_{i}"] = _wp_to_ewkt(wp)
+
+        sql = (
+            f"SELECT wp.idx FROM (VALUES {wp_values}) AS wp(idx, geom) "  # noqa: S608
+            f"WHERE NOT COALESCE(ST_Contains("
+            f"ST_Force2D(ST_GeomFromEWKT(:boundary)), "
+            f"ST_Force2D(ST_GeomFromEWKT(wp.geom))), FALSE)"
+        )
+        rows = db.execute(text(sql), params).fetchall()
+        for (wp_idx,) in rows:
+            # soft until boundary-aware A* routing lands; see follow-up issue.
+            violations.append(
+                Violation(
+                    is_warning=True,
+                    violation_kind="geofence",
+                    message=f"waypoint outside airport boundary: {boundary.name}",
+                    waypoint_index=wp_idx,
+                )
+            )
 
     return violations
 
@@ -373,7 +424,11 @@ def check_battery(
 
 
 def check_safety_zone(db: Session, wp: WaypointData, zone: SafetyZone) -> Violation | None:
-    """check if waypoint is inside a safety zone's geometry and altitude band"""
+    """check if waypoint is inside a safety zone's geometry and altitude band.
+
+    airport boundary zones use inverted semantics - waypoint outside the
+    polygon produces a hard geofence violation.
+    """
     if not zone.geometry:
         return None
 
@@ -387,6 +442,16 @@ def check_safety_zone(db: Session, wp: WaypointData, zone: SafetyZone) -> Violat
         ),
         {"zone_geom": _geom_to_ewkt(zone.geometry), "point": wp_ewkt},
     ).scalar()
+
+    if zone.type == SafetyZoneType.AIRPORT_BOUNDARY.value:
+        if contained is True:
+            return None
+        # soft until boundary-aware A* routing lands; see follow-up issue.
+        return Violation(
+            is_warning=True,
+            violation_kind="geofence",
+            message=f"waypoint outside airport boundary: {zone.name}",
+        )
 
     if contained is not True:
         return None

@@ -26,7 +26,9 @@ export default function SafetyZonesPanel({
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const count = safetyZones.length;
+  const boundaryZone = safetyZones.find((z) => z.type === "AIRPORT_BOUNDARY");
+  const regularZones = safetyZones.filter((z) => z.type !== "AIRPORT_BOUNDARY");
+  const count = regularZones.length;
   const grayed = !layerConfig.safetyZones;
 
   function handleClick(zone: SafetyZoneResponse) {
@@ -45,7 +47,7 @@ export default function SafetyZonesPanel({
         className="flex w-full items-center justify-between px-3 py-2"
       >
         <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border text-xs font-semibold text-tv-text-primary">
-          {t("airport.safetyZones")}
+          {t("layers.safetyZonesAndBoundary")}
         </span>
         <div className="flex items-center gap-2">
           <span
@@ -59,12 +61,45 @@ export default function SafetyZonesPanel({
 
       {!collapsed && (
         <div className="border-t border-tv-border max-h-60 overflow-y-auto">
+          {boundaryZone ? (
+            <button
+              onClick={() => handleClick(boundaryZone)}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors border-b border-tv-border ${
+                grayed ? "opacity-50 pointer-events-none" : "hover:bg-tv-surface-hover cursor-pointer"
+              }`}
+              data-testid={`boundary-item-${boundaryZone.id}`}
+            >
+              <svg className="h-2.5 w-2.5 flex-shrink-0" viewBox="0 0 10 10">
+                <rect
+                  x="0.5" y="0.5" width="9" height="9" rx="1"
+                  fill="none" stroke="#ffffff" strokeWidth="1.2" strokeDasharray="2.5 1.5"
+                />
+              </svg>
+              <div className="flex-1 min-w-0 flex items-center gap-2">
+                <span className="text-xs font-medium text-tv-text-primary truncate">
+                  {boundaryZone.name}
+                </span>
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border border-tv-border text-tv-text-secondary"
+                >
+                  {t("boundary.airportBoundary")}
+                </span>
+              </div>
+            </button>
+          ) : (
+            <div
+              className="px-3 py-2 text-xs italic text-tv-text-muted border-b border-tv-border"
+              data-testid="boundary-item-empty"
+            >
+              {t("boundary.noBoundary")}
+            </div>
+          )}
           {count === 0 ? (
             <p className="px-3 py-3 text-sm italic text-tv-text-muted text-center">
               {t("airport.noSafetyZones")}
             </p>
           ) : (
-            safetyZones.map((zone, idx) => (
+            regularZones.map((zone, idx) => (
               <button
                 key={zone.id}
                 onClick={() => handleClick(zone)}

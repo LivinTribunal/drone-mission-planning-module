@@ -1,80 +1,66 @@
 # Map Symbology
 
-Visual conventions for airport features rendered on the coordinator / operator
-MapLibre surface. Colors reference the design-system CSS variables where
-applicable; hard-coded hex values are listed for layer paint expressions that
-cannot reference CSS variables.
+## Airport Boundary
 
-## Runways
+The airport boundary defines the operational perimeter of the airport. The drone
+must remain inside this polygon. Visually it renders as the **inverse** of a
+safety zone: the region outside the polygon is shaded, the inside is transparent.
 
-- **Fill**: `#4a4a4a` at 0.5 opacity
-- **Stroke**: `#6a6a6a` at 0.6 opacity, 1.5px
-- **Centerline dashes**: `#ffffff` at 0.7 opacity, `[8, 8]` dash pattern
-- **Label**: "RWY {identifier}", 13pt, white on black halo
+### Data model
 
-## Taxiways
+- Stored in the `safety_zone` table with `type = 'AIRPORT_BOUNDARY'`.
+- One boundary per airport. The `Airport` aggregate-root invariant rejects a
+  second boundary with HTTP 409.
+- `altitude_floor` / `altitude_ceiling` are ignored for this type.
 
-- **Fill**: `#c8a83c` at 0.35 opacity
-- **Stroke**: `#b8a038` at 0.5 opacity, 1px
-- **Centerline dashes**: `#1a1a1a` at 0.6 opacity, `[6, 6]` dash pattern
-- **Label**: "TWY {identifier}", 11pt, amber on black halo
+### MapLibre rendering
 
-## Runway Touchpoint (TDP)
+Use a `Polygon` feature whose outer ring covers the whole world and whose inner
+ring (reversed winding) is the airport boundary, producing a "donut" where the
+boundary is a hole:
 
-Rendered only when `touchpoint_latitude` and `touchpoint_longitude` are set on
-the surface.
+```ts
+{
+  type: "Feature",
+  geometry: {
+    type: "Polygon",
+    coordinates: [
+      [[-180,-90],[180,-90],[180,90],[-180,90],[-180,-90]], // outer
+      reverseRing(boundaryOuterRing)                         // hole
+    ]
+  }
+}
+```
 
-- **Marker**: yellow (`#ffd700`) filled circle, 8px radius, 1px black stroke
-- **Label**: "TDP", 10pt yellow on black halo, offset above the marker
-- **Purpose**: reference point used for future video post-processing (landing
-  threshold crossing estimation). Does not affect trajectory generation.
+Two map layers are stacked on the resulting source:
 
-## AGL Systems
+| Layer                         | Type | Paint                                                          |
+|-------------------------------|------|----------------------------------------------------------------|
+| `airport-boundary-fill`       | fill | `fill-color: #000`, `fill-opacity: 0.4`, `fill-antialias: false` |
+| `airport-boundary-line`       | line | `line-color: #fff`, `line-width: 2`, `line-dasharray: [4, 4]`    |
 
-### PAPI
+The fill layer filters on `role == "mask"` (the inverted polygon feature). The
+line layer filters on `role == "outline"` (the original boundary geometry, no
+hole), so the dashed border tracks the boundary edges only.
 
-- **Marker**: magenta square icon (`agl-square` sprite)
-- **Label**: `{name}` (e.g. "PAPI RWY 06/24"), magenta on black halo
-- **LHA units**: magenta filled circles, 6px radius. Labelled individually
-  (`LHA {n} ({angle}°)`).
+### 3D view (CesiumJS)
 
-### Runway Edge Lights
+Mirrors the MapLibre approach. `CesiumInfrastructure` renders a polygon whose
+outer ring covers the world and whose inner hole is the boundary polygon, with
+`ClassificationType.TERRAIN` so the dark shade drapes over the ground outside
+the boundary. A `PolylineDashMaterialProperty` draws the dashed white outline
+on the boundary edge. Regular safety zones are filtered to skip
+`AIRPORT_BOUNDARY` so they do not double-render.
 
-- **Marker**: same magenta square icon as PAPI
-- **Label**: `{name}` (e.g. "EDGE LIGHTS RWY 06/24")
-- **LHA units**: magenta filled circles, 4px radius. Unit labels suppressed
-  (a single row can contain 30+ lights — individual labels would clutter the
-  map).
-- **Connecting line**: magenta (`#e91e90`) line at 0.3 opacity, 1px,
-  drawn between the first and last LHA of the row for quick orientation.
+### Layer panel / legend
 
-## Obstacles
+The existing "Safety Zones" toggle also controls the airport boundary. The label
+becomes "Safety Zones & Boundary" (`layers.safetyZonesAndBoundary`). The legend
+adds a dashed-rectangle swatch with the "Airport Boundary" label.
 
-See `obstacleLayers.ts` — color is driven by obstacle type. The touchpoint
-marker intentionally uses a distinct yellow palette so it is not mistaken for
-an obstacle.
+### Validation
 
-## Safety Zones
-
-See `safetyZoneLayers.ts` — each zone type has its own fill/stroke palette.
-
-## Zoom-Level Visibility
-
-- LHA circles and labels fade in between zoom 14 → 15 to avoid overwhelming
-  the map at airport-overview scale.
-- AGL icons fade out between zoom 14 → 15, yielding to the individual LHA
-  markers as the user zooms in.
-- Touchpoints are always visible — they are a single point per runway.
-
-## Color Reference
-
-| Purpose              | Hex       |
-|----------------------|-----------|
-| Runway fill          | `#4a4a4a` |
-| Runway stroke        | `#6a6a6a` |
-| Runway centerline    | `#ffffff` |
-| Taxiway fill         | `#c8a83c` |
-| Taxiway stroke       | `#b8a038` |
-| Taxiway label        | `#d4b84a` |
-| AGL / LHA magenta    | `#e91e90` |
-| Touchpoint yellow    | `#ffd700` |
+`GeofenceConstraint` / `_batch_check_zones` treat `AIRPORT_BOUNDARY` with
+inverted `ST_Contains` semantics - a waypoint **not** contained in the boundary
+polygon is a hard `geofence` violation. Regular safety zones keep their existing
+containment-is-violation behaviour.

@@ -67,6 +67,24 @@ export default function PoiInfoPanel({
       }
       case "safety_zone": {
         const z = feature.data;
+        if (z.type === "AIRPORT_BOUNDARY") {
+          const { areaM2, perimeterM } = computePolygonAreaPerimeter(z.geometry);
+          return (
+            <>
+              <InfoRow label={t("dashboard.poiName")} value={z.name} />
+              <InfoRow label={t("dashboard.poiType")} value={t("boundary.airportBoundary")} />
+              <InfoRow
+                label={t("dashboard.poiArea", { defaultValue: "Area" })}
+                value={formatArea(areaM2, t)}
+              />
+              <InfoRow
+                label={t("dashboard.poiPerimeter", { defaultValue: "Perimeter" })}
+                value={formatLength(perimeterM, t)}
+              />
+              <PolygonCoordRows polygon={z.geometry} label={t("dashboard.poiCoordinates")} />
+            </>
+          );
+        }
         return (
           <>
             <InfoRow label={t("dashboard.poiName")} value={z.name} />
@@ -437,4 +455,60 @@ function DeleteButton({
       {t("common.delete")} {waypointType.toLowerCase()}
     </button>
   );
+}
+
+function computePolygonAreaPerimeter(polygon: PolygonZ | null | undefined): {
+  areaM2: number;
+  perimeterM: number;
+} {
+  /** compute polygon area (shoelace, equirectangular) and perimeter (haversine). */
+  if (!polygon || !polygon.coordinates || !polygon.coordinates[0]) {
+    return { areaM2: 0, perimeterM: 0 };
+  }
+  const ring = polygon.coordinates[0];
+  if (ring.length < 3) return { areaM2: 0, perimeterM: 0 };
+
+  const R = 6378137;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+
+  // haversine perimeter
+  let perimeter = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [lon1, lat1] = ring[i];
+    const [lon2, lat2] = ring[i + 1];
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    perimeter += 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  // shoelace area on equirectangular projection centered at ring centroid
+  const latSum = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+  const cosLat = Math.cos(toRad(latSum));
+  let area = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const x1 = toRad(ring[i][0]) * R * cosLat;
+    const y1 = toRad(ring[i][1]) * R;
+    const x2 = toRad(ring[i + 1][0]) * R * cosLat;
+    const y2 = toRad(ring[i + 1][1]) * R;
+    area += x1 * y2 - x2 * y1;
+  }
+  return { areaM2: Math.abs(area) / 2, perimeterM: perimeter };
+}
+
+function formatArea(m2: number, t: (k: string, o?: Record<string, unknown>) => string): string {
+  /** format area in m² or km² depending on magnitude. */
+  if (m2 >= 1_000_000) {
+    return `${(m2 / 1_000_000).toFixed(2)} ${t("common.units.km2", { defaultValue: "km²" })}`;
+  }
+  return `${Math.round(m2)} ${t("common.units.m2", { defaultValue: "m²" })}`;
+}
+
+function formatLength(m: number, t: (k: string, o?: Record<string, unknown>) => string): string {
+  /** format length in meters or kilometers. */
+  if (m >= 1000) {
+    return `${(m / 1000).toFixed(2)} ${t("common.units.km", { defaultValue: "km" })}`;
+  }
+  return `${Math.round(m)} ${t("common.units.m")}`;
 }

@@ -10,7 +10,9 @@ from app.schemas.geometry import LineStringZ, PointZ, PolygonZ
 # values fail with a clean 422 instead of a 500 IntegrityError at commit
 SurfaceTypeStr = Literal["RUNWAY", "TAXIWAY"]
 ObstacleTypeStr = Literal["BUILDING", "TOWER", "ANTENNA", "VEGETATION", "OTHER"]
-SafetyZoneTypeStr = Literal["CTR", "RESTRICTED", "PROHIBITED", "TEMPORARY_NO_FLY"]
+SafetyZoneTypeStr = Literal[
+    "CTR", "RESTRICTED", "PROHIBITED", "TEMPORARY_NO_FLY", "AIRPORT_BOUNDARY"
+]
 LampTypeStr = Literal["HALOGEN", "LED"]
 PAPISideStr = Literal["LEFT", "RIGHT"]
 AglTypeStr = Literal["PAPI", "RUNWAY_EDGE_LIGHTS"]
@@ -146,7 +148,13 @@ class SafetyZoneCreate(BaseModel):
 
     @model_validator(mode="after")
     def _validate_altitude_range(self) -> "SafetyZoneCreate":
-        """reject inverted altitude envelopes before they reach the db."""
+        """reject inverted altitude envelopes and boundary zones with altitude bounds."""
+        if self.type == "AIRPORT_BOUNDARY" and (
+            self.altitude_floor is not None or self.altitude_ceiling is not None
+        ):
+            raise ValueError(
+                "altitude_floor and altitude_ceiling are not allowed for AIRPORT_BOUNDARY zones"
+            )
         if (
             self.altitude_floor is not None
             and self.altitude_ceiling is not None
@@ -168,7 +176,15 @@ class SafetyZoneUpdate(BaseModel):
 
     @model_validator(mode="after")
     def _validate_altitude_range(self) -> "SafetyZoneUpdate":
-        """reject inverted altitude envelopes before they reach the db."""
+        """reject inverted altitude envelopes and boundary zones with altitude bounds."""
+        # partial patches (no type field) skip the boundary check here;
+        # the service layer re-checks against the persisted zone type.
+        if self.type == "AIRPORT_BOUNDARY" and (
+            self.altitude_floor is not None or self.altitude_ceiling is not None
+        ):
+            raise ValueError(
+                "altitude_floor and altitude_ceiling are not allowed for AIRPORT_BOUNDARY zones"
+            )
         if (
             self.altitude_floor is not None
             and self.altitude_ceiling is not None

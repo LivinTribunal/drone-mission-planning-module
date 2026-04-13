@@ -10,13 +10,14 @@ type CategoryPolygon = "surface" | "safety_zone" | "obstacle";
 type CategoryPoint = "agl" | "lha";
 type Category = CategoryPolygon | CategoryPoint;
 
-type EntityType =
+export type EntityType =
   | "runway"
   | "taxiway"
   | "safety_zone_ctr"
   | "safety_zone_restricted"
   | "safety_zone_prohibited"
   | "safety_zone_no_fly"
+  | "safety_zone_airport_boundary"
   | "obstacle"
   | "agl"
   | "lha";
@@ -35,6 +36,7 @@ interface CreationFormProps {
   prefilledArea?: number;
   obstacles?: ObstacleResponse[];
   airportElevation?: number;
+  prefilledEntityType?: EntityType;
 }
 
 const POLYGON_CATEGORIES: { value: CategoryPolygon; labelKey: string }[] = [
@@ -63,6 +65,10 @@ const SAFETY_ZONE_SUBTYPES: { value: EntityType; labelKey: string }[] = [
   { value: "safety_zone_restricted", labelKey: "coordinator.creation.typeSafetyZoneRestricted" },
   { value: "safety_zone_prohibited", labelKey: "coordinator.creation.typeSafetyZoneProhibited" },
   { value: "safety_zone_no_fly", labelKey: "coordinator.creation.typeSafetyZoneNoFly" },
+  {
+    value: "safety_zone_airport_boundary",
+    labelKey: "coordinator.creation.typeSafetyZoneAirportBoundary",
+  },
 ];
 
 const OBSTACLE_SUBTYPES: { value: string; labelKey: string }[] = [
@@ -86,11 +92,23 @@ export default function CreationForm({
   prefilledArea,
   obstacles = [],
   airportElevation = 0,
+  prefilledEntityType,
 }: CreationFormProps) {
   /** creation form shown after drawing a geometry - two-tier type selection, fill fields, create entity. */
   const { t } = useTranslation();
-  const [category, setCategory] = useState<Category | "">("");
-  const [entityType, setEntityType] = useState<EntityType | "">("");
+  const initialCategory: Category | "" = prefilledEntityType?.startsWith("safety_zone_")
+    ? "safety_zone"
+    : prefilledEntityType === "runway" || prefilledEntityType === "taxiway"
+      ? "surface"
+      : prefilledEntityType === "obstacle"
+        ? "obstacle"
+        : prefilledEntityType === "agl"
+          ? "agl"
+          : prefilledEntityType === "lha"
+            ? "lha"
+            : "";
+  const [category, setCategory] = useState<Category | "">(initialCategory);
+  const [entityType, setEntityType] = useState<EntityType | "">(prefilledEntityType ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -252,9 +270,11 @@ export default function CreationForm({
       }
 
       if (effectiveEntityType.startsWith("safety_zone_")) {
-        data.altitude_floor = altFloor ? parseFloat(altFloor) : 0;
-        if (altCeiling) data.altitude_ceiling = parseFloat(altCeiling);
-        data.is_active = isActive;
+        if (effectiveEntityType !== "safety_zone_airport_boundary") {
+          data.altitude_floor = altFloor ? parseFloat(altFloor) : 0;
+          if (altCeiling) data.altitude_ceiling = parseFloat(altCeiling);
+          data.is_active = isActive;
+        }
       }
 
       if (effectiveEntityType === "obstacle") {
@@ -307,6 +327,15 @@ export default function CreationForm({
   }
 
   const isSafetyZone = effectiveEntityType.startsWith("safety_zone_");
+  const isAirportBoundary = effectiveEntityType === "safety_zone_airport_boundary";
+  const prefilledBoundary = prefilledEntityType === "safety_zone_airport_boundary";
+
+  // auto-prefill default name when switching into airport boundary
+  useEffect(() => {
+    if (isAirportBoundary && !name.trim()) {
+      setName(t("boundary.airportBoundary"));
+    }
+  }, [isAirportBoundary, name, t]);
 
   function namePlaceholder(): string {
     /** get the right placeholder for the name field. */
@@ -347,7 +376,8 @@ export default function CreationForm({
       </div>
 
       <div className="flex flex-col gap-1.5 [&_input]:!px-3 [&_input]:!py-1.5 [&_input]:!text-xs">
-        {/* tier 1 - category selection */}
+        {/* tier 1 - category selection (hidden for prefilled airport boundary) */}
+        {!prefilledBoundary && (
         <div>
           <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
             {t("coordinator.creation.selectCategory")}
@@ -366,9 +396,10 @@ export default function CreationForm({
             ))}
           </select>
         </div>
+        )}
 
         {/* tier 2 - subtype selection (for surface and safety_zone) */}
-        {needsSubtype && category && (
+        {!prefilledBoundary && needsSubtype && category && (
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
               {t("coordinator.creation.selectType")}
@@ -411,14 +442,16 @@ export default function CreationForm({
 
         {effectiveEntityType && (
           <>
-            {/* name - always required */}
-            <Input
-              id="create-name"
-              label={t("coordinator.detail.obstacleName")}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={namePlaceholder()}
-            />
+            {/* name - always required, auto-assigned (and hidden) for airport boundary */}
+            {!isAirportBoundary && (
+              <Input
+                id="create-name"
+                label={t("coordinator.detail.obstacleName")}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={namePlaceholder()}
+              />
+            )}
 
             {/* runway / taxiway fields */}
             {(effectiveEntityType === "runway" || effectiveEntityType === "taxiway") && (
@@ -519,43 +552,49 @@ export default function CreationForm({
             {/* safety zone fields */}
             {isSafetyZone && (
               <>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-tv-text-secondary">{t("coordinator.detail.zoneType")}:</span>
-                  <span
-                    className="rounded-full px-2 py-0.5 text-[10px] font-medium border"
-                    style={{
-                      borderColor: "var(--tv-accent)",
-                      color: "var(--tv-accent)",
-                    }}
-                  >
-                    {safetyZoneTypeLabel}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <Input
-                    id="create-alt-floor"
-                    label={t("coordinator.creation.altitudeFloor")}
-                    type="number"
-                    value={altFloor}
-                    onChange={(e) => setAltFloor(e.target.value)}
-                  />
-                  <Input
-                    id="create-alt-ceiling"
-                    label={t("coordinator.creation.altitudeCeiling")}
-                    type="number"
-                    value={altCeiling}
-                    onChange={(e) => setAltCeiling(e.target.value)}
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-xs text-tv-text-primary">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                    className="accent-tv-accent"
-                  />
-                  {t("coordinator.creation.active")}
-                </label>
+                {!isAirportBoundary && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-tv-text-secondary">{t("coordinator.detail.zoneType")}:</span>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-medium border"
+                      style={{
+                        borderColor: "var(--tv-accent)",
+                        color: "var(--tv-accent)",
+                      }}
+                    >
+                      {safetyZoneTypeLabel}
+                    </span>
+                  </div>
+                )}
+                {!isAirportBoundary && (
+                  <>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <Input
+                        id="create-alt-floor"
+                        label={t("coordinator.creation.altitudeFloor")}
+                        type="number"
+                        value={altFloor}
+                        onChange={(e) => setAltFloor(e.target.value)}
+                      />
+                      <Input
+                        id="create-alt-ceiling"
+                        label={t("coordinator.creation.altitudeCeiling")}
+                        type="number"
+                        value={altCeiling}
+                        onChange={(e) => setAltCeiling(e.target.value)}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-tv-text-primary">
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        onChange={(e) => setIsActive(e.target.checked)}
+                        className="accent-tv-accent"
+                      />
+                      {t("coordinator.creation.active")}
+                    </label>
+                  </>
+                )}
                 {prefilledArea != null && (
                   <p className="text-[10px] text-tv-text-muted">
                     {t("coordinator.creation.area")}: {Math.round(prefilledArea)} m²

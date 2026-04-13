@@ -1,4 +1,13 @@
 {
+  "boundary": {
+    "airportBoundary": "Airport Boundary",
+    "noBoundary": "No boundary defined",
+    "addBoundary": "Add Airport Boundary",
+    "onlyOne": "Airport boundary already exists"
+  },
+  "layers": {
+    "safetyZonesAndBoundary": "Safety Zones & Boundary"
+  },
   "common": {
     "appTitle": "TarmacView Mission Control Center",
     "appTitleCoordinator": "TarmacView Coordinator Center",
@@ -131,6 +140,8 @@
     "poiAltitude": "Altitude",
     "poiRadius": "Radius",
     "poiHeight": "Height",
+    "poiArea": "Area",
+    "poiPerimeter": "Perimeter",
     "bufferDistance": "Buffer Distance",
     "bufferZones": "Buffer Zones",
     "poiSide": "Side",
@@ -933,6 +944,7 @@
       "typeSafetyZoneRestricted": "Safety Zone (Restricted)",
       "typeSafetyZoneProhibited": "Safety Zone (Prohibited)",
       "typeSafetyZoneNoFly": "Safety Zone (Temporary No-Fly)",
+      "typeSafetyZoneAirportBoundary": "Airport Boundary",
       "typeObstacle": "Obstacle",
       "typeAgl": "AGL System",
       "namePlaceholderRunway": "e.g. RWY 06/24",
@@ -1148,7 +1160,8 @@
       "CTR": "CTR",
       "RESTRICTED": "Restricted",
       "PROHIBITED": "Prohibited",
-      "TEMPORARY_NO_FLY": "Temporary No-Fly"
+      "TEMPORARY_NO_FLY": "Temporary No-Fly",
+      "AIRPORT_BOUNDARY": "Airport Boundary"
     }
   },
   "drone": {

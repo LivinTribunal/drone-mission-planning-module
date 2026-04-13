@@ -49,6 +49,7 @@ class SafetyZoneType(str, enum.Enum):
     RESTRICTED = "RESTRICTED"
     PROHIBITED = "PROHIBITED"
     TEMPORARY_NO_FLY = "TEMPORARY_NO_FLY"
+    AIRPORT_BOUNDARY = "AIRPORT_BOUNDARY"
 
 
 class ObstacleType(str, enum.Enum):
