@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, ChevronUp, Trash2, Plus } from "lucide-react";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import { formatAglDisplayName } from "@/utils/agl";
+import { aglColorForType } from "@/utils/aglColor";
 import type { AGLResponse, LHAResponse, SurfaceResponse } from "@/types/airport";
 import type { MapFeature } from "@/types/map";
 
@@ -110,6 +111,7 @@ export default function CoordinatorAGLPanel({
             ) : (
               allAgls.map((agl, idx) => {
                 const expanded = expandedAgls.has(agl.id);
+                const color = aglColorForType(agl.agl_type);
                 return (
                   <div
                     key={agl.id}
@@ -124,10 +126,10 @@ export default function CoordinatorAGLPanel({
                         idx === count - 1 && !expanded ? "rounded-b-2xl" : ""
                       }`}
                     >
-                      {/* magenta circle icon */}
+                      {/* per-agl color swatch */}
                       <span
                         className="h-3 w-3 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: "var(--tv-accent-magenta)" }}
+                        style={{ backgroundColor: color }}
                       />
 
                       <div className="flex-1 min-w-0">
@@ -137,12 +139,9 @@ export default function CoordinatorAGLPanel({
                           </span>
                           <span
                             className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border"
-                            style={{
-                              borderColor: "var(--tv-accent-magenta)",
-                              color: "var(--tv-accent-magenta)",
-                            }}
+                            style={{ borderColor: color, color }}
                           >
-                            {agl.agl_type}
+                            {agl.agl_type === "RUNWAY_EDGE_LIGHTS" ? "REL" : agl.agl_type}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
@@ -187,7 +186,7 @@ export default function CoordinatorAGLPanel({
                           >
                             <span
                               className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: "var(--tv-accent-magenta)" }}
+                              style={{ backgroundColor: color }}
                             />
                             <div className="flex-1 min-w-0">
                               <span className="text-xs font-medium text-tv-text-primary">

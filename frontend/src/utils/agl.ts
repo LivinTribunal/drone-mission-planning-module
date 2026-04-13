@@ -11,7 +11,7 @@ export function formatAglDisplayName(
     return `PAPI RWY ${surface.identifier}`;
   }
   if (agl.agl_type === "RUNWAY_EDGE_LIGHTS" && isRunway) {
-    return `EDGE LIGHTS RWY ${surface.identifier}`;
+    return `REL RWY ${surface.identifier}`;
   }
   return agl.name;
 }

@@ -1,5 +1,6 @@
 import type { Map as MaplibreMap } from "maplibre-gl";
 import type { SurfaceResponse } from "@/types/airport";
+import { aglColorForType } from "@/utils/aglColor";
 
 export const AGL_SOURCE = "agls";
 export const AGL_POINT_LAYER = "agls-point";
@@ -29,24 +30,25 @@ export function addAglLayers(
           name: a.name,
           aglType: a.agl_type,
           entityType: "agl",
+          color: aglColorForType(a.agl_type),
         },
         geometry: a.position,
       })),
     },
   });
 
-  // agl square markers
+  // agl markers - colored circle per agl system
   map.addLayer({
     id: AGL_POINT_LAYER,
-    type: "symbol",
+    type: "circle",
     source: AGL_SOURCE,
-    layout: {
-      "icon-image": "agl-square",
-      "icon-size": 1.0,
-      "icon-allow-overlap": true,
-    },
     paint: {
-      "icon-opacity": ["interpolate", ["linear"], ["zoom"], 14, 1, 15, 0.3],
+      "circle-radius": 7,
+      "circle-color": ["get", "color"],
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 2,
+      "circle-opacity": ["interpolate", ["linear"], ["zoom"], 14, 1, 15, 0.4],
+      "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 14, 1, 15, 0.4],
     },
   });
 
@@ -63,7 +65,7 @@ export function addAglLayers(
       "text-anchor": "top",
     },
     paint: {
-      "text-color": "#e91e90",
+      "text-color": ["get", "color"],
       "text-halo-color": "#000000",
       "text-halo-width": 1,
     },
@@ -87,6 +89,7 @@ export function addAglLayers(
             lampType: l.lamp_type,
             aglType: aglTypeMap.get(l.agl_id) ?? "PAPI",
             entityType: "lha",
+            color: aglColorForType(aglTypeMap.get(l.agl_id)),
           },
           geometry: l.position,
         })),
@@ -104,7 +107,7 @@ export function addAglLayers(
           4,
           6,
         ],
-        "circle-color": "#e91e90",
+        "circle-color": ["get", "color"],
         "circle-stroke-color": "#ffffff",
         "circle-stroke-width": 1.5,
         "circle-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
@@ -143,7 +146,7 @@ export function addAglLayers(
         "text-allow-overlap": false,
       },
       paint: {
-        "text-color": "#e91e90",
+        "text-color": ["get", "color"],
         "text-halo-color": "#000000",
         "text-halo-width": 1,
         "text-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
@@ -160,7 +163,11 @@ export function addAglLayers(
       const last = ordered[ordered.length - 1].position.coordinates;
       return {
         type: "Feature" as const,
-        properties: { id: a.id, entityType: "agl-edge-line" },
+        properties: {
+          id: a.id,
+          entityType: "agl-edge-line",
+          color: aglColorForType(a.agl_type),
+        },
         geometry: {
           type: "LineString" as const,
           coordinates: [first, last],
@@ -178,9 +185,9 @@ export function addAglLayers(
       type: "line",
       source: EDGE_LIGHTS_LINE_SOURCE,
       paint: {
-        "line-color": "#e91e90",
-        "line-width": 1,
-        "line-opacity": 0.3,
+        "line-color": ["get", "color"],
+        "line-width": 1.5,
+        "line-opacity": 0.5,
       },
     });
   }

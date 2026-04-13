@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     terrain_api_batch_size: int = 2000  # max points per API request
     open_elevation_url: str = "https://api.open-elevation.com/api/v1/lookup"
 
+    # openaip api key - optional, used for airport data imports
+    openaip_api_key: str | None = None
+
     class Config:
         env_file = ".env"
 

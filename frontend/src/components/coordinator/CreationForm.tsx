@@ -168,7 +168,7 @@ export default function CreationForm({
     if (category !== "agl") return;
     const surface = surfaces.find((s) => s.id === surfaceId);
     const isRunway = surface?.surface_type === "RUNWAY";
-    const typeLabel = aglType === "RUNWAY_EDGE_LIGHTS" ? "EDGE LIGHTS" : "PAPI";
+    const typeLabel = aglType === "RUNWAY_EDGE_LIGHTS" ? "REL" : "PAPI";
     if (surface) {
       const prefix = isRunway ? "RWY" : "TWY";
       setName(`${typeLabel} ${prefix} ${surface.identifier}`);
@@ -267,10 +267,10 @@ export default function CreationForm({
 
       if (effectiveEntityType === "agl") {
         data.agl_type = aglType;
-        // side + glide slope are PAPI-only concepts; skip them for edge lights
-        if (aglType === "PAPI") {
-          data.side = aglSide;
-          if (glideSlopeAngle) data.glide_slope_angle = parseFloat(glideSlopeAngle);
+        data.side = aglSide;
+        // glide slope is a PAPI-only concept (defined approach beam); edge lights have no vertical guidance
+        if (aglType === "PAPI" && glideSlopeAngle) {
+          data.glide_slope_angle = parseFloat(glideSlopeAngle);
         }
         if (distFromThreshold) data.distance_from_threshold = parseFloat(distFromThreshold);
         data.surface_id = surfaceId;
@@ -634,31 +634,29 @@ export default function CreationForm({
                     <option value="RUNWAY_EDGE_LIGHTS">{t("coordinator.agl.runwayEdgeLights")}</option>
                   </select>
                 </div>
-                {/* side/glide-slope are PAPI-only - edge lights have neither */}
+                <div>
+                  <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                    {t("coordinator.creation.aglSide")}
+                  </label>
+                  <select
+                    value={aglSide}
+                    onChange={(e) => setAglSide(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                  >
+                    <option value="LEFT">{t("coordinator.detail.aglSides.left")}</option>
+                    <option value="RIGHT">{t("coordinator.detail.aglSides.right")}</option>
+                  </select>
+                </div>
+                {/* glide slope is PAPI-only - edge lights have no defined approach beam */}
                 {aglType === "PAPI" && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-                        {t("coordinator.creation.aglSide")}
-                      </label>
-                      <select
-                        value={aglSide}
-                        onChange={(e) => setAglSide(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
-                      >
-                        <option value="LEFT">{t("coordinator.detail.aglSides.left")}</option>
-                        <option value="RIGHT">{t("coordinator.detail.aglSides.right")}</option>
-                      </select>
-                    </div>
-                    <Input
-                      id="create-glide"
-                      label={t("coordinator.creation.glideSlopeAngle")}
-                      type="number"
-                      step="0.1"
-                      value={glideSlopeAngle}
-                      onChange={(e) => setGlideSlopeAngle(e.target.value)}
-                    />
-                  </>
+                  <Input
+                    id="create-glide"
+                    label={t("coordinator.creation.glideSlopeAngle")}
+                    type="number"
+                    step="0.1"
+                    value={glideSlopeAngle}
+                    onChange={(e) => setGlideSlopeAngle(e.target.value)}
+                  />
                 )}
                 <Input
                   id="create-dist"

@@ -830,7 +830,7 @@
     },
     "agl": {
       "displayNameFormat": "PAPI RWY {{runway}}",
-      "runwayEdgeLights": "Runway Edge Lights",
+      "runwayEdgeLights": "REL",
       "quickSetup": "Quick LHA Setup",
       "placeFirst": "First position",
       "placeLast": "Last position",
