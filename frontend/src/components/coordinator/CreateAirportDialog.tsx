@@ -54,6 +54,7 @@ export default function CreateAirportDialog({
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupEmpty, setLookupEmpty] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestionState | null>(null);
+  const [createdAirportId, setCreatedAirportId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -68,6 +69,7 @@ export default function CreateAirportDialog({
       setLookupError(null);
       setLookupEmpty(false);
       setSuggestions(null);
+      setCreatedAirportId(null);
     }
   }, [isOpen]);
 
@@ -266,11 +268,14 @@ export default function CreateAirportDialog({
 
       const failedCount = await createCheckedSuggestions(result.id);
       if (failedCount > 0) {
+        // keep the modal open so the user sees which items failed; they can dismiss to proceed.
         setErrors({
           form: t("coordinator.createAirport.lookup.partialFailure", {
             count: failedCount,
           }),
         });
+        setCreatedAirportId(result.id);
+        return;
       }
 
       onCreated(result.id);
@@ -508,12 +513,24 @@ export default function CreateAirportDialog({
           )}
 
           <div className="flex justify-end gap-2 mt-2">
-            <Button variant="secondary" type="button" onClick={onClose}>
-              {t("common.cancel")}
-            </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? t("coordinator.createAirport.adding") : t("coordinator.createAirport.add")}
-            </Button>
+            {createdAirportId ? (
+              <Button
+                type="button"
+                onClick={() => onCreated(createdAirportId)}
+                data-testid="continue-after-partial-failure"
+              >
+                {t("common.continue")}
+              </Button>
+            ) : (
+              <>
+                <Button variant="secondary" type="button" onClick={onClose}>
+                  {t("common.cancel")}
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? t("coordinator.createAirport.adding") : t("coordinator.createAirport.add")}
+                </Button>
+              </>
+            )}
           </div>
         </form>
       </Modal>

@@ -1,4 +1,5 @@
 import logging
+import math
 import re
 from typing import Any
 
@@ -13,9 +14,32 @@ from app.schemas.openaip import (
     RunwaySuggestion,
     SafetyZoneSuggestion,
 )
-from app.utils.geo import point_at_distance
 
 logger = logging.getLogger(__name__)
+
+_EARTH_RADIUS_M = 6371000.0
+
+
+def _point_at_distance(
+    lon: float, lat: float, bearing_deg: float, distance_m: float
+) -> tuple[float, float]:
+    """point at given distance and bearing from start - returns (lon, lat)."""
+    lat_rad = math.radians(lat)
+    lon_rad = math.radians(lon)
+    brng_rad = math.radians(bearing_deg)
+    angular_dist = distance_m / _EARTH_RADIUS_M
+
+    dest_lat = math.asin(
+        math.sin(lat_rad) * math.cos(angular_dist)
+        + math.cos(lat_rad) * math.sin(angular_dist) * math.cos(brng_rad)
+    )
+    dest_lon = lon_rad + math.atan2(
+        math.sin(brng_rad) * math.sin(angular_dist) * math.cos(lat_rad),
+        math.cos(angular_dist) - math.sin(lat_rad) * math.sin(dest_lat),
+    )
+
+    return math.degrees(dest_lon), math.degrees(dest_lat)
+
 
 # search radius around airport for airspaces and obstacles
 _NEARBY_RADIUS_KM = 25.0
@@ -107,7 +131,9 @@ def _convert_altitude_limit(limit: dict | None) -> float | None:
     if unit == 0:
         return v
 
-    return v
+    # unrecognized unit - safer to drop than silently mis-scale
+    logger.warning("openaip: unrecognized altitude unit code %r; skipping limit", unit)
+    return None
 
 
 # type mappers
@@ -142,7 +168,7 @@ def _compute_runway_geometry(
     this is the inverse of AirfieldSurface.recalculate_dimensions().
     """
     # end position: project from threshold along heading for length meters
-    end_lon, end_lat = point_at_distance(threshold_lon, threshold_lat, heading_deg, length_m)
+    end_lon, end_lat = _point_at_distance(threshold_lon, threshold_lat, heading_deg, length_m)
 
     # centerline
     geometry = LineStringZ(
@@ -158,12 +184,12 @@ def _compute_runway_geometry(
     left_bearing = (heading_deg - 90.0) % 360.0
     right_bearing = (heading_deg + 90.0) % 360.0
 
-    t_left_lon, t_left_lat = point_at_distance(threshold_lon, threshold_lat, left_bearing, half_w)
-    t_right_lon, t_right_lat = point_at_distance(
+    t_left_lon, t_left_lat = _point_at_distance(threshold_lon, threshold_lat, left_bearing, half_w)
+    t_right_lon, t_right_lat = _point_at_distance(
         threshold_lon, threshold_lat, right_bearing, half_w
     )
-    e_left_lon, e_left_lat = point_at_distance(end_lon, end_lat, left_bearing, half_w)
-    e_right_lon, e_right_lat = point_at_distance(end_lon, end_lat, right_bearing, half_w)
+    e_left_lon, e_left_lat = _point_at_distance(end_lon, end_lat, left_bearing, half_w)
+    e_right_lon, e_right_lat = _point_at_distance(end_lon, end_lat, right_bearing, half_w)
 
     # polygon ring: threshold-left -> end-left -> end-right -> threshold-right -> close
     boundary = PolygonZ(
@@ -195,7 +221,7 @@ def _generate_obstacle_boundary(
     coords = []
     for i in range(vertices):
         bearing = (360.0 * i) / vertices
-        p_lon, p_lat = point_at_distance(lon, lat, bearing, radius_m)
+        p_lon, p_lat = _point_at_distance(lon, lat, bearing, radius_m)
         coords.append([p_lon, p_lat, elevation])
     # close ring
     coords.append(coords[0])
@@ -478,7 +504,18 @@ def _pick_matching_airport(items: list[dict], icao: str) -> dict | None:
         if code == icao:
             return item
 
-    return items[0] if items else None
+    if not items:
+        return None
+
+    # no exact icao match - log so operators can spot bad lookups
+    fallback_code = (items[0].get("icaoCode") or items[0].get("icao") or "").upper()
+    logger.warning(
+        "openaip: no exact icao match for %s; falling back to first result (icao=%s)",
+        icao,
+        fallback_code or "<unknown>",
+    )
+
+    return items[0]
 
 
 def _fetch_nearby_airspaces(
@@ -536,6 +573,5 @@ def _fetch_nearby_obstacles(
 
 
 __all__ = [
-    "AirportLookupResponse",
     "lookup_airport_by_icao",
 ]

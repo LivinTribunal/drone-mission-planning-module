@@ -391,3 +391,30 @@ def test_lookup_route_not_found(client, monkeypatch):
         r = client.get("/api/v1/airports/lookup/XXXX")
 
     assert r.status_code == 404
+
+
+def test_lookup_route_invalid_icao_returns_400(client, monkeypatch):
+    """route surfaces DomainError(400) when icao format is invalid."""
+    monkeypatch.setattr(settings, "openaip_api_key", "testkey")
+    r = client.get("/api/v1/airports/lookup/XX")
+    assert r.status_code == 400
+
+
+def test_pick_matching_airport_logs_when_no_exact_match(caplog):
+    """fallback path emits a warning so bad lookups can be diagnosed."""
+    items = [{"icaoCode": "ZZZZ", "name": "wrong"}]
+
+    with caplog.at_level("WARNING", logger="app.services.openaip_service"):
+        result = openaip_service._pick_matching_airport(items, "LZIB")
+
+    assert result is items[0]
+    assert any("no exact icao match" in rec.message for rec in caplog.records)
+
+
+def test_convert_altitude_limit_unknown_unit_returns_none(caplog):
+    """unrecognized altitude unit yields None (safer than mis-scaling)."""
+    with caplog.at_level("WARNING", logger="app.services.openaip_service"):
+        v = openaip_service._convert_altitude_limit({"value": 1000, "unit": 99})
+
+    assert v is None
+    assert any("unrecognized altitude unit" in rec.message for rec in caplog.records)
