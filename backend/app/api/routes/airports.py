@@ -51,7 +51,8 @@ from app.schemas.infrastructure import (
     SurfaceResponse,
     SurfaceUpdate,
 )
-from app.services import airport_service
+from app.schemas.openaip import AirportLookupResponse
+from app.services import airport_service, openaip_service
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +125,18 @@ def bulk_change_drone(
     )
 
     return BulkChangeDroneResponse(updated_count=count, regressed_count=regressed, mission_ids=ids)
+
+
+# openaip lookup
+@router.get("/lookup/{icao_code}", response_model=AirportLookupResponse)
+def lookup_airport(icao_code: str):
+    """fetch airport data + nearby airspaces / obstacles from openaip."""
+    try:
+        return openaip_service.lookup_airport_by_icao(icao_code)
+    except NotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except DomainError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
 
 
 # terrain DEM

@@ -14,6 +14,7 @@
     "search": "Search",
     "comingSoon": "Coming soon",
     "close": "Close",
+    "continue": "Continue",
     "error": "Something went wrong",
     "yes": "Yes",
     "no": "No",
@@ -734,7 +735,24 @@
       "lonRequired": "Valid longitude required (-180 to 180)",
       "altRequired": "Altitude is required",
       "createError": "Failed to create airport",
-      "icaoConflict": "An airport with this ICAO code already exists"
+      "icaoConflict": "An airport with this ICAO code already exists",
+      "lookup": {
+        "button": "Lookup",
+        "looking": "Looking up...",
+        "notFound": "No airport found for this ICAO code",
+        "noApiKey": "OpenAIP lookup is not configured",
+        "apiDown": "OpenAIP lookup is unavailable. You can still enter data manually.",
+        "noSuggestions": "No runways, airspaces, or obstacles found near this airport",
+        "previewTitle": "Suggested infrastructure to create",
+        "runways": "Runways",
+        "safetyZones": "Safety zones",
+        "obstacles": "Obstacles",
+        "selectAll": "Select all",
+        "deselectAll": "Deselect all",
+        "all": "All",
+        "none": "None",
+        "partialFailure": "Airport created, but {{count}} suggested item(s) could not be added. You can add them manually from the airport detail page."
+      }
     },
     "detail": {
       "backToList": "Back to Airports",
