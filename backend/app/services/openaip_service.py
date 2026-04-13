@@ -98,6 +98,8 @@ def _convert_length(value: float | None, unit: int | None) -> float | None:
     if unit == 7:
         return float(value) * _METERS_PER_NM
 
+    # unrecognized unit - log and treat as meters so callers can still see the value
+    logger.warning("openaip: unrecognized length unit code %r; treating as meters", unit)
     return float(value)
 
 
@@ -371,7 +373,8 @@ def _parse_polygon_geometry(geom: dict | None, default_z: float = 0.0) -> Polygo
 
     out_rings: list[list[list[float]]] = []
     for ring in rings:
-        if len(ring) < 3:
+        # geojson/postgis linear rings need >=4 positions (3 unique + closing repeat)
+        if len(ring) < 4:
             return None
 
         new_ring: list[list[float]] = []

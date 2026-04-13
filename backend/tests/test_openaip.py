@@ -418,3 +418,34 @@ def test_convert_altitude_limit_unknown_unit_returns_none(caplog):
 
     assert v is None
     assert any("unrecognized altitude unit" in rec.message for rec in caplog.records)
+
+
+def test_convert_length_unknown_unit_logs_warning(caplog):
+    """unrecognized length unit falls back to meters but logs a warning."""
+    with caplog.at_level("WARNING", logger="app.services.openaip_service"):
+        v = openaip_service._convert_length(42, 99)
+
+    assert v == 42.0
+    assert any("unrecognized length unit" in rec.message for rec in caplog.records)
+
+
+def test_parse_polygon_geometry_rejects_degenerate_three_point_ring():
+    """a pre-closed 3-point ring has only 2 unique vertices and must be rejected."""
+    geom = {
+        "type": "Polygon",
+        "coordinates": [[[0.0, 0.0], [1.0, 1.0], [0.0, 0.0]]],
+    }
+    assert openaip_service._parse_polygon_geometry(geom) is None
+
+
+def test_parse_polygon_geometry_accepts_four_point_closed_ring():
+    """a valid 4-point closed ring (triangle) parses correctly."""
+    geom = {
+        "type": "Polygon",
+        "coordinates": [[[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, 0.0]]],
+    }
+    parsed = openaip_service._parse_polygon_geometry(geom)
+    assert parsed is not None
+    ring = parsed.coordinates[0]
+    assert len(ring) == 4
+    assert ring[0] == ring[-1]
