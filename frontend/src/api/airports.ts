@@ -1,5 +1,6 @@
 import type { ListMeta, DeleteResponse } from "@/types/common";
 import type {
+  AirportLookupResponse,
   AirportResponse,
   AirportSummaryResponse,
   AirportDetailResponse,
@@ -55,6 +56,15 @@ export async function createAirport(
   data: AirportCreate,
 ): Promise<AirportResponse> {
   const res = await client.post("/airports", data);
+  return res.data;
+}
+
+export async function lookupAirport(
+  icaoCode: string,
+): Promise<AirportLookupResponse> {
+  const res = await client.get(
+    `/airports/lookup/${encodeURIComponent(icaoCode)}`,
+  );
   return res.data;
 }
 
