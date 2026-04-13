@@ -7,6 +7,7 @@ import pytest
 from app.core.exceptions import ConflictError
 from app.models.airport import Airport, SafetyZone
 from app.models.enums import SafetyZoneType
+from tests.data.airports import AIRPORT_PAYLOAD, SAFETY_ZONE_PAYLOAD
 
 
 def _make_airport() -> Airport:
@@ -73,3 +74,60 @@ class TestAirportBoundaryInvariant:
         airport.add_safety_zone(_make_zone(SafetyZoneType.CTR.value, "c1"))
         airport.add_safety_zone(_make_zone(SafetyZoneType.CTR.value, "c2"))
         assert len(airport.safety_zones) == 2
+
+
+class TestUpdateSafetyZoneBoundaryConflict:
+    """api-level tests for PATCH safety zone to AIRPORT_BOUNDARY when one already exists."""
+
+    def _fresh_airport(self, client, icao: str):
+        """create a fresh airport with the given ICAO and return its id."""
+        payload = {**AIRPORT_PAYLOAD, "icao_code": icao}
+        r = client.post("/api/v1/airports", json=payload)
+        assert r.status_code == 201
+        return r.json()["id"]
+
+    def _boundary_payload(self):
+        """boundary zone payload derived from default CTR payload, no altitude bounds."""
+        return {
+            "name": "Boundary",
+            "type": "AIRPORT_BOUNDARY",
+            "geometry": SAFETY_ZONE_PAYLOAD["geometry"],
+        }
+
+    def test_update_to_boundary_conflicts_with_existing(self, client):
+        """patching a CTR zone to AIRPORT_BOUNDARY when one exists returns 409, not 500."""
+        airport_id = self._fresh_airport(client, "LKUB")
+
+        r = client.post(
+            f"/api/v1/airports/{airport_id}/safety-zones", json=self._boundary_payload()
+        )
+        assert r.status_code == 201
+
+        r = client.post(
+            f"/api/v1/airports/{airport_id}/safety-zones",
+            json={**SAFETY_ZONE_PAYLOAD, "name": "Other CTR"},
+        )
+        assert r.status_code == 201
+        ctr_id = r.json()["id"]
+
+        r = client.put(
+            f"/api/v1/airports/{airport_id}/safety-zones/{ctr_id}",
+            json={"type": "AIRPORT_BOUNDARY", "altitude_floor": None, "altitude_ceiling": None},
+        )
+        assert r.status_code == 409
+
+    def test_update_altitude_on_boundary_rejected(self, client):
+        """patching altitude fields on an AIRPORT_BOUNDARY zone returns 4xx, not silent success."""
+        airport_id = self._fresh_airport(client, "LKUC")
+
+        r = client.post(
+            f"/api/v1/airports/{airport_id}/safety-zones", json=self._boundary_payload()
+        )
+        assert r.status_code == 201
+        boundary_id = r.json()["id"]
+
+        r = client.put(
+            f"/api/v1/airports/{airport_id}/safety-zones/{boundary_id}",
+            json={"altitude_floor": 100.0},
+        )
+        assert r.status_code in (400, 422)

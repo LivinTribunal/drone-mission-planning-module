@@ -47,7 +47,7 @@ export default function SafetyZonesPanel({
         className="flex w-full items-center justify-between px-3 py-2"
       >
         <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border text-xs font-semibold text-tv-text-primary">
-          {t("airport.safetyZones")}
+          {t("layers.safetyZonesAndBoundary")}
         </span>
         <div className="flex items-center gap-2">
           <span

@@ -279,6 +279,7 @@ export default function CreationForm({
 
   const isSafetyZone = effectiveEntityType.startsWith("safety_zone_");
   const isAirportBoundary = effectiveEntityType === "safety_zone_airport_boundary";
+  const prefilledBoundary = prefilledEntityType === "safety_zone_airport_boundary";
 
   // auto-prefill default name when switching into airport boundary
   useEffect(() => {
@@ -326,7 +327,8 @@ export default function CreationForm({
       </div>
 
       <div className="flex flex-col gap-1.5 [&_input]:!px-3 [&_input]:!py-1.5 [&_input]:!text-xs">
-        {/* tier 1 - category selection */}
+        {/* tier 1 - category selection (hidden for prefilled airport boundary) */}
+        {!prefilledBoundary && (
         <div>
           <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
             {t("coordinator.creation.selectCategory")}
@@ -345,9 +347,10 @@ export default function CreationForm({
             ))}
           </select>
         </div>
+        )}
 
         {/* tier 2 - subtype selection (for surface and safety_zone) */}
-        {needsSubtype && category && (
+        {!prefilledBoundary && needsSubtype && category && (
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
               {t("coordinator.creation.selectType")}
@@ -390,14 +393,16 @@ export default function CreationForm({
 
         {effectiveEntityType && (
           <>
-            {/* name - always required */}
-            <Input
-              id="create-name"
-              label={t("coordinator.detail.obstacleName")}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={namePlaceholder()}
-            />
+            {/* name - always required, auto-assigned (and hidden) for airport boundary */}
+            {!isAirportBoundary && (
+              <Input
+                id="create-name"
+                label={t("coordinator.detail.obstacleName")}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={namePlaceholder()}
+              />
+            )}
 
             {/* runway / taxiway fields */}
             {(effectiveEntityType === "runway" || effectiveEntityType === "taxiway") && (
@@ -462,18 +467,20 @@ export default function CreationForm({
             {/* safety zone fields */}
             {isSafetyZone && (
               <>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-tv-text-secondary">{t("coordinator.detail.zoneType")}:</span>
-                  <span
-                    className="rounded-full px-2 py-0.5 text-[10px] font-medium border"
-                    style={{
-                      borderColor: "var(--tv-accent)",
-                      color: "var(--tv-accent)",
-                    }}
-                  >
-                    {safetyZoneTypeLabel}
-                  </span>
-                </div>
+                {!isAirportBoundary && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-tv-text-secondary">{t("coordinator.detail.zoneType")}:</span>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-medium border"
+                      style={{
+                        borderColor: "var(--tv-accent)",
+                        color: "var(--tv-accent)",
+                      }}
+                    >
+                      {safetyZoneTypeLabel}
+                    </span>
+                  </div>
+                )}
                 {!isAirportBoundary && (
                   <>
                     <div className="grid grid-cols-2 gap-1.5">

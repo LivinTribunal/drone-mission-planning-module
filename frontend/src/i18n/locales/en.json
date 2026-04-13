@@ -139,6 +139,8 @@
     "poiAltitude": "Altitude",
     "poiRadius": "Radius",
     "poiHeight": "Height",
+    "poiArea": "Area",
+    "poiPerimeter": "Perimeter",
     "bufferDistance": "Buffer Distance",
     "bufferZones": "Buffer Zones",
     "poiSide": "Side",
@@ -1127,7 +1129,8 @@
       "CTR": "CTR",
       "RESTRICTED": "Restricted",
       "PROHIBITED": "Prohibited",
-      "TEMPORARY_NO_FLY": "Temporary No-Fly"
+      "TEMPORARY_NO_FLY": "Temporary No-Fly",
+      "AIRPORT_BOUNDARY": "Airport Boundary"
     }
   },
   "drone": {

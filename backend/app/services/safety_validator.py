@@ -254,9 +254,10 @@ def _batch_check_boundary_zones(
         )
         rows = db.execute(text(sql), params).fetchall()
         for (wp_idx,) in rows:
+            # soft until boundary-aware A* routing lands; see follow-up issue.
             violations.append(
                 Violation(
-                    is_warning=False,
+                    is_warning=True,
                     violation_kind="geofence",
                     message=f"waypoint outside airport boundary: {boundary.name}",
                     waypoint_index=wp_idx,
@@ -445,8 +446,9 @@ def check_safety_zone(db: Session, wp: WaypointData, zone: SafetyZone) -> Violat
     if zone.type == SafetyZoneType.AIRPORT_BOUNDARY.value:
         if contained is True:
             return None
+        # soft until boundary-aware A* routing lands; see follow-up issue.
         return Violation(
-            is_warning=False,
+            is_warning=True,
             violation_kind="geofence",
             message=f"waypoint outside airport boundary: {zone.name}",
         )

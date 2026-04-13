@@ -152,9 +152,8 @@ export function addSafetyZoneLayers(
     SAFETY_ZONE_LABEL_LAYER,
   ];
 
-  // airport boundary: inverted polygon + dashed outline
+  // airport boundary: dashed outline only (no fill/mask)
   if (boundaryZone && boundaryZone.geometry) {
-    const inverted = buildInvertedPolygon(boundaryZone.geometry);
     const outlineFeature = {
       type: "Feature" as const,
       properties: {
@@ -170,19 +169,7 @@ export function addSafetyZoneLayers(
       type: "geojson",
       data: {
         type: "FeatureCollection",
-        features: [inverted, outlineFeature],
-      },
-    });
-
-    map.addLayer({
-      id: AIRPORT_BOUNDARY_FILL_LAYER,
-      type: "fill",
-      source: AIRPORT_BOUNDARY_SOURCE,
-      filter: ["==", ["get", "role"], "mask"],
-      paint: {
-        "fill-color": "#000000",
-        "fill-opacity": 0.4,
-        "fill-antialias": false,
+        features: [outlineFeature],
       },
     });
 
@@ -198,7 +185,7 @@ export function addSafetyZoneLayers(
       },
     });
 
-    layerIds.push(AIRPORT_BOUNDARY_FILL_LAYER, AIRPORT_BOUNDARY_LINE_LAYER);
+    layerIds.push(AIRPORT_BOUNDARY_LINE_LAYER);
   }
 
   return layerIds;

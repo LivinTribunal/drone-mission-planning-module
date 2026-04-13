@@ -31,6 +31,7 @@ import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import AirportMap from "@/components/map/AirportMap";
 import type { AirportMapHandle } from "@/components/map/AirportMap";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
+import { AIRPORT_BOUNDARY_SOURCE } from "@/components/map/layers/safetyZoneLayers";
 import InfrastructureListPanel from "@/components/coordinator/InfrastructureListPanel";
 import CoordinatorAGLPanel from "@/components/coordinator/CoordinatorAGLPanel";
 import AirportInfoPanel from "@/components/coordinator/AirportInfoPanel";
@@ -253,7 +254,22 @@ export default function AirportEditPage() {
       if (!m) return;
 
       if (featureType === "safety_zone") {
-        updateSourceFeatureGeometry(m, "safety-zones", featureId, update.geometry);
+        const zoneData = airport?.safety_zones.find((z) => z.id === featureId);
+        if (zoneData?.type === "AIRPORT_BOUNDARY") {
+          // update boundary outline live
+          const src = m.getSource(AIRPORT_BOUNDARY_SOURCE) as maplibregl.GeoJSONSource | undefined;
+          if (src && update.geometry.type === "Polygon") {
+            const poly = update.geometry as GeoJSON.Polygon;
+            const outlineFeature: GeoJSON.Feature = {
+              type: "Feature",
+              properties: { id: featureId, name: zoneData.name, entityType: "airport_boundary", role: "outline" },
+              geometry: poly,
+            };
+            src.setData({ type: "FeatureCollection", features: [outlineFeature] });
+          }
+        } else {
+          updateSourceFeatureGeometry(m, "safety-zones", featureId, update.geometry);
+        }
       } else if (featureType === "obstacle") {
         // update boundary polygon
         if (update.boundary) {
@@ -1097,62 +1113,30 @@ export default function AirportEditPage() {
                 }}
               />
 
-              <div
-                className="rounded-2xl border border-tv-border bg-tv-bg px-3 py-2"
-                data-testid="boundary-card"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <svg className="h-3 w-3 flex-shrink-0" viewBox="0 0 10 10">
-                    <rect x="0.5" y="0.5" width="9" height="9" rx="1"
-                      fill="none" stroke="#ffffff" strokeWidth="1.2" strokeDasharray="2.5 1.5" />
-                  </svg>
-                  <span className="text-xs font-semibold text-tv-text-primary">
-                    {t("boundary.airportBoundary")}
-                  </span>
-                </div>
-                {boundaryZone ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-tv-text-primary truncate flex-1">
-                      {boundaryZone.name}
-                    </span>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleFeatureClick({ type: "safety_zone", data: boundaryZone })}
-                        className="px-2 py-0.5 rounded-full text-[10px] border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
-                        data-testid="boundary-edit"
-                      >
-                        {t("common.edit")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSafetyZone(boundaryZone.id)}
-                        className="px-2 py-0.5 rounded-full text-[10px] border border-tv-border text-tv-error hover:bg-tv-surface-hover transition-colors"
-                        data-testid="boundary-delete"
-                      >
-                        {t("common.delete")}
-                      </button>
+              <InfrastructureListPanel
+                title={t("boundary.airportBoundary")}
+                items={boundaryZone ? [boundaryZone] : []}
+                getId={(z) => z.id}
+                getName={(z) => z.name}
+                onEdit={(z) => handleFeatureClick({ type: "safety_zone", data: z })}
+                onDelete={handleDeleteSafetyZone}
+                addLabel={t("boundary.addBoundary")}
+                onAdd={boundaryZone ? undefined : () => {
+                  setBoundaryEntityOverride("safety_zone_airport_boundary");
+                  handleToolChange("drawPolygon");
+                }}
+                renderItem={(z) => (
+                  <div className="flex items-center gap-2">
+                    <svg className="h-2.5 w-2.5 flex-shrink-0" viewBox="0 0 10 10">
+                      <rect x="0.5" y="0.5" width="9" height="9" rx="1"
+                        fill="none" stroke="#ffffff" strokeWidth="1.2" strokeDasharray="2.5 1.5" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-tv-text-primary truncate">{z.name}</span>
                     </div>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs italic text-tv-text-muted truncate flex-1">
-                      {t("boundary.noBoundary")}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBoundaryEntityOverride("safety_zone_airport_boundary");
-                        handleToolChange("drawPolygon");
-                      }}
-                      className="px-2 py-0.5 rounded-full text-[10px] bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover transition-colors flex-shrink-0"
-                      data-testid="boundary-add"
-                    >
-                      {t("boundary.addBoundary")}
-                    </button>
-                  </div>
                 )}
-              </div>
+              />
 
               <InfrastructureListPanel
                 title={t("airport.safetyZones")}

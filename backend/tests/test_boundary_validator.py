@@ -48,8 +48,8 @@ def test_waypoint_inside_boundary_no_violation(db_session, boundary_wkb):
     assert result == []
 
 
-def test_waypoint_outside_boundary_hard_violation(db_session, boundary_wkb):
-    """waypoint outside the boundary polygon is a hard geofence violation."""
+def test_waypoint_outside_boundary_soft_violation(db_session, boundary_wkb):
+    """waypoint outside the boundary polygon is a soft geofence warning (pending A* rerouting)."""
     wp = WaypointData(lon=14.30, lat=50.20, alt=100.0)
     zone = _boundary_zone(boundary_wkb, name="prague fence")
 
@@ -57,7 +57,7 @@ def test_waypoint_outside_boundary_hard_violation(db_session, boundary_wkb):
 
     assert len(result) == 1
     violation = result[0]
-    assert not violation.is_warning
+    assert violation.is_warning
     assert violation.violation_kind == "geofence"
     assert "prague fence" in violation.message
     assert violation.waypoint_index == 0
@@ -83,7 +83,7 @@ def test_check_safety_zone_inverted_for_boundary(db_session, boundary_wkb):
     result = check_safety_zone(db_session, outside, zone)
 
     assert result is not None
-    assert not result.is_warning
+    assert result.is_warning
     assert result.violation_kind == "geofence"
 
 

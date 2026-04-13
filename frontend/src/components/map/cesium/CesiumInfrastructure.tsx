@@ -241,7 +241,7 @@ export default function CesiumInfrastructure({
     return result;
   }, [airport.safety_zones, layers.safetyZones, selectedFeatureKey, t]);
 
-  // airport boundary - rendered as a world-covering polygon with the boundary as a hole
+  // airport boundary - dashed outline only (no fill)
   const airportBoundary = useMemo(() => {
     if (!layers.safetyZones) return [];
     const boundary = (airport.safety_zones ?? []).find(
@@ -252,34 +252,13 @@ export default function CesiumInfrastructure({
     const outerRing = boundary.geometry.coordinates[0];
     if (!outerRing?.length) return [];
 
-    // world-covering outer rectangle
-    const worldOuter = [
-      Cartesian3.fromDegrees(-179.9, -89.9, 0),
-      Cartesian3.fromDegrees(179.9, -89.9, 0),
-      Cartesian3.fromDegrees(179.9, 89.9, 0),
-      Cartesian3.fromDegrees(-179.9, 89.9, 0),
-    ];
-    const holePositions = outerRing.map(([lng, lat]) => Cartesian3.fromDegrees(lng, lat, 0));
-    const hole = new PolygonHierarchy(holePositions);
-    const hierarchy = new PolygonHierarchy(worldOuter, [hole]);
-
+    const outlinePositions = outerRing.map(([lng, lat]) => Cartesian3.fromDegrees(lng, lat, 0));
     const isSelected = selectedFeatureKey === `safety_zone:${boundary.id}`;
-    const outlinePositions = [...holePositions];
 
     return [
       <Entity
-        key={`airport-boundary-mask-${boundary.id}`}
-        name={boundary.name || t("boundary.airportBoundary", { defaultValue: "Airport Boundary" })}
-        polygon={{
-          hierarchy,
-          material: Color.BLACK.withAlpha(0.35),
-          outline: false,
-          classificationType: ClassificationType.TERRAIN,
-        }}
-        properties={{ featureType: "safety_zone", featureId: boundary.id }}
-      />,
-      <Entity
         key={`airport-boundary-outline-${boundary.id}`}
+        name={boundary.name || t("boundary.airportBoundary", { defaultValue: "Airport Boundary" })}
         polyline={{
           positions: outlinePositions,
           width: isSelected ? 4 : 2,
@@ -289,6 +268,7 @@ export default function CesiumInfrastructure({
           }),
           clampToGround: true,
         }}
+        properties={{ featureType: "safety_zone", featureId: boundary.id }}
       />,
     ];
   }, [airport.safety_zones, layers.safetyZones, selectedFeatureKey, t]);

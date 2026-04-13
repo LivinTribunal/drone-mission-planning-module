@@ -377,7 +377,7 @@ export default function LegendPanel({
           )}
           {showZones && (
             <LegendSection
-              title={t("dashboard.safetyZones")}
+              title={t("layers.safetyZonesAndBoundary")}
               items={zoneItems}
               defaultOpen={false}
             />
