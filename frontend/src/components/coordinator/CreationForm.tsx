@@ -17,6 +17,7 @@ type EntityType =
   | "safety_zone_restricted"
   | "safety_zone_prohibited"
   | "safety_zone_no_fly"
+  | "safety_zone_airport_boundary"
   | "obstacle"
   | "agl"
   | "lha";
@@ -63,6 +64,10 @@ const SAFETY_ZONE_SUBTYPES: { value: EntityType; labelKey: string }[] = [
   { value: "safety_zone_restricted", labelKey: "coordinator.creation.typeSafetyZoneRestricted" },
   { value: "safety_zone_prohibited", labelKey: "coordinator.creation.typeSafetyZoneProhibited" },
   { value: "safety_zone_no_fly", labelKey: "coordinator.creation.typeSafetyZoneNoFly" },
+  {
+    value: "safety_zone_airport_boundary",
+    labelKey: "coordinator.creation.typeSafetyZoneAirportBoundary",
+  },
 ];
 
 const OBSTACLE_SUBTYPES: { value: string; labelKey: string }[] = [
@@ -214,9 +219,11 @@ export default function CreationForm({
       }
 
       if (effectiveEntityType.startsWith("safety_zone_")) {
-        data.altitude_floor = altFloor ? parseFloat(altFloor) : 0;
-        if (altCeiling) data.altitude_ceiling = parseFloat(altCeiling);
-        data.is_active = isActive;
+        if (effectiveEntityType !== "safety_zone_airport_boundary") {
+          data.altitude_floor = altFloor ? parseFloat(altFloor) : 0;
+          if (altCeiling) data.altitude_ceiling = parseFloat(altCeiling);
+          data.is_active = isActive;
+        }
       }
 
       if (effectiveEntityType === "obstacle") {
@@ -258,6 +265,14 @@ export default function CreationForm({
   }
 
   const isSafetyZone = effectiveEntityType.startsWith("safety_zone_");
+  const isAirportBoundary = effectiveEntityType === "safety_zone_airport_boundary";
+
+  // auto-prefill default name when switching into airport boundary
+  useEffect(() => {
+    if (isAirportBoundary && !name.trim()) {
+      setName(t("boundary.airportBoundary"));
+    }
+  }, [isAirportBoundary, name, t]);
 
   function namePlaceholder(): string {
     /** get the right placeholder for the name field. */
@@ -446,31 +461,35 @@ export default function CreationForm({
                     {safetyZoneTypeLabel}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <Input
-                    id="create-alt-floor"
-                    label={t("coordinator.creation.altitudeFloor")}
-                    type="number"
-                    value={altFloor}
-                    onChange={(e) => setAltFloor(e.target.value)}
-                  />
-                  <Input
-                    id="create-alt-ceiling"
-                    label={t("coordinator.creation.altitudeCeiling")}
-                    type="number"
-                    value={altCeiling}
-                    onChange={(e) => setAltCeiling(e.target.value)}
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-xs text-tv-text-primary">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                    className="accent-tv-accent"
-                  />
-                  {t("coordinator.creation.active")}
-                </label>
+                {!isAirportBoundary && (
+                  <>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <Input
+                        id="create-alt-floor"
+                        label={t("coordinator.creation.altitudeFloor")}
+                        type="number"
+                        value={altFloor}
+                        onChange={(e) => setAltFloor(e.target.value)}
+                      />
+                      <Input
+                        id="create-alt-ceiling"
+                        label={t("coordinator.creation.altitudeCeiling")}
+                        type="number"
+                        value={altCeiling}
+                        onChange={(e) => setAltCeiling(e.target.value)}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-tv-text-primary">
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        onChange={(e) => setIsActive(e.target.checked)}
+                        className="accent-tv-accent"
+                      />
+                      {t("coordinator.creation.active")}
+                    </label>
+                  </>
+                )}
                 {prefilledArea != null && (
                   <p className="text-[10px] text-tv-text-muted">
                     {t("coordinator.creation.area")}: {Math.round(prefilledArea)} m²

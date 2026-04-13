@@ -423,14 +423,20 @@ export default function AirportEditPage() {
         const zoneType = entityType
           .replace("safety_zone_", "")
           .toUpperCase()
-          .replace("NO_FLY", "TEMPORARY_NO_FLY") as "CTR" | "RESTRICTED" | "PROHIBITED" | "TEMPORARY_NO_FLY";
+          .replace("NO_FLY", "TEMPORARY_NO_FLY") as
+          | "CTR"
+          | "RESTRICTED"
+          | "PROHIBITED"
+          | "TEMPORARY_NO_FLY"
+          | "AIRPORT_BOUNDARY";
+        const isBoundary = zoneType === "AIRPORT_BOUNDARY";
         await createSafetyZone(id, {
           name: String(data.name ?? ""),
           type: zoneType,
           geometry: { type: "Polygon", coordinates: polyCoords },
-          altitude_floor: data.altitude_floor as number | undefined,
-          altitude_ceiling: data.altitude_ceiling as number | undefined,
-          is_active: data.is_active as boolean | undefined,
+          altitude_floor: isBoundary ? undefined : (data.altitude_floor as number | undefined),
+          altitude_ceiling: isBoundary ? undefined : (data.altitude_ceiling as number | undefined),
+          is_active: isBoundary ? true : (data.is_active as boolean | undefined),
         });
       } else if (entityType === "obstacle") {
         const bufferDist = (data.buffer_distance as number) ?? 5.0;

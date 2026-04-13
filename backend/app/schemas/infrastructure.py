@@ -10,7 +10,9 @@ from app.schemas.geometry import LineStringZ, PointZ, PolygonZ
 # values fail with a clean 422 instead of a 500 IntegrityError at commit
 SurfaceTypeStr = Literal["RUNWAY", "TAXIWAY"]
 ObstacleTypeStr = Literal["BUILDING", "TOWER", "ANTENNA", "VEGETATION", "OTHER"]
-SafetyZoneTypeStr = Literal["CTR", "RESTRICTED", "PROHIBITED", "TEMPORARY_NO_FLY"]
+SafetyZoneTypeStr = Literal[
+    "CTR", "RESTRICTED", "PROHIBITED", "TEMPORARY_NO_FLY", "AIRPORT_BOUNDARY"
+]
 LampTypeStr = Literal["HALOGEN", "LED"]
 PAPISideStr = Literal["LEFT", "RIGHT"]
 
