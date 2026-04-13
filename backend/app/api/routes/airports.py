@@ -32,6 +32,8 @@ from app.schemas.infrastructure import (
     AGLListResponse,
     AGLResponse,
     AGLUpdate,
+    LHABulkGenerateRequest,
+    LHABulkGenerateResponse,
     LHACreate,
     LHAListResponse,
     LHAResponse,
@@ -185,7 +187,6 @@ def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends
         # validate with rasterio
         with rasterio.open(tmp_path) as dataset:
             if dataset.crs is None or dataset.crs.to_epsg() != 4326:
-                os.unlink(tmp_path)
                 raise HTTPException(status_code=400, detail="DEM must be in WGS84 (EPSG:4326)")
 
             bounds = list(dataset.bounds)
@@ -197,7 +198,6 @@ def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends
             apt_lon, apt_lat = airport_service.get_airport_lonlat(airport)
 
             if not (bounds[0] <= apt_lon <= bounds[2] and bounds[1] <= apt_lat <= bounds[3]):
-                os.unlink(tmp_path)
                 raise HTTPException(status_code=400, detail="DEM does not cover airport location")
 
         # move to final location
@@ -216,6 +216,11 @@ def upload_terrain_dem(airport_id: UUID, file: UploadFile, db: Session = Depends
         )
 
     except HTTPException:
+        try:
+            if os.path.exists(cleanup_path):
+                os.unlink(cleanup_path)
+        except OSError:
+            pass
         raise
     except (NotFoundError, DomainError) as e:
         try:
@@ -496,6 +501,24 @@ def update_lha(
 ):
     """update LHA"""
     return airport_service.update_lha(db, airport_id, surface_id, agl_id, lha_id, body)
+
+
+@router.post(
+    "/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/bulk",
+    status_code=201,
+    response_model=LHABulkGenerateResponse,
+)
+def bulk_generate_lhas(
+    airport_id: UUID,
+    surface_id: UUID,
+    agl_id: UUID,
+    body: LHABulkGenerateRequest,
+    db: Session = Depends(get_db),
+):
+    """generate evenly-spaced LHAs between two points via linear interpolation."""
+    created = airport_service.bulk_generate_lhas(db, airport_id, surface_id, agl_id, body)
+
+    return LHABulkGenerateResponse(generated=created)
 
 
 @router.delete(

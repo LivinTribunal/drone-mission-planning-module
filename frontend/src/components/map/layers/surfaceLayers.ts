@@ -14,6 +14,9 @@ export const TAXIWAY_FILL_LAYER = "taxiways-fill";
 export const TAXIWAY_STROKE_LAYER = "taxiways-stroke";
 export const TAXIWAY_CENTERLINE_LAYER = "taxiways-centerline";
 export const TAXIWAY_LABEL_LAYER = "taxiways-label";
+export const TOUCHPOINT_SOURCE = "runway-touchpoints";
+export const TOUCHPOINT_MARKER_LAYER = "runway-touchpoints-marker";
+export const TOUCHPOINT_LABEL_LAYER = "runway-touchpoints-label";
 
 // keep old names as aliases for backwards compat in layerGroupMap
 export const RUNWAY_LAYER = RUNWAY_FILL_LAYER;
@@ -283,7 +286,67 @@ export function addSurfaceLayers(
     },
   });
 
-  return [
+  // runway touchpoint markers - yellow diamond labelled "TDP"
+  const touchpoints = runways.filter(
+    (r) => r.touchpoint_latitude != null && r.touchpoint_longitude != null,
+  );
+  if (touchpoints.length > 0) {
+    map.addSource(TOUCHPOINT_SOURCE, {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: touchpoints.map((r) => ({
+          type: "Feature" as const,
+          properties: {
+            id: r.id,
+            identifier: r.identifier,
+            entityType: "touchpoint",
+          },
+          geometry: {
+            type: "Point" as const,
+            coordinates: [
+              r.touchpoint_longitude as number,
+              r.touchpoint_latitude as number,
+              r.touchpoint_altitude ?? 0,
+            ],
+          },
+        })),
+      },
+    });
+
+    map.addLayer({
+      id: TOUCHPOINT_MARKER_LAYER,
+      type: "circle",
+      source: TOUCHPOINT_SOURCE,
+      paint: {
+        "circle-radius": 8,
+        "circle-color": "#ffd700",
+        "circle-stroke-color": "#000000",
+        "circle-stroke-width": 1,
+        "circle-opacity": 0.9,
+      },
+    });
+
+    map.addLayer({
+      id: TOUCHPOINT_LABEL_LAYER,
+      type: "symbol",
+      source: TOUCHPOINT_SOURCE,
+      layout: {
+        "text-field": "TDP",
+        "text-size": 10,
+        "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+        "text-offset": [0, 1.2],
+        "text-anchor": "top",
+      },
+      paint: {
+        "text-color": "#ffd700",
+        "text-halo-color": "#000000",
+        "text-halo-width": 1.5,
+      },
+    });
+  }
+
+  const layers = [
     RUNWAY_STROKE_LAYER,
     RUNWAY_FILL_LAYER,
     RUNWAY_CENTERLINE_LAYER,
@@ -293,4 +356,8 @@ export function addSurfaceLayers(
     TAXIWAY_CENTERLINE_LAYER,
     TAXIWAY_LABEL_LAYER,
   ];
+  if (touchpoints.length > 0) {
+    layers.push(TOUCHPOINT_MARKER_LAYER, TOUCHPOINT_LABEL_LAYER);
+  }
+  return layers;
 }

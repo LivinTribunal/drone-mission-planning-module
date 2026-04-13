@@ -45,8 +45,13 @@ export interface SurfaceResponse {
   width: number | null;
   threshold_position: PointZ | null;
   end_position: PointZ | null;
+  touchpoint_latitude: number | null;
+  touchpoint_longitude: number | null;
+  touchpoint_altitude: number | null;
   agls: AGLResponse[];
 }
+
+export type AglType = "PAPI" | "RUNWAY_EDGE_LIGHTS";
 
 export interface ObstacleResponse {
   id: string;
@@ -74,7 +79,7 @@ export interface SafetyZoneResponse {
 export interface AGLResponse {
   id: string;
   surface_id: string;
-  agl_type: string;
+  agl_type: AglType;
   name: string;
   position: PointZ;
   side: PAPISide | null;
@@ -88,7 +93,8 @@ export interface LHAResponse {
   id: string;
   agl_id: string;
   unit_number: number;
-  setting_angle: number;
+  // null for PAPI lhas before coordinator fills the angle in manually
+  setting_angle: number | null;
   transition_sector_width: number | null;
   lamp_type: LampType;
   position: PointZ;
@@ -145,6 +151,9 @@ export interface SurfaceCreate {
   width?: number | null;
   threshold_position?: PointZ | null;
   end_position?: PointZ | null;
+  touchpoint_latitude?: number | null;
+  touchpoint_longitude?: number | null;
+  touchpoint_altitude?: number | null;
 }
 
 export interface SurfaceUpdate {
@@ -158,6 +167,22 @@ export interface SurfaceUpdate {
   width?: number | null;
   threshold_position?: PointZ | null;
   end_position?: PointZ | null;
+  touchpoint_latitude?: number | null;
+  touchpoint_longitude?: number | null;
+  touchpoint_altitude?: number | null;
+}
+
+export interface LHABulkGenerateRequest {
+  first_position: PointZ;
+  last_position: PointZ;
+  spacing_m: number;
+  setting_angle?: number | null;
+  tolerance?: number | null;
+  lamp_type?: "HALOGEN" | "LED";
+}
+
+export interface LHABulkGenerateResponse {
+  generated: LHAResponse[];
 }
 
 export interface ObstacleCreate {
@@ -196,7 +221,7 @@ export interface SafetyZoneUpdate {
 }
 
 export interface AGLCreate {
-  agl_type: string;
+  agl_type: AglType;
   name: string;
   position: PointZ;
   side?: PAPISide | null;
@@ -206,7 +231,7 @@ export interface AGLCreate {
 }
 
 export interface AGLUpdate {
-  agl_type?: string;
+  agl_type?: AglType;
   name?: string;
   position?: PointZ;
   side?: PAPISide | null;
@@ -218,7 +243,7 @@ export interface AGLUpdate {
 
 export interface LHACreate {
   unit_number: number;
-  setting_angle: number;
+  setting_angle: number | null;
   transition_sector_width?: number | null;
   lamp_type: LampType;
   position: PointZ;
@@ -227,7 +252,7 @@ export interface LHACreate {
 
 export interface LHAUpdate {
   unit_number?: number;
-  setting_angle?: number;
+  setting_angle?: number | null;
   transition_sector_width?: number | null;
   lamp_type?: LampType;
   position?: PointZ;

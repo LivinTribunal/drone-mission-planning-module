@@ -29,6 +29,13 @@ class AGL(Base):
     surface = relationship("AirfieldSurface", back_populates="agls")
     lhas = relationship("LHA", back_populates="agl", cascade="all, delete-orphan")
 
+    __table_args__ = (
+        CheckConstraint(
+            "agl_type IN ('PAPI', 'RUNWAY_EDGE_LIGHTS')",
+            name="ck_agl_agl_type",
+        ),
+    )
+
     def calculate_lha_center_point(self) -> tuple[float, float, float]:
         """compute centroid (lon, lat, alt) of all LHA positions."""
         from app.core.geometry import parse_ewkb
@@ -68,14 +75,16 @@ class LHA(Base):
     id = Column(UUID, primary_key=True, default=uuid4)
     agl_id = Column(UUID, ForeignKey("agl.id", ondelete="CASCADE"), nullable=False)
     unit_number = Column(Integer, nullable=False)
-    setting_angle = Column(Float, nullable=False)
+    # nullable: PAPI bulk generation leaves this blank for coordinator fill-in per lha
+    setting_angle = Column(Float, nullable=True)
     transition_sector_width = Column(Float)
     lamp_type = Column(
         String(10),
         nullable=False,
+        default="HALOGEN",
     )
     position = Column(Geometry("POINTZ", srid=4326), nullable=False)  # normalized ground elevation
-    tolerance = Column(Float, nullable=True)  # angular tolerance in degrees for PAPI transition
+    tolerance = Column(Float, nullable=True, default=0.2)  # angular tolerance in degrees
 
     agl = relationship("AGL", back_populates="lhas")
 

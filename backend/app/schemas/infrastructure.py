@@ -15,6 +15,7 @@ SafetyZoneTypeStr = Literal[
 ]
 LampTypeStr = Literal["HALOGEN", "LED"]
 PAPISideStr = Literal["LEFT", "RIGHT"]
+AglTypeStr = Literal["PAPI", "RUNWAY_EDGE_LIGHTS"]
 
 
 # surfaces for airport
@@ -31,6 +32,18 @@ class SurfaceCreate(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
+    touchpoint_latitude: float | None = Field(default=None, ge=-90, le=90)
+    touchpoint_longitude: float | None = Field(default=None, ge=-180, le=180)
+    touchpoint_altitude: float | None = None
+
+    @model_validator(mode="after")
+    def _validate_touchpoint_completeness(self) -> "SurfaceCreate":
+        """touchpoint fields are all-or-nothing to avoid partial state."""
+        fields = (self.touchpoint_latitude, self.touchpoint_longitude, self.touchpoint_altitude)
+        provided = sum(1 for f in fields if f is not None)
+        if 0 < provided < 3:
+            raise ValueError("touchpoint requires all three coordinates or none")
+        return self
 
 
 class SurfaceUpdate(BaseModel):
@@ -45,6 +58,21 @@ class SurfaceUpdate(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
+    touchpoint_latitude: float | None = Field(default=None, ge=-90, le=90)
+    touchpoint_longitude: float | None = Field(default=None, ge=-180, le=180)
+    touchpoint_altitude: float | None = None
+
+    @model_validator(mode="after")
+    def _validate_touchpoint_completeness(self) -> "SurfaceUpdate":
+        """touchpoint fields are all-or-nothing to avoid partial state."""
+        # check model_fields_set to catch explicit nulls - apply_schema_update
+        # uses exclude_unset, so an unsent field is safe but a partial payload
+        # with explicit nulls would otherwise slip through
+        tp_fields = {"touchpoint_latitude", "touchpoint_longitude", "touchpoint_altitude"}
+        set_tp = tp_fields & self.model_fields_set
+        if 0 < len(set_tp) < 3:
+            raise ValueError("touchpoint requires all three coordinates or none")
+        return self
 
 
 class SurfaceResponse(BaseModel):
@@ -62,6 +90,9 @@ class SurfaceResponse(BaseModel):
     width: float | None = None
     threshold_position: PointZ | None = None
     end_position: PointZ | None = None
+    touchpoint_latitude: float | None = None
+    touchpoint_longitude: float | None = None
+    touchpoint_altitude: float | None = None
     agls: list["AGLResponse"] = []
 
     model_config = {"from_attributes": True}
@@ -183,7 +214,7 @@ class LHACreate(BaseModel):
     """lha create schema"""
 
     unit_number: int
-    setting_angle: float
+    setting_angle: float | None = None
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr
     position: PointZ
@@ -209,7 +240,7 @@ class LHAResponse(BaseModel):
     id: UUID
     agl_id: UUID
     unit_number: int
-    setting_angle: float
+    setting_angle: float | None = None
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr
     position: PointZ
@@ -221,7 +252,7 @@ class LHAResponse(BaseModel):
 class AGLCreate(BaseModel):
     """agl create schema"""
 
-    agl_type: str
+    agl_type: AglTypeStr
     name: str
     position: PointZ
     side: PAPISideStr | None = None
@@ -233,7 +264,7 @@ class AGLCreate(BaseModel):
 class AGLUpdate(BaseModel):
     """agl update schema"""
 
-    agl_type: str | None = None
+    agl_type: AglTypeStr | None = None
     name: str | None = None
     position: PointZ | None = None
     side: PAPISideStr | None = None
@@ -249,7 +280,7 @@ class AGLResponse(BaseModel):
 
     id: UUID
     surface_id: UUID
-    agl_type: str
+    agl_type: AglTypeStr
     name: str
     position: PointZ
     side: PAPISideStr | None = None
@@ -259,6 +290,31 @@ class AGLResponse(BaseModel):
     lhas: list[LHAResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+# bulk LHA generation
+class LHABulkGenerateRequest(BaseModel):
+    """bulk LHA generation request - linearly interpolate between two points."""
+
+    first_position: PointZ
+    last_position: PointZ
+    spacing_m: float = Field(gt=0, le=1000)
+    setting_angle: float | None = None
+    tolerance: float | None = 0.2
+    lamp_type: LampTypeStr = "HALOGEN"
+
+    @model_validator(mode="after")
+    def _validate_positions_differ(self) -> "LHABulkGenerateRequest":
+        """first and last positions must not be identical - zero-length interpolation is invalid."""
+        if self.first_position.coordinates == self.last_position.coordinates:
+            raise ValueError("first and last positions must differ")
+        return self
+
+
+class LHABulkGenerateResponse(BaseModel):
+    """bulk LHA generation response."""
+
+    generated: list[LHAResponse]
 
 
 # recalculate dimensions responses

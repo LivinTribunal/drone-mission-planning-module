@@ -796,6 +796,7 @@
       "opposite": "Opposite",
       "surfaceLength": "Length (m)",
       "surfaceWidth": "Width (m)",
+      "touchpoint": "Touchpoint (TDP)",
       "obstacleName": "Name",
       "obstacleType": "Type",
       "obstacleHeight": "Height (m)",
@@ -857,7 +858,18 @@
       }
     },
     "agl": {
-      "displayNameFormat": "PAPI RWY {{runway}}"
+      "displayNameFormat": "PAPI RWY {{runway}}",
+      "runwayEdgeLights": "REL",
+      "quickSetup": "Quick LHA Setup",
+      "placeFirst": "First position",
+      "placeLast": "Last position",
+      "lhaSpacing": "Spacing (m)",
+      "generateLhas": "Generate",
+      "generatedCount": "Generated {{count}} LHAs",
+      "quickSetupError": "Failed to generate LHAs",
+      "quickSetupInvalidPositions": "Enter valid coordinates for both positions",
+      "quickSetupInvalidSpacing": "Spacing must be a positive number",
+      "quickSetupMissingSurface": "Parent surface not found"
     },
     "tools": {
       "select": "Select",
@@ -963,7 +975,8 @@
       "createSuccess": "Created {{type}}: {{name}}",
       "createError": "Failed to create feature",
       "selectSurface": "Select a surface",
-      "area": "Area"
+      "area": "Area",
+      "touchpoint": "Touchpoint (TDP)"
     },
     "geoJsonEditor": {
       "title": "GeoJSON Editor",

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Trash2, RotateCcw, Plus, Calculator } from "lucide-react";
+import { Trash2, RotateCcw, Plus, Calculator, MapPin } from "lucide-react";
 import Input from "@/components/common/Input";
 import FeatureInfoPanel from "@/components/common/FeatureInfoPanel";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
@@ -9,9 +9,10 @@ import type {
   SurfaceResponse,
   SurfaceRecalculateResponse,
   ObstacleRecalculateResponse,
+  AGLResponse,
 } from "@/types/airport";
 import type { PointZ } from "@/types/common";
-import { recalculateSurface, recalculateObstacle } from "@/api/airports";
+import { recalculateSurface, recalculateObstacle, bulkCreateLHAs } from "@/api/airports";
 
 interface EditableFeatureInfoProps {
   feature: MapFeature;
@@ -22,6 +23,15 @@ interface EditableFeatureInfoProps {
   onDelete?: (featureType: string, id: string) => Promise<void>;
   deleteWarnings?: string[];
   onAddLha?: (aglId: string) => void;
+  onLhasGenerated?: () => Promise<void> | void;
+  pickingTouchpoint?: boolean;
+  onPickTouchpointToggle?: () => void;
+  pickedTouchpointCoord?: { lat: number; lon: number; alt: number } | null;
+  onPickedTouchpointConsumed?: () => void;
+  pickingLha?: "first" | "last" | null;
+  onPickLhaToggle?: (which: "first" | "last") => void;
+  pickedLhaCoord?: { which: "first" | "last"; lat: number; lon: number; alt: number } | null;
+  onPickedLhaConsumed?: () => void;
 }
 
 type RecalcPreview =
@@ -37,6 +47,15 @@ export default function EditableFeatureInfo({
   onDelete,
   deleteWarnings,
   onAddLha,
+  onLhasGenerated,
+  pickingTouchpoint,
+  onPickTouchpointToggle,
+  pickedTouchpointCoord,
+  onPickedTouchpointConsumed,
+  pickingLha,
+  onPickLhaToggle,
+  pickedLhaCoord,
+  onPickedLhaConsumed,
 }: EditableFeatureInfoProps) {
   /** editable feature info panel for selected map features. */
   const { t } = useTranslation();
@@ -58,6 +77,19 @@ export default function EditableFeatureInfo({
     setRecalcError(null);
     setDeleteError(null);
   }, [feature]);
+
+  // apply picked touchpoint coord to formData and notify parent it's consumed
+  useEffect(() => {
+    if (!pickedTouchpointCoord) return;
+    const update = {
+      touchpoint_latitude: pickedTouchpointCoord.lat,
+      touchpoint_longitude: pickedTouchpointCoord.lon,
+      touchpoint_altitude: pickedTouchpointCoord.alt,
+    };
+    setFormData((prev) => ({ ...prev, ...update }));
+    onUpdate(update);
+    onPickedTouchpointConsumed?.();
+  }, [pickedTouchpointCoord, onUpdate, onPickedTouchpointConsumed]);
 
   async function handleRecalculate() {
     /** call backend to recompute dimensions and show side-by-side preview. */
@@ -203,6 +235,68 @@ export default function EditableFeatureInfo({
               value={val("buffer_distance")}
               onChange={(e) => handleChange("buffer_distance", e.target.value === "" ? null : parseFloat(e.target.value))}
             />
+            {val("surface_type") === "RUNWAY" && (
+              <div
+                className="mt-1 rounded-lg border border-tv-border bg-tv-bg p-2 space-y-1.5"
+                data-testid="surface-touchpoint-section"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-semibold text-tv-text-secondary uppercase tracking-wide">
+                    {t("coordinator.detail.touchpoint")}
+                  </p>
+                  {onPickTouchpointToggle && (
+                    <button
+                      type="button"
+                      onClick={onPickTouchpointToggle}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors border ${
+                        pickingTouchpoint
+                          ? "border-tv-accent bg-tv-accent text-tv-accent-text"
+                          : "border-tv-accent text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
+                      }`}
+                      data-testid="surface-touchpoint-pick-map"
+                    >
+                      <MapPin className="h-3 w-3" />
+                      {t("mission.config.pickOnMap")}
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Input
+                    id="feat-tp-lat"
+                    label={t("map.coordinates.lat")}
+                    type="number"
+                    step="0.000001"
+                    value={val("touchpoint_latitude")}
+                    onChange={(e) => handleChange(
+                      "touchpoint_latitude",
+                      e.target.value === "" ? null : parseFloat(e.target.value),
+                    )}
+                  />
+                  <Input
+                    id="feat-tp-lon"
+                    label={t("map.coordinates.lon")}
+                    type="number"
+                    step="0.000001"
+                    value={val("touchpoint_longitude")}
+                    onChange={(e) => handleChange(
+                      "touchpoint_longitude",
+                      e.target.value === "" ? null : parseFloat(e.target.value),
+                    )}
+                  />
+                </div>
+                <Input
+                  id="feat-tp-alt"
+                  label={t("map.coordinates.alt")}
+                  type="number"
+                  step="0.01"
+                  value={val("touchpoint_altitude")}
+                  onChange={(e) => handleChange(
+                    "touchpoint_altitude",
+                    e.target.value === "" ? null : parseFloat(e.target.value),
+                  )}
+                />
+              </div>
+            )}
             {airportId && (
               <RecalculateBlock
                 loading={recalcLoading}
@@ -347,12 +441,28 @@ export default function EditableFeatureInfo({
                 </select>
               </div>
             )}
-            <Input
-              id="feat-type"
-              label={t("coordinator.detail.aglType")}
-              value={val("agl_type")}
-              onChange={(e) => handleChange("agl_type", e.target.value)}
-            />
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("coordinator.detail.aglType")}
+              </label>
+              <select
+                value={val("agl_type")}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  if (next === "RUNWAY_EDGE_LIGHTS" && formData.glide_slope_angle != null) {
+                    setFormData((prev) => ({ ...prev, agl_type: next, glide_slope_angle: null }));
+                    onUpdate({ agl_type: next, glide_slope_angle: null });
+                  } else {
+                    handleChange("agl_type", next);
+                  }
+                }}
+                className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                data-testid="feat-agl-type-select"
+              >
+                <option value="PAPI">PAPI</option>
+                <option value="RUNWAY_EDGE_LIGHTS">{t("coordinator.agl.runwayEdgeLights")}</option>
+              </select>
+            </div>
             <div>
               <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
                 {t("coordinator.detail.aglSide")}
@@ -367,14 +477,16 @@ export default function EditableFeatureInfo({
                 <option value="RIGHT">{t("coordinator.detail.aglSides.right")}</option>
               </select>
             </div>
-            <Input
-              id="feat-glide"
-              label={t("coordinator.detail.aglGlideAngle")}
-              type="number"
-              step="0.1"
-              value={val("glide_slope_angle")}
-              onChange={(e) => handleChange("glide_slope_angle", e.target.value === "" ? null : parseFloat(e.target.value))}
-            />
+            {val("agl_type") === "PAPI" && (
+              <Input
+                id="feat-glide"
+                label={t("coordinator.detail.aglGlideAngle")}
+                type="number"
+                step="0.1"
+                value={val("glide_slope_angle")}
+                onChange={(e) => handleChange("glide_slope_angle", e.target.value === "" ? null : parseFloat(e.target.value))}
+              />
+            )}
             <PointCoordEditor
               position={(formData.position as PointZ | undefined) ?? null}
               onChange={(coords) => {
@@ -392,6 +504,18 @@ export default function EditableFeatureInfo({
                 <Plus className="h-3 w-3" />
                 {t("coordinator.detail.addLha")}
               </button>
+            )}
+            {airportId && (
+              <QuickLhaSetup
+                airportId={airportId}
+                agl={feature.data as AGLResponse}
+                surfaces={surfaces ?? []}
+                onGenerated={onLhasGenerated}
+                pickingLha={pickingLha ?? null}
+                onPickLhaToggle={onPickLhaToggle}
+                pickedLhaCoord={pickedLhaCoord ?? null}
+                onPickedLhaConsumed={onPickedLhaConsumed}
+              />
             )}
           </>
         )}
@@ -652,6 +776,255 @@ function RecalculateBlock({
         {t("coordinator.detail.recalculate")}
       </button>
       {error && <p className="text-[10px] text-tv-error pl-1">{error}</p>}
+    </div>
+  );
+}
+
+function QuickLhaSetup({
+  airportId,
+  agl,
+  surfaces,
+  onGenerated,
+  pickingLha,
+  onPickLhaToggle,
+  pickedLhaCoord,
+  onPickedLhaConsumed,
+}: {
+  airportId: string;
+  agl: AGLResponse;
+  surfaces: SurfaceResponse[];
+  onGenerated?: () => Promise<void> | void;
+  pickingLha?: "first" | "last" | null;
+  onPickLhaToggle?: (which: "first" | "last") => void;
+  pickedLhaCoord?: { which: "first" | "last"; lat: number; lon: number; alt: number } | null;
+  onPickedLhaConsumed?: () => void;
+}) {
+  /** collapsible bulk LHA generator - place first/last + spacing, calls backend bulk endpoint. */
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+
+  const aglAlt = agl.position.coordinates[2] ?? 0;
+  const [firstLat, setFirstLat] = useState("");
+  const [firstLon, setFirstLon] = useState("");
+  const [firstAlt, setFirstAlt] = useState(String(aglAlt));
+  const [lastLat, setLastLat] = useState("");
+  const [lastLon, setLastLon] = useState("");
+  const [lastAlt, setLastAlt] = useState(String(aglAlt));
+  const [spacing, setSpacing] = useState("3");
+  const [lampType, setLampType] = useState<"HALOGEN" | "LED">("HALOGEN");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [generatedCount, setGeneratedCount] = useState<number | null>(null);
+
+  const surface = surfaces.find((s) => s.id === agl.surface_id);
+
+  // apply incoming picked coord, then notify parent it's consumed
+  useEffect(() => {
+    if (!pickedLhaCoord) return;
+    const lat = String(Math.round(pickedLhaCoord.lat * 1e6) / 1e6);
+    const lon = String(Math.round(pickedLhaCoord.lon * 1e6) / 1e6);
+    const alt = String(Math.round(pickedLhaCoord.alt * 100) / 100);
+    if (pickedLhaCoord.which === "first") {
+      setFirstLat(lat);
+      setFirstLon(lon);
+      setFirstAlt(alt);
+    } else {
+      setLastLat(lat);
+      setLastLon(lon);
+      setLastAlt(alt);
+    }
+    onPickedLhaConsumed?.();
+  }, [pickedLhaCoord, onPickedLhaConsumed]);
+
+  // expand panel automatically when user starts a pick
+  useEffect(() => {
+    if (pickingLha && !expanded) setExpanded(true);
+  }, [pickingLha, expanded]);
+
+  function pickButton(which: "first" | "last") {
+    /** render a small pick-on-map button for the given target. */
+    if (!onPickLhaToggle) return null;
+    const active = pickingLha === which;
+    return (
+      <button
+        type="button"
+        onClick={() => onPickLhaToggle(which)}
+        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors border ${
+          active
+            ? "border-tv-accent bg-tv-accent text-tv-accent-text"
+            : "border-tv-accent text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
+        }`}
+        data-testid={`qls-${which}-pick-map`}
+      >
+        <MapPin className="h-3 w-3" />
+        {t("mission.config.pickOnMap")}
+      </button>
+    );
+  }
+
+  async function handleGenerate() {
+    /** submit bulk generation request and surface the resulting count. */
+    setErr(null);
+    setGeneratedCount(null);
+
+    const fLat = parseFloat(firstLat);
+    const fLon = parseFloat(firstLon);
+    const fAlt = parseFloat(firstAlt);
+    const lLat = parseFloat(lastLat);
+    const lLon = parseFloat(lastLon);
+    const lAlt = parseFloat(lastAlt);
+    const sp = parseFloat(spacing);
+
+    if ([fLat, fLon, fAlt, lLat, lLon, lAlt].some((v) => isNaN(v))) {
+      setErr(t("coordinator.agl.quickSetupInvalidPositions"));
+      return;
+    }
+    if (isNaN(sp) || sp <= 0) {
+      setErr(t("coordinator.agl.quickSetupInvalidSpacing"));
+      return;
+    }
+    if (!surface) {
+      setErr(t("coordinator.agl.quickSetupMissingSurface"));
+      return;
+    }
+
+    const isEdgeLights = agl.agl_type === "RUNWAY_EDGE_LIGHTS";
+    setBusy(true);
+    try {
+      const res = await bulkCreateLHAs(airportId, surface.id, agl.id, {
+        first_position: { type: "Point", coordinates: [fLon, fLat, fAlt] },
+        last_position: { type: "Point", coordinates: [lLon, lLat, lAlt] },
+        spacing_m: sp,
+        setting_angle: isEdgeLights ? 0 : null,
+        tolerance: 0.2,
+        lamp_type: lampType,
+      });
+      setGeneratedCount(res.generated.length);
+      if (onGenerated) await onGenerated();
+    } catch (e) {
+      setErr(
+        e instanceof Error && e.message ? e.message : t("coordinator.agl.quickSetupError"),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="mt-1 rounded-lg border border-tv-border bg-tv-bg"
+      data-testid="quick-lha-setup"
+    >
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-2 py-1.5 text-[10px] font-semibold text-tv-text-secondary uppercase tracking-wide"
+      >
+        <span>{t("coordinator.agl.quickSetup")}</span>
+        <span>{expanded ? "▾" : "▸"}</span>
+      </button>
+      {expanded && (
+        <div className="px-2 pb-2 space-y-1.5 [&_input]:!px-3 [&_input]:!py-1.5 [&_input]:!text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] text-tv-text-muted">
+              {t("coordinator.agl.placeFirst")}
+            </p>
+            {pickButton("first")}
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Input
+              id="qls-first-lat"
+              label={t("map.coordinates.lat")}
+              type="number"
+              step="0.000001"
+              value={firstLat}
+              onChange={(e) => setFirstLat(e.target.value)}
+            />
+            <Input
+              id="qls-first-lon"
+              label={t("map.coordinates.lon")}
+              type="number"
+              step="0.000001"
+              value={firstLon}
+              onChange={(e) => setFirstLon(e.target.value)}
+            />
+          </div>
+          <Input
+            id="qls-first-alt"
+            label={t("map.coordinates.alt")}
+            type="number"
+            step="0.01"
+            value={firstAlt}
+            onChange={(e) => setFirstAlt(e.target.value)}
+          />
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] text-tv-text-muted">
+              {t("coordinator.agl.placeLast")}
+            </p>
+            {pickButton("last")}
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Input
+              id="qls-last-lat"
+              label={t("map.coordinates.lat")}
+              type="number"
+              step="0.000001"
+              value={lastLat}
+              onChange={(e) => setLastLat(e.target.value)}
+            />
+            <Input
+              id="qls-last-lon"
+              label={t("map.coordinates.lon")}
+              type="number"
+              step="0.000001"
+              value={lastLon}
+              onChange={(e) => setLastLon(e.target.value)}
+            />
+          </div>
+          <Input
+            id="qls-last-alt"
+            label={t("map.coordinates.alt")}
+            type="number"
+            step="0.01"
+            value={lastAlt}
+            onChange={(e) => setLastAlt(e.target.value)}
+          />
+          <Input
+            id="qls-spacing"
+            label={t("coordinator.agl.lhaSpacing")}
+            type="number"
+            step="0.1"
+            value={spacing}
+            onChange={(e) => setSpacing(e.target.value)}
+          />
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("coordinator.detail.lhaLampType")}
+            </label>
+            <select
+              value={lampType}
+              onChange={(e) => setLampType(e.target.value as "HALOGEN" | "LED")}
+              className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+            >
+              <option value="HALOGEN">{t("coordinator.detail.lampTypes.halogen")}</option>
+              <option value="LED">{t("coordinator.detail.lampTypes.led")}</option>
+            </select>
+          </div>
+          {err && <p className="text-[10px] text-tv-error">{err}</p>}
+          {generatedCount != null && (
+            <p className="text-[10px] text-tv-text-secondary" data-testid="qls-generated-count">
+              {t("coordinator.agl.generatedCount", { count: generatedCount })}
+            </p>
+          )}
+          <button
+            onClick={handleGenerate}
+            disabled={busy}
+            className="flex items-center justify-center gap-1.5 w-full px-3 py-1.5 rounded-full text-xs font-semibold bg-tv-accent text-tv-accent-text hover:bg-tv-accent-hover transition-colors disabled:opacity-50"
+            data-testid="qls-generate-button"
+          >
+            {t("coordinator.agl.generateLhas")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
