@@ -190,9 +190,14 @@ export default function CreateAirportDialog({
     );
   }
 
-  async function createCheckedSuggestions(airportId: string) {
-    /** create surfaces / obstacles / safety zones from checked suggestions. */
-    if (!suggestions) return;
+  async function createCheckedSuggestions(airportId: string): Promise<number> {
+    /** create surfaces / obstacles / safety zones; return count of failures. */
+    if (!suggestions) return 0;
+
+    const trackFailure = (err: unknown) => {
+      console.warn("failed to create suggested item", err);
+      return null;
+    };
 
     const runwayPromises = suggestions.runways
       .filter((r) => r.checked)
@@ -207,7 +212,7 @@ export default function CreateAirportDialog({
           width: r.width,
           threshold_position: r.threshold_position,
           end_position: r.end_position,
-        }).catch(() => null),
+        }).catch(trackFailure),
       );
     const obstaclePromises = suggestions.obstacles
       .filter((o) => o.checked)
@@ -217,7 +222,7 @@ export default function CreateAirportDialog({
           type: o.type,
           height: o.height,
           boundary: o.boundary,
-        }).catch(() => null),
+        }).catch(trackFailure),
       );
     const zonePromises = suggestions.safetyZones
       .filter((z) => z.checked)
@@ -229,14 +234,15 @@ export default function CreateAirportDialog({
           altitude_floor: z.altitude_floor,
           altitude_ceiling: z.altitude_ceiling,
           is_active: true,
-        }).catch(() => null),
+        }).catch(trackFailure),
       );
 
-    await Promise.all([
+    const results = await Promise.all([
       ...runwayPromises,
       ...obstaclePromises,
       ...zonePromises,
     ]);
+    return results.filter((r) => r === null).length;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -258,7 +264,14 @@ export default function CreateAirportDialog({
         },
       });
 
-      await createCheckedSuggestions(result.id);
+      const failedCount = await createCheckedSuggestions(result.id);
+      if (failedCount > 0) {
+        setErrors({
+          form: t("coordinator.createAirport.lookup.partialFailure", {
+            count: failedCount,
+          }),
+        });
+      }
 
       onCreated(result.id);
     } catch (err) {

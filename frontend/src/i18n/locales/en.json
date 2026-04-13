@@ -745,7 +745,8 @@
         "previewTitle": "Suggested infrastructure to create",
         "runways": "Runways",
         "safetyZones": "Safety zones",
-        "obstacles": "Obstacles"
+        "obstacles": "Obstacles",
+        "partialFailure": "Airport created, but {{count}} suggested item(s) could not be added. You can add them manually from the airport detail page."
       }
     },
     "detail": {

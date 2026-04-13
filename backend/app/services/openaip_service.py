@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -54,6 +55,8 @@ _OBSTACLE_TYPE_MAP: dict[int, str] = {
 _METERS_PER_FOOT = 0.3048
 _METERS_PER_NM = 1852.0
 _METERS_PER_KM = 1000.0
+
+_ICAO_PATTERN = re.compile(r"^[A-Z]{4}$")
 
 
 # unit conversion helpers
@@ -216,13 +219,13 @@ def _client() -> httpx.Client:
 
 
 def _get(client: httpx.Client, path: str, params: dict | None = None) -> dict:
-    """GET wrapper that injects apiKey and maps errors to DomainError."""
+    """GET wrapper that injects auth header and maps errors to DomainError."""
     url = f"{settings.openaip_api_url.rstrip('/')}{path}"
     q = dict(params or {})
-    q["apiKey"] = settings.openaip_api_key
+    headers = {"x-openaip-api-key": settings.openaip_api_key}
 
     try:
-        resp = client.get(url, params=q)
+        resp = client.get(url, params=q, headers=headers)
     except httpx.TimeoutException as e:
         raise DomainError("openaip request timed out", status_code=502) from e
     except httpx.HTTPError as e:
@@ -406,8 +409,11 @@ def lookup_airport_by_icao(icao_code: str) -> AirportLookupResponse:
     raises DomainError(502) on upstream failures.
     """
     icao = (icao_code or "").strip().upper()
-    if not icao:
-        raise DomainError("icao_code is required", status_code=400)
+    if not _ICAO_PATTERN.match(icao):
+        raise DomainError(
+            "icao_code must be exactly 4 uppercase letters",
+            status_code=400,
+        )
 
     with _client() as client:
         # search airports by icao
@@ -529,17 +535,7 @@ def _fetch_nearby_obstacles(
     return out
 
 
-# re-exports for convenience in tests
 __all__ = [
     "AirportLookupResponse",
     "lookup_airport_by_icao",
-    "_compute_runway_geometry",
-    "_generate_obstacle_boundary",
-    "_map_airspace_type",
-    "_map_obstacle_type",
-    "_convert_length",
-    "_convert_altitude_limit",
-    "_parse_runway",
-    "_parse_airspace",
-    "_parse_obstacle",
 ]
