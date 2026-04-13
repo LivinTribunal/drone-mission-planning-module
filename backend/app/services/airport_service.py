@@ -559,6 +559,15 @@ def update_safety_zone(
         raise NotFoundError("safety zone not found")
 
     apply_schema_update(zone, schema)
+
+    # cross-field check after merge - partial updates can invert the envelope
+    if (
+        zone.altitude_floor is not None
+        and zone.altitude_ceiling is not None
+        and zone.altitude_floor > zone.altitude_ceiling
+    ):
+        raise DomainError("altitude_floor must be <= altitude_ceiling", status_code=422)
+
     db.commit()
     db.refresh(zone)
 
@@ -829,9 +838,20 @@ def bulk_generate_lhas(
     if total_distance <= 0:
         raise DomainError("first and last positions must differ", status_code=422)
 
-    # number of LHAs, bounded to avoid runaway generation
+    # start numbering after any existing LHAs - append-only semantics: calling
+    # this twice on the same AGL extends numbering past existing units and
+    # counts toward the cumulative 200-cap
+    existing_count = db.query(LHA).filter(LHA.agl_id == agl_id).count()
+
+    # number of LHAs, bounded to avoid runaway generation, enforcing cumulative cap
     count = max(2, int(round(total_distance / schema.spacing_m)) + 1)
-    count = min(count, 200)
+    remaining_slots = max(0, 200 - existing_count)
+    if remaining_slots < 2:
+        raise DomainError(
+            "agl already has 200 lha units - delete some before generating more",
+            status_code=422,
+        )
+    count = min(count, remaining_slots)
 
     # default angle: RUNWAY_EDGE_LIGHTS uses 0, PAPI stays null for coordinator fill-in
     is_edge_lights = agl.agl_type == "RUNWAY_EDGE_LIGHTS"
@@ -841,11 +861,6 @@ def bulk_generate_lhas(
         setting_angle = 0.0
     else:
         setting_angle = None
-
-    # start numbering after any existing LHAs - append-only semantics: calling
-    # this twice on the same AGL extends numbering past existing units and
-    # counts toward the 200-cap on subsequent calls
-    existing_count = db.query(LHA).filter(LHA.agl_id == agl_id).count()
 
     # reuse one provider across the loop - DEM-backed providers open a
     # rasterio handle per instance, so creating one per iteration would

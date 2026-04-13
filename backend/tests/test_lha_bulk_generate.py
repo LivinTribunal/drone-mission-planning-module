@@ -134,3 +134,34 @@ def test_bulk_generate_caps_at_200(client):
     assert r.status_code == 201
     generated = r.json()["generated"]
     assert len(generated) == 200
+
+
+def test_bulk_generate_cumulative_cap_across_calls(client):
+    """second call cannot push cumulative LHA count past 200."""
+    apt_id, surface_id, agl_id = _setup(client, "LZCC")
+
+    # first call fills up to the 200 cap
+    first_body = {
+        "first_position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
+        "last_position": {"type": "Point", "coordinates": [14.3000, 50.1000, 380.0]},
+        "spacing_m": 1.0,
+    }
+    r1 = client.post(
+        f"/api/v1/airports/{apt_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/bulk",
+        json=first_body,
+    )
+    assert r1.status_code == 201
+    assert len(r1.json()["generated"]) == 200
+
+    # second call must be rejected - cap already reached
+    second_body = {
+        "first_position": {"type": "Point", "coordinates": [14.3001, 50.1000, 380.0]},
+        "last_position": {"type": "Point", "coordinates": [14.3010, 50.1000, 380.0]},
+        "spacing_m": 1.0,
+    }
+    r2 = client.post(
+        f"/api/v1/airports/{apt_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/bulk",
+        json=second_body,
+    )
+    assert r2.status_code == 422
+    assert "200" in r2.json()["detail"]

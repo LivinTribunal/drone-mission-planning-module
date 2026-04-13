@@ -86,6 +86,40 @@ def test_create_safety_zone(client):
     assert r.json()["name"] == "Prague CTR"
 
 
+def test_safety_zone_partial_update_rejects_inverted_altitudes(client):
+    """partial update that would invert floor/ceiling must be rejected."""
+    apt = client.post(
+        "/api/v1/airports",
+        json={**AIRPORT_PAYLOAD, "icao_code": "LKSZ"},
+    ).json()
+    zone = client.post(
+        f"/api/v1/airports/{apt['id']}/safety-zones", json=SAFETY_ZONE_PAYLOAD
+    ).json()
+
+    # floor (0) + existing ceiling (2500) is fine; pushing floor above the
+    # stored ceiling via a floor-only patch must be rejected
+    r = client.put(
+        f"/api/v1/airports/{apt['id']}/safety-zones/{zone['id']}",
+        json={"altitude_floor": 5000.0},
+    )
+    assert r.status_code == 422
+    assert "altitude" in r.json()["detail"].lower()
+
+    # dropping ceiling below existing floor via a ceiling-only patch is also bad.
+    # raise floor first via a valid update to give us something to invert.
+    ok = client.put(
+        f"/api/v1/airports/{apt['id']}/safety-zones/{zone['id']}",
+        json={"altitude_floor": 500.0},
+    )
+    assert ok.status_code == 200
+
+    r2 = client.put(
+        f"/api/v1/airports/{apt['id']}/safety-zones/{zone['id']}",
+        json={"altitude_ceiling": 100.0},
+    )
+    assert r2.status_code == 422
+
+
 def test_create_agl_and_lha(client):
     """create an agl and nested lha under a surface."""
     airports = client.get("/api/v1/airports").json()["data"]
