@@ -18,6 +18,7 @@ export interface MissionResponse {
   default_capture_mode: CaptureMode | null;
   default_buffer_distance: number | null;
   transit_agl: number | null;
+  require_perpendicular_runway_crossing: boolean;
   has_unsaved_map_changes: boolean;
   inspection_count: number;
   estimated_duration: number | null;
@@ -97,6 +98,7 @@ export interface MissionCreate {
   default_capture_mode?: CaptureMode | null;
   default_buffer_distance?: number | null;
   transit_agl?: number | null;
+  require_perpendicular_runway_crossing?: boolean;
 }
 
 export interface MissionUpdate {
@@ -111,6 +113,7 @@ export interface MissionUpdate {
   default_capture_mode?: CaptureMode | null;
   default_buffer_distance?: number | null;
   transit_agl?: number | null;
+  require_perpendicular_runway_crossing?: boolean;
 }
 
 export interface InspectionCreate {

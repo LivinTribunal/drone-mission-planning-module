@@ -290,6 +290,12 @@ def _generate_trajectory_inner(
     # resolve mission-level default buffer for transit A*
     mission_buffer_override = data.mission.default_buffer_distance
 
+    # operator opt-in: allow shortest-geodesic crossing instead of perpendicular,
+    # reducing the runway closure window. defaults True for legacy behavior.
+    require_perpendicular = getattr(data.mission, "require_perpendicular_runway_crossing", True)
+    if require_perpendicular is None:
+        require_perpendicular = True
+
     sorted_inspections = sorted(mission.inspections, key=lambda i: i.sequence_order)
 
     for inspection in sorted_inspections:
@@ -721,6 +727,7 @@ def _generate_trajectory_inner(
                 elevation_provider=provider,
                 transit_agl=transit_agl,
                 buffer_distance_override=mission_buffer_override,
+                require_perpendicular_runway_crossing=require_perpendicular,
             )
             all_waypoints.extend(transit_wps)
 
@@ -750,6 +757,7 @@ def _generate_trajectory_inner(
             elevation_provider=provider,
             transit_agl=transit_agl,
             buffer_distance_override=mission_buffer_override,
+            require_perpendicular_runway_crossing=require_perpendicular,
         )
         all_waypoints.extend(landing_transit)
 

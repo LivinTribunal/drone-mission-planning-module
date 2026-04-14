@@ -152,6 +152,7 @@ class MissionCreate(BaseModel):
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
     transit_agl: float | None = Field(default=None, ge=_MIN_TRANSIT_ALTITUDE_AGL)
+    require_perpendicular_runway_crossing: bool = True
 
     @field_validator("transit_agl")
     @classmethod
@@ -174,6 +175,7 @@ class MissionUpdate(BaseModel):
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
     transit_agl: float | None = Field(default=None, ge=_MIN_TRANSIT_ALTITUDE_AGL)
+    require_perpendicular_runway_crossing: bool | None = None
 
     @field_validator("transit_agl")
     @classmethod
@@ -201,6 +203,7 @@ class MissionResponse(BaseModel):
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = None
     transit_agl: float | None = None
+    require_perpendicular_runway_crossing: bool = True
     has_unsaved_map_changes: bool = False
     inspection_count: int = 0
     estimated_duration: float | None = None

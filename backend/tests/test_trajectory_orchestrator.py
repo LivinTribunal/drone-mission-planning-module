@@ -1114,3 +1114,40 @@ def test_hover_point_lock_missing_selected_lha_raises(client, db_engine):
             match="hover-point-lock requires a selected LHA",
         ):
             generate_trajectory(db, mission_id)
+
+
+def test_require_perpendicular_runway_crossing_shortens_path(client):
+    """flag=False produces a shorter total_distance than flag=True when transit crosses runway."""
+    # takeoff north of runway, landing south - guarantees the landing transit
+    # leg crosses the runway centerline regardless of how the inspection ends.
+    takeoff = {"type": "Point", "coordinates": [14.26, 50.11, 300]}
+    landing = {"type": "Point", "coordinates": [14.26, 50.08, 300]}
+
+    # baseline with the perpendicular constraint enforced
+    perp_mission_id, _ = _create_mission_with_inspection(
+        client,
+        "PERP",
+        takeoff_coordinate=takeoff,
+        landing_coordinate=landing,
+        require_perpendicular_runway_crossing=True,
+    )
+    perp_resp = client.post(f"/api/v1/missions/{perp_mission_id}/generate-trajectory")
+    assert perp_resp.status_code == 200, perp_resp.text
+    perp_distance = perp_resp.json()["flight_plan"]["total_distance"]
+
+    # second mission: identical geometry, flag off (shortest geodesic)
+    short_mission_id, _ = _create_mission_with_inspection(
+        client,
+        "SHRT",
+        takeoff_coordinate=takeoff,
+        landing_coordinate=landing,
+        require_perpendicular_runway_crossing=False,
+    )
+    short_resp = client.post(f"/api/v1/missions/{short_mission_id}/generate-trajectory")
+    assert short_resp.status_code == 200, short_resp.text
+    short_distance = short_resp.json()["flight_plan"]["total_distance"]
+
+    assert short_distance < perp_distance, (
+        f"shortest-geodesic distance {short_distance:.1f} not strictly less than "
+        f"perpendicular {perp_distance:.1f}"
+    )

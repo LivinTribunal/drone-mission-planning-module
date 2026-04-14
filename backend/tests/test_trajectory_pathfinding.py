@@ -1,12 +1,20 @@
 """unit tests for trajectory pathfinding - visibility graph, A*, collision resolution."""
 
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
+from geoalchemy2.elements import WKTElement
 
+from app.models.airport import Airport, Obstacle, Runway
 from app.models.enums import CameraAction, WaypointType
-from app.services.trajectory_pathfinding import _max_effective_buffer, _max_turn_angle
+from app.services.trajectory_pathfinding import (
+    _max_effective_buffer,
+    _max_turn_angle,
+    compute_transit_path,
+)
 from app.services.trajectory_types import DEFAULT_OBSTACLE_RADIUS, Point3D, WaypointData
+from app.utils.geo import bearing_between, total_path_distance
 
 # _max_turn_angle
 
@@ -249,6 +257,229 @@ class TestFastPathBufferOverride:
         # the fast-path _is_segment_blocked call should include buffer_distance
         # prior to fix it was: _is_segment_blocked(db, from_point, to_point, obstacles, zones)
         # after fix: _is_segment_blocked(..., buffer_distance=fast_path_buffer)
-        assert "fast_path_buffer" in source, (
-            "compute_transit_path must resolve buffer_distance_override for fast-path check"
+        assert (
+            "fast_path_buffer" in source
+        ), "compute_transit_path must resolve buffer_distance_override for fast-path check"
+
+
+# perpendicular vs shortest-geodesic runway crossing flag
+
+
+_ICAO_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def _unique_icao() -> str:
+    """generate a unique 4-letter ICAO code so tests don't collide on the unique constraint."""
+    raw = uuid4().hex.upper()
+    out = []
+    for ch in raw:
+        if ch in _ICAO_ALPHABET:
+            out.append(ch)
+        if len(out) == 4:
+            break
+    while len(out) < 4:
+        out.append("X")
+    return "".join(out)
+
+
+def _make_perpendicular_runway_airport(db_session):
+    """build airport with a single east-west runway centered at (14.26, 50.10)."""
+    airport = Airport(
+        id=uuid4(),
+        icao_code=_unique_icao(),
+        name="Flag Test Airport",
+        elevation=300.0,
+        location=WKTElement("SRID=4326;POINTZ(14.26 50.10 300)", srid=4326),
+    )
+    runway = Runway(
+        id=uuid4(),
+        airport_id=airport.id,
+        identifier="09/27",
+        surface_type="RUNWAY",
+        geometry=WKTElement(
+            "SRID=4326;LINESTRINGZ(14.255 50.10 300, 14.265 50.10 300)",
+            srid=4326,
+        ),
+        heading=90.0,
+        length=700.0,
+        width=45.0,
+        buffer_distance=5.0,
+    )
+    db_session.add(airport)
+    db_session.add(runway)
+    db_session.commit()
+    db_session.refresh(airport)
+    db_session.refresh(runway)
+    return airport, runway
+
+
+def _bearings(waypoints, from_pt):
+    """consecutive segment bearings starting from from_pt."""
+    pts = [(from_pt.lon, from_pt.lat)] + [(w.lon, w.lat) for w in waypoints]
+    out = []
+    for i in range(1, len(pts)):
+        out.append(bearing_between(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]))
+    return out
+
+
+def _path_distance(waypoints, from_pt):
+    """total geodesic distance from from_pt through waypoints."""
+    pts = [(from_pt.lon, from_pt.lat, from_pt.alt)] + [(w.lon, w.lat, w.alt) for w in waypoints]
+    return total_path_distance(pts)
+
+
+class TestRequirePerpendicularRunwayCrossing:
+    """flag toggles between perpendicular-anchored A* and shortest-geodesic crossing."""
+
+    def test_flag_true_keeps_perpendicular_segment(self, db_session):
+        """with the flag on, A* must include a segment near runway-perpendicular."""
+        _, runway = _make_perpendicular_runway_airport(db_session)
+
+        # endpoints north and south of east-west runway, offset east of midpoint
+        from_pt = Point3D(lon=14.262, lat=50.0975, alt=350.0)
+        to_pt = Point3D(lon=14.258, lat=50.1025, alt=350.0)
+
+        wps = compute_transit_path(
+            db_session,
+            from_pt,
+            to_pt,
+            obstacles=[],
+            zones=[],
+            speed=8.0,
+            surfaces=[runway],
+            require_perpendicular_runway_crossing=True,
         )
+
+        bearings = _bearings(wps, from_pt)
+
+        # runway heading 90 -> perpendicular bearings are 0 or 180
+        def perp_delta(b):
+            return min(abs(b - 0.0), abs(b - 180.0), abs(b - 360.0))
+
+        assert any(
+            perp_delta(b) <= 5.0 for b in bearings
+        ), f"no perpendicular segment found in bearings {bearings}"
+
+    def test_flag_false_is_strictly_shorter_and_clears_runway(self, db_session):
+        """flag off lets A* (or the fast-path) pick the shortest geodesic crossing."""
+        _, runway = _make_perpendicular_runway_airport(db_session)
+
+        from_pt = Point3D(lon=14.262, lat=50.0975, alt=350.0)
+        to_pt = Point3D(lon=14.258, lat=50.1025, alt=350.0)
+
+        perp_wps = compute_transit_path(
+            db_session,
+            from_pt,
+            to_pt,
+            obstacles=[],
+            zones=[],
+            speed=8.0,
+            surfaces=[runway],
+            require_perpendicular_runway_crossing=True,
+        )
+        short_wps = compute_transit_path(
+            db_session,
+            from_pt,
+            to_pt,
+            obstacles=[],
+            zones=[],
+            speed=8.0,
+            surfaces=[runway],
+            require_perpendicular_runway_crossing=False,
+        )
+
+        perp_dist = _path_distance(perp_wps, from_pt)
+        short_dist = _path_distance(short_wps, from_pt)
+        assert (
+            short_dist < perp_dist
+        ), f"shortest-geodesic distance {short_dist:.1f} not < perpendicular {perp_dist:.1f}"
+
+    def test_flag_false_still_avoids_obstacle(self, db_session):
+        """flag off must still detour around an obstacle on the straight line."""
+        airport, runway = _make_perpendicular_runway_airport(db_session)
+
+        from_pt = Point3D(lon=14.262, lat=50.0975, alt=350.0)
+        to_pt = Point3D(lon=14.258, lat=50.1025, alt=350.0)
+
+        # obstacle straddling the straight line near the midpoint
+        obstacle = Obstacle(
+            id=uuid4(),
+            airport_id=airport.id,
+            name="block",
+            height=80.0,
+            type="BUILDING",
+            buffer_distance=5.0,
+            boundary=WKTElement(
+                "SRID=4326;POLYGONZ(("
+                "14.2598 50.0998 300, "
+                "14.2602 50.0998 300, "
+                "14.2602 50.1002 300, "
+                "14.2598 50.1002 300, "
+                "14.2598 50.0998 300"
+                "))",
+                srid=4326,
+            ),
+        )
+        db_session.add(obstacle)
+        db_session.commit()
+        db_session.refresh(obstacle)
+
+        wps = compute_transit_path(
+            db_session,
+            from_pt,
+            to_pt,
+            obstacles=[obstacle],
+            zones=[],
+            speed=8.0,
+            surfaces=[runway],
+            require_perpendicular_runway_crossing=False,
+        )
+
+        # path must be longer than the naive straight line because of the detour
+        straight = total_path_distance(
+            [(from_pt.lon, from_pt.lat, from_pt.alt), (to_pt.lon, to_pt.lat, to_pt.alt)]
+        )
+        rerouted = _path_distance(wps, from_pt)
+        assert (
+            rerouted > straight
+        ), f"rerouted distance {rerouted:.1f} not greater than straight {straight:.1f}"
+
+    def test_flag_false_no_runways_matches_default(self, db_session):
+        """without any runways, both flag values produce the same straight-line path."""
+        airport = Airport(
+            id=uuid4(),
+            icao_code="LKNR",
+            name="No Runway Airport",
+            elevation=300.0,
+            location=WKTElement("SRID=4326;POINTZ(14.26 50.10 300)", srid=4326),
+        )
+        db_session.add(airport)
+        db_session.flush()
+
+        from_pt = Point3D(lon=14.262, lat=50.0975, alt=350.0)
+        to_pt = Point3D(lon=14.258, lat=50.1025, alt=350.0)
+
+        wps_true = compute_transit_path(
+            db_session,
+            from_pt,
+            to_pt,
+            obstacles=[],
+            zones=[],
+            speed=8.0,
+            surfaces=[],
+            require_perpendicular_runway_crossing=True,
+        )
+        wps_false = compute_transit_path(
+            db_session,
+            from_pt,
+            to_pt,
+            obstacles=[],
+            zones=[],
+            speed=8.0,
+            surfaces=[],
+            require_perpendicular_runway_crossing=False,
+        )
+        # both fast-path single-segment, same endpoint
+        assert len(wps_true) == 1 and len(wps_false) == 1
+        assert wps_true[0].lon == wps_false[0].lon
+        assert wps_true[0].lat == wps_false[0].lat
