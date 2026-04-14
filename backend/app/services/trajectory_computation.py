@@ -562,10 +562,7 @@ def calculate_vertical_path(
     for i in range(density):
         # interpolate elevation from min to max in density steps
         if density > 1:
-            elevation = (
-                MIN_ELEVATION_ANGLE
-                + (max_elev - MIN_ELEVATION_ANGLE) / (density - 1) * i
-            )
+            elevation = MIN_ELEVATION_ANGLE + (max_elev - MIN_ELEVATION_ANGLE) / (density - 1) * i
         else:
             # single measurement at midpoint elevation
             elevation = (MIN_ELEVATION_ANGLE + max_elev) / 2
