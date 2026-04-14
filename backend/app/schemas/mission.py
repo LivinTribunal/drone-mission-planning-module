@@ -17,6 +17,8 @@ InspectionMethodStr = Literal[
 ]
 # capture mode values - used by trajectory_computation to choose camera_action
 CaptureModeStr = Literal["VIDEO_CAPTURE", "PHOTO_CAPTURE"]
+# hover bearing reference frames - RUNWAY = 0 is approach side, COMPASS = absolute
+HoverBearingRefStr = Literal["RUNWAY", "COMPASS"]
 
 # minimum transit altitude (m AGL) - mirrors trajectory_types.MINIMUM_AGL_ALTITUDE.
 # duplicated here so schemas do not import from services (architectural boundary).
@@ -55,7 +57,7 @@ class InspectionConfigOverride(BaseModel):
     camera_gimbal_angle: float | None = None
     selected_lha_id: UUID | None = None
     hover_bearing: float | None = None
-    hover_bearing_reference: str | None = None
+    hover_bearing_reference: HoverBearingRefStr | None = None
 
     @field_validator("lha_ids", mode="before")
     @classmethod
@@ -104,7 +106,7 @@ class InspectionConfigResponse(BaseModel):
     camera_gimbal_angle: float | None = None
     selected_lha_id: UUID | None = None
     hover_bearing: float | None = None
-    hover_bearing_reference: str | None = None
+    hover_bearing_reference: HoverBearingRefStr | None = None
 
     model_config = {"from_attributes": True}
 

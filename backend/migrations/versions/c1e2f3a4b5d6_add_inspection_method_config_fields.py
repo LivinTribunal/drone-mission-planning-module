@@ -17,6 +17,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 revision: str = "c1e2f3a4b5d6"
 down_revision: Union[str, Sequence[str], None] = ("a8f1c2d3e4b5", "d7e8f9a0b1c2")
@@ -43,7 +44,7 @@ def upgrade() -> None:
     )
     op.add_column(
         "inspection_configuration",
-        sa.Column("selected_lha_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("selected_lha_id", PGUUID(as_uuid=True), nullable=True),
     )
     # FK ensures orphaned references are cleared if the referenced LHA is deleted
     op.create_foreign_key(

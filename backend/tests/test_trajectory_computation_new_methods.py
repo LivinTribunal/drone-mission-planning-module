@@ -23,7 +23,7 @@ from app.services.trajectory_types import (
     Point3D,
     ResolvedConfig,
 )
-from app.utils.geo import distance_between
+from app.utils.geo import bearing_between, distance_between
 
 
 @dataclass
@@ -304,6 +304,64 @@ class TestHoverPointLock:
         cfg = ResolvedConfig(capture_mode="PHOTO_CAPTURE")
         wps = calculate_hover_point_lock_path(target, "PAPI", 0.0, cfg, uuid4(), speed=0.0)
         assert wps[0].camera_action == CameraAction.PHOTO_CAPTURE
+
+    def test_runway_relative_bearing_zero_is_approach_side(self):
+        """RUNWAY reference with hover_bearing=0 matches the legacy approach-side fallback."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        runway_heading = 90.0
+        legacy = calculate_hover_point_lock_path(
+            target, "PAPI", runway_heading, ResolvedConfig(), uuid4(), speed=0.0
+        )
+        cfg_rwy = ResolvedConfig(hover_bearing=0.0, hover_bearing_reference="RUNWAY")
+        rwy = calculate_hover_point_lock_path(
+            target, "PAPI", runway_heading, cfg_rwy, uuid4(), speed=0.0
+        )
+        # drone is placed at the same position when RUNWAY offset is 0
+        assert abs(legacy[0].lon - rwy[0].lon) < 1e-9
+        assert abs(legacy[0].lat - rwy[0].lat) < 1e-9
+
+    def test_runway_relative_bearing_rotates_clockwise(self):
+        """RUNWAY reference with hover_bearing=90 rotates drone 90° CW from approach side."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        runway_heading = 90.0  # approach side = 270
+        cfg = ResolvedConfig(hover_bearing=90.0, hover_bearing_reference="RUNWAY")
+        wps = calculate_hover_point_lock_path(
+            target, "PAPI", runway_heading, cfg, uuid4(), speed=0.0
+        )
+        # bearing from LHA to drone should be 270 + 90 = 360 % 360 = 0 (north)
+        bearing_lha_to_drone = bearing_between(target.lon, target.lat, wps[0].lon, wps[0].lat)
+        assert abs(bearing_lha_to_drone - 0.0) < 1.0 or abs(bearing_lha_to_drone - 360.0) < 1.0
+
+    def test_compass_bearing_is_absolute(self):
+        """COMPASS reference ignores runway heading - hover_bearing is the true bearing from LHA."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        # runway heading varied - drone bearing must stay at the configured compass value
+        for rwy in (0.0, 90.0, 180.0, 270.0):
+            cfg = ResolvedConfig(hover_bearing=45.0, hover_bearing_reference="COMPASS")
+            wps = calculate_hover_point_lock_path(target, "PAPI", rwy, cfg, uuid4(), speed=0.0)
+            b = bearing_between(target.lon, target.lat, wps[0].lon, wps[0].lat)
+            assert abs(b - 45.0) < 1.0, f"runway={rwy} got bearing={b}"
+
+    def test_compass_bearing_normalises_negative_values(self):
+        """COMPASS reference with negative bearing wraps via mod 360."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        cfg = ResolvedConfig(hover_bearing=-90.0, hover_bearing_reference="COMPASS")
+        wps = calculate_hover_point_lock_path(target, "PAPI", 0.0, cfg, uuid4(), speed=0.0)
+        # -90 mod 360 = 270 (west of LHA)
+        b = bearing_between(target.lon, target.lat, wps[0].lon, wps[0].lat)
+        assert abs(b - 270.0) < 1.0
+
+    def test_bearing_reference_default_is_runway(self):
+        """hover_bearing with no reference set defaults to RUNWAY."""
+        target = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        runway_heading = 90.0
+        cfg = ResolvedConfig(hover_bearing=45.0, hover_bearing_reference=None)
+        wps = calculate_hover_point_lock_path(
+            target, "PAPI", runway_heading, cfg, uuid4(), speed=0.0
+        )
+        # approach side (270) + 45 = 315
+        b = bearing_between(target.lon, target.lat, wps[0].lon, wps[0].lat)
+        assert abs(b - 315.0) < 1.0
 
     def test_dispatch_requires_target(self):
         """dispatcher rejects hover-point-lock without a target LHA."""

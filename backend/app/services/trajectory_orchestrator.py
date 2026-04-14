@@ -118,7 +118,15 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
         .filter(SafetyZone.airport_id == airport.id, SafetyZone.is_active == True)  # noqa: E712
         .all()
     )
-    surfaces = db.query(AirfieldSurface).filter(AirfieldSurface.airport_id == airport.id).all()
+    # eager-load surface -> agls -> lhas so hover-point-lock's AGL-agnostic
+    # lookup (find_lha_in_surfaces) doesn't trigger N+1 lazy loads on the
+    # trajectory critical path.
+    surfaces = (
+        db.query(AirfieldSurface)
+        .options(joinedload(AirfieldSurface.agls).joinedload(AGL.lhas))
+        .filter(AirfieldSurface.airport_id == airport.id)
+        .all()
+    )
 
     # constraints intentionally empty during generation - constraint rules are
     # per-flight-plan children that get cascade-deleted with the old plan.

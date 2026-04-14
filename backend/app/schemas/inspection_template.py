@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ListMeta
-from app.schemas.mission import CaptureModeStr, InspectionMethodStr
+from app.schemas.mission import CaptureModeStr, HoverBearingRefStr, InspectionMethodStr
 
 
 class InspectionConfigCreate(BaseModel):
@@ -29,7 +29,7 @@ class InspectionConfigCreate(BaseModel):
     camera_gimbal_angle: float | None = None
     selected_lha_id: UUID | None = None
     hover_bearing: float | None = None
-    hover_bearing_reference: str | None = None
+    hover_bearing_reference: HoverBearingRefStr | None = None
 
 
 class InspectionConfigResponse(BaseModel):
@@ -55,7 +55,7 @@ class InspectionConfigResponse(BaseModel):
     camera_gimbal_angle: float | None = None
     selected_lha_id: UUID | None = None
     hover_bearing: float | None = None
-    hover_bearing_reference: str | None = None
+    hover_bearing_reference: HoverBearingRefStr | None = None
 
     model_config = {"from_attributes": True}
 
