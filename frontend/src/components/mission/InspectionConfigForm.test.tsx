@@ -170,6 +170,40 @@ describe("InspectionConfigForm method variants", () => {
     expect(last.camera_gimbal_angle).toBeCloseTo(-45, 1);
   });
 
+  it("hides geometry-override fields for methods that ignore them", () => {
+    for (const method of [
+      "FLY_OVER",
+      "PARALLEL_SIDE_SWEEP",
+      "HOVER_POINT_LOCK",
+    ] as const) {
+      const { unmount } = renderForm({
+        inspection: baseInspection({ method }),
+        template: (method === "HOVER_POINT_LOCK" ? papiTemplate : runwayTemplate) as never,
+      });
+      expect(
+        screen.queryByTestId("inspection-horizontal-distance"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("inspection-sweep-angle"),
+      ).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("renders geometry-override fields for VERTICAL_PROFILE and ANGULAR_SWEEP", () => {
+    for (const method of ["VERTICAL_PROFILE", "ANGULAR_SWEEP"] as const) {
+      const { unmount } = renderForm({
+        inspection: baseInspection({ method }),
+        template: papiTemplate as never,
+      });
+      expect(
+        screen.getByTestId("inspection-horizontal-distance"),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("inspection-sweep-angle")).toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it("hover-point-lock: editing distance without lock does not recompute", () => {
     const onChange = vi.fn();
     renderForm({

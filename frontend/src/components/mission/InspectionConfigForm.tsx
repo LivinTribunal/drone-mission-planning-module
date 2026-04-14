@@ -296,44 +296,50 @@ export default function InspectionConfigForm({
         )}
       </div>
 
-      {/* geometry overrides */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-            {t("mission.config.horizontalDistance")}
-          </label>
-          <input
-            type="number"
-            step="1"
-            min="50"
-            value={horizontalDistance}
-            onChange={(e) =>
-              handleNumberChange("horizontal_distance", e.target.value)
-            }
-            placeholder={t("mission.config.horizontalDistanceHint")}
-            className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
-            data-testid="inspection-horizontal-distance"
-          />
+      {/* geometry overrides - only methods that consume them */}
+      {(inspection.method === "VERTICAL_PROFILE" ||
+        inspection.method === "ANGULAR_SWEEP") && (
+        <div
+          className="grid grid-cols-2 gap-3"
+          data-testid="geometry-override-fields"
+        >
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.horizontalDistance")}
+            </label>
+            <input
+              type="number"
+              step="1"
+              min="50"
+              value={horizontalDistance}
+              onChange={(e) =>
+                handleNumberChange("horizontal_distance", e.target.value)
+              }
+              placeholder={t("mission.config.horizontalDistanceHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-horizontal-distance"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.sweepAngle")}
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              min="1"
+              max="180"
+              value={sweepAngle}
+              onChange={(e) =>
+                handleNumberChange("sweep_angle", e.target.value)
+              }
+              placeholder={t("mission.config.sweepAngleHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-sweep-angle"
+            />
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-            {t("mission.config.sweepAngle")}
-          </label>
-          <input
-            type="number"
-            step="0.5"
-            min="1"
-            max="180"
-            value={sweepAngle}
-            onChange={(e) =>
-              handleNumberChange("sweep_angle", e.target.value)
-            }
-            placeholder={t("mission.config.sweepAngleHint")}
-            className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
-            data-testid="inspection-sweep-angle"
-          />
-        </div>
-      </div>
+      )}
 
       {/* buffer distance override */}
       <div>
