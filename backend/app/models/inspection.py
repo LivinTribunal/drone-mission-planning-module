@@ -65,7 +65,7 @@ class InspectionConfiguration(Base):
     distance_from_lha = Column(Float, nullable=True)
     height_above_lha = Column(Float, nullable=True)
     camera_gimbal_angle = Column(Float, nullable=True)
-    selected_lha_id = Column(UUID, nullable=True)
+    selected_lha_id = Column(UUID, ForeignKey("lha.id", ondelete="SET NULL"), nullable=True)
 
     # config fields that can be overridden per-inspection.
     # lha_ids is included for duplication support (duplicate_mission copies it)

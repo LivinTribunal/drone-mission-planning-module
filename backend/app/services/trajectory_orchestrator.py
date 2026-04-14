@@ -392,18 +392,18 @@ def _generate_trajectory_inner(
             )
 
         # compute path distance for speed/framerate check
-        if is_new_method:
-            if inspection.method == InspectionMethod.HOVER_POINT_LOCK:
-                path_dist = 0.0
-            else:
-                path_dist = 0.0
-                for k in range(1, len(ordered_lhas)):
-                    path_dist += distance_between(
-                        ordered_lhas[k - 1].lon,
-                        ordered_lhas[k - 1].lat,
-                        ordered_lhas[k].lon,
-                        ordered_lhas[k].lat,
-                    )
+        if inspection.method == InspectionMethod.HOVER_POINT_LOCK:
+            # hover has zero travel distance by definition
+            path_dist = 0.0
+        elif is_new_method:
+            path_dist = 0.0
+            for k in range(1, len(ordered_lhas)):
+                path_dist += distance_between(
+                    ordered_lhas[k - 1].lon,
+                    ordered_lhas[k - 1].lat,
+                    ordered_lhas[k].lon,
+                    ordered_lhas[k].lat,
+                )
         else:
             start_pos = determine_start_position(
                 center, config, inspection.method, rwy_heading, glide_slope
@@ -437,7 +437,13 @@ def _generate_trajectory_inner(
             if warning:
                 warnings.append((warning, []))
 
-        if drone:
+        # FOV check only applies to methods where the drone hovers/approaches at a fixed
+        # standoff radius - fly-over and parallel-side-sweep fly along the lights so
+        # horizontal_distance is not a meaningful approach distance for them.
+        if drone and inspection.method in (
+            InspectionMethod.ANGULAR_SWEEP,
+            InspectionMethod.VERTICAL_PROFILE,
+        ):
             fov_distance = config.horizontal_distance or MIN_ARC_RADIUS
             approach = (rwy_heading + 180) % 360
             warning = check_sensor_fov(drone, lha_positions, fov_distance, approach)

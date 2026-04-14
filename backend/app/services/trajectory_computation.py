@@ -864,7 +864,11 @@ def compute_measurement_trajectory(
         raise ValueError(f"unsupported inspection method: {inspection.method}")
 
     # terrain correction before video wrapper - skip for new methods that already
-    # use per-LHA ground elevations baked into lha.position.alt
+    # use per-LHA ground elevations baked into lha.position.alt.
+    # caveat: parallel-side-sweep places waypoints at a lateral offset from the LHA,
+    # so terrain at the offset point may differ from the LHA's own ground elevation.
+    # clearance there relies on validate_inspection_pass as the safety net; a future
+    # improvement could sample elevation_provider.get_elevation() at each offset point.
     if inspection.method in (InspectionMethod.ANGULAR_SWEEP, InspectionMethod.VERTICAL_PROFILE):
         _apply_terrain_delta(waypoints, center, elevation_provider)
 

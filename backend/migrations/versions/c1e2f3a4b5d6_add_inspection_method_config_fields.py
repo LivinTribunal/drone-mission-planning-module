@@ -45,10 +45,24 @@ def upgrade() -> None:
         "inspection_configuration",
         sa.Column("selected_lha_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=True),
     )
+    # FK ensures orphaned references are cleared if the referenced LHA is deleted
+    op.create_foreign_key(
+        "fk_inspection_configuration_selected_lha_id_lha",
+        "inspection_configuration",
+        "lha",
+        ["selected_lha_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
 
 
 def downgrade() -> None:
     """drop method-specific config columns."""
+    op.drop_constraint(
+        "fk_inspection_configuration_selected_lha_id_lha",
+        "inspection_configuration",
+        type_="foreignkey",
+    )
     op.drop_column("inspection_configuration", "selected_lha_id")
     op.drop_column("inspection_configuration", "camera_gimbal_angle")
     op.drop_column("inspection_configuration", "height_above_lha")

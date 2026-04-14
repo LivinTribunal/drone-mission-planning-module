@@ -765,3 +765,71 @@ def test_has_unsaved_map_changes_cleared_after_generate(client):
 
     mission = client.get(f"/api/v1/missions/{mission_id}").json()
     assert mission["has_unsaved_map_changes"] is False
+
+
+def test_hover_point_lock_missing_selected_lha_raises(client, db_engine):
+    """orchestrator raises TrajectoryGenerationError when HOVER_POINT_LOCK has no selected LHA."""
+    from sqlalchemy.orm import Session
+
+    from app.services.trajectory_orchestrator import generate_trajectory
+
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "HPLK"},
+    ).json()
+    airport_id = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces", json=TRAJECTORY_SURFACE_PAYLOAD
+    ).json()
+    surface_id = surface["id"]
+
+    agl = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls",
+        json=TRAJECTORY_AGL_PAYLOAD,
+    ).json()
+    agl_id = agl["id"]
+
+    for i in range(1, 4):
+        client.post(
+            f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas",
+            json=make_lha_payload(i),
+        )
+
+    template = client.post(
+        "/api/v1/inspection-templates",
+        json={
+            "name": "Hover Template",
+            "methods": ["HOVER_POINT_LOCK"],
+            "target_agl_ids": [agl_id],
+            "default_config": {"measurement_density": 4, "speed_override": 5.0},
+        },
+    ).json()
+
+    drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Hover Missing LHA",
+            "airport_id": airport_id,
+            "drone_profile_id": drone["id"],
+            "default_speed": 5.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
+        },
+    ).json()
+    mission_id = mission["id"]
+
+    # inspection without selected_lha_id in config
+    client.post(
+        f"/api/v1/missions/{mission_id}/inspections",
+        json={"template_id": template["id"], "method": "HOVER_POINT_LOCK"},
+    )
+
+    with Session(db_engine) as db:
+        with pytest.raises(
+            TrajectoryGenerationError,
+            match="hover-point-lock requires a selected LHA",
+        ):
+            generate_trajectory(db, mission_id)

@@ -59,8 +59,7 @@ MAX_TURN_ANGLE: Degrees = 60.0
 
 # minimum speed floor for duration calculation - prevents division by zero
 MIN_SPEED_FLOOR: MetersPerSecond = 0.1
-if MIN_SPEED_FLOOR <= 0:
-    raise ValueError("MIN_SPEED_FLOOR must be positive to prevent division by zero")
+assert MIN_SPEED_FLOOR > 0, "MIN_SPEED_FLOOR must be positive to prevent division by zero"
 
 # surface edge node spacing for visibility graph
 SURFACE_NODE_SPACING: Meters = 200.0
@@ -144,7 +143,7 @@ class ResolvedConfig:
     distance_from_lha: Meters | None = None
     height_above_lha: Meters | None = None
     camera_gimbal_angle: Degrees | None = None
-    selected_lha_id: str | None = None
+    selected_lha_id: UUID | str | None = None
 
 
 @dataclass
