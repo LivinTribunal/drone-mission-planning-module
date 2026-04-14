@@ -88,7 +88,6 @@ vi.mock("@/api/inspectionTemplates", () => ({
       speed_override: 2.0,
       measurement_density: null,
       custom_tolerances: null,
-      density: null,
       hover_duration: null,
       horizontal_distance: null,
       sweep_angle: null,

@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, DomainError, NotFoundError
 from app.models.agl import AGL
 from app.models.inspection import (
     Inspection,
@@ -97,6 +97,13 @@ def create_template(db: Session, schema: InspectionTemplateCreate) -> Inspection
     db.add(template)
     db.flush()
 
+    # enforce method <-> AGL type compatibility matrix
+    try:
+        template.validate_method_agl_compat(methods)
+    except ValueError as e:
+        db.rollback()
+        raise DomainError(str(e), status_code=400) from e
+
     for method in methods:
         db.execute(insp_template_methods.insert().values(template_id=template.id, method=method))
 
@@ -144,6 +151,23 @@ def update_template(
     if target_ids is not None:
         agls = db.query(AGL).filter(AGL.id.in_(target_ids)).all()
         template.targets = agls
+
+    # resolve the methods list to validate - existing if not changing
+    if methods is None:
+        existing = db.execute(
+            select(insp_template_methods.c.method).where(
+                insp_template_methods.c.template_id == template_id
+            )
+        ).fetchall()
+        check_methods = [row[0] for row in existing]
+    else:
+        check_methods = methods
+
+    try:
+        template.validate_method_agl_compat(check_methods)
+    except ValueError as e:
+        db.rollback()
+        raise DomainError(str(e), status_code=400) from e
 
     if methods is not None:
         db.execute(

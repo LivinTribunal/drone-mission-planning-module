@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ListMeta
-from app.schemas.mission import CaptureModeStr, InspectionMethodStr
+from app.schemas.mission import CaptureModeStr, HoverBearingRefStr, InspectionMethodStr
 
 
 class InspectionConfigCreate(BaseModel):
@@ -17,10 +17,19 @@ class InspectionConfigCreate(BaseModel):
     hover_duration: float | None = None
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
+    vertical_profile_height: float | None = Field(default=None, gt=0)
     lha_ids: list[UUID] | None = None
     capture_mode: CaptureModeStr | None = None
     recording_setup_duration: float | None = None
     buffer_distance: float | None = Field(default=None, ge=0)
+    height_above_lights: float | None = Field(default=None, gt=0)
+    lateral_offset: float | None = Field(default=None, gt=0)
+    distance_from_lha: float | None = Field(default=None, gt=0)
+    height_above_lha: float | None = Field(default=None, gt=0)
+    camera_gimbal_angle: float | None = None
+    selected_lha_id: UUID | None = None
+    hover_bearing: float | None = None
+    hover_bearing_reference: HoverBearingRefStr | None = None
 
 
 class InspectionConfigResponse(BaseModel):
@@ -34,10 +43,19 @@ class InspectionConfigResponse(BaseModel):
     hover_duration: float | None = None
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
+    vertical_profile_height: float | None = None
     lha_ids: list[UUID] | None = None
     capture_mode: CaptureModeStr | None = None
     recording_setup_duration: float | None = None
     buffer_distance: float | None = None
+    height_above_lights: float | None = None
+    lateral_offset: float | None = None
+    distance_from_lha: float | None = None
+    height_above_lha: float | None = None
+    camera_gimbal_angle: float | None = None
+    selected_lha_id: UUID | None = None
+    hover_bearing: float | None = None
+    hover_bearing_reference: HoverBearingRefStr | None = None
 
     model_config = {"from_attributes": True}
 

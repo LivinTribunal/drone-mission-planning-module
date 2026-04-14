@@ -42,6 +42,28 @@ class ExportFormat(str, enum.Enum):
 class InspectionMethod(str, enum.Enum):
     VERTICAL_PROFILE = "VERTICAL_PROFILE"
     ANGULAR_SWEEP = "ANGULAR_SWEEP"
+    FLY_OVER = "FLY_OVER"
+    PARALLEL_SIDE_SWEEP = "PARALLEL_SIDE_SWEEP"
+    HOVER_POINT_LOCK = "HOVER_POINT_LOCK"
+
+
+# method <-> AGL type compatibility per ZEPHYR spec
+METHOD_AGL_COMPAT: dict[InspectionMethod, set[str]] = {
+    InspectionMethod.VERTICAL_PROFILE: {"PAPI"},
+    InspectionMethod.ANGULAR_SWEEP: {"PAPI"},
+    InspectionMethod.HOVER_POINT_LOCK: {"PAPI", "RUNWAY_EDGE_LIGHTS"},
+    InspectionMethod.FLY_OVER: {"RUNWAY_EDGE_LIGHTS"},
+    InspectionMethod.PARALLEL_SIDE_SWEEP: {"RUNWAY_EDGE_LIGHTS"},
+}
+
+
+def is_method_compatible_with_agl(method: str, agl_type: str) -> bool:
+    """check whether an inspection method is compatible with an AGL type."""
+    try:
+        m = InspectionMethod(method)
+    except ValueError:
+        return False
+    return agl_type in METHOD_AGL_COMPAT.get(m, set())
 
 
 class SafetyZoneType(str, enum.Enum):

@@ -6,14 +6,22 @@ export interface InspectionConfigResponse {
   speed_override: number | null;
   measurement_density: number | null;
   custom_tolerances: Record<string, number> | null;
-  density: number | null;
   hover_duration: number | null;
   horizontal_distance: number | null;
   sweep_angle: number | null;
+  vertical_profile_height: number | null;
   lha_ids: string[] | null;
   capture_mode: CaptureMode | null;
   recording_setup_duration: number | null;
   buffer_distance: number | null;
+  height_above_lights: number | null;
+  lateral_offset: number | null;
+  distance_from_lha: number | null;
+  height_above_lha: number | null;
+  camera_gimbal_angle: number | null;
+  selected_lha_id: string | null;
+  hover_bearing: number | null;
+  hover_bearing_reference: "RUNWAY" | "COMPASS" | null;
 }
 
 export interface InspectionTemplateResponse {

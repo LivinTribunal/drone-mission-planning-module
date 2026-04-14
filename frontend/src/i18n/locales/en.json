@@ -297,7 +297,17 @@
     "draftMoveRestriction": "Compute trajectory first",
     "inspectionMethod": {
       "VERTICAL_PROFILE": "Vertical Profile",
-      "ANGULAR_SWEEP": "Angular Sweep"
+      "ANGULAR_SWEEP": "Angular Sweep",
+      "FLY_OVER": "Fly Over",
+      "PARALLEL_SIDE_SWEEP": "Parallel Side Sweep",
+      "HOVER_POINT_LOCK": "Hover Point Lock"
+    },
+    "inspectionMethodShort": {
+      "VERTICAL_PROFILE": "Vertical",
+      "ANGULAR_SWEEP": "Angular",
+      "FLY_OVER": "Fly Over",
+      "PARALLEL_SIDE_SWEEP": "Side Sweep",
+      "HOVER_POINT_LOCK": "Hover Lock"
     },
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
@@ -478,6 +488,8 @@
       "horizontalDistanceHint": "Default: 400m",
       "sweepAngle": "Sweep Angle (°)",
       "sweepAngleHint": "Default: 15°",
+      "verticalProfileHeight": "Vertical Profile Height (m)",
+      "verticalProfileHeightHint": "Default: ~45m",
       "bufferDistanceOverride": "Buffer Distance Override (m)",
       "bufferDistanceOverrideHint": "Leave empty to use mission-level value",
       "speedFramerateWarning": "Speed exceeds camera frame rate capability for the selected drone",
@@ -547,7 +559,45 @@
       "setCoordinatesFirst": "Set Takeoff & Landing First",
       "setCoordinatesTooltip": "Set takeoff and landing coordinates first",
       "warningsMessage": "Message",
-      "warningsWaypoint": "WP"
+      "warningsWaypoint": "WP",
+      "pickAglType": "Select AGL system type",
+      "noTemplateForCombo": "No template exists for this combination. Ask your Coordinator to create one.",
+      "otherTemplates": "Other templates",
+      "specialTemplates": "Special / Non-AGL",
+      "templatesCount_one": "{{count}} template",
+      "templatesCount_other": "{{count}} templates",
+      "back": "Back",
+      "aglType": {
+        "PAPI": "PAPI",
+        "RUNWAY_EDGE_LIGHTS": "Runway Edge Lights"
+      },
+      "heightAboveLights": "Height Above Lights (m)",
+      "heightAboveLightsHint": "Default: 15 m",
+      "heightAboveLha": "Height Above LHA (m)",
+      "heightAboveLhaHint": "Default: 5 m",
+      "distanceFromLha": "Distance from LHA (m)",
+      "distanceFromLhaHint": "PAPI: 50 m / Runway: 10 m",
+      "lateralOffset": "Lateral Offset (m)",
+      "lateralOffsetHint": "Default: 30 m",
+      "cameraGimbalAngle": "Gimbal Angle (°)",
+      "cameraGimbalAngleHint": "-90 = straight down",
+      "targetLha": "Target LHA",
+      "targetLhaSelect": "Select an LHA...",
+      "targetAgl": "Target AGL",
+      "targetAglSelect": "Select an AGL...",
+      "angleLock": "Auto-aim camera at LHA",
+      "angleLockOn": "On",
+      "angleLockOff": "Off",
+      "angleLockHint": "On: editing any field recomputes the third so the camera always points at the LHA. Off: all three are independent.",
+      "hoverBearing": "Approach bearing (°)",
+      "hoverBearingRef": {
+        "RUNWAY": "Relative to RWY",
+        "COMPASS": "Compass"
+      },
+      "hoverBearingRunwayHint": "0 = approach side (opposite RWY heading)",
+      "hoverBearingCompassHint": "0 = true north, 90 = east",
+      "hoverBearingRunwayHelp": "0° places the drone on the runway approach side of the LHA (opposite runway heading). 90° rotates the drone clockwise around the LHA.",
+      "hoverBearingCompassHelp": "Absolute compass heading from LHA to drone. 0° = N, 90° = E, 180° = S, 270° = W."
     },
     "validationExportPage": {
       "validationResults": "Validation Results",

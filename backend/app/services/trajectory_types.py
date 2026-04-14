@@ -30,6 +30,22 @@ DEFAULT_SPEED: MetersPerSecond = 5.0
 DEFAULT_GLIDE_SLOPE: Degrees = 3.0
 DEFAULT_HEADING: Degrees = 0.0
 
+# fly-over defaults
+DEFAULT_FLY_OVER_HEIGHT: Meters = 15.0
+DEFAULT_FLY_OVER_SPEED: MetersPerSecond = 5.0
+DEFAULT_FLY_OVER_GIMBAL: Degrees = -90.0
+
+# parallel-side-sweep defaults
+DEFAULT_PARALLEL_OFFSET: Meters = 30.0
+DEFAULT_PARALLEL_HEIGHT: Meters = 10.0
+DEFAULT_PARALLEL_SPEED: MetersPerSecond = 3.0
+
+# hover-point-lock defaults (ZEPHYR manual fallback)
+DEFAULT_HOVER_DISTANCE_PAPI: Meters = 50.0
+DEFAULT_HOVER_DISTANCE_RUNWAY: Meters = 10.0
+DEFAULT_HOVER_HEIGHT: Meters = 5.0
+DEFAULT_HOVER_DURATION: Seconds = 10.0
+
 # speed/sensor checks
 SPEED_FRAMERATE_MARGIN = 0.8
 MIN_LHA_FOR_FOV_CHECK = 2
@@ -43,8 +59,7 @@ MAX_TURN_ANGLE: Degrees = 60.0
 
 # minimum speed floor for duration calculation - prevents division by zero
 MIN_SPEED_FLOOR: MetersPerSecond = 0.1
-if MIN_SPEED_FLOOR <= 0:
-    raise ValueError("MIN_SPEED_FLOOR must be positive to prevent division by zero")
+assert MIN_SPEED_FLOOR > 0, "MIN_SPEED_FLOOR must be positive to prevent division by zero"
 
 # surface edge node spacing for visibility graph
 SURFACE_NODE_SPACING: Meters = 200.0
@@ -119,9 +134,19 @@ class ResolvedConfig:
     hover_duration: Seconds | None = None
     horizontal_distance: Meters | None = None
     sweep_angle: Degrees | None = None
+    vertical_profile_height: Meters | None = None
     capture_mode: str = "VIDEO_CAPTURE"
     recording_setup_duration: Seconds = 5.0
     buffer_distance: Meters = 5.0
+    # method-specific fields
+    height_above_lights: Meters | None = None
+    lateral_offset: Meters | None = None
+    distance_from_lha: Meters | None = None
+    height_above_lha: Meters | None = None
+    camera_gimbal_angle: Degrees | None = None
+    selected_lha_id: UUID | str | None = None
+    hover_bearing: Degrees | None = None
+    hover_bearing_reference: str | None = None
 
 
 @dataclass

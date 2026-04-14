@@ -48,6 +48,12 @@
   --tv-method-angular-sweep-text: #4595e5;
   --tv-method-vertical-profile-bg: rgba(155, 89, 182, 0.15);
   --tv-method-vertical-profile-text: #9b59b6;
+  --tv-method-fly-over-bg: rgba(59, 187, 59, 0.15);
+  --tv-method-fly-over-text: #2e8b2e;
+  --tv-method-parallel-side-sweep-bg: rgba(229, 165, 69, 0.15);
+  --tv-method-parallel-side-sweep-text: #c77d0c;
+  --tv-method-hover-point-lock-bg: rgba(233, 30, 144, 0.15);
+  --tv-method-hover-point-lock-text: #c4117a;
 
   /* safety zone colors */
   --tv-zone-ctr-fill: rgba(69, 149, 229, 0.2);
@@ -102,6 +108,12 @@
   --tv-method-angular-sweep-text: #60a5fa;
   --tv-method-vertical-profile-bg: rgba(155, 89, 182, 0.2);
   --tv-method-vertical-profile-text: #c084fc;
+  --tv-method-fly-over-bg: rgba(59, 187, 59, 0.2);
+  --tv-method-fly-over-text: #4ade80;
+  --tv-method-parallel-side-sweep-bg: rgba(229, 165, 69, 0.2);
+  --tv-method-parallel-side-sweep-text: #fbbf24;
+  --tv-method-hover-point-lock-bg: rgba(233, 30, 144, 0.2);
+  --tv-method-hover-point-lock-text: #f472b6;
 
   /* map panel - dark */
   --tv-map-bg: #0a0a0a;

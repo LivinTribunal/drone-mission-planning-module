@@ -449,6 +449,27 @@ export default function MissionConfigPage() {
     }
   }
 
+  async function handleChangeMethod(
+    inspId: string,
+    method: InspectionMethod,
+  ) {
+    if (!id || !mission) return;
+    const previousStatus = mission.status;
+    try {
+      await updateInspection(id, inspId, { method });
+      const fresh = await getMission(id);
+      updateMissionState(fresh, previousStatus);
+      setLastSaved(new Date());
+      showNotification(t("mission.config.saved"));
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 409) {
+        showNotification(t("mission.config.domainError"));
+      } else {
+        showNotification(t("mission.config.saveError"));
+      }
+    }
+  }
+
   async function handleRemoveInspection(inspId: string) {
     if (!id || !mission) return;
     const previousStatus = mission.status;
@@ -671,6 +692,8 @@ export default function MissionConfigPage() {
               canReorder={canModify}
               visibleIds={visibleInspectionIds}
               onToggleVisibility={handleToggleVisibility}
+              agls={allAgls}
+              onChangeMethod={handleChangeMethod}
             />
           </div>
 
@@ -842,6 +865,7 @@ export default function MissionConfigPage() {
         templates={templates}
         onSelect={handleAddInspection}
         usedTemplateIds={new Set(mission.inspections.map((i) => i.template_id))}
+        agls={allAgls}
       />
 
       {/* unsaved changes dialog */}

@@ -24,7 +24,12 @@ export type CaptureMode = "VIDEO_CAPTURE" | "PHOTO_CAPTURE";
 
 export type ExportFormat = "MAVLINK" | "KML" | "KMZ" | "JSON" | "UGCS";
 
-export type InspectionMethod = "VERTICAL_PROFILE" | "ANGULAR_SWEEP";
+export type InspectionMethod =
+  | "VERTICAL_PROFILE"
+  | "ANGULAR_SWEEP"
+  | "FLY_OVER"
+  | "PARALLEL_SIDE_SWEEP"
+  | "HOVER_POINT_LOCK";
 
 export type SafetyZoneType =
   | "CTR"

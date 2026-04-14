@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronUp, ChevronDown, Copy, Trash2 } from "lucide-react";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { AGLResponse } from "@/types/airport";
+import { methodBadgeStyle } from "@/utils/inspectionMethodBadge";
 
 type SortField = "name" | "agl" | "method" | "usedIn" | "created" | "lastUpdated";
 type SortDir = "asc" | "desc";
@@ -84,26 +85,7 @@ export default function InspectionTemplateTable({
 
   function formatMethod(method: string) {
     /**format method name for display.*/
-    if (method === "ANGULAR_SWEEP") return t("coordinator.inspections.angularSweep");
-    if (method === "VERTICAL_PROFILE") return t("coordinator.inspections.verticalProfile");
-    return method;
-  }
-
-  function methodBadgeStyle(method: string): React.CSSProperties {
-    /**get inline styles for an inspection method badge.*/
-    if (method === "ANGULAR_SWEEP") {
-      return {
-        backgroundColor: "var(--tv-method-angular-sweep-bg)",
-        color: "var(--tv-method-angular-sweep-text)",
-      };
-    }
-    if (method === "VERTICAL_PROFILE") {
-      return {
-        backgroundColor: "var(--tv-method-vertical-profile-bg)",
-        color: "var(--tv-method-vertical-profile-text)",
-      };
-    }
-    return {};
+    return t(`map.inspectionMethodShort.${method}`, method);
   }
 
   function formatDate(dateStr: string | null) {
