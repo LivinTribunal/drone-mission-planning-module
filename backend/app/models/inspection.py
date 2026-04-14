@@ -34,6 +34,7 @@ insp_template_targets = Table(
 CONFIG_FIELDS: tuple[str, ...] = (
     "altitude_offset",
     "speed_override",
+    "measurement_speed_override",
     "measurement_density",
     "custom_tolerances",
     "hover_duration",
@@ -75,6 +76,7 @@ class InspectionConfiguration(Base):
     id = Column(UUID, primary_key=True, default=uuid4)
     altitude_offset = Column(Float)
     speed_override = Column(Float)
+    measurement_speed_override = Column(Float, nullable=True)
     measurement_density = Column(Integer)
     custom_tolerances = Column(JSONB)
     density = Column(Float)

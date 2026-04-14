@@ -177,24 +177,19 @@ def test_vertical_path_same_horizontal():
         assert abs(wp.lat - wps[0].lat) < 0.0001
 
 
-def test_vertical_path_hover_at_transitions():
-    """HOVER waypoints inserted at LHA setting angle boundaries"""
+def test_vertical_path_is_continuous_measurement_pass():
+    """vertical profile emits a continuous measurement pass - no HOVER stops at
+    LHA setting angle boundaries (operators want one uninterrupted climb)."""
     from app.services.trajectory_computation import calculate_vertical_path
 
-    # optimal density for 0.05 tolerance over 4.6 range = ceil(4.6/0.1)+1 = 47
-    # use 50 to be safe
     config = ResolvedConfig(measurement_density=50, hover_duration=5.0)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
     setting_angles = [3.0, 3.5, 4.0, 4.5]
 
     wps = calculate_vertical_path(center, 243.0, config, None, 3.0, setting_angles)
 
-    hover_wps = [wp for wp in wps if wp.waypoint_type == WaypointType.HOVER]
-
-    assert len(hover_wps) >= 1
-
-    for hwp in hover_wps:
-        assert hwp.hover_duration == 5.0
+    assert all(wp.waypoint_type == WaypointType.MEASUREMENT for wp in wps)
+    assert all(wp.hover_duration is None for wp in wps)
 
 
 # config resolution tests

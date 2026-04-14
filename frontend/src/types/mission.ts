@@ -30,6 +30,7 @@ export interface MissionDetailResponse extends MissionResponse {
 export interface InspectionConfigResponse {
   altitude_offset: number | null;
   speed_override: number | null;
+  measurement_speed_override: number | null;
   measurement_density: number | null;
   custom_tolerances: Record<string, number> | null;
   hover_duration: number | null;
@@ -64,6 +65,7 @@ export interface InspectionResponse {
 export interface InspectionConfigOverride {
   altitude_offset?: number | null;
   speed_override?: number | null;
+  measurement_speed_override?: number | null;
   measurement_density?: number | null;
   custom_tolerances?: Record<string, number> | null;
   hover_duration?: number | null;

@@ -467,6 +467,8 @@
       "lhaSelection": "LHA Selection",
       "altitudeOffset": "Altitude Offset (m)",
       "speedOverride": "Speed Override (m/s)",
+      "measurementSpeed": "Measurement speed (m/s)",
+      "measurementSpeedHint": "Applies to measurement waypoints only",
       "measurementDensity": "Measurement Density (pts)",
       "customTolerances": "Custom Tolerances",
       "hoverDuration": "Hover Duration (s)",

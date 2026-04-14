@@ -49,6 +49,15 @@ def _opposite_bearing(heading: Degrees) -> Degrees:
     return (heading + 180) % 360
 
 
+def _resolve_measurement_speed(
+    config: ResolvedConfig, transit_speed: MetersPerSecond
+) -> MetersPerSecond:
+    """pick measurement speed: override > resolved transit speed."""
+    if config.measurement_speed_override is not None:
+        return config.measurement_speed_override
+    return transit_speed
+
+
 def overlay_config(result: ResolvedConfig, config: InspectionConfiguration) -> None:
     """overlay non-None fields from an ORM config onto resolved config."""
     for key in CONFIG_FIELDS:
@@ -543,20 +552,31 @@ def calculate_vertical_path(
     speed: MetersPerSecond,
     setting_angles: list[Degrees],
 ) -> list[WaypointData]:
-    """generate vertical profile path with HOVER at transition angles."""
+    """generate vertical profile path as one continuous measurement pass.
+
+    setting_angles stays in the signature for symmetry with other measurement
+    paths and future density derivation; hover stops at LHA setting angles
+    were removed so operators get one continuous climb.
+    """
     density = config.measurement_density
-    hover_duration = config.hover_duration
     distance = (
         config.horizontal_distance
         if config.horizontal_distance is not None
         else DEFAULT_HORIZONTAL_DISTANCE
     )
+    measurement_speed = _resolve_measurement_speed(config, speed)
 
     approach_heading = _opposite_bearing(runway_heading)
     lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
     heading_to_center = bearing_between(lon, lat, center.lon, center.lat)
 
     max_elev = _vertical_profile_max_elevation(distance, config)
+
+    cam_action = (
+        CameraAction.RECORDING
+        if config.capture_mode == "VIDEO_CAPTURE"
+        else CameraAction.PHOTO_CAPTURE
+    )
 
     waypoints = []
     for i in range(density):
@@ -567,20 +587,8 @@ def calculate_vertical_path(
             # single measurement at midpoint elevation
             elevation = (MIN_ELEVATION_ANGLE + max_elev) / 2
 
-        # altitude at elevation angle from center
         alt = center.alt + distance * math.tan(math.radians(elevation))
         pitch = elevation_angle(lon, lat, alt, center.lon, center.lat, center.alt)
-
-        # hover at LHA setting angle boundaries
-        is_transition = any(abs(elevation - sa) < HOVER_ANGLE_TOLERANCE for sa in setting_angles)
-        wp_type = WaypointType.HOVER if is_transition else WaypointType.MEASUREMENT
-        wp_hover = hover_duration if is_transition else None
-
-        cam_action = (
-            CameraAction.RECORDING
-            if config.capture_mode == "VIDEO_CAPTURE"
-            else CameraAction.PHOTO_CAPTURE
-        )
 
         waypoints.append(
             WaypointData(
@@ -588,12 +596,12 @@ def calculate_vertical_path(
                 lat=lat,
                 alt=alt,
                 heading=heading_to_center,
-                speed=speed,
-                waypoint_type=wp_type,
+                speed=measurement_speed,
+                waypoint_type=WaypointType.MEASUREMENT,
                 camera_action=cam_action,
                 camera_target=center,
                 inspection_id=inspection_id,
-                hover_duration=wp_hover,
+                hover_duration=None,
                 gimbal_pitch=pitch,
             )
         )
@@ -714,6 +722,8 @@ def calculate_fly_over_path(
         else CameraAction.PHOTO_CAPTURE
     )
 
+    measurement_speed = _resolve_measurement_speed(config, speed)
+
     waypoints = []
     for lha in lha_positions:
         waypoints.append(
@@ -722,7 +732,7 @@ def calculate_fly_over_path(
                 lat=lha.lat,
                 alt=lha.alt + height,
                 heading=heading,
-                speed=speed,
+                speed=measurement_speed,
                 waypoint_type=WaypointType.MEASUREMENT,
                 camera_action=cam_action,
                 camera_target=lha,
@@ -803,6 +813,8 @@ def calculate_parallel_side_sweep_path(
             off_elevs = batch[len(lha_positions) :]
             terrain_deltas = [off - lha_e for off, lha_e in zip(off_elevs, lha_elevs)]
 
+    measurement_speed = _resolve_measurement_speed(config, speed)
+
     waypoints = []
     for lha, (lon, lat), delta in zip(lha_positions, offset_positions, terrain_deltas):
         waypoints.append(
@@ -811,7 +823,7 @@ def calculate_parallel_side_sweep_path(
                 lat=lat,
                 alt=lha.alt + height + delta,
                 heading=row_heading,
-                speed=speed,
+                speed=measurement_speed,
                 waypoint_type=WaypointType.MEASUREMENT,
                 camera_action=cam_action,
                 camera_target=lha,

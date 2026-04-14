@@ -210,6 +210,51 @@ describe("InspectionConfigForm method variants", () => {
     }
   });
 
+  it("renders measurement speed field for vertical-profile/fly-over/parallel-side-sweep", () => {
+    for (const method of [
+      "VERTICAL_PROFILE",
+      "FLY_OVER",
+      "PARALLEL_SIDE_SWEEP",
+    ] as const) {
+      const { unmount } = renderForm({
+        inspection: baseInspection({ method }),
+        template: (method === "VERTICAL_PROFILE" ? papiTemplate : runwayTemplate) as never,
+      });
+      expect(
+        screen.getByTestId("inspection-measurement-speed-override"),
+      ).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("hides measurement speed field for hover-point-lock and angular-sweep", () => {
+    for (const method of ["HOVER_POINT_LOCK", "ANGULAR_SWEEP"] as const) {
+      const { unmount } = renderForm({
+        inspection: baseInspection({ method }),
+        template: papiTemplate as never,
+      });
+      expect(
+        screen.queryByTestId("inspection-measurement-speed-override"),
+      ).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("propagates measurement_speed_override changes", () => {
+    const onChange = vi.fn();
+    renderForm({
+      inspection: baseInspection({ method: "FLY_OVER" }),
+      onChange,
+    });
+    fireEvent.change(
+      screen.getByTestId("inspection-measurement-speed-override"),
+      { target: { value: "2.5" } },
+    );
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ measurement_speed_override: 2.5 }),
+    );
+  });
+
   it("hover-point-lock: editing distance without lock does not recompute", () => {
     const onChange = vi.fn();
     renderForm({

@@ -410,16 +410,19 @@ class TestCalculateVerticalPath:
         assert max(lons) - min(lons) < 1e-8
         assert max(lats) - min(lats) < 1e-8
 
-    def test_hover_at_transition_angles(self):
-        """waypoints near setting angles get HOVER type."""
-        config = self._default_config(measurement_density=100)
+    def test_no_hover_at_setting_angles(self):
+        """vertical profile is one continuous measurement pass - no HOVER stops at
+        LHA setting angles even when density is high enough to land on them."""
+        config = self._default_config(measurement_density=5)
         center = Point3D(lon=14.26, lat=50.1, alt=300.0)
-        # setting angle in the middle of min-max range
         mid_angle = (MIN_ELEVATION_ANGLE + MAX_ELEVATION_ANGLE) / 2
         wps = calculate_vertical_path(center, 60.0, config, uuid4(), 5.0, [mid_angle])
 
         hover_wps = [wp for wp in wps if wp.waypoint_type == WaypointType.HOVER]
-        assert len(hover_wps) > 0, "should have at least one HOVER waypoint at transition angle"
+        assert len(hover_wps) == 0
+        # every waypoint is a measurement and carries no hover_duration
+        assert all(wp.waypoint_type == WaypointType.MEASUREMENT for wp in wps)
+        assert all(wp.hover_duration is None for wp in wps)
 
     def test_no_hover_without_angles(self):
         """no HOVER waypoints when no setting angles."""
@@ -429,15 +432,22 @@ class TestCalculateVerticalPath:
         hover_wps = [wp for wp in wps if wp.waypoint_type == WaypointType.HOVER]
         assert len(hover_wps) == 0
 
-    def test_hover_duration_set(self):
-        """HOVER waypoints get the configured hover_duration."""
-        config = self._default_config(measurement_density=100, hover_duration=5.0)
+    def test_measurement_speed_override_applies(self):
+        """measurement_speed_override wins over the passed transit speed."""
+        config = self._default_config(measurement_speed_override=2.0)
         center = Point3D(lon=14.26, lat=50.1, alt=300.0)
-        mid_angle = (MIN_ELEVATION_ANGLE + MAX_ELEVATION_ANGLE) / 2
-        wps = calculate_vertical_path(center, 60.0, config, uuid4(), 5.0, [mid_angle])
-        hover_wps = [wp for wp in wps if wp.waypoint_type == WaypointType.HOVER]
-        for wp in hover_wps:
-            assert wp.hover_duration == 5.0
+        wps = calculate_vertical_path(center, 60.0, config, uuid4(), 7.0, [])
+        assert wps, "expected at least one waypoint"
+        for wp in wps:
+            assert wp.speed == 2.0
+
+    def test_measurement_speed_falls_back_to_transit(self):
+        """without measurement_speed_override, waypoints use the transit speed."""
+        config = self._default_config()
+        center = Point3D(lon=14.26, lat=50.1, alt=300.0)
+        wps = calculate_vertical_path(center, 60.0, config, uuid4(), 7.0, [])
+        for wp in wps:
+            assert wp.speed == 7.0
 
 
 # compute_measurement_trajectory

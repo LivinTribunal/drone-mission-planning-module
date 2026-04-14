@@ -129,6 +129,7 @@ class ResolvedConfig:
 
     altitude_offset: Meters = 0.0
     speed_override: MetersPerSecond | None = None
+    measurement_speed_override: MetersPerSecond | None = None
     measurement_density: int = 8
     custom_tolerances: dict | None = None
     hover_duration: Seconds | None = None

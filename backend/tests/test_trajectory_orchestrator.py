@@ -430,7 +430,8 @@ def test_pipeline_computes_distance_and_duration(client):
 
 
 def test_vertical_profile_generates_hover_waypoints(client):
-    """vertical profile method generates waypoints including hover at transition angles"""
+    """vertical profile is one continuous measurement pass - HOVER only appears as
+    video recording bookends, not at LHA setting-angle transitions."""
     airport = client.post(
         "/api/v1/airports",
         json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "VPRO"},
@@ -491,9 +492,16 @@ def test_vertical_profile_generates_hover_waypoints(client):
     wps = fp["waypoints"]
     assert len(wps) > 0
 
-    # vertical profile should produce HOVER waypoints at transition angles
-    wp_types = [w["waypoint_type"] for w in wps]
-    assert "HOVER" in wp_types, "vertical profile should include HOVER waypoints"
+    # vertical profile emits continuous MEASUREMENT waypoints; the only HOVERs
+    # that may appear are the RECORDING_START / RECORDING_STOP video bookends.
+    inspection_hover_wps = [
+        w for w in wps if w["waypoint_type"] == "HOVER" and w.get("inspection_id") is not None
+    ]
+    for wp in inspection_hover_wps:
+        assert wp["camera_action"] in (
+            "RECORDING_START",
+            "RECORDING_STOP",
+        ), "vertical profile should not hover mid-climb at setting angles"
 
     # altitudes should vary (vertical sweep changes altitude)
     measurement_wps = [w for w in wps if w["waypoint_type"] == "MEASUREMENT"]
@@ -1114,3 +1122,33 @@ def test_hover_point_lock_missing_selected_lha_raises(client, db_engine):
             match="hover-point-lock requires a selected LHA",
         ):
             generate_trajectory(db, mission_id)
+
+
+def test_measurement_speed_override_governs_only_measurement_waypoints(client):
+    """measurement_speed_override sets measurement speed; speed_override drives the
+    per-inspection transit waypoints (climb/descent bracketing the pass)."""
+    _, _, gen = _run_new_method_mission(
+        client,
+        "MSPD",
+        "FLY_OVER",
+        config={
+            "speed_override": 7.0,
+            "measurement_speed_override": 2.0,
+            "height_above_lights": 12.0,
+            "capture_mode": "PHOTO_CAPTURE",
+        },
+    )
+    assert gen.status_code == 200, gen.text
+    fp = gen.json()["flight_plan"]
+
+    measurements = [w for w in fp["waypoints"] if w["waypoint_type"] == "MEASUREMENT"]
+    assert measurements, "expected measurement waypoints"
+    for wp in measurements:
+        assert wp["speed"] == pytest.approx(2.0)
+
+    # at least one TRANSIT waypoint should carry the speed_override
+    # (inspection-owned climb/descent transits use the resolved per-inspection speed)
+    transit_speeds = [wp["speed"] for wp in fp["waypoints"] if wp["waypoint_type"] == "TRANSIT"]
+    assert any(
+        s == pytest.approx(7.0) for s in transit_speeds
+    ), f"expected at least one transit at speed_override=7.0, got speeds: {transit_speeds}"
