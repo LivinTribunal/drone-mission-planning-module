@@ -154,7 +154,11 @@ class TestParallelSideSweep:
             assert abs(d - DEFAULT_PARALLEL_OFFSET) < 1.0
 
     def test_offset_direction_away_from_runway(self):
-        """waypoints are placed on the side farther from the runway centerline."""
+        """waypoints are placed on the side farther from the runway centerline.
+
+        runway centerline sits north of the LHA row; the perpendicular offset
+        must put the drone south (further from the runway).
+        """
         row = _row(3)
         # runway center just to the north of the row
         runway_center = Point3D(lon=14.26, lat=50.101, alt=380.0)
@@ -163,6 +167,68 @@ class TestParallelSideSweep:
         # pick midpoint; it should be farther south (lat < row lat)
         mid = wps[len(wps) // 2]
         assert mid.lat < row[len(row) // 2].lat
+
+    def test_offset_direction_breaks_when_runway_center_equals_row_centroid(self):
+        """reproduces the orchestrator-level bug: passing the LHA centroid as
+        runway_center makes both perpendicular candidates equidistant, so the
+        tie-break in calculate_parallel_side_sweep_path resolves to a constant
+        direction regardless of which side of the runway the edge lights are on.
+
+        for an east-heading row the tie-break always picks perp_a (= heading+90
+        = south), so the drone sits on the south side regardless of where the
+        actual runway is. moving the "runway_center" to the north or south of
+        the row produces the same waypoints - the direction is NOT driven by
+        the runway's position.
+        """
+        row = _row(3)
+        centroid = Point3D.center(row)
+        cfg = ResolvedConfig()
+
+        wps_centroid = calculate_parallel_side_sweep_path(row, centroid, cfg, uuid4(), speed=3.0)
+
+        # moving runway_center far to the north should flip the side. with the
+        # centroid, the waypoints stay on the same (south) side - proving the
+        # LHA centroid is not a valid runway reference.
+        far_north = Point3D(lon=centroid.lon, lat=centroid.lat + 0.01, alt=centroid.alt)
+        wps_real = calculate_parallel_side_sweep_path(row, far_north, cfg, uuid4(), speed=3.0)
+
+        mid_centroid = wps_centroid[len(wps_centroid) // 2]
+        mid_real = wps_real[len(wps_real) // 2]
+        # both produce south offset because the tie-break fires when equidistant
+        # and real_north→south is the correct behavior. the bug manifests when
+        # the runway is on the OTHER side: with centroid, no flip happens.
+        assert mid_centroid.lat < row[len(row) // 2].lat
+        assert mid_real.lat < row[len(row) // 2].lat
+
+        # now put runway on the SOUTH side - real call flips to north, centroid
+        # call stays stuck on south.
+        far_south = Point3D(lon=centroid.lon, lat=centroid.lat - 0.01, alt=centroid.alt)
+        wps_flipped = calculate_parallel_side_sweep_path(row, far_south, cfg, uuid4(), speed=3.0)
+        mid_flipped = wps_flipped[len(wps_flipped) // 2]
+        assert mid_flipped.lat > row[len(row) // 2].lat
+        # centroid-based call did not flip - demonstrates the original bug
+        assert mid_centroid.lat < row[len(row) // 2].lat
+
+    def test_terrain_correction_at_offset(self):
+        """waypoints lift when terrain at the lateral offset is higher than at the LHA."""
+        row = _row(3)
+        runway_center = Point3D(lon=14.26, lat=50.101, alt=380.0)
+        cfg = ResolvedConfig()
+
+        class FakeProvider:
+            """terrain provider that returns 380 at LHAs and 385 at offset points."""
+
+            def get_elevations_batch(self, points):
+                """first half = LHA pts (380), second half = offset pts (385)."""
+                n = len(points) // 2
+                return [380.0] * n + [385.0] * n
+
+        wps = calculate_parallel_side_sweep_path(
+            row, runway_center, cfg, uuid4(), speed=3.0, elevation_provider=FakeProvider()
+        )
+        for wp, lha in zip(wps, row):
+            # expected: lha.alt + DEFAULT_PARALLEL_HEIGHT + 5m terrain delta
+            assert abs(wp.alt - (lha.alt + DEFAULT_PARALLEL_HEIGHT + 5.0)) < 0.01
 
     def test_altitude_above_lights(self):
         """altitude = LHA ground + default height."""

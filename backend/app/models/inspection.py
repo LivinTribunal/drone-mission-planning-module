@@ -28,6 +28,29 @@ insp_template_targets = Table(
     ),
 )
 
+# config fields consumed by the trajectory pipeline (ResolvedConfig).
+# this is the single source of truth imported by trajectory_computation.
+# kept at module scope so it can be imported without touching the ORM.
+CONFIG_FIELDS: tuple[str, ...] = (
+    "altitude_offset",
+    "speed_override",
+    "measurement_density",
+    "custom_tolerances",
+    "hover_duration",
+    "horizontal_distance",
+    "sweep_angle",
+    "capture_mode",
+    "recording_setup_duration",
+    "buffer_distance",
+    "height_above_lights",
+    "lateral_offset",
+    "distance_from_lha",
+    "height_above_lha",
+    "camera_gimbal_angle",
+    "selected_lha_id",
+)
+
+
 insp_template_methods = Table(
     "insp_template_methods",
     Base.metadata,
@@ -67,29 +90,11 @@ class InspectionConfiguration(Base):
     camera_gimbal_angle = Column(Float, nullable=True)
     selected_lha_id = Column(UUID, ForeignKey("lha.id", ondelete="SET NULL"), nullable=True)
 
-    # config fields that can be overridden per-inspection.
-    # lha_ids is included for duplication support (duplicate_mission copies it)
-    # but is NOT consumed from ResolvedConfig in the trajectory path -
-    # the orchestrator reads inspection.lha_ids directly instead.
-    _MERGE_FIELDS = (
-        "altitude_offset",
-        "speed_override",
-        "measurement_density",
-        "custom_tolerances",
-        "hover_duration",
-        "horizontal_distance",
-        "sweep_angle",
-        "lha_ids",
-        "capture_mode",
-        "recording_setup_duration",
-        "buffer_distance",
-        "height_above_lights",
-        "lateral_offset",
-        "distance_from_lha",
-        "height_above_lha",
-        "camera_gimbal_angle",
-        "selected_lha_id",
-    )
+    # fields merged by resolve_with_defaults. a superset of CONFIG_FIELDS that
+    # additionally includes lha_ids so duplicate_mission copies it; lha_ids is
+    # NOT consumed from ResolvedConfig in the trajectory path - the orchestrator
+    # reads inspection.lha_ids directly.
+    _MERGE_FIELDS = CONFIG_FIELDS + ("lha_ids",)
 
     def resolve_with_defaults(self, template_config: InspectionConfiguration | None):
         """merge this config over template defaults, returning field dict."""

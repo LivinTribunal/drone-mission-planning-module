@@ -31,6 +31,7 @@ from app.services.trajectory_computation import (
     get_lha_positions,
     get_lha_setting_angles,
     get_ordered_lha_positions,
+    get_runway_centerline_midpoint,
     get_runway_heading,
     resolve_density,
     resolve_speed,
@@ -356,6 +357,18 @@ def _generate_trajectory_inner(
         # ordered LHA positions are used by fly-over and parallel-side-sweep
         ordered_lhas = get_ordered_lha_positions(template, lha_ids)
 
+        # parallel-side-sweep needs a point on the runway centerline to orient
+        # the perpendicular offset. LHA row centroid is not a substitute.
+        runway_center: Point3D | None = None
+        if inspection.method == InspectionMethod.PARALLEL_SIDE_SWEEP:
+            runway_center = get_runway_centerline_midpoint(template, data.surfaces)
+            if runway_center is None:
+                raise TrajectoryGenerationError(
+                    f"{template.name} #{inspection.sequence_order}: "
+                    "parallel-side-sweep requires a runway surface with a centerline "
+                    "for its target AGL"
+                )
+
         # hover-point-lock needs a single operator-selected LHA
         target_lha_pos: Point3D | None = None
         target_agl_type: str | None = None
@@ -421,8 +434,20 @@ def _generate_trajectory_inner(
         else:
             method_default_speed = default_speed
 
+        # fly-over and parallel-side-sweep generate exactly len(ordered_lhas)
+        # waypoints (one per LHA), not config.measurement_density. passing the
+        # wrong density inflates waypoint_spacing and yields over-conservative
+        # speed recommendations plus spurious framerate warnings.
+        if inspection.method in (
+            InspectionMethod.FLY_OVER,
+            InspectionMethod.PARALLEL_SIDE_SWEEP,
+        ):
+            density_for_speed = max(len(ordered_lhas), 2)
+        else:
+            density_for_speed = config.measurement_density
+
         speed, speed_warning, optimal_speed = resolve_speed(
-            config, path_dist, config.measurement_density, drone, method_default_speed
+            config, path_dist, density_for_speed, drone, method_default_speed
         )
         if speed_warning:
             warnings.append(
@@ -464,6 +489,7 @@ def _generate_trajectory_inner(
                 ordered_lha_positions=ordered_lhas,
                 target_lha_position=target_lha_pos,
                 target_agl_type=target_agl_type,
+                runway_center=runway_center,
             )
         except ValueError as e:
             raise TrajectoryGenerationError(str(e))

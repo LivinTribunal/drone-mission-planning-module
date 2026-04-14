@@ -4,7 +4,7 @@ from uuid import UUID
 
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
-from app.models.inspection import InspectionConfiguration
+from app.models.inspection import CONFIG_FIELDS, InspectionConfiguration
 from app.models.mission import DroneProfile
 from app.schemas.geometry import parse_ewkb
 from app.services.trajectory_types import (
@@ -42,26 +42,6 @@ from app.utils.geo import (
 )
 
 logger = logging.getLogger(__name__)
-
-# config fields that can be overridden per-inspection
-CONFIG_FIELDS = (
-    "altitude_offset",
-    "speed_override",
-    "measurement_density",
-    "custom_tolerances",
-    "hover_duration",
-    "horizontal_distance",
-    "sweep_angle",
-    "capture_mode",
-    "recording_setup_duration",
-    "buffer_distance",
-    "height_above_lights",
-    "lateral_offset",
-    "distance_from_lha",
-    "height_above_lha",
-    "camera_gimbal_angle",
-    "selected_lha_id",
-)
 
 
 def _opposite_bearing(heading: Degrees) -> Degrees:
@@ -200,6 +180,34 @@ def get_runway_heading(template, surfaces) -> Degrees:
                 return surface.heading
 
     return DEFAULT_HEADING
+
+
+def get_runway_centerline_midpoint(template, surfaces) -> Point3D | None:
+    """return the midpoint of the runway centerline for the template's surface.
+
+    parallel-side-sweep needs a point ON the runway centerline to orient the
+    perpendicular offset direction away from the runway. the LHA row centroid
+    is NOT a substitute - both perpendicular candidates are equidistant from it.
+    """
+    for agl in template.targets:
+        for surface in surfaces:
+            if surface.id != agl.surface_id or surface.geometry is None:
+                continue
+            try:
+                line = parse_ewkb(surface.geometry.data)
+            except (KeyError, ValueError, TypeError):
+                continue
+            coords = line.get("coordinates") or []
+            if len(coords) < 2:
+                continue
+            start = coords[0]
+            end = coords[-1]
+            mid_lon = (start[0] + end[0]) / 2
+            mid_lat = (start[1] + end[1]) / 2
+            mid_alt = (start[2] + end[2]) / 2 if len(start) >= 3 and len(end) >= 3 else 0.0
+            return Point3D(lon=mid_lon, lat=mid_lat, alt=mid_alt)
+
+    return None
 
 
 def compute_optimal_density(
@@ -691,6 +699,7 @@ def calculate_parallel_side_sweep_path(
     config: ResolvedConfig,
     inspection_id: UUID | None,
     speed: MetersPerSecond,
+    elevation_provider=None,
 ) -> list[WaypointData]:
     """generate parallel side-sweep path offset perpendicular from a row of lights.
 
@@ -735,14 +744,31 @@ def calculate_parallel_side_sweep_path(
         else CameraAction.PHOTO_CAPTURE
     )
 
+    # precompute offset positions
+    offset_positions: list[tuple[float, float]] = [
+        point_at_distance(lha.lon, lha.lat, perp, offset) for lha in lha_positions
+    ]
+
+    # terrain correction: waypoints sit laterally away from LHAs, where ground
+    # elevation may differ from the LHA's own ground. lift waypoints by the
+    # delta so clearance above terrain at the offset matches the intended height.
+    terrain_deltas: list[float] = [0.0] * len(lha_positions)
+    if elevation_provider is not None:
+        lha_pts = [(lha.lat, lha.lon) for lha in lha_positions]
+        offset_pts = [(lat, lon) for (lon, lat) in offset_positions]
+        batch = elevation_provider.get_elevations_batch(lha_pts + offset_pts)
+        if len(batch) == 2 * len(lha_positions):
+            lha_elevs = batch[: len(lha_positions)]
+            off_elevs = batch[len(lha_positions) :]
+            terrain_deltas = [off - lha_e for off, lha_e in zip(off_elevs, lha_elevs)]
+
     waypoints = []
-    for lha in lha_positions:
-        lon, lat = point_at_distance(lha.lon, lha.lat, perp, offset)
+    for lha, (lon, lat), delta in zip(lha_positions, offset_positions, terrain_deltas):
         waypoints.append(
             WaypointData(
                 lon=lon,
                 lat=lat,
-                alt=lha.alt + height,
+                alt=lha.alt + height + delta,
                 heading=row_heading,
                 speed=speed,
                 waypoint_type=WaypointType.MEASUREMENT,
@@ -829,6 +855,7 @@ def compute_measurement_trajectory(
     ordered_lha_positions: list[Point3D] | None = None,
     target_lha_position: Point3D | None = None,
     target_agl_type: str | None = None,
+    runway_center: Point3D | None = None,
 ) -> list[WaypointData]:
     """dispatch to the path computation matching the inspection method."""
     if inspection.method == InspectionMethod.ANGULAR_SWEEP:
@@ -846,8 +873,15 @@ def compute_measurement_trajectory(
     elif inspection.method == InspectionMethod.PARALLEL_SIDE_SWEEP:
         if not ordered_lha_positions:
             raise ValueError("parallel-side-sweep requires ordered LHA positions")
+        if runway_center is None:
+            raise ValueError("parallel-side-sweep requires a runway centerline reference point")
         waypoints = calculate_parallel_side_sweep_path(
-            ordered_lha_positions, center, config, inspection.id, speed
+            ordered_lha_positions,
+            runway_center,
+            config,
+            inspection.id,
+            speed,
+            elevation_provider=elevation_provider,
         )
     elif inspection.method == InspectionMethod.HOVER_POINT_LOCK:
         if target_lha_position is None:
@@ -863,12 +897,10 @@ def compute_measurement_trajectory(
     else:
         raise ValueError(f"unsupported inspection method: {inspection.method}")
 
-    # terrain correction before video wrapper - skip for new methods that already
-    # use per-LHA ground elevations baked into lha.position.alt.
-    # caveat: parallel-side-sweep places waypoints at a lateral offset from the LHA,
-    # so terrain at the offset point may differ from the LHA's own ground elevation.
-    # clearance there relies on validate_inspection_pass as the safety net; a future
-    # improvement could sample elevation_provider.get_elevation() at each offset point.
+    # terrain correction before video wrapper. fly-over and hover-point-lock
+    # place waypoints directly above their LHA, so lha.position.alt already
+    # captures the correct ground elevation. parallel-side-sweep applies its
+    # own terrain delta at the offset position inside calculate_parallel_side_sweep_path.
     if inspection.method in (InspectionMethod.ANGULAR_SWEEP, InspectionMethod.VERTICAL_PROFILE):
         _apply_terrain_delta(waypoints, center, elevation_provider)
 
