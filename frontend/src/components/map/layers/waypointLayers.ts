@@ -858,6 +858,10 @@ export function waypointsToSimplifiedCornersGeoJSON(
       continue;
     }
 
+    // inside a measurement sequence (e.g. angular sweep arc) the simplified view
+    // should stay a clean line - skip corner detection for measurement waypoints.
+    if (type === "MEASUREMENT" || type === "HOVER") continue;
+
     // check if direction changes (compare heading before and after)
     const dxA = curr[0] - prev[0];
     const dyA = curr[1] - prev[1];
@@ -886,30 +890,40 @@ export function waypointsToSimplifiedCornersGeoJSON(
 export function waypointsToSimplifiedMeasurementGeoJSON(
   waypoints: WaypointResponse[],
 ): GeoJSON.FeatureCollection {
-  // count measurement/hover waypoints per ground position
-  const counts = new Map<string, { coords: number[]; count: number }>();
+  // group measurement/hover waypoints by ground position to find vertical stacks
+  const groups = new Map<string, WaypointResponse[]>();
 
   for (const wp of waypoints) {
     if (wp.waypoint_type !== "MEASUREMENT" && wp.waypoint_type !== "HOVER") continue;
     const key = coordKey(wp.position.coordinates[0], wp.position.coordinates[1]);
-    const entry = counts.get(key);
-    if (entry) {
-      entry.count++;
-    } else {
-      counts.set(key, { coords: wp.position.coordinates, count: 1 });
-    }
+    const entry = groups.get(key);
+    if (entry) entry.push(wp);
+    else groups.set(key, [wp]);
   }
 
   // only show dots for stacked positions (vertical profiles, count > 1)
   const features: GeoJSON.Feature[] = [];
-  for (const { coords, count } of counts.values()) {
-    if (count > 1) {
-      features.push({
-        type: "Feature",
-        properties: {},
-        geometry: { type: "Point", coordinates: coords },
-      });
-    }
+  for (const wps of groups.values()) {
+    if (wps.length <= 1) continue;
+    const sorted = [...wps].sort((a, b) => a.sequence_order - b.sequence_order);
+    const first = sorted[0];
+    const alts = sorted.map((w) => w.position.coordinates[2] ?? 0);
+    const seqs = sorted.map((w) => w.sequence_order);
+    features.push({
+      type: "Feature",
+      properties: {
+        id: sorted.map((w) => w.id).join(","),
+        waypoint_type: first.waypoint_type,
+        sequence_order: first.sequence_order,
+        stack_count: sorted.length,
+        seq_min: Math.min(...seqs),
+        seq_max: Math.max(...seqs),
+        alt_min: Math.min(...alts),
+        alt_max: Math.max(...alts),
+        altitude: first.position.coordinates[2] ?? 0,
+      },
+      geometry: { type: "Point", coordinates: first.position.coordinates },
+    });
   }
 
   return { type: "FeatureCollection", features };

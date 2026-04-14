@@ -133,7 +133,7 @@ export default function InspectionListPage() {
     try {
       const result = await createInspectionTemplate({
         name: data.name,
-        target_agl_ids: [data.aglId],
+        target_agl_ids: data.aglId ? [data.aglId] : [],
         methods: [data.method],
       });
       setShowCreate(false);

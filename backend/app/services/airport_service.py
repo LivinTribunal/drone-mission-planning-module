@@ -13,8 +13,8 @@ from app.core.config import TERRAIN_DIR, settings
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
 from app.models.agl import AGL, LHA
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
-from app.models.inspection import InspectionConfiguration
 from app.models.enums import MissionStatus, SafetyZoneType
+from app.models.inspection import InspectionConfiguration
 from app.models.mission import DroneProfile, Mission
 from app.schemas.airport import AirportCreate, AirportSummaryResponse, AirportUpdate
 from app.schemas.geometry import PolygonZ, parse_ewkb

@@ -26,9 +26,13 @@ from app.services.trajectory_computation import (
     compute_measurement_trajectory,
     determine_end_position,
     determine_start_position,
+    find_lha_by_id,
+    find_lha_in_surfaces,
     get_glide_slope_angle,
     get_lha_positions,
     get_lha_setting_angles,
+    get_ordered_lha_positions,
+    get_runway_centerline_midpoint,
     get_runway_heading,
     resolve_density,
     resolve_speed,
@@ -40,6 +44,8 @@ from app.services.trajectory_pathfinding import (
     resolve_inspection_collisions,
 )
 from app.services.trajectory_types import (
+    DEFAULT_FLY_OVER_SPEED,
+    DEFAULT_PARALLEL_SPEED,
     DEFAULT_RESERVE_MARGIN,
     DEFAULT_SPEED,
     MIN_ARC_RADIUS,
@@ -112,7 +118,15 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
         .filter(SafetyZone.airport_id == airport.id, SafetyZone.is_active == True)  # noqa: E712
         .all()
     )
-    surfaces = db.query(AirfieldSurface).filter(AirfieldSurface.airport_id == airport.id).all()
+    # eager-load surface -> agls -> lhas so hover-point-lock's AGL-agnostic
+    # lookup (find_lha_in_surfaces) doesn't trigger N+1 lazy loads on the
+    # trajectory critical path.
+    surfaces = (
+        db.query(AirfieldSurface)
+        .options(joinedload(AirfieldSurface.agls).joinedload(AGL.lhas))
+        .filter(AirfieldSurface.airport_id == airport.id)
+        .all()
+    )
 
     # constraints intentionally empty during generation - constraint rules are
     # per-flight-plan children that get cascade-deleted with the old plan.
@@ -349,6 +363,56 @@ def _generate_trajectory_inner(
         rwy_heading = get_runway_heading(template, data.surfaces)
         setting_angles = get_lha_setting_angles(template, lha_ids)
 
+        # ordered LHA positions are used by fly-over and parallel-side-sweep
+        ordered_lhas = get_ordered_lha_positions(template, lha_ids)
+
+        # parallel-side-sweep needs a point on the runway centerline to orient
+        # the perpendicular offset. LHA row centroid is not a substitute.
+        runway_center: Point3D | None = None
+        if inspection.method == InspectionMethod.PARALLEL_SIDE_SWEEP:
+            runway_center = get_runway_centerline_midpoint(template, data.surfaces)
+            if runway_center is None:
+                raise TrajectoryGenerationError(
+                    f"{template.name} #{inspection.sequence_order}: "
+                    "parallel-side-sweep requires a runway surface with a centerline "
+                    "for its target AGL"
+                )
+
+        # hover-point-lock needs a single operator-selected LHA
+        target_lha_pos: Point3D | None = None
+        target_agl_type: str | None = None
+        is_new_method = inspection.method in (
+            InspectionMethod.FLY_OVER,
+            InspectionMethod.PARALLEL_SIDE_SWEEP,
+            InspectionMethod.HOVER_POINT_LOCK,
+        )
+        if inspection.method == InspectionMethod.HOVER_POINT_LOCK:
+            selected_id = config.selected_lha_id
+            if selected_id is None:
+                raise TrajectoryGenerationError(
+                    f"{template.name} #{inspection.sequence_order}: "
+                    "hover-point-lock requires a selected LHA"
+                )
+            # hover-point-lock is AGL-agnostic: search across all airport AGLs
+            # instead of the template's target list.
+            match = find_lha_by_id(template, selected_id)
+            if match is None:
+                match = find_lha_in_surfaces(data.surfaces, selected_id)
+            if match is None:
+                raise TrajectoryGenerationError(
+                    f"{template.name} #{inspection.sequence_order}: "
+                    f"selected LHA {selected_id} not found in airport"
+                )
+            target_lha_pos, target_agl = match
+            target_agl_type = target_agl.agl_type
+            # hover can reference a "RUNWAY" bearing - resolve heading from the
+            # surface hosting the selected LHA's AGL when the template has no
+            # target AGLs of its own (AGL-agnostic hover templates).
+            for surface in data.surfaces:
+                if surface.id == target_agl.surface_id and surface.heading:
+                    rwy_heading = surface.heading
+                    break
+
         # compute optimal density if not overridden
         density, density_warning = resolve_density(inspection.method, setting_angles, config)
         if density_warning:
@@ -360,17 +424,50 @@ def _generate_trajectory_inner(
                 )
             )
 
-        # compute optimal speed from path geometry and camera frame rate
-        start_pos = determine_start_position(
-            center, config, inspection.method, rwy_heading, glide_slope
-        )
-        end_pos = determine_end_position(
-            center, config, inspection.method, rwy_heading, glide_slope
-        )
-        path_dist = distance_between(start_pos.lon, start_pos.lat, end_pos.lon, end_pos.lat)
+        # compute path distance for speed/framerate check
+        if inspection.method == InspectionMethod.HOVER_POINT_LOCK:
+            # hover has zero travel distance by definition
+            path_dist = 0.0
+        elif is_new_method:
+            path_dist = 0.0
+            for k in range(1, len(ordered_lhas)):
+                path_dist += distance_between(
+                    ordered_lhas[k - 1].lon,
+                    ordered_lhas[k - 1].lat,
+                    ordered_lhas[k].lon,
+                    ordered_lhas[k].lat,
+                )
+        else:
+            start_pos = determine_start_position(
+                center, config, inspection.method, rwy_heading, glide_slope
+            )
+            end_pos = determine_end_position(
+                center, config, inspection.method, rwy_heading, glide_slope
+            )
+            path_dist = distance_between(start_pos.lon, start_pos.lat, end_pos.lon, end_pos.lat)
+
+        # method-specific default speed overrides mission default for new methods
+        if inspection.method == InspectionMethod.FLY_OVER:
+            method_default_speed = DEFAULT_FLY_OVER_SPEED
+        elif inspection.method == InspectionMethod.PARALLEL_SIDE_SWEEP:
+            method_default_speed = DEFAULT_PARALLEL_SPEED
+        else:
+            method_default_speed = default_speed
+
+        # fly-over and parallel-side-sweep generate exactly len(ordered_lhas)
+        # waypoints (one per LHA), not config.measurement_density. passing the
+        # wrong density inflates waypoint_spacing and yields over-conservative
+        # speed recommendations plus spurious framerate warnings.
+        if inspection.method in (
+            InspectionMethod.FLY_OVER,
+            InspectionMethod.PARALLEL_SIDE_SWEEP,
+        ):
+            density_for_speed = max(len(ordered_lhas), 2)
+        else:
+            density_for_speed = config.measurement_density
 
         speed, speed_warning, optimal_speed = resolve_speed(
-            config, path_dist, config.measurement_density, drone, default_speed
+            config, path_dist, density_for_speed, drone, method_default_speed
         )
         if speed_warning:
             warnings.append(
@@ -385,7 +482,13 @@ def _generate_trajectory_inner(
             if warning:
                 warnings.append((warning, []))
 
-        if drone:
+        # FOV check only applies to methods where the drone hovers/approaches at a fixed
+        # standoff radius - fly-over and parallel-side-sweep fly along the lights so
+        # horizontal_distance is not a meaningful approach distance for them.
+        if drone and inspection.method in (
+            InspectionMethod.ANGULAR_SWEEP,
+            InspectionMethod.VERTICAL_PROFILE,
+        ):
             fov_distance = config.horizontal_distance or MIN_ARC_RADIUS
             approach = (rwy_heading + 180) % 360
             warning = check_sensor_fov(drone, lha_positions, fov_distance, approach)
@@ -403,6 +506,10 @@ def _generate_trajectory_inner(
                 speed,
                 setting_angles,
                 elevation_provider=data.elevation_provider,
+                ordered_lha_positions=ordered_lhas,
+                target_lha_position=target_lha_pos,
+                target_agl_type=target_agl_type,
+                runway_center=runway_center,
             )
         except ValueError as e:
             raise TrajectoryGenerationError(str(e))

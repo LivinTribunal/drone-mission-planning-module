@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Modal from "@/components/common/Modal";
 import Input from "@/components/common/Input";
 import Button from "@/components/common/Button";
 import type { AGLResponse } from "@/types/airport";
 import type { InspectionMethod } from "@/types/enums";
+import { aglTypesForMethod } from "@/utils/methodAglCompatibility";
 
 interface CreateTemplateDialogProps {
   isOpen: boolean;
@@ -12,6 +13,16 @@ interface CreateTemplateDialogProps {
   agls: AGLResponse[];
   onSubmit: (data: { name: string; aglId: string; method: InspectionMethod }) => Promise<void>;
 }
+
+// hover-point-lock is not tied to a specific AGL - operator picks the LHA per mission
+const AGL_AGNOSTIC_METHODS: InspectionMethod[] = ["HOVER_POINT_LOCK"];
+const ALL_METHODS: InspectionMethod[] = [
+  "VERTICAL_PROFILE",
+  "ANGULAR_SWEEP",
+  "HOVER_POINT_LOCK",
+  "FLY_OVER",
+  "PARALLEL_SIDE_SWEEP",
+];
 
 export default function CreateTemplateDialog({
   isOpen,
@@ -26,6 +37,26 @@ export default function CreateTemplateDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  const requiresAgl = method !== "" && !AGL_AGNOSTIC_METHODS.includes(method);
+  const compatAglTypes = method ? aglTypesForMethod(method) : [];
+  const availableAgls = method
+    ? agls.filter((a) => compatAglTypes.includes(a.agl_type))
+    : [];
+  const selectedAgl = agls.find((a) => a.id === aglId);
+
+  // auto-prefill name when method (and AGL, if needed) changes
+  useEffect(() => {
+    if (!method) return;
+    const methodLabel = t(`map.inspectionMethod.${method}`);
+    if (!requiresAgl) {
+      setName(methodLabel);
+      return;
+    }
+    if (!selectedAgl) return;
+    const sidePart = selectedAgl.side ? ` ${selectedAgl.side}` : "";
+    setName(`${selectedAgl.name}${sidePart} - ${methodLabel}`);
+  }, [selectedAgl, method, requiresAgl, t]);
 
   function resetForm() {
     setName("");
@@ -46,8 +77,8 @@ export default function CreateTemplateDialog({
     const newErrors: Record<string, string> = {};
 
     if (!name.trim()) newErrors.name = t("coordinator.inspections.nameRequired");
-    if (!aglId) newErrors.agl = t("coordinator.inspections.aglRequired");
     if (!method) newErrors.method = t("coordinator.inspections.methodRequired");
+    if (requiresAgl && !aglId) newErrors.agl = t("coordinator.inspections.aglRequired");
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -57,7 +88,11 @@ export default function CreateTemplateDialog({
     setSubmitting(true);
     setApiError(null);
     try {
-      await onSubmit({ name: name.trim(), aglId, method: method as InspectionMethod });
+      await onSubmit({
+        name: name.trim(),
+        aglId: requiresAgl ? aglId : "",
+        method: method as InspectionMethod,
+      });
       resetForm();
     } catch {
       setApiError(t("coordinator.inspections.createError"));
@@ -88,50 +123,24 @@ export default function CreateTemplateDialog({
         <div>
           <div className="relative">
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-              {t("coordinator.inspections.selectAgl")}
-            </label>
-            <select
-              value={aglId}
-              onChange={(e) => {
-                setAglId(e.target.value);
-                setErrors((prev) => ({ ...prev, agl: "" }));
-              }}
-              className="w-full px-4 py-2.5 pr-10 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
-              data-testid="create-template-agl"
-            >
-              <option value="">{t("coordinator.inspections.selectAgl")}</option>
-              {agls.map((agl) => (
-                <option key={agl.id} value={agl.id}>
-                  {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
-                </option>
-              ))}
-            </select>
-            <svg className="pointer-events-none absolute right-3 top-[2.1rem] h-4 w-4 text-tv-text-secondary" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-            </svg>
-          </div>
-          {errors.agl && (
-            <p className="text-xs text-tv-error mt-1">{errors.agl}</p>
-          )}
-        </div>
-
-        <div>
-          <div className="relative">
-            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
               {t("coordinator.inspections.selectMethod")}
             </label>
             <select
               value={method}
               onChange={(e) => {
                 setMethod(e.target.value as InspectionMethod | "");
-                setErrors((prev) => ({ ...prev, method: "" }));
+                setAglId("");
+                setErrors((prev) => ({ ...prev, method: "", agl: "" }));
               }}
               className="w-full px-4 py-2.5 pr-10 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
               data-testid="create-template-method"
             >
               <option value="">{t("coordinator.inspections.selectMethod")}</option>
-              <option value="ANGULAR_SWEEP">{t("coordinator.inspections.angularSweep")}</option>
-              <option value="VERTICAL_PROFILE">{t("coordinator.inspections.verticalProfile")}</option>
+              {ALL_METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {t(`map.inspectionMethod.${m}`)}
+                </option>
+              ))}
             </select>
             <svg className="pointer-events-none absolute right-3 top-[2.1rem] h-4 w-4 text-tv-text-secondary" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
@@ -141,6 +150,38 @@ export default function CreateTemplateDialog({
             <p className="text-xs text-tv-error mt-1">{errors.method}</p>
           )}
         </div>
+
+        {requiresAgl && (
+          <div>
+            <div className="relative">
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("coordinator.inspections.selectAgl")}
+              </label>
+              <select
+                value={aglId}
+                onChange={(e) => {
+                  setAglId(e.target.value);
+                  setErrors((prev) => ({ ...prev, agl: "" }));
+                }}
+                className="w-full px-4 py-2.5 pr-10 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
+                data-testid="create-template-agl"
+              >
+                <option value="">{t("coordinator.inspections.selectAgl")}</option>
+                {availableAgls.map((agl) => (
+                  <option key={agl.id} value={agl.id}>
+                    {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
+                  </option>
+                ))}
+              </select>
+              <svg className="pointer-events-none absolute right-3 top-[2.1rem] h-4 w-4 text-tv-text-secondary" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </div>
+            {errors.agl && (
+              <p className="text-xs text-tv-error mt-1">{errors.agl}</p>
+            )}
+          </div>
+        )}
 
         {apiError && (
           <p className="text-xs text-tv-error">{apiError}</p>

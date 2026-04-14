@@ -1,8 +1,12 @@
 import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { GripVertical, Trash2, Eye, EyeOff, Plus, ChevronDown } from "lucide-react";
+import type { AGLResponse, AglType } from "@/types/airport";
 import type { InspectionResponse } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
+import type { InspectionMethod } from "@/types/enums";
+import { compatibleMethods } from "@/utils/methodAglCompatibility";
+import { methodBadgeStyle } from "@/utils/inspectionMethodBadge";
 
 interface InspectionListProps {
   inspections: InspectionResponse[];
@@ -16,6 +20,9 @@ interface InspectionListProps {
   canReorder: boolean;
   visibleIds: Set<string>;
   onToggleVisibility: (id: string) => void;
+  // optional - enables per-row method dropdown filtered by AGL compat
+  agls?: AGLResponse[];
+  onChangeMethod?: (inspectionId: string, method: InspectionMethod) => void;
 }
 
 export default function InspectionList({
@@ -30,6 +37,8 @@ export default function InspectionList({
   canReorder,
   visibleIds,
   onToggleVisibility,
+  agls,
+  onChangeMethod,
 }: InspectionListProps) {
   const { t } = useTranslation();
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -174,6 +183,56 @@ export default function InspectionList({
                 <span className="flex-1 text-tv-text-primary truncate">
                   {template?.name ?? insp.template_id.slice(0, 8)}
                 </span>
+
+                <span
+                  className="flex-shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium leading-none"
+                  style={methodBadgeStyle(insp.method)}
+                  data-testid={`inspection-method-badge-${insp.id}`}
+                >
+                  {t(`map.inspectionMethodShort.${insp.method}`, insp.method)}
+                </span>
+
+                {onChangeMethod && template && (() => {
+                  // resolve this template's AGL types, filter methods
+                  const aglTypes: AglType[] = [];
+                  if (agls) {
+                    const seen = new Set<AglType>();
+                    for (const aid of template.target_agl_ids ?? []) {
+                      const a = agls.find((x) => x.id === aid);
+                      if (a && !seen.has(a.agl_type)) {
+                        seen.add(a.agl_type);
+                        aglTypes.push(a.agl_type);
+                      }
+                    }
+                  }
+                  const available = compatibleMethods(
+                    template.methods,
+                    aglTypes,
+                  );
+                  if (available.length <= 1) return null;
+                  return (
+                    <select
+                      value={insp.method}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        onChangeMethod(
+                          insp.id,
+                          e.target.value as InspectionMethod,
+                        );
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={!isDraft}
+                      className="px-2 py-1 rounded-full text-[11px] border border-tv-border bg-tv-bg text-tv-text-primary disabled:opacity-50"
+                      data-testid={`inspection-method-select-${insp.id}`}
+                    >
+                      {available.map((m) => (
+                        <option key={m} value={m}>
+                          {m.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
 
                 <button
                   onClick={(e) => {
