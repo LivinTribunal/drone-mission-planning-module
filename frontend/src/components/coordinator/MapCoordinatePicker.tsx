@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import maplibregl from "maplibre-gl";
+import { Maximize2, Minimize2 } from "lucide-react";
 import Button from "@/components/common/Button";
 import Input from "@/components/common/Input";
 
@@ -11,13 +12,35 @@ interface MapCoordinatePickerProps {
   initialLon?: number;
 }
 
+const ESRI_TILES =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const ESRI_ATTRIBUTION =
+  "Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community";
+
+function makeSatelliteStyle(): maplibregl.StyleSpecification {
+  /** inline maplibre style with esri world imagery raster tiles. */
+  return {
+    version: 8,
+    sources: {
+      satellite: {
+        type: "raster",
+        tiles: [ESRI_TILES],
+        tileSize: 256,
+        maxzoom: 18,
+        attribution: ESRI_ATTRIBUTION,
+      },
+    },
+    layers: [{ id: "satellite-base", type: "raster", source: "satellite" }],
+  };
+}
+
 export default function MapCoordinatePicker({
   onConfirm,
   onClose,
   initialLat,
   initialLon,
 }: MapCoordinatePickerProps) {
-  /** small map modal for clicking to pick coordinates. */
+  /** map modal with satellite tiles + enlarge for clicking to pick coordinates. */
   const { t } = useTranslation();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
@@ -25,13 +48,14 @@ export default function MapCoordinatePicker({
   const [lat, setLat] = useState(initialLat ?? 48.17);
   const [lon, setLon] = useState(initialLon ?? 17.21);
   const [alt, setAlt] = useState(0);
+  const [enlarged, setEnlarged] = useState(false);
 
   useEffect(() => {
     if (!mapRef.current) return;
 
     const map = new maplibregl.Map({
       container: mapRef.current,
-      style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+      style: makeSatelliteStyle(),
       center: [lon, lat],
       zoom: 4,
     });
@@ -58,6 +82,33 @@ export default function MapCoordinatePicker({
     }
   }, [lat, lon]);
 
+  // resize map when enlarged state toggles
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const frame = requestAnimationFrame(() => map.resize());
+    return () => cancelAnimationFrame(frame);
+  }, [enlarged]);
+
+  // escape collapses from enlarged, or closes modal
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (enlarged) {
+        setEnlarged(false);
+      } else {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [enlarged, onClose]);
+
+  const mapHeightClass = enlarged ? "h-[70vh]" : "h-64";
+  const shellClass = enlarged
+    ? "fixed inset-4 max-w-none flex flex-col rounded-2xl border border-tv-border bg-tv-surface p-4"
+    : "w-full max-w-lg rounded-2xl border border-tv-border bg-tv-surface p-4";
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
@@ -68,7 +119,7 @@ export default function MapCoordinatePicker({
       aria-modal="true"
       data-testid="coordinate-picker-modal"
     >
-      <div className="w-full max-w-lg rounded-2xl border border-tv-border bg-tv-surface p-4">
+      <div className={shellClass}>
         <h3 className="text-sm font-semibold text-tv-text-primary mb-2">
           {t("coordinator.coordinatePicker.title")}
         </h3>
@@ -76,10 +127,31 @@ export default function MapCoordinatePicker({
           {t("coordinator.coordinatePicker.instructions")}
         </p>
 
-        <div
-          ref={mapRef}
-          className="w-full h-64 rounded-xl overflow-hidden border border-tv-border mb-3"
-        />
+        <div className={`relative w-full ${mapHeightClass} rounded-xl overflow-hidden border border-tv-border mb-3 ${enlarged ? "flex-1" : ""}`}>
+          <div ref={mapRef} className="w-full h-full" />
+          <button
+            type="button"
+            onClick={() => setEnlarged((v) => !v)}
+            className="absolute top-2 right-2 z-10 flex items-center justify-center h-8 w-8 rounded-full border border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+            aria-label={
+              enlarged
+                ? t("coordinator.coordinatePicker.collapse")
+                : t("coordinator.coordinatePicker.enlarge")
+            }
+            title={
+              enlarged
+                ? t("coordinator.coordinatePicker.collapse")
+                : t("coordinator.coordinatePicker.enlarge")
+            }
+            data-testid="coordinate-picker-enlarge"
+          >
+            {enlarged ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize2 className="h-4 w-4" />
+            )}
+          </button>
+        </div>
 
         <div className="grid grid-cols-3 gap-2 mb-3">
           <Input

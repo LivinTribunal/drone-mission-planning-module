@@ -272,6 +272,9 @@
     "validateTrajectory": "Validate Trajectory",
     "placeTakeoff": "Place Takeoff",
     "placeLanding": "Place Landing",
+    "useTakeoffAsLanding": "Use takeoff as landing",
+    "useTakeoffAsLandingHint": "Landing will match the takeoff point",
+    "markerUnsaved": "Unsaved",
     "computeTrajectory": "Compute Trajectory",
     "recomputeTrajectory": "Recompute Trajectory",
     "noChangesToRecompute": "No changes to recompute",
@@ -1038,7 +1041,9 @@
     "coordinatePicker": {
       "title": "Pick Location",
       "instructions": "Click on the map to set coordinates",
-      "confirm": "Confirm"
+      "confirm": "Confirm",
+      "enlarge": "Enlarge map",
+      "collapse": "Collapse map"
     },
     "inspections": {
       "title": "Inspection Templates",

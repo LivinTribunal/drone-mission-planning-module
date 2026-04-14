@@ -41,7 +41,6 @@ import WarningsPanel from "@/components/mission/WarningsPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
 import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
-import PoiInfoPanel from "@/components/map/overlays/PoiInfoPanel";
 import Modal from "@/components/common/Modal";
 import type { MapFeature } from "@/types/map";
 
@@ -781,15 +780,7 @@ export default function MissionConfigPage() {
               selectedWarning={selectedWarning}
               onWarningClose={() => setSelectedWarning(null)}
             >
-              {/* feature info panel */}
-              {selectedFeature && (
-                <div className="absolute top-3 right-3 z-10 w-56">
-                  <PoiInfoPanel
-                    feature={selectedFeature}
-                    onClose={() => setSelectedFeature(null)}
-                  />
-                </div>
-              )}
+              {/* feature info panel renders on the left inside AirportMap for all feature types */}
 
               {/* pick-on-map banner */}
               {pickingCoord && (
