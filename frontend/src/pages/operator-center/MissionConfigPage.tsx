@@ -866,6 +866,7 @@ export default function MissionConfigPage() {
         onSelect={handleAddInspection}
         usedTemplateIds={new Set(mission.inspections.map((i) => i.template_id))}
         agls={allAgls}
+        surfaces={airportDetail?.surfaces}
       />
 
       {/* unsaved changes dialog */}

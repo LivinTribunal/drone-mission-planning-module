@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Modal from "@/components/common/Modal";
-import type { AGLResponse, AglType } from "@/types/airport";
+import type { AGLResponse, AglType, SurfaceResponse } from "@/types/airport";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { InspectionMethod } from "@/types/enums";
 import { compatibleMethods } from "@/utils/methodAglCompatibility";
@@ -15,6 +15,8 @@ interface TemplatePickerProps {
   usedTemplateIds?: Set<string>;
   // optional - enables 2-step grouping by AGL type
   agls?: AGLResponse[];
+  // optional - enables sorting templates by runway/surface identifier
+  surfaces?: SurfaceResponse[];
 }
 
 function templateAglTypes(
@@ -29,6 +31,50 @@ function templateAglTypes(
   return [...types];
 }
 
+// natural-order compare so "04R" < "09" < "22L"
+function compareRunway(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+}
+
+// per-template sort key: earliest runway identifier among its target AGLs.
+// templates whose AGLs don't resolve to any surface return "" and sink to the end.
+function buildSortKey(
+  agls: AGLResponse[],
+  surfaces: SurfaceResponse[],
+): (tpl: InspectionTemplateResponse) => string {
+  const aglToSurfaceId = new Map<string, string>();
+  for (const agl of agls) aglToSurfaceId.set(agl.id, agl.surface_id);
+  const surfaceIdToIdentifier = new Map<string, string>();
+  for (const s of surfaces) surfaceIdToIdentifier.set(s.id, s.identifier);
+  return (tpl) => {
+    const idents: string[] = [];
+    for (const aglId of tpl.target_agl_ids ?? []) {
+      const surfaceId = aglToSurfaceId.get(aglId);
+      if (!surfaceId) continue;
+      const ident = surfaceIdToIdentifier.get(surfaceId);
+      if (ident) idents.push(ident);
+    }
+    if (idents.length === 0) return "";
+    idents.sort(compareRunway);
+    return idents[0];
+  };
+}
+
+function sortByRunway(
+  list: InspectionTemplateResponse[],
+  sortKey: (tpl: InspectionTemplateResponse) => string,
+): InspectionTemplateResponse[] {
+  const copy = [...list];
+  copy.sort((a, b) => {
+    const ka = sortKey(a);
+    const kb = sortKey(b);
+    if (ka === "" && kb !== "") return 1;
+    if (ka !== "" && kb === "") return -1;
+    return compareRunway(ka, kb);
+  });
+  return copy;
+}
+
 export default function TemplatePicker({
   isOpen,
   onClose,
@@ -36,6 +82,7 @@ export default function TemplatePicker({
   onSelect,
   usedTemplateIds,
   agls,
+  surfaces,
 }: TemplatePickerProps) {
   const { t } = useTranslation();
   const [selectedMethod, setSelectedMethod] = useState<
@@ -45,6 +92,8 @@ export default function TemplatePicker({
 
   // group templates by AGL type if we have airport AGLs to resolve against.
   // hover-point-lock templates are AGL-agnostic and always land in the "special" bucket.
+  // when surfaces are available, templates inside each bucket are sorted by runway
+  // identifier with natural order (04R < 09 < 22L).
   const grouped = useMemo(() => {
     if (!agls || agls.length === 0) return null;
     const byType: Record<AglType, InspectionTemplateResponse[]> = {
@@ -62,8 +111,21 @@ export default function TemplatePicker({
       }
       for (const type of types) byType[type].push(tpl);
     }
+    if (surfaces && surfaces.length > 0) {
+      const sortKey = buildSortKey(agls, surfaces);
+      byType.PAPI = sortByRunway(byType.PAPI, sortKey);
+      byType.RUNWAY_EDGE_LIGHTS = sortByRunway(byType.RUNWAY_EDGE_LIGHTS, sortKey);
+    }
     return { byType, special };
-  }, [templates, agls]);
+  }, [templates, agls, surfaces]);
+
+  // flat fallback list - also sorted by runway when surfaces are available
+  const flatTemplates = useMemo(() => {
+    if (!surfaces || surfaces.length === 0 || !agls || agls.length === 0) {
+      return templates;
+    }
+    return sortByRunway(templates, buildSortKey(agls, surfaces));
+  }, [templates, agls, surfaces]);
 
   function compatMethods(tpl: InspectionTemplateResponse): InspectionMethod[] {
     // if we have AGL context, narrow the methods to compatible ones
@@ -226,7 +288,7 @@ export default function TemplatePicker({
           </div>
         )}
 
-        {!shouldGroup && templates.map(renderTemplateRow)}
+        {!shouldGroup && flatTemplates.map(renderTemplateRow)}
       </div>
     </Modal>
   );
