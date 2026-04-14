@@ -9,6 +9,7 @@ export interface InspectionConfigResponse {
   hover_duration: number | null;
   horizontal_distance: number | null;
   sweep_angle: number | null;
+  vertical_profile_height: number | null;
   lha_ids: string[] | null;
   capture_mode: CaptureMode | null;
   recording_setup_duration: number | null;
@@ -19,6 +20,8 @@ export interface InspectionConfigResponse {
   height_above_lha: number | null;
   camera_gimbal_angle: number | null;
   selected_lha_id: string | null;
+  hover_bearing: number | null;
+  hover_bearing_reference: "RUNWAY" | "COMPASS" | null;
 }
 
 export interface InspectionTemplateResponse {

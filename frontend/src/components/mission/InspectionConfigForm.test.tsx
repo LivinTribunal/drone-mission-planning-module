@@ -147,9 +147,9 @@ describe("InspectionConfigForm method variants", () => {
       template: papiTemplate as never,
     });
     const btn = screen.getByTestId("angle-lock-toggle");
-    expect(btn).toHaveAttribute("aria-pressed", "false");
+    expect(btn).toHaveAttribute("aria-checked", "false");
     fireEvent.click(btn);
-    expect(btn).toHaveAttribute("aria-pressed", "true");
+    expect(btn).toHaveAttribute("aria-checked", "true");
   });
 
   it("hover-point-lock: editing height with lock on recomputes gimbal angle", () => {
@@ -191,7 +191,13 @@ describe("InspectionConfigForm method variants", () => {
   });
 
   it("renders geometry-override fields for VERTICAL_PROFILE and ANGULAR_SWEEP", () => {
-    for (const method of ["VERTICAL_PROFILE", "ANGULAR_SWEEP"] as const) {
+    // angular sweep shows horizontal_distance + sweep_angle;
+    // vertical profile shows horizontal_distance + vertical_profile_height.
+    const cases: Array<{ method: "VERTICAL_PROFILE" | "ANGULAR_SWEEP"; secondField: string }> = [
+      { method: "ANGULAR_SWEEP", secondField: "inspection-sweep-angle" },
+      { method: "VERTICAL_PROFILE", secondField: "inspection-vertical-profile-height" },
+    ];
+    for (const { method, secondField } of cases) {
       const { unmount } = renderForm({
         inspection: baseInspection({ method }),
         template: papiTemplate as never,
@@ -199,7 +205,7 @@ describe("InspectionConfigForm method variants", () => {
       expect(
         screen.getByTestId("inspection-horizontal-distance"),
       ).toBeInTheDocument();
-      expect(screen.getByTestId("inspection-sweep-angle")).toBeInTheDocument();
+      expect(screen.getByTestId(secondField)).toBeInTheDocument();
       unmount();
     }
   });

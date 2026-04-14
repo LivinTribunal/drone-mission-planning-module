@@ -27,6 +27,7 @@ from app.services.trajectory_computation import (
     determine_end_position,
     determine_start_position,
     find_lha_by_id,
+    find_lha_in_surfaces,
     get_glide_slope_angle,
     get_lha_positions,
     get_lha_setting_angles,
@@ -384,14 +385,25 @@ def _generate_trajectory_inner(
                     f"{template.name} #{inspection.sequence_order}: "
                     "hover-point-lock requires a selected LHA"
                 )
+            # hover-point-lock is AGL-agnostic: search across all airport AGLs
+            # instead of the template's target list.
             match = find_lha_by_id(template, selected_id)
+            if match is None:
+                match = find_lha_in_surfaces(data.surfaces, selected_id)
             if match is None:
                 raise TrajectoryGenerationError(
                     f"{template.name} #{inspection.sequence_order}: "
-                    f"selected LHA {selected_id} not found in template targets"
+                    f"selected LHA {selected_id} not found in airport"
                 )
             target_lha_pos, target_agl = match
             target_agl_type = target_agl.agl_type
+            # hover can reference a "RUNWAY" bearing - resolve heading from the
+            # surface hosting the selected LHA's AGL when the template has no
+            # target AGLs of its own (AGL-agnostic hover templates).
+            for surface in data.surfaces:
+                if surface.id == target_agl.surface_id and surface.heading:
+                    rwy_heading = surface.heading
+                    break
 
         # compute optimal density if not overridden
         density, density_warning = resolve_density(inspection.method, setting_angles, config)

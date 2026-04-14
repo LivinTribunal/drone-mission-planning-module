@@ -3,6 +3,7 @@ import Input from "@/components/common/Input";
 import type { InspectionConfigResponse } from "@/types/inspectionTemplate";
 import type { InspectionMethod } from "@/types/enums";
 import type { AGLResponse } from "@/types/airport";
+import { methodsForAgl } from "@/utils/methodAglCompatibility";
 
 interface TemplateConfigSectionProps {
   config: Omit<InspectionConfigResponse, "id"> | null;
@@ -43,6 +44,18 @@ export default function TemplateConfigSection({
     ? selectedAgl.lhas.length > 0 && selectedAgl.lhas.every((lha) => selectedLhaIds.has(lha.id))
     : false;
 
+  // methods compatible with the selected AGL type. HOVER_POINT_LOCK is
+  // AGL-agnostic so it's the only option when no AGL is picked yet.
+  // legacy templates may carry a method that's no longer compatible - keep
+  // it in the list so the select can still display its current value.
+  const compatMethods: InspectionMethod[] = selectedAgl
+    ? methodsForAgl(selectedAgl.agl_type)
+    : ["HOVER_POINT_LOCK"];
+  const methodOptions = compatMethods.includes(method as InspectionMethod)
+    ? compatMethods
+    : [...compatMethods, method as InspectionMethod];
+  const methodLocked = !selectedAglId && method !== "HOVER_POINT_LOCK";
+
   return (
     <div className="flex flex-col gap-3">
       {/* agl system dropdown */}
@@ -67,7 +80,8 @@ export default function TemplateConfigSection({
         </svg>
       </div>
 
-      {/* method dropdown */}
+      {/* method dropdown - hidden for hover point lock since it's implicit */}
+      {method !== "HOVER_POINT_LOCK" && (
       <div className="relative">
         <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
           {t("coordinator.inspections.method")}
@@ -75,15 +89,25 @@ export default function TemplateConfigSection({
         <select
           value={method}
           onChange={(e) => onMethodChange(e.target.value as InspectionMethod)}
-          className="w-full px-4 py-2.5 pr-10 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
+          disabled={methodLocked}
+          className="w-full px-4 py-2.5 pr-10 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <option value="ANGULAR_SWEEP">{t("coordinator.inspections.angularSweep")}</option>
-          <option value="VERTICAL_PROFILE">{t("coordinator.inspections.verticalProfile")}</option>
+          {methodOptions.map((m) => (
+            <option key={m} value={m}>
+              {t(`map.inspectionMethod.${m}`, m)}
+            </option>
+          ))}
         </select>
+        {methodLocked && (
+          <p className="text-[11px] text-tv-text-muted mt-1">
+            {t("coordinator.inspections.selectAglFirst")}
+          </p>
+        )}
         <svg className="pointer-events-none absolute right-3 top-[2.1rem] h-4 w-4 text-tv-text-secondary" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
         </svg>
       </div>
+      )}
 
       {/* lha units */}
       <div>
@@ -196,6 +220,16 @@ export default function TemplateConfigSection({
           type="number"
           value={config?.sweep_angle ?? ""}
           onChange={(e) => handleNumber("sweep_angle", e.target.value)}
+          step="0.5"
+        />
+      )}
+
+      {method === "VERTICAL_PROFILE" && (
+        <Input
+          label={t("mission.config.verticalProfileHeight")}
+          type="number"
+          value={config?.vertical_profile_height ?? ""}
+          onChange={(e) => handleNumber("vertical_profile_height", e.target.value)}
           step="0.5"
         />
       )}

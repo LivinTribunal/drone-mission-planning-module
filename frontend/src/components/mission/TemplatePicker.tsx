@@ -5,6 +5,7 @@ import type { AGLResponse, AglType } from "@/types/airport";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { InspectionMethod } from "@/types/enums";
 import { compatibleMethods } from "@/utils/methodAglCompatibility";
+import { methodBadgeStyle } from "@/utils/inspectionMethodBadge";
 
 interface TemplatePickerProps {
   isOpen: boolean;
@@ -42,23 +43,26 @@ export default function TemplatePicker({
   >({});
   const [selectedAgl, setSelectedAgl] = useState<AglType | null>(null);
 
-  // group templates by AGL type if we have airport AGLs to resolve against
+  // group templates by AGL type if we have airport AGLs to resolve against.
+  // hover-point-lock templates are AGL-agnostic and always land in the "special" bucket.
   const grouped = useMemo(() => {
     if (!agls || agls.length === 0) return null;
     const byType: Record<AglType, InspectionTemplateResponse[]> = {
       PAPI: [],
       RUNWAY_EDGE_LIGHTS: [],
     };
-    const ungrouped: InspectionTemplateResponse[] = [];
+    const special: InspectionTemplateResponse[] = [];
     for (const tpl of templates) {
+      const isHoverOnly =
+        tpl.methods.length > 0 && tpl.methods.every((m) => m === "HOVER_POINT_LOCK");
       const types = templateAglTypes(tpl, agls);
-      if (types.length === 0) {
-        ungrouped.push(tpl);
+      if (isHoverOnly || types.length === 0) {
+        special.push(tpl);
         continue;
       }
       for (const type of types) byType[type].push(tpl);
     }
-    return { byType, ungrouped };
+    return { byType, special };
   }, [templates, agls]);
 
   function compatMethods(tpl: InspectionTemplateResponse): InspectionMethod[] {
@@ -83,7 +87,7 @@ export default function TemplatePicker({
     return (
       <div
         key={tpl.id}
-        className="flex items-center gap-3 p-3 rounded-2xl border border-tv-border hover:bg-tv-surface-hover cursor-pointer transition-colors"
+        className="flex items-center gap-3 p-3 rounded-2xl border border-tv-border bg-tv-bg hover:bg-tv-surface-hover cursor-pointer transition-colors"
         onClick={() => handleSelect(tpl)}
         data-testid={`template-option-${tpl.id}`}
       >
@@ -116,20 +120,24 @@ export default function TemplatePicker({
               }));
             }}
             onClick={(e) => e.stopPropagation()}
-            className="px-2.5 py-1 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary"
+            style={methodBadgeStyle(selectedMethod[tpl.id] ?? methods[0])}
+            className="appearance-none px-2.5 py-1 rounded-full text-xs font-medium border-0 cursor-pointer focus:outline-none"
             data-testid={`method-select-${tpl.id}`}
           >
             {methods.map((m) => (
               <option key={m} value={m}>
-                {m.replace(/_/g, " ")}
+                {t(`map.inspectionMethodShort.${m}`, m)}
               </option>
             ))}
           </select>
         )}
 
         {methods.length === 1 && (
-          <span className="px-2.5 py-1 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary">
-            {methods[0]?.replace(/_/g, " ")}
+          <span
+            className="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap"
+            style={methodBadgeStyle(methods[0] ?? "")}
+          >
+            {t(`map.inspectionMethodShort.${methods[0]}`, methods[0])}
           </span>
         )}
       </div>
@@ -181,12 +189,12 @@ export default function TemplatePicker({
                 </button>
               );
             })}
-            {grouped.ungrouped.length > 0 && (
+            {grouped.special.length > 0 && (
               <div className="pt-2 border-t border-tv-border space-y-2">
                 <p className="text-xs font-medium text-tv-text-secondary">
-                  {t("mission.config.otherTemplates")}
+                  {t("mission.config.specialTemplates")}
                 </p>
-                {grouped.ungrouped.map(renderTemplateRow)}
+                {grouped.special.map(renderTemplateRow)}
               </div>
             )}
           </div>

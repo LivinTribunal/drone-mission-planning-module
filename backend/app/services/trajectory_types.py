@@ -134,6 +134,7 @@ class ResolvedConfig:
     hover_duration: Seconds | None = None
     horizontal_distance: Meters | None = None
     sweep_angle: Degrees | None = None
+    vertical_profile_height: Meters | None = None
     capture_mode: str = "VIDEO_CAPTURE"
     recording_setup_duration: Seconds = 5.0
     buffer_distance: Meters = 5.0
@@ -144,6 +145,8 @@ class ResolvedConfig:
     height_above_lha: Meters | None = None
     camera_gimbal_angle: Degrees | None = None
     selected_lha_id: UUID | str | None = None
+    hover_bearing: Degrees | None = None
+    hover_bearing_reference: str | None = None
 
 
 @dataclass

@@ -42,6 +42,7 @@ class InspectionConfigOverride(BaseModel):
     hover_duration: float | None = None
     horizontal_distance: float | None = Field(default=None, gt=0)
     sweep_angle: float | None = None
+    vertical_profile_height: float | None = Field(default=None, gt=0)
     lha_ids: list[UUID] | None = None
     capture_mode: CaptureModeStr | None = None
     recording_setup_duration: float | None = None
@@ -53,6 +54,8 @@ class InspectionConfigOverride(BaseModel):
     height_above_lha: float | None = Field(default=None, gt=0)
     camera_gimbal_angle: float | None = None
     selected_lha_id: UUID | None = None
+    hover_bearing: float | None = None
+    hover_bearing_reference: str | None = None
 
     @field_validator("lha_ids", mode="before")
     @classmethod
@@ -89,6 +92,7 @@ class InspectionConfigResponse(BaseModel):
     hover_duration: float | None = None
     horizontal_distance: float | None = None
     sweep_angle: float | None = None
+    vertical_profile_height: float | None = None
     lha_ids: list[UUID] | None = None
     capture_mode: CaptureModeStr | None = None
     recording_setup_duration: float | None = None
@@ -99,6 +103,8 @@ class InspectionConfigResponse(BaseModel):
     height_above_lha: float | None = None
     camera_gimbal_angle: float | None = None
     selected_lha_id: UUID | None = None
+    hover_bearing: float | None = None
+    hover_bearing_reference: str | None = None
 
     model_config = {"from_attributes": True}
 

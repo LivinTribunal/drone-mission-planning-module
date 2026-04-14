@@ -97,6 +97,19 @@ def get_ordered_lha_positions(template, lha_ids: list | None = None) -> list[Poi
     return positions
 
 
+def _parse_lha_position(lha) -> Point3D | None:
+    """parse an LHA's EWKB position into Point3D, or None when missing/invalid."""
+    if not lha.position:
+        return None
+    try:
+        c = parse_ewkb(lha.position.data).get("coordinates")
+        if not c or len(c) < 3:
+            return None
+    except (KeyError, ValueError, TypeError):
+        return None
+    return Point3D(lon=c[0], lat=c[1], alt=c[2])
+
+
 def find_lha_by_id(template, lha_id) -> tuple[Point3D, object] | None:
     """locate a single LHA position by id across all template AGLs.
 
@@ -107,15 +120,31 @@ def find_lha_by_id(template, lha_id) -> tuple[Point3D, object] | None:
         for lha in agl.lhas:
             if str(lha.id) != target:
                 continue
-            if not lha.position:
+            pos = _parse_lha_position(lha)
+            if pos is None:
                 return None
-            try:
-                c = parse_ewkb(lha.position.data).get("coordinates")
-                if not c or len(c) < 3:
+            return pos, agl
+
+    return None
+
+
+def find_lha_in_surfaces(surfaces, lha_id) -> tuple[Point3D, object] | None:
+    """locate a single LHA position by id across all AGLs of a surface list.
+
+    used for AGL-agnostic methods (hover-point-lock) where the template does
+    not constrain which LHA the operator may choose.
+    returns (position, parent_agl) or None when not found.
+    """
+    target = str(lha_id)
+    for surface in surfaces:
+        for agl in surface.agls:
+            for lha in agl.lhas:
+                if str(lha.id) != target:
+                    continue
+                pos = _parse_lha_position(lha)
+                if pos is None:
                     return None
-            except (KeyError, ValueError, TypeError):
-                return None
-            return Point3D(lon=c[0], lat=c[1], alt=c[2]), agl
+                return pos, agl
 
     return None
 
@@ -401,6 +430,18 @@ def determine_start_position(
     raise ValueError(f"unsupported inspection method: {method}")
 
 
+def _vertical_profile_max_elevation(distance: Meters, config: ResolvedConfig) -> Degrees:
+    """max elevation angle for a vertical profile at the given horizontal distance.
+
+    when vertical_profile_height is set, the top of the profile sits at
+    center.alt + vertical_profile_height, so the max elevation follows from
+    the triangle (height, distance). otherwise falls back to MAX_ELEVATION_ANGLE.
+    """
+    if config.vertical_profile_height is not None and distance > 0:
+        return math.degrees(math.atan2(config.vertical_profile_height, distance))
+    return MAX_ELEVATION_ANGLE
+
+
 def determine_end_position(
     center: Point3D,
     config: ResolvedConfig,
@@ -428,7 +469,8 @@ def determine_end_position(
                 else DEFAULT_HORIZONTAL_DISTANCE
             )
             lon, lat = point_at_distance(center.lon, center.lat, approach, distance)
-            alt = center.alt + distance * math.tan(math.radians(MAX_ELEVATION_ANGLE))
+            max_elev = _vertical_profile_max_elevation(distance, config)
+            alt = center.alt + distance * math.tan(math.radians(max_elev))
 
             return Point3D(lon=lon, lat=lat, alt=alt)
 
@@ -514,17 +556,19 @@ def calculate_vertical_path(
     lon, lat = point_at_distance(center.lon, center.lat, approach_heading, distance)
     heading_to_center = bearing_between(lon, lat, center.lon, center.lat)
 
+    max_elev = _vertical_profile_max_elevation(distance, config)
+
     waypoints = []
     for i in range(density):
         # interpolate elevation from min to max in density steps
         if density > 1:
             elevation = (
                 MIN_ELEVATION_ANGLE
-                + (MAX_ELEVATION_ANGLE - MIN_ELEVATION_ANGLE) / (density - 1) * i
+                + (max_elev - MIN_ELEVATION_ANGLE) / (density - 1) * i
             )
         else:
             # single measurement at midpoint elevation
-            elevation = (MIN_ELEVATION_ANGLE + MAX_ELEVATION_ANGLE) / 2
+            elevation = (MIN_ELEVATION_ANGLE + max_elev) / 2
 
         # altitude at elevation angle from center
         alt = center.alt + distance * math.tan(math.radians(elevation))
@@ -809,8 +853,22 @@ def calculate_hover_point_lock_path(
         config.hover_duration if config.hover_duration is not None else DEFAULT_HOVER_DURATION
     )
 
-    approach = _opposite_bearing(runway_heading)
-    lon, lat = point_at_distance(target_lha.lon, target_lha.lat, approach, distance)
+    # resolve the bearing from the LHA to the drone's hover position.
+    # reference "COMPASS": operator value is an absolute compass bearing.
+    # reference "RUNWAY" (default): operator value is relative to the runway
+    # heading of the AGL hosting the selected LHA (0 = along runway heading).
+    # when no operator bearing is set, fall back to the legacy approach-side
+    # (opposite of runway heading) so existing inspections are unaffected.
+    if config.hover_bearing is not None:
+        if (config.hover_bearing_reference or "RUNWAY").upper() == "COMPASS":
+            bearing_from_lha = config.hover_bearing % 360
+        else:
+            # RUNWAY reference: 0 = approach side (opposite of runway heading)
+            bearing_from_lha = (_opposite_bearing(runway_heading) + config.hover_bearing) % 360
+    else:
+        bearing_from_lha = _opposite_bearing(runway_heading)
+
+    lon, lat = point_at_distance(target_lha.lon, target_lha.lat, bearing_from_lha, distance)
     alt = target_lha.alt + height
     heading_to_lha = bearing_between(lon, lat, target_lha.lon, target_lha.lat)
 

@@ -20,6 +20,7 @@ import TemplateConfigSection from "@/components/mission/TemplateConfigSection";
 import DetailSelector from "@/components/common/DetailSelector";
 import DetailSelectorItem from "@/components/common/DetailSelectorItem";
 import CreateTemplateDialog from "@/components/mission/CreateTemplateDialog";
+import { methodBadgeStyle } from "@/utils/inspectionMethodBadge";
 
 const AUTOSAVE_DELAY = 1200;
 
@@ -154,6 +155,7 @@ export default function InspectionEditPage() {
             hover_duration: cfg.hover_duration,
             horizontal_distance: cfg.horizontal_distance,
             sweep_angle: cfg.sweep_angle,
+            vertical_profile_height: cfg.vertical_profile_height,
             lha_ids: cfg.lha_ids,
             capture_mode: cfg.capture_mode,
             recording_setup_duration: cfg.recording_setup_duration,
@@ -164,6 +166,8 @@ export default function InspectionEditPage() {
             height_above_lha: cfg.height_above_lha,
             camera_gimbal_angle: cfg.camera_gimbal_angle,
             selected_lha_id: cfg.selected_lha_id,
+            hover_bearing: cfg.hover_bearing,
+            hover_bearing_reference: cfg.hover_bearing_reference,
           }
         : {
             altitude_offset: null,
@@ -173,6 +177,7 @@ export default function InspectionEditPage() {
             hover_duration: null,
             horizontal_distance: null,
             sweep_angle: null,
+            vertical_profile_height: null,
             lha_ids: null,
             capture_mode: null,
             recording_setup_duration: null,
@@ -183,6 +188,8 @@ export default function InspectionEditPage() {
             height_above_lha: null,
             camera_gimbal_angle: null,
             selected_lha_id: null,
+            hover_bearing: null,
+            hover_bearing_reference: null,
           },
     );
 
@@ -192,10 +199,13 @@ export default function InspectionEditPage() {
     const aglId = tpl.target_agl_ids[0] ?? "";
     setSelectedAglId(aglId);
 
-    // initialize lha selection from config or all lhas
+    // initialize lha selection from config or all lhas.
+    // hover-point-lock templates don't pin specific LHAs - the operator picks
+    // one at mission time - so leave the set empty here.
+    const method = (tpl.methods[0] ?? "ANGULAR_SWEEP") as InspectionMethod;
     if (cfg?.lha_ids && cfg.lha_ids.length > 0) {
       setSelectedLhaIds(new Set(cfg.lha_ids.map(String)));
-    } else if (aglId) {
+    } else if (aglId && method !== "HOVER_POINT_LOCK") {
       const agl = allAgls.find((a) => a.id === aglId);
       if (agl) setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
     }
@@ -215,9 +225,10 @@ export default function InspectionEditPage() {
     if (!agl) return;
 
     const cfg = template.default_config;
+    const method = (template.methods[0] ?? "ANGULAR_SWEEP") as InspectionMethod;
     if (cfg?.lha_ids && cfg.lha_ids.length > 0) {
       setSelectedLhaIds(new Set(cfg.lha_ids.map(String)));
-    } else {
+    } else if (method !== "HOVER_POINT_LOCK") {
       setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
     }
   }, [allAgls, template]);
@@ -296,8 +307,14 @@ export default function InspectionEditPage() {
     /**handle agl change and schedule autosave.*/
     setSelectedAglId(aglId);
     if (aglId) {
-      const agl = allAgls.find((a) => a.id === aglId);
-      if (agl) setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
+      // hover point lock picks a single LHA per mission, so leave the
+      // template's LHA list empty on AGL change; other methods pre-select all.
+      if (editMethod === "HOVER_POINT_LOCK") {
+        setSelectedLhaIds(new Set());
+      } else {
+        const agl = allAgls.find((a) => a.id === aglId);
+        if (agl) setSelectedLhaIds(new Set(agl.lhas.map((l) => l.id)));
+      }
     } else {
       setSelectedLhaIds(new Set());
     }
@@ -373,7 +390,7 @@ export default function InspectionEditPage() {
     try {
       const result = await createInspectionTemplate({
         name: data.name,
-        target_agl_ids: [data.aglId],
+        target_agl_ids: data.aglId ? [data.aglId] : [],
         methods: [data.method],
       });
       setShowCreate(false);
@@ -383,28 +400,9 @@ export default function InspectionEditPage() {
     }
   }
 
-  /** get inline styles for an inspection method badge. */
-  function methodBadgeStyle(method: string): React.CSSProperties {
-    if (method === "ANGULAR_SWEEP") {
-      return {
-        backgroundColor: "var(--tv-method-angular-sweep-bg)",
-        color: "var(--tv-method-angular-sweep-text)",
-      };
-    }
-    if (method === "VERTICAL_PROFILE") {
-      return {
-        backgroundColor: "var(--tv-method-vertical-profile-bg)",
-        color: "var(--tv-method-vertical-profile-text)",
-      };
-    }
-    return {};
-  }
-
   /** format inspection method for display. */
   function formatMethod(method: string) {
-    if (method === "ANGULAR_SWEEP") return t("coordinator.inspections.angularSweep");
-    if (method === "VERTICAL_PROFILE") return t("coordinator.inspections.verticalProfile");
-    return method;
+    return t(`map.inspectionMethodShort.${method}`, method);
   }
 
   const filteredTemplates = selectorSearch

@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ChevronDown, ChevronUp, Lock, Unlock } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info } from "lucide-react";
 import type { InspectionResponse, InspectionConfigOverride } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -34,41 +34,46 @@ export default function InspectionConfigForm({
   const { t } = useTranslation();
 
   // resolve values: dirty override > saved config > template defaults
+  // explicit null in override means "cleared by user" - don't fall through to saved/default.
   const savedCfg = inspection.config;
   const defaultCfg = template?.default_config;
 
-  const altitudeOffset =
-    configOverride.altitude_offset ?? savedCfg?.altitude_offset ?? defaultCfg?.altitude_offset ?? "";
-  const speedOverride =
-    configOverride.speed_override ?? savedCfg?.speed_override ?? defaultCfg?.speed_override ?? "";
-  const measurementDensity =
-    configOverride.measurement_density ?? savedCfg?.measurement_density ?? defaultCfg?.measurement_density ?? "";
-  const hoverDuration =
-    configOverride.hover_duration ?? savedCfg?.hover_duration ?? defaultCfg?.hover_duration ?? "";
-  const bufferDistance =
-    configOverride.buffer_distance ?? savedCfg?.buffer_distance ?? defaultCfg?.buffer_distance ?? "";
-  const horizontalDistance =
-    configOverride.horizontal_distance ?? savedCfg?.horizontal_distance ?? defaultCfg?.horizontal_distance ?? "";
-  const sweepAngle =
-    configOverride.sweep_angle ?? savedCfg?.sweep_angle ?? defaultCfg?.sweep_angle ?? "";
+  function resolveNumber(field: keyof InspectionConfigOverride): number | "" {
+    if (field in configOverride) {
+      const v = configOverride[field];
+      return typeof v === "number" ? v : "";
+    }
+    const saved = savedCfg?.[field as keyof typeof savedCfg];
+    if (typeof saved === "number") return saved;
+    const def = defaultCfg?.[field as keyof typeof defaultCfg];
+    return typeof def === "number" ? def : "";
+  }
+
+  const altitudeOffset = resolveNumber("altitude_offset");
+  const speedOverride = resolveNumber("speed_override");
+  const measurementDensity = resolveNumber("measurement_density");
+  const hoverDuration = resolveNumber("hover_duration");
+  const bufferDistance = resolveNumber("buffer_distance");
+  const horizontalDistance = resolveNumber("horizontal_distance");
+  const sweepAngle = resolveNumber("sweep_angle");
+  const verticalProfileHeight = resolveNumber("vertical_profile_height");
   const captureMode =
     configOverride.capture_mode !== undefined
       ? configOverride.capture_mode
       : savedCfg?.capture_mode ?? defaultCfg?.capture_mode ?? null;
-  const recordingSetupDuration =
-    configOverride.recording_setup_duration ?? savedCfg?.recording_setup_duration ?? defaultCfg?.recording_setup_duration ?? "";
+  const recordingSetupDuration = resolveNumber("recording_setup_duration");
 
   // method-specific fields
-  const heightAboveLights =
-    configOverride.height_above_lights ?? savedCfg?.height_above_lights ?? defaultCfg?.height_above_lights ?? "";
-  const lateralOffset =
-    configOverride.lateral_offset ?? savedCfg?.lateral_offset ?? defaultCfg?.lateral_offset ?? "";
-  const distanceFromLha =
-    configOverride.distance_from_lha ?? savedCfg?.distance_from_lha ?? defaultCfg?.distance_from_lha ?? "";
-  const heightAboveLha =
-    configOverride.height_above_lha ?? savedCfg?.height_above_lha ?? defaultCfg?.height_above_lha ?? "";
-  const cameraGimbalAngle =
-    configOverride.camera_gimbal_angle ?? savedCfg?.camera_gimbal_angle ?? defaultCfg?.camera_gimbal_angle ?? "";
+  const heightAboveLights = resolveNumber("height_above_lights");
+  const lateralOffset = resolveNumber("lateral_offset");
+  const distanceFromLha = resolveNumber("distance_from_lha");
+  const heightAboveLha = resolveNumber("height_above_lha");
+  const cameraGimbalAngle = resolveNumber("camera_gimbal_angle");
+  const hoverBearing = resolveNumber("hover_bearing");
+  const hoverBearingReference: "RUNWAY" | "COMPASS" =
+    ("hover_bearing_reference" in configOverride
+      ? configOverride.hover_bearing_reference
+      : savedCfg?.hover_bearing_reference ?? defaultCfg?.hover_bearing_reference) ?? "RUNWAY";
   const selectedLhaId =
     configOverride.selected_lha_id !== undefined
       ? configOverride.selected_lha_id
@@ -77,6 +82,20 @@ export default function InspectionConfigForm({
   // angle-lock toggle: when on, editing one of {height, distance, angle}
   // recomputes the third so the triangle stays consistent.
   const [angleLocked, setAngleLocked] = useState(false);
+
+  // hover-point-lock AGL picker - seeded from the currently selected LHA's parent
+  const aglOfSelectedLha = useMemo(() => {
+    if (!selectedLhaId) return null;
+    return agls.find((a) => a.lhas.some((l) => l.id === selectedLhaId)) ?? null;
+  }, [agls, selectedLhaId]);
+  const [hoverAglId, setHoverAglId] = useState<string>(aglOfSelectedLha?.id ?? "");
+  // keep hoverAglId in sync if the parent changes selected_lha_id externally
+  useEffect(() => {
+    if (aglOfSelectedLha && aglOfSelectedLha.id !== hoverAglId) {
+      setHoverAglId(aglOfSelectedLha.id);
+    }
+  }, [aglOfSelectedLha, hoverAglId]);
+  const hoverAgl = agls.find((a) => a.id === hoverAglId) ?? null;
 
   // effective capture mode for conditional display
   const effectiveCaptureMode = captureMode ?? "VIDEO_CAPTURE";
@@ -126,7 +145,7 @@ export default function InspectionConfigForm({
       {!collapsed && (
       <div className={`space-y-4 mt-3${disabled ? " pointer-events-none opacity-60" : ""}`}>
 
-      {/* read-only fields */}
+      {/* read-only fields - method is implicit for hover point lock */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
@@ -136,6 +155,7 @@ export default function InspectionConfigForm({
             {template?.name ?? "-"}
           </p>
         </div>
+        {inspection.method !== "HOVER_POINT_LOCK" && (
         <div>
           <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
             {t("mission.config.method")}
@@ -144,10 +164,62 @@ export default function InspectionConfigForm({
             {t(`map.inspectionMethod.${inspection.method}`, inspection.method)}
           </p>
         </div>
+        )}
       </div>
 
-      {/* agl / lha selection */}
-      {targetAgls.length > 0 && (
+      {/* hover-point-lock AGL/LHA picker - rendered at the top of the config */}
+      {inspection.method === "HOVER_POINT_LOCK" && (
+        <div className="grid grid-cols-2 gap-2" data-testid="hover-point-lock-target">
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.targetAgl")}
+            </label>
+            <select
+              value={hoverAglId}
+              onChange={(e) => {
+                setHoverAglId(e.target.value);
+                onChange({ ...configOverride, selected_lha_id: null });
+              }}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-hover-agl"
+            >
+              <option value="">{t("mission.config.targetAglSelect")}</option>
+              {agls.map((agl) => (
+                <option key={agl.id} value={agl.id}>
+                  {agl.name}
+                  {agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.targetLha")}
+            </label>
+            <select
+              value={selectedLhaId ?? ""}
+              disabled={!hoverAgl}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                onChange({ ...configOverride, selected_lha_id: v });
+              }}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors disabled:opacity-50"
+              data-testid="inspection-selected-lha"
+            >
+              <option value="">{t("mission.config.targetLhaSelect")}</option>
+              {hoverAgl?.lhas.map((lha) => (
+                <option key={lha.id} value={lha.id}>
+                  {t("mission.config.unitNumber")} {lha.unit_number}
+                  {lha.setting_angle != null ? ` (${lha.setting_angle}°)` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* agl / lha selection - hover point lock picks a single LHA above instead */}
+      {inspection.method !== "HOVER_POINT_LOCK" && targetAgls.length > 0 && (
         <div>
           <label className="block text-xs font-medium mb-1.5 text-tv-text-secondary">
             {t("mission.config.lhaSelection")}
@@ -221,22 +293,43 @@ export default function InspectionConfigForm({
             data-testid="inspection-speed-override"
           />
         </div>
-        <div>
-          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-            {t("mission.config.measurementDensity")}
-          </label>
-          <input
-            type="number"
-            step="1"
-            min="0"
-            value={measurementDensity}
-            onChange={(e) =>
-              handleNumberChange("measurement_density", e.target.value)
-            }
-            className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
-            data-testid="inspection-measurement-density"
-          />
-        </div>
+        {inspection.method !== "HOVER_POINT_LOCK" && (
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.measurementDensity")}
+            </label>
+            <input
+              type="number"
+              step="1"
+              min="0"
+              value={measurementDensity}
+              onChange={(e) =>
+                handleNumberChange("measurement_density", e.target.value)
+              }
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-measurement-density"
+            />
+          </div>
+        )}
+        {inspection.method === "HOVER_POINT_LOCK" && (
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.bufferDistanceOverride")}
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              value={bufferDistance}
+              onChange={(e) =>
+                handleNumberChange("buffer_distance", e.target.value)
+              }
+              placeholder={t("mission.config.bufferDistanceOverrideHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-buffer-distance"
+            />
+          </div>
+        )}
         <div>
           <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
             {t("mission.config.hoverDuration")}
@@ -320,28 +413,50 @@ export default function InspectionConfigForm({
               data-testid="inspection-horizontal-distance"
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-              {t("mission.config.sweepAngle")}
-            </label>
-            <input
-              type="number"
-              step="0.5"
-              min="1"
-              max="180"
-              value={sweepAngle}
-              onChange={(e) =>
-                handleNumberChange("sweep_angle", e.target.value)
-              }
-              placeholder={t("mission.config.sweepAngleHint")}
-              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
-              data-testid="inspection-sweep-angle"
-            />
-          </div>
+          {inspection.method === "ANGULAR_SWEEP" && (
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("mission.config.sweepAngle")}
+              </label>
+              <input
+                type="number"
+                step="0.5"
+                min="1"
+                max="180"
+                value={sweepAngle}
+                onChange={(e) =>
+                  handleNumberChange("sweep_angle", e.target.value)
+                }
+                placeholder={t("mission.config.sweepAngleHint")}
+                className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                data-testid="inspection-sweep-angle"
+              />
+            </div>
+          )}
+          {inspection.method === "VERTICAL_PROFILE" && (
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("mission.config.verticalProfileHeight")}
+              </label>
+              <input
+                type="number"
+                step="0.5"
+                min="1"
+                value={verticalProfileHeight}
+                onChange={(e) =>
+                  handleNumberChange("vertical_profile_height", e.target.value)
+                }
+                placeholder={t("mission.config.verticalProfileHeightHint")}
+                className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                data-testid="inspection-vertical-profile-height"
+              />
+            </div>
+          )}
         </div>
       )}
 
-      {/* buffer distance override */}
+      {/* buffer distance override - inlined into the top grid for hover point lock */}
+      {inspection.method !== "HOVER_POINT_LOCK" && (
       <div>
         <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
           {t("mission.config.bufferDistanceOverride")}
@@ -359,6 +474,7 @@ export default function InspectionConfigForm({
           data-testid="inspection-buffer-distance"
         />
       </div>
+      )}
 
       {/* fly-over specific */}
       {inspection.method === "FLY_OVER" && (
@@ -447,57 +563,36 @@ export default function InspectionConfigForm({
       {/* hover-point-lock specific */}
       {inspection.method === "HOVER_POINT_LOCK" && (
         <div className="space-y-3" data-testid="hover-point-lock-fields">
-          {/* target LHA picker */}
-          <div>
-            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-              {t("mission.config.targetLha")}
-            </label>
-            <select
-              value={selectedLhaId ?? ""}
-              onChange={(e) => {
-                const v = e.target.value || null;
-                onChange({ ...configOverride, selected_lha_id: v });
-              }}
-              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
-              data-testid="inspection-selected-lha"
-            >
-              <option value="">{t("mission.config.targetLhaSelect")}</option>
-              {targetAgls.flatMap((agl) =>
-                agl.lhas.map((lha) => (
-                  <option key={lha.id} value={lha.id}>
-                    {agl.name} - {t("mission.config.unitNumber")}{" "}
-                    {lha.unit_number}
-                  </option>
-                )),
-              )}
-            </select>
-          </div>
-
-          {/* angle lock toggle */}
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-tv-text-secondary">
-              {t("mission.config.angleLock")}
-            </label>
-            <button
-              type="button"
-              onClick={() => setAngleLocked((v) => !v)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                angleLocked
-                  ? "bg-tv-accent text-tv-accent-text"
-                  : "border border-tv-border bg-tv-bg text-tv-text-primary"
-              }`}
-              data-testid="angle-lock-toggle"
-              aria-pressed={angleLocked}
-            >
-              {angleLocked ? (
-                <Lock className="h-3 w-3" />
-              ) : (
-                <Unlock className="h-3 w-3" />
-              )}
-              {angleLocked
-                ? t("mission.config.angleLockOn")
-                : t("mission.config.angleLockOff")}
-            </button>
+          {/* auto-aim toggle: trig-locks the distance/height/angle triangle */}
+          <div className="rounded-2xl border border-tv-border bg-tv-bg/50 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Crosshair className="h-3.5 w-3.5 text-tv-text-secondary flex-shrink-0" />
+                <label className="text-xs font-medium text-tv-text-primary truncate">
+                  {t("mission.config.angleLock")}
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAngleLocked((v) => !v)}
+                role="switch"
+                aria-checked={angleLocked}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
+                  angleLocked ? "bg-tv-accent" : "bg-tv-border"
+                }`}
+                data-testid="angle-lock-toggle"
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    angleLocked ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+            <div className="flex items-start gap-1.5 text-[11px] text-tv-text-muted leading-snug">
+              <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              <span>{t("mission.config.angleLockHint")}</span>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
@@ -604,6 +699,56 @@ export default function InspectionConfigForm({
                 data-testid="inspection-camera-gimbal-angle"
               />
             </div>
+          </div>
+
+          {/* approach bearing: where the drone sits relative to the LHA */}
+          <div className="rounded-2xl border border-tv-border bg-tv-bg/50 p-3 space-y-2">
+            <label className="block text-xs font-medium text-tv-text-primary">
+              {t("mission.config.hoverBearing")}
+            </label>
+            <div className="flex gap-1 rounded-full bg-tv-bg border border-tv-border p-0.5">
+              {(["RUNWAY", "COMPASS"] as const).map((ref) => (
+                <button
+                  key={ref}
+                  type="button"
+                  onClick={() =>
+                    onChange({ ...configOverride, hover_bearing_reference: ref })
+                  }
+                  className={`flex-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    hoverBearingReference === ref
+                      ? "bg-tv-accent text-tv-accent-text"
+                      : "text-tv-text-secondary hover:text-tv-text-primary"
+                  }`}
+                  data-testid={`hover-bearing-ref-${ref.toLowerCase()}`}
+                >
+                  {t(`mission.config.hoverBearingRef.${ref}`)}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              step="1"
+              min="-360"
+              max="360"
+              value={hoverBearing}
+              onChange={(e) =>
+                handleNumberChange("hover_bearing", e.target.value)
+              }
+              placeholder={t(
+                hoverBearingReference === "COMPASS"
+                  ? "mission.config.hoverBearingCompassHint"
+                  : "mission.config.hoverBearingRunwayHint",
+              )}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-hover-bearing"
+            />
+            <p className="text-[11px] text-tv-text-muted leading-snug">
+              {t(
+                hoverBearingReference === "COMPASS"
+                  ? "mission.config.hoverBearingCompassHelp"
+                  : "mission.config.hoverBearingRunwayHelp",
+              )}
+            </p>
           </div>
         </div>
       )}

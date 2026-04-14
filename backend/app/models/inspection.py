@@ -39,6 +39,7 @@ CONFIG_FIELDS: tuple[str, ...] = (
     "hover_duration",
     "horizontal_distance",
     "sweep_angle",
+    "vertical_profile_height",
     "capture_mode",
     "recording_setup_duration",
     "buffer_distance",
@@ -48,6 +49,8 @@ CONFIG_FIELDS: tuple[str, ...] = (
     "height_above_lha",
     "camera_gimbal_angle",
     "selected_lha_id",
+    "hover_bearing",
+    "hover_bearing_reference",
 )
 
 
@@ -78,6 +81,7 @@ class InspectionConfiguration(Base):
     hover_duration = Column(Float)  # seconds
     horizontal_distance = Column(Float)
     sweep_angle = Column(Float)
+    vertical_profile_height = Column(Float, nullable=True)
     lha_ids = Column(JSONB)
     capture_mode = Column(String(20), nullable=True)
     recording_setup_duration = Column(Float, nullable=True)
@@ -89,6 +93,8 @@ class InspectionConfiguration(Base):
     height_above_lha = Column(Float, nullable=True)
     camera_gimbal_angle = Column(Float, nullable=True)
     selected_lha_id = Column(UUID, ForeignKey("lha.id", ondelete="SET NULL"), nullable=True)
+    hover_bearing = Column(Float, nullable=True)
+    hover_bearing_reference = Column(String(10), nullable=True)
 
     # fields merged by resolve_with_defaults. a superset of CONFIG_FIELDS that
     # additionally includes lha_ids so duplicate_mission copies it; lha_ids is

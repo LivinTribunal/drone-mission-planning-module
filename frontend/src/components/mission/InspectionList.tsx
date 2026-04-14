@@ -6,6 +6,7 @@ import type { InspectionResponse } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { InspectionMethod } from "@/types/enums";
 import { compatibleMethods } from "@/utils/methodAglCompatibility";
+import { methodBadgeStyle } from "@/utils/inspectionMethodBadge";
 
 interface InspectionListProps {
   inspections: InspectionResponse[];
@@ -181,6 +182,14 @@ export default function InspectionList({
 
                 <span className="flex-1 text-tv-text-primary truncate">
                   {template?.name ?? insp.template_id.slice(0, 8)}
+                </span>
+
+                <span
+                  className="flex-shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium leading-none"
+                  style={methodBadgeStyle(insp.method)}
+                  data-testid={`inspection-method-badge-${insp.id}`}
+                >
+                  {t(`map.inspectionMethodShort.${insp.method}`, insp.method)}
                 </span>
 
                 {onChangeMethod && template && (() => {
