@@ -141,7 +141,7 @@ export default function InspectionConfigForm({
             {t("mission.config.method")}
           </label>
           <p className="text-sm text-tv-text-primary">
-            {inspection.method.replace(/_/g, " ")}
+            {t(`map.inspectionMethod.${inspection.method}`, inspection.method)}
           </p>
         </div>
       </div>

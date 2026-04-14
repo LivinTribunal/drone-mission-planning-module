@@ -297,7 +297,10 @@
     "draftMoveRestriction": "Compute trajectory first",
     "inspectionMethod": {
       "VERTICAL_PROFILE": "Vertical Profile",
-      "ANGULAR_SWEEP": "Angular Sweep"
+      "ANGULAR_SWEEP": "Angular Sweep",
+      "FLY_OVER": "Fly Over",
+      "PARALLEL_SIDE_SWEEP": "Parallel Side Sweep",
+      "HOVER_POINT_LOCK": "Hover Point Lock"
     },
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",

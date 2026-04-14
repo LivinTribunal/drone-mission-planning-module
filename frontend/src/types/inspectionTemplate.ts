@@ -6,7 +6,6 @@ export interface InspectionConfigResponse {
   speed_override: number | null;
   measurement_density: number | null;
   custom_tolerances: Record<string, number> | null;
-  density: number | null;
   hover_duration: number | null;
   horizontal_distance: number | null;
   sweep_angle: number | null;
