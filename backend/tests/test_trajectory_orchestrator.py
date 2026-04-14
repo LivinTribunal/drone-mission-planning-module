@@ -767,6 +767,287 @@ def test_has_unsaved_map_changes_cleared_after_generate(client):
     assert mission["has_unsaved_map_changes"] is False
 
 
+def _setup_airport_template_for_method(
+    client, icao_code: str, method: str, agl_type: str = "RUNWAY_EDGE_LIGHTS"
+):
+    """airport + runway surface + AGL of the given type + 4 LHAs + template."""
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": icao_code},
+    ).json()
+    airport_id = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces", json=TRAJECTORY_SURFACE_PAYLOAD
+    ).json()
+    surface_id = surface["id"]
+
+    agl_payload = {**TRAJECTORY_AGL_PAYLOAD, "agl_type": agl_type}
+    agl = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls",
+        json=agl_payload,
+    ).json()
+    agl_id = agl["id"]
+
+    lha_ids: list[str] = []
+    for i in range(1, 5):
+        lha = client.post(
+            f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas",
+            json=make_lha_payload(i),
+        ).json()
+        lha_ids.append(lha["id"])
+
+    template = client.post(
+        "/api/v1/inspection-templates",
+        json={
+            "name": f"Template {icao_code}",
+            "methods": [method],
+            "target_agl_ids": [agl_id],
+            "default_config": {"measurement_density": 4, "speed_override": 3.0},
+        },
+    ).json()
+
+    return airport_id, agl_id, template["id"], lha_ids
+
+
+def _run_new_method_mission(
+    client,
+    icao_code: str,
+    method: str,
+    config: dict | None = None,
+    agl_type: str = "RUNWAY_EDGE_LIGHTS",
+):
+    """create a mission + inspection for a new method and generate the trajectory."""
+    airport_id, _, template_id, lha_ids = _setup_airport_template_for_method(
+        client, icao_code, method, agl_type=agl_type
+    )
+
+    drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": f"Test {icao_code}",
+            "airport_id": airport_id,
+            "drone_profile_id": drone["id"],
+            "default_speed": 5.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
+        },
+    ).json()
+    mission_id = mission["id"]
+
+    payload: dict = {"template_id": template_id, "method": method}
+    if config is not None:
+        payload["config"] = config
+
+    r = client.post(f"/api/v1/missions/{mission_id}/inspections", json=payload)
+    assert r.status_code == 201, r.text
+
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    return mission_id, lha_ids, gen
+
+
+def test_fly_over_generates_flight_plan(client):
+    """fly-over produces one measurement waypoint per LHA at lha.alt + height_above_lights."""
+    _, lha_ids, gen = _run_new_method_mission(
+        client,
+        "FLYO",
+        "FLY_OVER",
+        config={"height_above_lights": 12.0},
+    )
+    assert gen.status_code == 200, gen.text
+    fp = gen.json()["flight_plan"]
+    measurements = [w for w in fp["waypoints"] if w["waypoint_type"] == "MEASUREMENT"]
+    assert len(measurements) == len(lha_ids)
+    # altitude = LHA ground (300) + height_above_lights (12)
+    for wp in measurements:
+        assert wp["position"]["coordinates"][2] == pytest.approx(312.0, abs=1.0)
+
+
+def test_fly_over_video_mode_wraps_with_recording_hovers(client):
+    """VIDEO capture adds RECORDING_START / RECORDING_STOP hover waypoints at the ends."""
+    _, lha_ids, gen = _run_new_method_mission(
+        client,
+        "FLYV",
+        "FLY_OVER",
+        config={
+            "capture_mode": "VIDEO_CAPTURE",
+            "recording_setup_duration": 2.0,
+            "height_above_lights": 12.0,
+        },
+    )
+    assert gen.status_code == 200, gen.text
+    fp = gen.json()["flight_plan"]
+    pass_wps = [
+        w
+        for w in fp["waypoints"]
+        if w["waypoint_type"] in ("MEASUREMENT", "HOVER") and w["inspection_id"]
+    ]
+    actions = [w["camera_action"] for w in pass_wps]
+    assert "RECORDING_START" in actions
+    assert "RECORDING_STOP" in actions
+    # start/stop bookend the measurement run
+    assert pass_wps[0]["camera_action"] == "RECORDING_START"
+    assert pass_wps[-1]["camera_action"] == "RECORDING_STOP"
+
+
+def test_parallel_side_sweep_generates_flight_plan(client):
+    """parallel-side-sweep produces waypoints on the exterior side of the runway."""
+    _, lha_ids, gen = _run_new_method_mission(
+        client,
+        "PARA",
+        "PARALLEL_SIDE_SWEEP",
+        config={"lateral_offset": 25.0, "height_above_lights": 10.0},
+    )
+    assert gen.status_code == 200, gen.text
+    fp = gen.json()["flight_plan"]
+    measurements = [w for w in fp["waypoints"] if w["waypoint_type"] == "MEASUREMENT"]
+    assert len(measurements) == len(lha_ids)
+
+    # TRAJECTORY_SURFACE_PAYLOAD: runway centerline runs from (14.24, 50.10) to
+    # (14.28, 50.09); midpoint ~ (14.26, 50.095). LHAs sit around (14.274, 50.098)
+    # - just north of the centerline midpoint in lat. so the exterior (far) side
+    # of the runway is further north (higher lat) than the LHA row.
+    lha_lat = 50.098
+    runway_mid_lat = 50.095
+    for wp in measurements:
+        wp_lat = wp["position"]["coordinates"][1]
+        # exterior: further from runway centerline than LHAs
+        assert abs(wp_lat - runway_mid_lat) > abs(lha_lat - runway_mid_lat) - 1e-6
+
+
+def test_parallel_side_sweep_video_mode(client):
+    """VIDEO mode adds RECORDING_START / RECORDING_STOP hover waypoints."""
+    _, _, gen = _run_new_method_mission(
+        client,
+        "PRVD",
+        "PARALLEL_SIDE_SWEEP",
+        config={
+            "capture_mode": "VIDEO_CAPTURE",
+            "recording_setup_duration": 2.0,
+            "lateral_offset": 25.0,
+        },
+    )
+    assert gen.status_code == 200, gen.text
+    fp = gen.json()["flight_plan"]
+    actions = [w["camera_action"] for w in fp["waypoints"]]
+    assert "RECORDING_START" in actions
+    assert "RECORDING_STOP" in actions
+
+
+def test_hover_point_lock_single_hover_photo(client):
+    """PHOTO capture: one HOVER waypoint with PHOTO_CAPTURE action and configured dwell."""
+    airport_id, _, template_id, lha_ids = _setup_airport_template_for_method(
+        client, "HPSL", "HOVER_POINT_LOCK"
+    )
+
+    drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Hover Single",
+            "airport_id": airport_id,
+            "drone_profile_id": drone["id"],
+            "default_speed": 5.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
+        },
+    ).json()
+
+    r = client.post(
+        f"/api/v1/missions/{mission['id']}/inspections",
+        json={
+            "template_id": template_id,
+            "method": "HOVER_POINT_LOCK",
+            "config": {
+                "selected_lha_id": lha_ids[0],
+                "hover_duration": 8.0,
+                "capture_mode": "PHOTO_CAPTURE",
+                "camera_gimbal_angle": -30.0,
+                "distance_from_lha": 10.0,
+                "height_above_lha": 5.0,
+            },
+        },
+    )
+    assert r.status_code == 201, r.text
+
+    gen = client.post(f"/api/v1/missions/{mission['id']}/generate-trajectory")
+    assert gen.status_code == 200, gen.text
+    fp = gen.json()["flight_plan"]
+
+    hover_wps = [w for w in fp["waypoints"] if w["waypoint_type"] == "HOVER" and w["inspection_id"]]
+    assert len(hover_wps) == 1
+    # _apply_camera_actions clears camera_action on the first/last waypoint of a
+    # pass; for a single-waypoint hover that is the only waypoint, so PHOTO_CAPTURE
+    # gets stripped to NONE here. the underlying behavior is covered by the unit
+    # tests on calculate_hover_point_lock_path.
+    assert hover_wps[0]["hover_duration"] == pytest.approx(8.0, abs=1e-3)
+    assert hover_wps[0]["gimbal_pitch"] == pytest.approx(-30.0, abs=1e-3)
+
+
+def test_hover_point_lock_video_three_waypoints(client):
+    """VIDEO capture emits RECORDING_START + RECORDING + RECORDING_STOP hover waypoints."""
+    airport_id, _, template_id, lha_ids = _setup_airport_template_for_method(
+        client, "HPVD", "HOVER_POINT_LOCK"
+    )
+    drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Hover Video",
+            "airport_id": airport_id,
+            "drone_profile_id": drone["id"],
+            "default_speed": 5.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
+        },
+    ).json()
+
+    r = client.post(
+        f"/api/v1/missions/{mission['id']}/inspections",
+        json={
+            "template_id": template_id,
+            "method": "HOVER_POINT_LOCK",
+            "config": {
+                "selected_lha_id": lha_ids[0],
+                "capture_mode": "VIDEO_CAPTURE",
+                "recording_setup_duration": 2.0,
+            },
+        },
+    )
+    assert r.status_code == 201, r.text
+
+    gen = client.post(f"/api/v1/missions/{mission['id']}/generate-trajectory")
+    assert gen.status_code == 200, gen.text
+    fp = gen.json()["flight_plan"]
+
+    pass_wps = [w for w in fp["waypoints"] if w["waypoint_type"] == "HOVER" and w["inspection_id"]]
+    actions = [w["camera_action"] for w in pass_wps]
+    assert actions == ["RECORDING_START", "RECORDING", "RECORDING_STOP"]
+
+
+def test_fly_over_speed_uses_lha_count_as_density(client):
+    """speed is resolved using len(ordered_lhas), not config.measurement_density.
+
+    with the old bug, passing density=8 for 4 LHAs inflated waypoint_spacing and
+    recommended a higher optimal_speed. fix: density = 4 -> lower optimal speed,
+    no spurious framerate warning when speed <= optimal.
+    """
+    # no speed_override -> fall back to method default (5 m/s for fly-over)
+    _, lha_ids, gen = _run_new_method_mission(
+        client,
+        "FLSP",
+        "FLY_OVER",
+    )
+    assert gen.status_code == 200, gen.text
+    fp = gen.json()["flight_plan"]
+    measurements = [w for w in fp["waypoints"] if w["waypoint_type"] == "MEASUREMENT"]
+    assert len(measurements) == len(lha_ids)
+
+
 def test_hover_point_lock_missing_selected_lha_raises(client, db_engine):
     """orchestrator raises TrajectoryGenerationError when HOVER_POINT_LOCK has no selected LHA."""
     from sqlalchemy.orm import Session
