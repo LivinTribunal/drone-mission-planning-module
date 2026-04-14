@@ -552,6 +552,7 @@
       "warningsMessage": "Message",
       "warningsWaypoint": "WP",
       "pickAglType": "Select AGL system type",
+      "noTemplateForCombo": "No template exists for this combination. Ask your Coordinator to create one.",
       "otherTemplates": "Other templates",
       "templatesCount_one": "{{count}} template",
       "templatesCount_other": "{{count}} templates",

@@ -169,12 +169,7 @@ export default function TemplatePicker({
                 <button
                   key={type}
                   onClick={() => setSelectedAgl(type)}
-                  disabled={count === 0}
-                  className={`w-full flex items-center justify-between p-3 rounded-2xl border border-tv-border bg-tv-bg transition-colors ${
-                    count === 0
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:bg-tv-surface-hover cursor-pointer"
-                  }`}
+                  className="w-full flex items-center justify-between p-3 rounded-2xl border border-tv-border bg-tv-bg transition-colors hover:bg-tv-surface-hover cursor-pointer"
                   data-testid={`agl-type-option-${type}`}
                 >
                   <span className="text-sm font-medium text-tv-text-primary">
@@ -212,8 +207,11 @@ export default function TemplatePicker({
               </button>
             </div>
             {grouped.byType[selectedAgl].length === 0 && (
-              <p className="text-sm text-tv-text-muted py-4 text-center">
-                {t("common.noResults")}
+              <p
+                className="text-sm text-tv-text-muted py-4 text-center"
+                data-testid="no-template-for-combo"
+              >
+                {t("mission.config.noTemplateForCombo")}
               </p>
             )}
             {grouped.byType[selectedAgl].map(renderTemplateRow)}

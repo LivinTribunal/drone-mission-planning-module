@@ -702,6 +702,32 @@ describe("TemplatePicker", () => {
       expect(values).toContain("VERTICAL_PROFILE");
     });
 
+    it("shows 'no template for combination' prompt when AGL has no templates", () => {
+      // PAPI-only template; RUNWAY bucket is empty
+      const papiOnly = [
+        {
+          id: "t-papi",
+          name: "PAPI Angular",
+          description: null,
+          methods: ["ANGULAR_SWEEP"],
+          target_agl_ids: ["agl-papi"],
+          default_config: null,
+          angular_tolerances: null,
+          created_by: null,
+          created_at: null,
+        },
+      ];
+      renderPicker({
+        templates: papiOnly as never,
+        agls: [papiAgl, runwayAgl] as never,
+      });
+      fireEvent.click(screen.getByTestId("agl-type-option-RUNWAY_EDGE_LIGHTS"));
+      expect(screen.getByTestId("no-template-for-combo")).toBeInTheDocument();
+      expect(
+        screen.getByText("mission.config.noTemplateForCombo"),
+      ).toBeInTheDocument();
+    });
+
     it("falls back to flat list when no agls provided", () => {
       renderPicker({ templates: groupedTemplates as never });
       // flat mode: both templates rendered, no AGL step
