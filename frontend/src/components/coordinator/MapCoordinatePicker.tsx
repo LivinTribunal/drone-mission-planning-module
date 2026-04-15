@@ -44,11 +44,15 @@ function makeSatelliteStyle(): maplibregl.StyleSpecification {
   };
 }
 
-async function fetchElevation(lat: number, lon: number): Promise<number | null> {
-  /** query open-elevation for point altitude. returns null on failure. */
+async function fetchElevation(
+  lat: number,
+  lon: number,
+  signal?: AbortSignal,
+): Promise<number | null> {
+  /** query open-elevation for point altitude. returns null on failure or abort. */
   try {
     const url = `https://api.open-elevation.com/api/v1/lookup?locations=${lat},${lon}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal });
     if (!res.ok) return null;
     const data = await res.json();
     const elev = data?.results?.[0]?.elevation;
@@ -91,6 +95,9 @@ export default function MapCoordinatePicker({
       attributionControl: { compact: true },
     });
 
+    // aborts any in-flight elevation fetch when the component unmounts
+    const controller = new AbortController();
+
     map.on("click", async (e) => {
       const { lat: clat, lng: clon } = e.lngLat;
       setLat(clat);
@@ -106,7 +113,7 @@ export default function MapCoordinatePicker({
       altUserTouchedRef.current = false;
       const token = ++elevReqRef.current;
       setAltLoading(true);
-      const elev = await fetchElevation(clat, clon);
+      const elev = await fetchElevation(clat, clon, controller.signal);
       // discard if a newer click superseded us or the user typed in the meantime
       if (token !== elevReqRef.current) return;
       setAltLoading(false);
@@ -114,7 +121,10 @@ export default function MapCoordinatePicker({
     });
 
     mapInstanceRef.current = map;
-    return () => map.remove();
+    return () => {
+      controller.abort();
+      map.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -144,6 +154,10 @@ export default function MapCoordinatePicker({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [enlarged, onClose]);
+
+  // empty field -> NaN; Confirm stays disabled until both coords are finite and in range
+  const isLatValid = Number.isFinite(lat) && lat >= -90 && lat <= 90;
+  const isLonValid = Number.isFinite(lon) && lon >= -180 && lon <= 180;
 
   const mapHeightClass = enlarged ? "h-[70vh]" : "h-64";
   const shellClass = enlarged
@@ -195,22 +209,42 @@ export default function MapCoordinatePicker({
         </div>
 
         <div className="grid grid-cols-3 gap-2 mb-3">
-          <Input
-            id="picker-lat"
-            label={t("coordinator.createAirport.latitude")}
-            type="number"
-            step="any"
-            value={lat.toFixed(6)}
-            onChange={(e) => setLat(parseFloat(e.target.value) || 0)}
-          />
-          <Input
-            id="picker-lon"
-            label={t("coordinator.createAirport.longitude")}
-            type="number"
-            step="any"
-            value={lon.toFixed(6)}
-            onChange={(e) => setLon(parseFloat(e.target.value) || 0)}
-          />
+          <div>
+            <Input
+              id="picker-lat"
+              label={t("coordinator.createAirport.latitude")}
+              type="number"
+              step="any"
+              value={Number.isFinite(lat) ? lat.toFixed(6) : ""}
+              onChange={(e) => setLat(parseFloat(e.target.value))}
+            />
+            {!isLatValid && (
+              <p
+                className="text-xs text-tv-error mt-1"
+                data-testid="picker-lat-error"
+              >
+                {t("coordinator.coordinatePicker.latRange")}
+              </p>
+            )}
+          </div>
+          <div>
+            <Input
+              id="picker-lon"
+              label={t("coordinator.createAirport.longitude")}
+              type="number"
+              step="any"
+              value={Number.isFinite(lon) ? lon.toFixed(6) : ""}
+              onChange={(e) => setLon(parseFloat(e.target.value))}
+            />
+            {!isLonValid && (
+              <p
+                className="text-xs text-tv-error mt-1"
+                data-testid="picker-lon-error"
+              >
+                {t("coordinator.coordinatePicker.lonRange")}
+              </p>
+            )}
+          </div>
           <div className="relative">
             <Input
               id="picker-alt"
@@ -239,7 +273,10 @@ export default function MapCoordinatePicker({
           <Button variant="secondary" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={() => onConfirm({ lat, lon, alt })}>
+          <Button
+            onClick={() => onConfirm({ lat, lon, alt })}
+            disabled={!isLatValid || !isLonValid}
+          >
             {t("coordinator.coordinatePicker.confirm")}
           </Button>
         </div>
