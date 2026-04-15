@@ -95,12 +95,14 @@ def generate_kmz(
     mission_name: str = "",
     airport_elevation: float = 0,
 ) -> bytes:
-    """serialize flight plan waypoints to kmz (zipped kml) format."""
-    kml_bytes = generate_kml(flight_plan, mission_name, airport_elevation)
+    """serialize flight plan to a dji wpmz archive consumable by flight hub 2."""
+    template_kml = _build_dji_template_kml(flight_plan, mission_name, airport_elevation)
+    waylines_wpml = _build_dji_waylines_wpml(flight_plan, mission_name, airport_elevation)
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("doc.kml", kml_bytes)
+        zf.writestr("wpmz/template.kml", template_kml)
+        zf.writestr("wpmz/waylines.wpml", waylines_wpml)
 
     return buf.getvalue()
 
@@ -417,12 +419,219 @@ def generate_gpx(
     return ET.tostring(gpx, encoding="utf-8", xml_declaration=True)
 
 
-# dji camera action mapping
+# dji wpmz namespace - flight hub 2 / pilot 2 validate against this schema version
+_KML_NS = "http://www.opengis.net/kml/2.2"
+_WPML_NS = "http://www.dji.com/wpmz/1.0.2"
+_KML = f"{{{_KML_NS}}}"
+_WPML = f"{{{_WPML_NS}}}"
+
+ET.register_namespace("", _KML_NS)
+ET.register_namespace("wpml", _WPML_NS)
+
+# dji camera action mapping - values match actionActuatorFunc in the dji wpml schema
 _DJI_CAMERA_ACTIONS = {
     "PHOTO_CAPTURE": "takePhoto",
     "RECORDING_START": "startRecord",
     "RECORDING_STOP": "stopRecord",
 }
+
+# defaults - m350 rtk + h20t payload. production should map from mission drone profile.
+_DJI_DEFAULT_DRONE_ENUM = "89"
+_DJI_DEFAULT_DRONE_SUB_ENUM = "0"
+_DJI_DEFAULT_PAYLOAD_ENUM = "52"
+_DJI_DEFAULT_PAYLOAD_SUB_ENUM = "0"
+
+
+def _kml_tag(name: str) -> str:
+    """qualify an element name with the kml namespace."""
+    return f"{_KML}{name}"
+
+
+def _wpml_tag(name: str) -> str:
+    """qualify an element name with the dji wpml namespace."""
+    return f"{_WPML}{name}"
+
+
+def _sub_text(parent, tag: str, text: str):
+    """create a child element in the wpml namespace with text content."""
+    el = ET.SubElement(parent, _wpml_tag(tag))
+    el.text = text
+    return el
+
+
+def _append_mission_config(doc, waypoints) -> None:
+    """build the shared wpml:missionConfig block used by both wpmz files."""
+    config = ET.SubElement(doc, _wpml_tag("missionConfig"))
+    _sub_text(config, "flyToWaylineMode", "safely")
+    _sub_text(config, "finishAction", "goHome")
+    _sub_text(config, "exitOnRCLost", "executeLostAction")
+    _sub_text(config, "executeRCLostAction", "hover")
+    _sub_text(config, "takeOffSecurityHeight", "20")
+    auto_speed = f"{waypoints[0].speed or 5:g}" if waypoints else "5"
+    _sub_text(config, "globalTransitionalSpeed", auto_speed)
+
+    drone_info = ET.SubElement(config, _wpml_tag("droneInfo"))
+    _sub_text(drone_info, "droneEnumValue", _DJI_DEFAULT_DRONE_ENUM)
+    _sub_text(drone_info, "droneSubEnumValue", _DJI_DEFAULT_DRONE_SUB_ENUM)
+
+    payload_info = ET.SubElement(config, _wpml_tag("payloadInfo"))
+    _sub_text(payload_info, "payloadEnumValue", _DJI_DEFAULT_PAYLOAD_ENUM)
+    _sub_text(payload_info, "payloadSubEnumValue", _DJI_DEFAULT_PAYLOAD_SUB_ENUM)
+    _sub_text(payload_info, "payloadPositionIndex", "0")
+
+
+def _append_heading_param(parent, heading: float) -> None:
+    """attach the waypoint heading parameter block."""
+    heading_param = ET.SubElement(parent, _wpml_tag("waypointHeadingParam"))
+    _sub_text(heading_param, "waypointHeadingMode", "smoothTransition")
+    _sub_text(heading_param, "waypointHeadingAngle", f"{heading:g}")
+    _sub_text(heading_param, "waypointPoiPoint", "0.000000,0.000000,0.000000")
+    _sub_text(heading_param, "waypointHeadingPathMode", "followBadArc")
+
+
+def _append_turn_param(parent) -> None:
+    """attach the waypoint turn mode block - stop at each point for inspection missions."""
+    turn_param = ET.SubElement(parent, _wpml_tag("waypointTurnParam"))
+    _sub_text(turn_param, "waypointTurnMode", "toPointAndStopWithDiscontinuityCurvature")
+    _sub_text(turn_param, "waypointTurnDampingDist", "0")
+
+
+def _append_action_group(placemark, wp, index: int) -> None:
+    """attach a wpml:actionGroup if the waypoint has camera actions or hover time."""
+    camera_func = _DJI_CAMERA_ACTIONS.get(wp.camera_action)
+    hover_secs = wp.hover_duration or 0
+    if not camera_func and hover_secs <= 0:
+        return
+
+    group = ET.SubElement(placemark, _wpml_tag("actionGroup"))
+    _sub_text(group, "actionGroupId", str(index))
+    _sub_text(group, "actionGroupStartIndex", str(index))
+    _sub_text(group, "actionGroupEndIndex", str(index))
+    _sub_text(group, "actionGroupMode", "sequence")
+
+    trigger = ET.SubElement(group, _wpml_tag("actionTrigger"))
+    _sub_text(trigger, "actionTriggerType", "reachPoint")
+
+    action_id = 0
+    if hover_secs > 0:
+        action = ET.SubElement(group, _wpml_tag("action"))
+        _sub_text(action, "actionId", str(action_id))
+        _sub_text(action, "actionActuatorFunc", "hover")
+        params = ET.SubElement(action, _wpml_tag("actionActuatorFuncParam"))
+        _sub_text(params, "hoverTime", f"{hover_secs:g}")
+        action_id += 1
+
+    if camera_func:
+        action = ET.SubElement(group, _wpml_tag("action"))
+        _sub_text(action, "actionId", str(action_id))
+        _sub_text(action, "actionActuatorFunc", camera_func)
+        params = ET.SubElement(action, _wpml_tag("actionActuatorFuncParam"))
+        _sub_text(params, "payloadPositionIndex", "0")
+        if camera_func == "takePhoto":
+            _sub_text(params, "fileSuffix", "")
+            _sub_text(params, "useGlobalPayloadLensIndex", "1")
+
+
+def _append_placemark(folder, wp, airport_elevation: float) -> None:
+    """add a wpml waypoint placemark with coordinates, altitude, heading, and actions."""
+    lon, lat, alt = _extract_coords(wp.position)
+    agl = alt - airport_elevation
+
+    placemark = ET.SubElement(folder, _kml_tag("Placemark"))
+    point = ET.SubElement(placemark, _kml_tag("Point"))
+    ET.SubElement(point, _kml_tag("coordinates")).text = f"{lon:.8f},{lat:.8f}"
+
+    _sub_text(placemark, "index", str(wp.sequence_order))
+    _sub_text(placemark, "executeHeight", f"{agl:.2f}")
+    _sub_text(placemark, "waypointSpeed", f"{wp.speed or 0:g}")
+
+    _append_heading_param(placemark, wp.heading or 0)
+    _append_turn_param(placemark)
+    _sub_text(placemark, "useStraightLine", "0")
+
+    _append_action_group(placemark, wp, wp.sequence_order)
+
+
+def _build_dji_template_kml(
+    flight_plan: FlightPlan,
+    mission_name: str,
+    airport_elevation: float,
+) -> bytes:
+    """build wpmz/template.kml - mission config plus reference waypoint template."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+    auto_speed = f"{waypoints[0].speed or 5:g}" if waypoints else "5"
+    now = datetime.now(timezone.utc)
+    timestamp_ms = str(int(now.timestamp() * 1000))
+
+    kml = ET.Element(_kml_tag("kml"))
+    doc = ET.SubElement(kml, _kml_tag("Document"))
+    if mission_name:
+        ET.SubElement(doc, _kml_tag("name")).text = mission_name
+    _sub_text(doc, "author", "TarmacView")
+    _sub_text(doc, "createTime", timestamp_ms)
+    _sub_text(doc, "updateTime", timestamp_ms)
+
+    _append_mission_config(doc, waypoints)
+
+    folder = ET.SubElement(doc, _kml_tag("Folder"))
+    _sub_text(folder, "templateType", "waypoint")
+    _sub_text(folder, "templateId", "0")
+
+    coord_sys = ET.SubElement(folder, _wpml_tag("waylineCoordinateSysParam"))
+    _sub_text(coord_sys, "coordinateMode", "WGS84")
+    _sub_text(coord_sys, "heightMode", "relativeToStartPoint")
+    _sub_text(coord_sys, "positioningType", "GPS")
+
+    _sub_text(folder, "autoFlightSpeed", auto_speed)
+    _sub_text(folder, "globalHeight", "50")
+    _sub_text(folder, "caliFlightEnable", "0")
+    _sub_text(folder, "gimbalPitchMode", "manual")
+
+    global_heading = ET.SubElement(folder, _wpml_tag("globalWaypointHeadingParam"))
+    _sub_text(global_heading, "waypointHeadingMode", "followWayline")
+    _sub_text(global_heading, "waypointHeadingAngle", "0")
+    _sub_text(global_heading, "waypointPoiPoint", "0.000000,0.000000,0.000000")
+    _sub_text(global_heading, "waypointHeadingPathMode", "followBadArc")
+
+    _sub_text(folder, "globalWaypointTurnMode", "toPointAndStopWithDiscontinuityCurvature")
+    _sub_text(folder, "globalUseStraightLine", "0")
+
+    for wp in waypoints:
+        _append_placemark(folder, wp, airport_elevation)
+
+    return ET.tostring(kml, encoding="utf-8", xml_declaration=True)
+
+
+def _build_dji_waylines_wpml(
+    flight_plan: FlightPlan,
+    mission_name: str,
+    airport_elevation: float,
+) -> bytes:
+    """build wpmz/waylines.wpml - executable wayline consumed by the aircraft."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+    auto_speed = f"{waypoints[0].speed or 5:g}" if waypoints else "5"
+
+    kml = ET.Element(_kml_tag("kml"))
+    doc = ET.SubElement(kml, _kml_tag("Document"))
+    if mission_name:
+        ET.SubElement(doc, _kml_tag("name")).text = mission_name
+
+    _append_mission_config(doc, waypoints)
+
+    folder = ET.SubElement(doc, _kml_tag("Folder"))
+    _sub_text(folder, "templateId", "0")
+    _sub_text(folder, "executeHeightMode", "relativeToStartPoint")
+    _sub_text(folder, "waylineId", "0")
+    if flight_plan.total_distance is not None:
+        _sub_text(folder, "distance", f"{flight_plan.total_distance:g}")
+    if flight_plan.estimated_duration is not None:
+        _sub_text(folder, "duration", f"{flight_plan.estimated_duration:g}")
+    _sub_text(folder, "autoFlightSpeed", auto_speed)
+
+    for wp in waypoints:
+        _append_placemark(folder, wp, airport_elevation)
+
+    return ET.tostring(kml, encoding="utf-8", xml_declaration=True)
 
 
 def generate_wpml(
@@ -430,50 +639,8 @@ def generate_wpml(
     mission_name: str = "",
     airport_elevation: float = 0,
 ) -> bytes:
-    """serialize flight plan to dji wpml (waypoint mission) xml format."""
-    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
-
-    wpml = ET.Element("wpml")
-
-    # mission config
-    config = ET.SubElement(wpml, "missionConfig")
-    ET.SubElement(config, "flyToWaylineMode").text = "safely"
-    ET.SubElement(config, "finishAction").text = "goHome"
-    ET.SubElement(config, "maxFlightSpeed").text = "15"
-    auto_speed = str(waypoints[0].speed or 5) if waypoints else "5"
-    ET.SubElement(config, "autoFlightSpeed").text = auto_speed
-    drone_info = ET.SubElement(config, "droneInfo")
-    ET.SubElement(drone_info, "droneEnumValue").text = "68"
-    ET.SubElement(drone_info, "droneSubEnumValue").text = "0"
-
-    folder = ET.SubElement(wpml, "folder")
-    ET.SubElement(folder, "waylineId").text = "0"
-
-    wps_elem = ET.SubElement(folder, "waypoints")
-    for wp in waypoints:
-        lon, lat, alt = _extract_coords(wp.position)
-        agl = alt - airport_elevation
-
-        point = ET.SubElement(wps_elem, "waypoint")
-        ET.SubElement(point, "index").text = str(wp.sequence_order)
-        loc = ET.SubElement(point, "point")
-        ET.SubElement(loc, "latitude").text = f"{lat:.8f}"
-        ET.SubElement(loc, "longitude").text = f"{lon:.8f}"
-        ET.SubElement(point, "executeHeight").text = f"{agl:.2f}"
-        ET.SubElement(point, "waypointSpeed").text = str(wp.speed or 0)
-
-        heading_param = ET.SubElement(point, "waypointHeadingParam")
-        ET.SubElement(heading_param, "waypointHeadingMode").text = "smoothTransition"
-        ET.SubElement(heading_param, "waypointHeadingAngle").text = str(wp.heading or 0)
-
-        dji_action = _DJI_CAMERA_ACTIONS.get(wp.camera_action)
-        if dji_action:
-            action_group = ET.SubElement(point, "actionGroup")
-            ET.SubElement(action_group, "actionGroupId").text = "0"
-            action = ET.SubElement(action_group, "action")
-            ET.SubElement(action, "actionActuatorFunc").text = dji_action
-
-    return ET.tostring(wpml, encoding="utf-8", xml_declaration=True)
+    """serialize flight plan to dji waylines.wpml - the executable wayline file."""
+    return _build_dji_waylines_wpml(flight_plan, mission_name, airport_elevation)
 
 
 # litchi camera action codes

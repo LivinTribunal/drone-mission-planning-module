@@ -119,10 +119,10 @@ class TestGenerateKml:
 
 
 class TestGenerateKmz:
-    """tests for kmz export generation."""
+    """tests for dji wpmz (kmz) export generation."""
 
-    def test_produces_valid_zip(self):
-        """kmz is a valid zip file containing doc.kml."""
+    def test_produces_dji_wpmz_archive_layout(self):
+        """kmz is a valid zip with wpmz/template.kml + wpmz/waylines.wpml."""
         fp = _make_flight_plan(3)
 
         result = export_service.generate_kmz(fp, "Test", 0)
@@ -130,9 +130,118 @@ class TestGenerateKmz:
 
         assert zipfile.is_zipfile(buf)
         with zipfile.ZipFile(buf) as zf:
-            assert "doc.kml" in zf.namelist()
-            kml_content = zf.read("doc.kml").decode("utf-8")
-            assert "<kml" in kml_content
+            names = set(zf.namelist())
+            assert names == {"wpmz/template.kml", "wpmz/waylines.wpml"}
+
+    def test_template_kml_has_dji_namespaces(self):
+        """template.kml declares both kml 2.2 and dji wpmz namespaces."""
+        fp = _make_flight_plan(2)
+
+        result = export_service.generate_kmz(fp, "Test", 0)
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            content = zf.read("wpmz/template.kml").decode("utf-8")
+
+        assert "http://www.opengis.net/kml/2.2" in content
+        assert "http://www.dji.com/wpmz/1.0.2" in content
+        assert "wpml:missionConfig" in content
+
+    def test_waylines_wpml_has_dji_namespaces(self):
+        """waylines.wpml declares both kml 2.2 and dji wpmz namespaces."""
+        fp = _make_flight_plan(2)
+
+        result = export_service.generate_kmz(fp, "Test", 0)
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            content = zf.read("wpmz/waylines.wpml").decode("utf-8")
+
+        assert "http://www.opengis.net/kml/2.2" in content
+        assert "http://www.dji.com/wpmz/1.0.2" in content
+        assert "wpml:executeHeightMode" in content
+        assert "relativeToStartPoint" in content
+
+    def test_waylines_has_one_placemark_per_waypoint(self):
+        """every waypoint produces a placemark in waylines.wpml."""
+        fp = _make_flight_plan(4)
+
+        result = export_service.generate_kmz(fp, "Test", 0)
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            content = zf.read("wpmz/waylines.wpml").decode("utf-8")
+
+        assert content.count("<Placemark") == 4
+
+    def test_executeHeight_is_agl(self):
+        """execute height is agl (msl minus airport elevation)."""
+        fp = _make_flight_plan(1)
+
+        result = export_service.generate_kmz(fp, "Test", 290.0)
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            content = zf.read("wpmz/waylines.wpml").decode("utf-8")
+
+        # alt=300 - elevation=290 = 10m AGL
+        assert "<wpml:executeHeight>10.00</wpml:executeHeight>" in content
+
+    def test_camera_action_maps_to_dji_actuator_func(self):
+        """photo_capture waypoint produces a takePhoto action inside an actionGroup."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].camera_action = "PHOTO_CAPTURE"
+
+        result = export_service.generate_kmz(fp, "", 0)
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            content = zf.read("wpmz/waylines.wpml").decode("utf-8")
+
+        assert "wpml:actionGroup" in content
+        assert "takePhoto" in content
+        assert "wpml:actionTriggerType>reachPoint" in content
+
+    def test_hover_duration_produces_hover_action(self):
+        """waypoint with hover_duration > 0 emits a hover action with hoverTime."""
+        fp = _make_flight_plan(2)
+        fp.waypoints[0].hover_duration = 4.5
+
+        result = export_service.generate_kmz(fp, "", 0)
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            content = zf.read("wpmz/waylines.wpml").decode("utf-8")
+
+        assert "<wpml:actionActuatorFunc>hover</wpml:actionActuatorFunc>" in content
+        assert "<wpml:hoverTime>4.5</wpml:hoverTime>" in content
+
+    def test_mission_config_drone_info_present(self):
+        """missionConfig includes droneInfo and payloadInfo blocks."""
+        fp = _make_flight_plan(1)
+
+        result = export_service.generate_kmz(fp, "", 0)
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            content = zf.read("wpmz/template.kml").decode("utf-8")
+
+        assert "wpml:droneInfo" in content
+        assert "wpml:droneEnumValue" in content
+        assert "wpml:payloadInfo" in content
+        assert "wpml:payloadEnumValue" in content
+
+    def test_template_kml_has_template_folder(self):
+        """template.kml folder declares templateType=waypoint and coordinate system."""
+        fp = _make_flight_plan(1)
+
+        result = export_service.generate_kmz(fp, "", 0)
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            content = zf.read("wpmz/template.kml").decode("utf-8")
+
+        assert "<wpml:templateType>waypoint</wpml:templateType>" in content
+        assert "<wpml:coordinateMode>WGS84</wpml:coordinateMode>" in content
+        assert "<wpml:heightMode>relativeToStartPoint</wpml:heightMode>" in content
+
+    def test_empty_waypoints_produces_valid_archive(self):
+        """missions with zero waypoints still emit a structurally valid wpmz archive."""
+        fp = _make_flight_plan(0)
+
+        result = export_service.generate_kmz(fp, "", 0)
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            names = set(zf.namelist())
+            template = zf.read("wpmz/template.kml").decode("utf-8")
+            waylines = zf.read("wpmz/waylines.wpml").decode("utf-8")
+
+        assert names == {"wpmz/template.kml", "wpmz/waylines.wpml"}
+        assert "<Placemark" not in template
+        assert "<Placemark" not in waylines
 
 
 class TestGenerateJson:
@@ -656,31 +765,32 @@ class TestGenerateGpx:
 
 
 class TestGenerateWpml:
-    """tests for wpml (dji) export generation."""
+    """tests for dji waylines.wpml export generation."""
 
     def test_generates_valid_wpml(self):
-        """wpml output contains xml declaration and wpml elements."""
+        """wpml output is a kml 2.2 document carrying dji wpml extensions."""
         fp = _make_flight_plan(3)
 
         result = export_service.generate_wpml(fp, "Test", 290.0)
         text = result.decode("utf-8")
 
         assert "<?xml" in text
-        assert "<wpml>" in text
-        assert "<missionConfig>" in text
-        assert "<waypoints>" in text
+        assert "http://www.opengis.net/kml/2.2" in text
+        assert "http://www.dji.com/wpmz/1.0.2" in text
+        assert "wpml:missionConfig" in text
+        assert "wpml:executeHeightMode" in text
 
     def test_waypoint_count(self):
-        """wpml has correct number of waypoint elements."""
+        """wpml has one placemark per waypoint."""
         fp = _make_flight_plan(4)
 
         result = export_service.generate_wpml(fp, "", 0)
         text = result.decode("utf-8")
 
-        assert text.count("<waypoint>") == 4
+        assert text.count("<Placemark") == 4
 
     def test_camera_action_mapping(self):
-        """dji camera action is mapped correctly."""
+        """dji camera action is mapped to wpml:actionActuatorFunc."""
         fp = _make_flight_plan(3)
         fp.waypoints[1].camera_action = "PHOTO_CAPTURE"
 
@@ -688,6 +798,7 @@ class TestGenerateWpml:
         text = result.decode("utf-8")
 
         assert "takePhoto" in text
+        assert "wpml:actionGroup" in text
 
     def test_agl_altitude(self):
         """execute height is agl (msl minus elevation)."""
@@ -697,7 +808,7 @@ class TestGenerateWpml:
         result = export_service.generate_wpml(fp, "", elev)
         text = result.decode("utf-8")
 
-        assert "<executeHeight>" in text
+        assert "wpml:executeHeight" in text
         # 300 - 290 = 10
         assert "10.00" in text
 
@@ -709,6 +820,16 @@ class TestGenerateWpml:
         text = result.decode("utf-8")
 
         assert "encoding='utf-8'" in text.lower() or 'encoding="utf-8"' in text.lower()
+        assert "Letisko Žilina" in text
+
+    def test_relativeToStartPoint_altitude_mode(self):
+        """executeHeightMode is relativeToStartPoint so agl values are interpreted correctly."""
+        fp = _make_flight_plan(1)
+
+        result = export_service.generate_wpml(fp, "", 0)
+        text = result.decode("utf-8")
+
+        assert "<wpml:executeHeightMode>relativeToStartPoint</wpml:executeHeightMode>" in text
 
 
 class TestGenerateLitchiCsv:
