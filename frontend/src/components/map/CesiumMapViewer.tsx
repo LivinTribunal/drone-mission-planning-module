@@ -39,7 +39,6 @@ interface CesiumMapViewerProps {
   takeoffCoordinate?: PointZ | null;
   landingCoordinate?: PointZ | null;
   visibleInspectionIds?: Set<string>;
-  inspectionIndexMap?: Record<string, number>;
   terrainMode: "map" | "satellite";
   onFeatureClick?: (feature: MapFeature | null) => void;
   onWaypointClick?: (id: string | null) => void;
@@ -47,7 +46,6 @@ interface CesiumMapViewerProps {
   onViewerReady?: (viewer: CesiumViewerType) => void;
   focusFeature?: MapFeature | null;
   highlightedWaypointIds?: string[] | null;
-  highlightSeverity?: string | null;
 }
 
 const VALID_FEATURE_TYPES: ReadonlySet<string> = new Set<MapFeatureType>([
@@ -152,7 +150,6 @@ export default function CesiumMapViewer({
   takeoffCoordinate,
   landingCoordinate,
   visibleInspectionIds,
-  inspectionIndexMap,
   terrainMode,
   onFeatureClick,
   onWaypointClick,
@@ -160,7 +157,6 @@ export default function CesiumMapViewer({
   onViewerReady,
   focusFeature,
   highlightedWaypointIds,
-  highlightSeverity,
 }: CesiumMapViewerProps) {
   const viewerRef = useRef<CesiumViewerType | null>(null);
   const handlerRef = useRef<ScreenSpaceEventHandler | null>(null);
@@ -523,12 +519,10 @@ export default function CesiumMapViewer({
           takeoffCoordinate={takeoffCoordinate}
           landingCoordinate={landingCoordinate}
           visibleInspectionIds={visibleInspectionIds}
-          inspectionIndexMap={inspectionIndexMap}
           showSimplified={layers.simplifiedTrajectory}
           airportElevation={airport.elevation ?? 0}
           terrainOffset={terrainOffset}
           highlightedWaypointIds={highlightedWaypointIds}
-          highlightSeverity={highlightSeverity}
         />
       )}
     </Viewer>

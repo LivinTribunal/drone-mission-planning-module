@@ -31,13 +31,11 @@ interface CesiumTrajectoryProps {
   takeoffCoordinate?: PointZ | null;
   landingCoordinate?: PointZ | null;
   visibleInspectionIds?: Set<string>;
-  inspectionIndexMap?: Record<string, number>;
   showSimplified?: boolean;
   airportElevation?: number;
   /** ellipsoid-geoid offset: cesium terrain height minus airport MSL elevation. */
   terrainOffset?: number;
   highlightedWaypointIds?: string[] | null;
-  highlightSeverity?: string | null;
 }
 
 /** convert MSL altitude to cesium ellipsoidal height. */
@@ -108,7 +106,7 @@ function addPathSegments(
   if (sorted.length < 1) return;
 
   // takeoff -> first waypoint
-  if (showTakeoffLanding && takeoff && sorted.length > 0) {
+  if (showTakeoffLanding && takeoff) {
     const [tLng, tLat, tAlt] = takeoff.coordinates;
     const [wLng, wLat, wAlt] = sorted[0].position.coordinates;
     const color = TRANSIT_COLOR;
@@ -142,7 +140,7 @@ function addPathSegments(
   }
 
   // last waypoint -> landing
-  if (showTakeoffLanding && landing && sorted.length > 0) {
+  if (showTakeoffLanding && landing) {
     const last = sorted[sorted.length - 1];
     const [wLng, wLat, wAlt] = last.position.coordinates;
     const [lLng, lLat, lAlt] = landing.coordinates;
@@ -452,7 +450,6 @@ export default function CesiumTrajectory({
   takeoffCoordinate,
   landingCoordinate,
   visibleInspectionIds,
-  inspectionIndexMap,
   showSimplified,
   airportElevation = 0,
   terrainOffset = 0,
@@ -562,7 +559,7 @@ export default function CesiumTrajectory({
         terrainOffset, highlightedWaypointIds);
     }
   }, [viewer, visibleWaypoints, selectedWaypointId, terrainOffset,
-    takeoffCoordinate, landingCoordinate, inspectionIndexMap,
+    takeoffCoordinate, landingCoordinate,
     showSimplified, layers.path, layers.takeoffLanding, layers.cameraHeading,
     layers.pathHeading, airportElevation, highlightedWaypointIds, t]);
 
