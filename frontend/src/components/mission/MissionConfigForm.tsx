@@ -149,6 +149,7 @@ export default function MissionConfigForm({
 }: MissionConfigFormProps) {
   /** mission-level configuration form with coordinate pick-on-map support. */
   const { t } = useTranslation();
+  const [useTakeoffAsLanding, setUseTakeoffAsLanding] = useState(false);
 
   const droneProfileId =
     values.drone_profile_id !== undefined
@@ -308,11 +309,41 @@ export default function MissionConfigForm({
       </div>
 
       {/* takeoff + landing */}
+      {!disabled && (!takeoff || !landing) && (
+        <label
+          className="flex items-start gap-2 text-xs text-tv-text-primary cursor-pointer"
+          data-testid="use-takeoff-as-landing"
+        >
+          <input
+            type="checkbox"
+            className="mt-0.5 accent-tv-accent"
+            checked={useTakeoffAsLanding}
+            onChange={() => {
+              const next = !useTakeoffAsLanding;
+              setUseTakeoffAsLanding(next);
+              if (next && takeoff) {
+                onChange({ landing_coordinate: takeoff });
+              }
+            }}
+            data-testid="use-takeoff-as-landing-checkbox"
+          />
+          <span className="flex flex-col">
+            <span className="font-semibold">{t("map.useTakeoffAsLanding")}</span>
+            <span className="text-tv-text-secondary">{t("map.useTakeoffAsLandingHint")}</span>
+          </span>
+        </label>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <CoordinateInput
           label={t("mission.config.takeoffCoordinate")}
           value={takeoff ?? null}
-          onChange={(val: PointZ | null) => onChange({ takeoff_coordinate: val })}
+          onChange={(val: PointZ | null) => {
+            if (useTakeoffAsLanding) {
+              onChange({ takeoff_coordinate: val, landing_coordinate: val });
+            } else {
+              onChange({ takeoff_coordinate: val });
+            }
+          }}
           picking={pickingCoord === "takeoff"}
           onPickOnMap={onPickCoord ? () => onPickCoord(pickingCoord === "takeoff" ? null : "takeoff") : undefined}
           defaultAltitude={defaultAltitude}
@@ -322,7 +353,11 @@ export default function MissionConfigForm({
           value={landing ?? null}
           onChange={(val: PointZ | null) => onChange({ landing_coordinate: val })}
           picking={pickingCoord === "landing"}
-          onPickOnMap={onPickCoord ? () => onPickCoord(pickingCoord === "landing" ? null : "landing") : undefined}
+          onPickOnMap={
+            useTakeoffAsLanding || !onPickCoord
+              ? undefined
+              : () => onPickCoord(pickingCoord === "landing" ? null : "landing")
+          }
           defaultAltitude={defaultAltitude}
         />
       </div>

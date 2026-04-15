@@ -1406,15 +1406,19 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       apply();
       map.triggerRepaint();
     } else {
-      // style may not be loaded yet after mount - fire once then detach from both events
-      const handler = () => {
-        map.off("load", handler);
-        map.off("styledata", handler);
-        apply();
+      // poll until style ready - load event already fired, styledata may not
+      let cancelled = false;
+      const poll = () => {
+        if (cancelled) return;
+        if (map.isStyleLoaded()) {
+          apply();
+          map.triggerRepaint();
+        } else {
+          requestAnimationFrame(poll);
+        }
       };
-      map.on("load", handler);
-      map.on("styledata", handler);
-      return () => { map.off("load", handler); map.off("styledata", handler); };
+      requestAnimationFrame(poll);
+      return () => { cancelled = true; };
     }
   }, [waypoints, takeoffCoordinate, landingCoordinate, inspectionIndexMap, addWaypointLayers]);
 

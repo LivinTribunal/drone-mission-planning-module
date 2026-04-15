@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import maplibregl from "maplibre-gl";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, Loader2 } from "lucide-react";
 import Button from "@/components/common/Button";
 import Input from "@/components/common/Input";
 
@@ -12,26 +12,50 @@ interface MapCoordinatePickerProps {
   initialLon?: number;
 }
 
-const ESRI_TILES =
+const ESRI_IMAGERY_TILES =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const ESRI_ATTRIBUTION =
-  "Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community";
+const ESRI_REFERENCE_TILES =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
+const ESRI_ATTRIBUTION = "Tiles © Esri";
 
 function makeSatelliteStyle(): maplibregl.StyleSpecification {
-  /** inline maplibre style with esri world imagery raster tiles. */
+  /** satellite base + esri reference overlay for country lines, cities, labels. */
   return {
     version: 8,
     sources: {
       satellite: {
         type: "raster",
-        tiles: [ESRI_TILES],
+        tiles: [ESRI_IMAGERY_TILES],
         tileSize: 256,
         maxzoom: 18,
         attribution: ESRI_ATTRIBUTION,
       },
+      reference: {
+        type: "raster",
+        tiles: [ESRI_REFERENCE_TILES],
+        tileSize: 256,
+        maxzoom: 18,
+      },
     },
-    layers: [{ id: "satellite-base", type: "raster", source: "satellite" }],
+    layers: [
+      { id: "satellite-base", type: "raster", source: "satellite" },
+      { id: "reference-overlay", type: "raster", source: "reference" },
+    ],
   };
+}
+
+async function fetchElevation(lat: number, lon: number): Promise<number | null> {
+  /** query open-elevation for point altitude. returns null on failure. */
+  try {
+    const url = `https://api.open-elevation.com/api/v1/lookup?locations=${lat},${lon}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const elev = data?.results?.[0]?.elevation;
+    return typeof elev === "number" ? elev : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function MapCoordinatePicker({
@@ -48,7 +72,13 @@ export default function MapCoordinatePicker({
   const [lat, setLat] = useState(initialLat ?? 48.17);
   const [lon, setLon] = useState(initialLon ?? 17.21);
   const [alt, setAlt] = useState(0);
+  const [altLoading, setAltLoading] = useState(false);
   const [enlarged, setEnlarged] = useState(false);
+  // tracks whether the user has manually edited altitude since the last map click;
+  // if so, auto-fetch must not overwrite their value.
+  const altUserTouchedRef = useRef(false);
+  // monotonic token to discard stale elevation responses when user clicks again.
+  const elevReqRef = useRef(0);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -58,11 +88,13 @@ export default function MapCoordinatePicker({
       style: makeSatelliteStyle(),
       center: [lon, lat],
       zoom: 4,
+      attributionControl: { compact: true },
     });
 
-    map.on("click", (e) => {
-      setLat(e.lngLat.lat);
-      setLon(e.lngLat.lng);
+    map.on("click", async (e) => {
+      const { lat: clat, lng: clon } = e.lngLat;
+      setLat(clat);
+      setLon(clon);
       if (markerRef.current) {
         markerRef.current.setLngLat(e.lngLat);
       } else {
@@ -70,6 +102,15 @@ export default function MapCoordinatePicker({
           .setLngLat(e.lngLat)
           .addTo(map);
       }
+      // new click resets manual-edit flag and invalidates any in-flight request
+      altUserTouchedRef.current = false;
+      const token = ++elevReqRef.current;
+      setAltLoading(true);
+      const elev = await fetchElevation(clat, clon);
+      // discard if a newer click superseded us or the user typed in the meantime
+      if (token !== elevReqRef.current) return;
+      setAltLoading(false);
+      if (elev !== null && !altUserTouchedRef.current) setAlt(elev);
     });
 
     mapInstanceRef.current = map;
@@ -170,14 +211,28 @@ export default function MapCoordinatePicker({
             value={lon.toFixed(6)}
             onChange={(e) => setLon(parseFloat(e.target.value) || 0)}
           />
-          <Input
-            id="picker-alt"
-            label={t("coordinator.createAirport.altitude")}
-            type="number"
-            step="any"
-            value={alt.toString()}
-            onChange={(e) => setAlt(parseFloat(e.target.value) || 0)}
-          />
+          <div className="relative">
+            <Input
+              id="picker-alt"
+              label={t("coordinator.createAirport.altitude")}
+              type="number"
+              step="any"
+              value={altLoading ? "" : alt.toString()}
+              onChange={(e) => {
+                altUserTouchedRef.current = true;
+                // cancel any in-flight elevation fetch and hide spinner immediately
+                elevReqRef.current++;
+                setAltLoading(false);
+                setAlt(parseFloat(e.target.value) || 0);
+              }}
+            />
+            {altLoading && (
+              <Loader2
+                className="absolute right-3 bottom-3 h-4 w-4 animate-spin text-tv-text-secondary pointer-events-none"
+                aria-label={t("coordinator.coordinatePicker.altitudeLoading")}
+              />
+            )}
+          </div>
         </div>
 
         <div className="flex justify-end gap-2">

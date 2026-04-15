@@ -1043,7 +1043,8 @@
       "instructions": "Click on the map to set coordinates",
       "confirm": "Confirm",
       "enlarge": "Enlarge map",
-      "collapse": "Collapse map"
+      "collapse": "Collapse map",
+      "altitudeLoading": "Fetching altitude"
     },
     "inspections": {
       "title": "Inspection Templates",

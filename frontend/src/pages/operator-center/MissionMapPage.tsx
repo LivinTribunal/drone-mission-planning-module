@@ -342,7 +342,6 @@ export default function MissionMapPage() {
           coordinates: [lngLat.lng, lngLat.lat, alt],
         };
 
-        // compute which fields change - mirror landing when toggle is on during takeoff placement
         const updates: Partial<{ takeoff_coordinate: PointZ; landing_coordinate: PointZ }> = isTakeoff
           ? { takeoff_coordinate: newCoord }
           : { landing_coordinate: newCoord };
@@ -350,9 +349,6 @@ export default function MissionMapPage() {
           updates.landing_coordinate = newCoord;
         }
 
-        // optimistic: update local mission so markers render immediately
-        const snapshot = mission;
-        setMission((prev) => (prev ? { ...prev, ...updates } : prev));
         const pendingKeys = new Set<"takeoff" | "landing">();
         if (updates.takeoff_coordinate) pendingKeys.add("takeoff");
         if (updates.landing_coordinate) pendingKeys.add("landing");
@@ -363,13 +359,10 @@ export default function MissionMapPage() {
           await updateMission(id, updates);
           const fresh = await getMission(id);
           setMission(fresh);
-          updateMissionFromPage(fresh);
           refreshMissions();
         } catch (err) {
           console.error("map save error:", err instanceof Error ? err.message : String(err));
           showNotification(t("map.saveError"));
-          // roll back optimistic update
-          setMission(snapshot);
         } finally {
           setPendingPlacement((prev) => {
             const next = new Set(prev);
@@ -395,7 +388,7 @@ export default function MissionMapPage() {
         return;
       }
     },
-    [activeTool, id, mission, measure, heading, refreshMissions, updateMissionFromPage, resetTool, t, airportDetail, useTakeoffAsLanding],
+    [activeTool, id, mission, measure, heading, refreshMissions, resetTool, t, airportDetail, useTakeoffAsLanding],
   );
 
   // handle tool change
@@ -631,24 +624,19 @@ export default function MissionMapPage() {
     if (!next) return;
     if (!id || !mission?.takeoff_coordinate) return;
 
-    // mirror existing takeoff to landing immediately
     const mirror: PointZ = {
       type: "Point",
       coordinates: [...mission.takeoff_coordinate.coordinates] as [number, number, number],
     };
-    const snapshot = mission;
-    setMission((prev) => (prev ? { ...prev, landing_coordinate: mirror } : prev));
     setPendingPlacement((prev) => new Set([...prev, "landing"]));
     try {
       await updateMission(id, { landing_coordinate: mirror });
       const fresh = await getMission(id);
       setMission(fresh);
-      updateMissionFromPage(fresh);
       refreshMissions();
     } catch (err) {
       console.error("map save error:", err instanceof Error ? err.message : String(err));
       showNotification(t("map.saveError"));
-      setMission(snapshot);
     } finally {
       setPendingPlacement((prev) => {
         const next = new Set(prev);
@@ -656,7 +644,7 @@ export default function MissionMapPage() {
         return next;
       });
     }
-  }, [useTakeoffAsLanding, id, mission, refreshMissions, updateMissionFromPage, t]);
+  }, [useTakeoffAsLanding, id, mission, refreshMissions, t]);
 
 
   // zoom reset - not yet wired to map API
@@ -889,7 +877,7 @@ export default function MissionMapPage() {
             onWarningClose={() => setSelectedWarning(null)}
             leftPanelChildren={
               <>
-                {isDraft && (
+                {isDraft && (!mission.takeoff_coordinate || !mission.landing_coordinate) && (
                   <label
                     className="flex items-start gap-2 rounded-2xl border border-tv-border bg-tv-bg px-3 py-2 text-xs text-tv-text-primary cursor-pointer"
                     data-testid="use-takeoff-as-landing"
