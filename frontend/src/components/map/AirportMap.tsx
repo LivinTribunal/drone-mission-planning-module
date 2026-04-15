@@ -2291,7 +2291,6 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
               takeoffCoordinate={takeoffCoordinate}
               landingCoordinate={landingCoordinate}
               visibleInspectionIds={visibleInspectionIds}
-              inspectionIndexMap={inspectionIndexMap}
               terrainMode={terrainMode}
               onFeatureClick={(f) => setSelectedFeature(f)}
               onWaypointClick={onWaypointClick}
@@ -2303,7 +2302,6 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
               }}
               focusFeature={focusFeature}
               highlightedWaypointIds={highlightedWaypointIds}
-              highlightSeverity={highlightSeverity}
             />
           </Suspense>
         </div>
