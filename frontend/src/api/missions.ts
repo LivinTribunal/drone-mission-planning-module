@@ -70,13 +70,35 @@ export async function validateMission(
 export async function exportMissionFiles(
   id: string,
   formats: string[],
-): Promise<Blob> {
+): Promise<{ blob: Blob; filename: string | null }> {
   const res = await client.post(
     `/missions/${id}/export`,
     { formats },
     { responseType: "blob" },
   );
-  return res.data;
+  return { blob: res.data, filename: parseContentDispositionFilename(res.headers) };
+}
+
+/** extract filename from a Content-Disposition response header.
+ * prefers the rfc 5987 filename* (utf-8) variant when present.
+ */
+function parseContentDispositionFilename(
+  headers: unknown,
+): string | null {
+  const raw =
+    (headers as { "content-disposition"?: string })?.["content-disposition"] ??
+    (headers as { "Content-Disposition"?: string })?.["Content-Disposition"];
+  if (!raw) return null;
+  const star = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/i.exec(raw);
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1]);
+    } catch {
+      return star[1];
+    }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(raw);
+  return plain?.[1] ?? null;
 }
 
 export async function completeMission(

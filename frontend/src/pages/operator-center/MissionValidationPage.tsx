@@ -180,31 +180,14 @@ export default function MissionValidationPage() {
     if (!id || !mission) return;
     setIsExporting(true);
     try {
-      const blob = await exportMissionFiles(id, formats);
+      const { blob, filename } = await exportMissionFiles(id, formats);
 
-      // trigger browser download
+      // trigger browser download using the filename from the backend
+      // (the backend sanitizer enforces dji flight hub 2 naming rules)
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-
-      // filename from content type
-      if (formats.length === 1) {
-        const ext =
-          formats[0] === "KML"
-            ? "kml"
-            : formats[0] === "KMZ"
-              ? "kmz"
-              : formats[0] === "JSON"
-                ? "json"
-                : formats[0] === "UGCS"
-                  ? "ugcs.json"
-                  : "waypoints";
-        const safeName = mission.name.replace(/[/\\:*?"<>|]/g, "_");
-        a.download = `mission_${safeName}.${ext}`;
-      } else {
-        const safeName = mission.name.replace(/[/\\:*?"<>|]/g, "_");
-        a.download = `mission_${safeName}_export.zip`;
-      }
+      a.download = filename ?? `${mission.name}.${formats[0].toLowerCase()}`;
 
       document.body.appendChild(a);
       try {
