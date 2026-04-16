@@ -151,15 +151,21 @@ class TestGenerateKmz:
             assert "http://www.dji.com/wpmz/1.0.6" in content
             assert "1.0.2" not in content
 
-    def test_waylines_folder_uses_wgs84_execute_height_mode(self):
-        """waylines folder declares executeHeightMode=WGS84 (absolute heights)."""
+    def test_waylines_folder_uses_relative_to_start_point(self):
+        """waylines folder declares executeHeightMode=relativeToStartPoint.
+
+        fh2 then anchors waypoints against the takeoff's screen position and
+        offsets each by its AGL value - this avoids dependence on fh2's dem,
+        which is unreliable for non-commercial airports. absolute-altitude
+        modes (WGS84, EGM96) render routes under ground or floating above it
+        depending on the dem quality at that coordinate.
+        """
         fp = _make_flight_plan(2)
 
         _, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
 
-        assert "<wpml:executeHeightMode>WGS84</wpml:executeHeightMode>" in waylines
+        assert "<wpml:executeHeightMode>relativeToStartPoint</wpml:executeHeightMode>" in waylines
         assert "<wpml:realTimeFollowSurfaceByFov>0</wpml:realTimeFollowSurfaceByFov>" in waylines
-        assert "relativeToStartPoint" not in waylines
 
     def test_template_folder_uses_egm96_height_mode(self):
         """template folder declares heightMode=EGM96 so msl-like values are honored."""
@@ -180,23 +186,33 @@ class TestGenerateKmz:
 
         assert waylines.count("<Placemark") == 4
 
-    def test_execute_height_preserves_msl_value(self):
-        """waylines executeHeight is the waypoint's msl altitude (WGS84 mode)."""
+    def test_execute_height_is_agl(self):
+        """waylines executeHeight is AGL (msl minus airport_elevation).
+
+        paired with executeHeightMode=relativeToStartPoint so fh2 offsets
+        each waypoint by this AGL from the takeoff anchor.
+        """
         fp = _make_flight_plan(1)
 
         _, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 290.0))
 
-        # msl = 300, kept as-is (ellipsoidal approximation)
-        assert "<wpml:executeHeight>300.000000</wpml:executeHeight>" in waylines
+        # msl 300 - airport_elevation 290 = 10m AGL
+        assert "<wpml:executeHeight>10.000000</wpml:executeHeight>" in waylines
 
-    def test_template_placemark_has_ellipsoid_and_agl_heights(self):
-        """template placemark carries both ellipsoidHeight (msl) and height (agl)."""
+    def test_template_placemark_height_slots_match_msl(self):
+        """template ellipsoidHeight + height both carry the same msl value.
+
+        per the dji schema ellipsoidHeight is nominally HAE, but fh2 anchors
+        its ground reference to takeOffRefPoint (which we also write in msl),
+        so writing msl consistently positions waypoints against the same datum
+        and avoids the +44 m geoid drift we saw when ellipsoidHeight was HAE.
+        """
         fp = _make_flight_plan(1)
 
         template, _ = _read_wpmz(export_service.generate_kmz(fp, "Test", 290.0))
 
         assert "<wpml:ellipsoidHeight>300.000000</wpml:ellipsoidHeight>" in template
-        assert "<wpml:height>10.000000</wpml:height>" in template
+        assert "<wpml:height>300.000000</wpml:height>" in template
 
     def test_placemark_has_use_global_flags(self):
         """template placemarks carry useGlobal* flags; waylines do not (matches dji sample)."""
@@ -243,7 +259,7 @@ class TestGenerateKmz:
         assert "<wpml:waylineAvoidLimitAreaMode>0</wpml:waylineAvoidLimitAreaMode>" in template
 
     def test_take_off_ref_point_from_mission(self):
-        """takeOffRefPoint is derived from mission.takeoff_coordinate when set."""
+        """takeOffRefPoint is derived from mission.takeoff_coordinate (msl value)."""
         fp = _make_flight_plan(1)
         mission = MagicMock()
         mission.takeoff_coordinate = MagicMock()
@@ -256,12 +272,12 @@ class TestGenerateKmz:
         assert "<wpml:takeOffRefPointAGLHeight>0</wpml:takeOffRefPointAGLHeight>" in template
 
     def test_take_off_ref_point_falls_back_to_first_waypoint(self):
-        """takeOffRefPoint falls back to the first waypoint when mission is absent."""
+        """takeOffRefPoint falls back to the first waypoint's msl altitude."""
         fp = _make_flight_plan(2)
 
         template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0))
 
-        # first waypoint defaults in _make_flight_plan: 49.69, 18.11, 300
+        # first waypoint default msl 300
         expected = "<wpml:takeOffRefPoint>49.690000,18.110000,300.000000</wpml:takeOffRefPoint>"
         assert expected in template
 
@@ -330,6 +346,20 @@ class TestGenerateKmz:
 
         assert "<wpml:droneEnumValue>89</wpml:droneEnumValue>" in template
         assert "<wpml:payloadEnumValue>42</wpml:payloadEnumValue>" in template
+
+    def test_matrice_4t_enum_mapping(self):
+        """dji matrice 4t maps to drone enum 100/1 and payload 90/0."""
+        fp = _make_flight_plan(1)
+        profile = MagicMock()
+        profile.model_identifier = None
+        profile.manufacturer = "DJI"
+        profile.model = "Matrice 4T"
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0, drone_profile=profile))
+
+        assert "<wpml:droneEnumValue>100</wpml:droneEnumValue>" in template
+        assert "<wpml:droneSubEnumValue>1</wpml:droneSubEnumValue>" in template
+        assert "<wpml:payloadEnumValue>90</wpml:payloadEnumValue>" in template
 
     def test_default_enums_match_m30t_sample(self):
         """without a drone profile, enums fall back to m30t/h30t (matches reference sample)."""
@@ -1108,7 +1138,7 @@ class TestGenerateWpml:
         assert "http://www.opengis.net/kml/2.2" in text
         assert "http://www.dji.com/wpmz/1.0.6" in text
         assert "wpml:missionConfig" in text
-        assert "<wpml:executeHeightMode>WGS84</wpml:executeHeightMode>" in text
+        assert "<wpml:executeHeightMode>relativeToStartPoint</wpml:executeHeightMode>" in text
 
     def test_waypoint_count(self):
         """wpml has one placemark per waypoint."""
@@ -1130,14 +1160,16 @@ class TestGenerateWpml:
         assert "takePhoto" in text
         assert "wpml:actionGroup" in text
 
-    def test_msl_altitude_preserved_in_executeHeight(self):
-        """executeHeight carries the msl value so dji interprets it as absolute wgs84."""
+    def test_execute_height_is_agl_relative_to_takeoff(self):
+        """executeHeight carries AGL; paired with relativeToStartPoint mode."""
         fp = _make_flight_plan(1)
 
         result = export_service.generate_wpml(fp, "", 290.0)
         text = result.decode("utf-8")
 
-        assert "<wpml:executeHeight>300.000000</wpml:executeHeight>" in text
+        # msl 300 - airport_elevation 290 = 10m above takeoff
+        assert "<wpml:executeHeight>10.000000</wpml:executeHeight>" in text
+        assert "<wpml:executeHeightMode>relativeToStartPoint</wpml:executeHeightMode>" in text
 
     def test_xml_encoding_declaration_utf8(self):
         """wpml xml declaration specifies utf-8 encoding."""

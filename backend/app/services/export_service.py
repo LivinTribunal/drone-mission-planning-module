@@ -455,6 +455,13 @@ _DJI_ENUM_REGISTRY: dict[str, tuple[str, str, str, str]] = {
     "dji matrice 350 rtk": ("89", "0", "42", "0"),
     "dji mavic 3 enterprise": ("77", "0", "66", "0"),
     "dji mavic 3 thermal": ("77", "1", "67", "0"),
+    # matrice 4 series - values sourced from dji wpmz documentation. verify
+    # against a known-good flight hub 2 export if fh2 reports a device-type
+    # mismatch, and update alongside a test fixture.
+    "dji matrice 4e": ("100", "0", "90", "0"),
+    "dji m4e": ("100", "0", "90", "0"),
+    "dji matrice 4t": ("100", "1", "90", "0"),
+    "dji m4t": ("100", "1", "90", "0"),
 }
 
 
@@ -501,10 +508,15 @@ def _sub_text(parent, tag: str, text: str):
 
 
 def _takeoff_ref_point(mission, flight_plan) -> str:
-    """build the 'lat,lon,ellipsoidHeight' string for wpml:takeOffRefPoint.
+    """build the 'lat,lon,alt' string for wpml:takeOffRefPoint.
 
-    prefers mission.takeoff_coordinate; falls back to the first waypoint
-    so the file is still valid when takeoff is unset.
+    dji schema nominally calls the z-field HAE, but fh2 anchors its ground
+    reference and waypoint rendering against this value directly. writing a
+    consistent MSL value here (matching executeHeight + heightMode=EGM96)
+    keeps the whole route positioned against the same datum; introducing a
+    geoid offset causes fh2 to render waypoints ~44 m above ground.
+
+    prefers mission.takeoff_coordinate; falls back to the first waypoint.
     """
     takeoff = getattr(mission, "takeoff_coordinate", None) if mission else None
     if takeoff is not None:
@@ -641,15 +653,17 @@ def _append_action_group(placemark, wp, index: int) -> None:
 def _append_placemark(folder, wp, airport_elevation: float, *, in_waylines: bool) -> None:
     """add a wpml waypoint placemark.
 
-    the template folder wants ellipsoidHeight + height; the waylines folder
-    wants executeHeight plus the gimbal-heading + workType trailers. common
-    body (index, speed, turn, useGlobal flags, isRisky) is shared.
+    waylines executeHeight is written as AGL relative to the takeoff point,
+    paired with executeHeightMode=relativeToStartPoint so fh2's renderer
+    anchors against the takeoff's screen-space position (no reliance on
+    fh2's terrain dem, which is unreliable for non-commercial airports).
+
+    template ellipsoidHeight / height stay as raw msl - they're only used
+    for preview and stay consistent with takeOffRefPoint.
     """
     lon, lat, alt = _extract_coords(wp.position)
+    msl = alt
     agl = alt - airport_elevation
-    # we don't ship a geoid model, so msl is used as an ellipsoidal approximation;
-    # sub-meter precision is not required for route preview.
-    ellipsoid = alt
 
     placemark = ET.SubElement(folder, _kml_tag("Placemark"))
     point = ET.SubElement(placemark, _kml_tag("Point"))
@@ -658,10 +672,10 @@ def _append_placemark(folder, wp, airport_elevation: float, *, in_waylines: bool
     _sub_text(placemark, "index", str(wp.sequence_order))
 
     if in_waylines:
-        _sub_text(placemark, "executeHeight", f"{ellipsoid:.6f}")
+        _sub_text(placemark, "executeHeight", f"{agl:.6f}")
     else:
-        _sub_text(placemark, "ellipsoidHeight", f"{ellipsoid:.6f}")
-        _sub_text(placemark, "height", f"{agl:.6f}")
+        _sub_text(placemark, "ellipsoidHeight", f"{msl:.6f}")
+        _sub_text(placemark, "height", f"{msl:.6f}")
 
     _sub_text(placemark, "waypointSpeed", f"{wp.speed or 0:g}")
     _append_heading_param(placemark, wp.heading or 0, in_waylines=in_waylines)
@@ -790,7 +804,14 @@ def _build_dji_waylines_wpml(
 
     folder = ET.SubElement(doc, _kml_tag("Folder"))
     _sub_text(folder, "templateId", "0")
-    _sub_text(folder, "executeHeightMode", "WGS84")
+    # relativeToStartPoint: executeHeight is AGL relative to takeoff. fh2
+    # anchors against the takeoff's screen position in its 3d view so we
+    # don't depend on fh2's DEM being accurate at the airport (it isn't,
+    # for non-commercial fields like JARO). WGS84 / EGM96 modes asked fh2
+    # to place waypoints at absolute ellipsoidal or geoid heights, which
+    # rendered either under ground or floating above it depending on the
+    # dem quality at that coordinate.
+    _sub_text(folder, "executeHeightMode", "relativeToStartPoint")
     _sub_text(folder, "waylineId", "0")
     if flight_plan.total_distance is not None:
         _sub_text(folder, "distance", f"{flight_plan.total_distance:g}")
