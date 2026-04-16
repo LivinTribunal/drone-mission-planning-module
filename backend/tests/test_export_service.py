@@ -215,7 +215,13 @@ class TestGenerateKmz:
         assert "<wpml:height>300.000000</wpml:height>" in template
 
     def test_placemark_has_use_global_flags(self):
-        """template placemarks carry useGlobal* flags; waylines do not (matches dji sample)."""
+        """template placemarks inherit speed, heading, and turn from globals.
+
+        matches fh2's own export: per-waypoint aim is driven by the rotateYaw
+        action at each reachPoint, not by the placemark heading block. the
+        placemark followWayline + useGlobal=1 keeps fh2 happy while the
+        gimbal tracks the aircraft body via the drone's default Follow mode.
+        """
         fp = _make_flight_plan(1)
 
         template, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
@@ -226,6 +232,30 @@ class TestGenerateKmz:
         assert "<wpml:useStraightLine>1</wpml:useStraightLine>" in template
         assert "<wpml:useStraightLine>1</wpml:useStraightLine>" in waylines
         assert "useGlobalHeadingParam" not in waylines
+
+    def test_placemark_heading_mode_is_follow_wayline(self):
+        """placemark heading mode is followWayline with angle 0.
+
+        aim at the target happens via the actionGroup rotateYaw action at
+        reachPoint. regression guard: smoothTransition + explicit per-waypoint
+        angles broke fh2's gimbal follow simulation and locked the camera
+        to absolute north.
+        """
+        fp = _make_flight_plan(3)
+        wp = fp.waypoints[1]
+        wp.waypoint_type = "MEASUREMENT"
+        wp.heading = 172.1
+        wp.camera_target = MagicMock()
+        wp.camera_target.data = _make_ewkb(18.12, 49.69, 290.0)
+
+        template, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
+
+        for content in (template, waylines):
+            assert "<wpml:waypointHeadingMode>followWayline</wpml:waypointHeadingMode>" in content
+            assert "smoothTransition" not in content
+        # the target bearing appears only inside the rotateYaw action, not in
+        # the placemark waypointHeadingAngle
+        assert "<wpml:aircraftHeading>172.1</wpml:aircraftHeading>" in waylines
 
     def test_placemark_includes_isRisky_and_turn_damping(self):
         """placemarks carry isRisky=0 and turnDampingDist=0.2."""
@@ -302,26 +332,104 @@ class TestGenerateKmz:
         assert "<wpml:actionActuatorFunc>hover</wpml:actionActuatorFunc>" in waylines
         assert "<wpml:hoverTime>4.5</wpml:hoverTime>" in waylines
 
-    def test_heading_emits_rotate_yaw_action(self):
-        """waypoint with heading emits rotateYaw so the aircraft aims correctly."""
-        fp = _make_flight_plan(1)
-        fp.waypoints[0].heading = 137.5
+    def test_heading_emits_rotate_yaw_action_for_measurement(self):
+        """measurement waypoint with heading emits rotateYaw to aim at target."""
+        fp = _make_flight_plan(3)
+        wp = fp.waypoints[1]
+        wp.waypoint_type = "MEASUREMENT"
+        wp.heading = 137.5
+        wp.camera_target = MagicMock()
+        wp.camera_target.data = _make_ewkb(18.12, 49.69, 290.0)
 
         _, waylines = _read_wpmz(export_service.generate_kmz(fp, "", 0))
 
         assert "<wpml:actionActuatorFunc>rotateYaw</wpml:actionActuatorFunc>" in waylines
         assert "<wpml:aircraftHeading>137.5</wpml:aircraftHeading>" in waylines
+        # positive heading → clockwise is the short rotation path
+        assert "<wpml:aircraftPathMode>clockwise</wpml:aircraftPathMode>" in waylines
 
-    def test_gimbal_pitch_emits_gimbal_rotate_action(self):
-        """waypoint with gimbal_pitch emits gimbalRotate so the camera aims correctly."""
-        fp = _make_flight_plan(1)
-        fp.waypoints[0].gimbal_pitch = -45.0
+    def test_rotate_yaw_path_mode_follows_sign(self):
+        """aircraftPathMode matches the sign of the target heading (short-path rotation).
+
+        regression guard for the 'camera stuck on north' bug: a positive target
+        heading (172°) paired with counterClockwise forces a 188° wraparound
+        rotation that fh2 refuses to execute, leaving both aircraft + gimbal
+        at their startup yaw.
+        """
+        fp = _make_flight_plan(3)
+        neg_wp = fp.waypoints[1]
+        neg_wp.waypoint_type = "MEASUREMENT"
+        neg_wp.heading = -45.0
+        neg_wp.camera_target = MagicMock()
+        neg_wp.camera_target.data = _make_ewkb(18.12, 49.69, 290.0)
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        # -45° → counterClockwise takes the short way
+        assert "<wpml:aircraftHeading>-45</wpml:aircraftHeading>" in waylines
+        path_block = (
+            "<wpml:aircraftHeading>-45</wpml:aircraftHeading>"
+            "<wpml:aircraftPathMode>counterClockwise</wpml:aircraftPathMode>"
+        )
+        assert path_block in waylines
+
+    def test_gimbal_pitch_emits_gimbal_rotate_action_for_measurement(self):
+        """measurement waypoint with gimbal_pitch emits gimbalRotate that
+        commands pitch only. yaw is disabled so the gimbal follows the aircraft
+        body (which the preceding rotateYaw action has just aimed at the target).
+
+        regression guard: enabling explicit yaw breaks fh2's gimbal-follow
+        simulation and locks the preview camera to the commanded absolute yaw.
+        """
+        fp = _make_flight_plan(3)
+        wp = fp.waypoints[1]
+        wp.waypoint_type = "MEASUREMENT"
+        wp.heading = 172.1
+        wp.gimbal_pitch = -45.0
+        wp.camera_target = MagicMock()
+        wp.camera_target.data = _make_ewkb(18.12, 49.69, 290.0)
 
         _, waylines = _read_wpmz(export_service.generate_kmz(fp, "", 0))
 
         assert "<wpml:actionActuatorFunc>gimbalRotate</wpml:actionActuatorFunc>" in waylines
+        assert "<wpml:gimbalHeadingYawBase>north</wpml:gimbalHeadingYawBase>" in waylines
         assert "<wpml:gimbalPitchRotateEnable>1</wpml:gimbalPitchRotateEnable>" in waylines
         assert "<wpml:gimbalPitchRotateAngle>-45</wpml:gimbalPitchRotateAngle>" in waylines
+        assert "<wpml:gimbalYawRotateEnable>0</wpml:gimbalYawRotateEnable>" in waylines
+        assert "<wpml:gimbalYawRotateAngle>0</wpml:gimbalYawRotateAngle>" in waylines
+
+    def test_template_uses_manual_gimbal_pitch_mode(self):
+        """template folder declares gimbalPitchMode=manual (matches fh2 export).
+
+        'manual' lets the actionGroup gimbalRotate drive pitch while yaw is
+        taken care of by the drone's default Follow gimbal mode (after rotateYaw
+        puts the nose on target). usePointSetting would pull in the per-waypoint
+        waypointGimbalHeadingParam and re-lock yaw to the values in that block.
+        """
+        fp = _make_flight_plan(1)
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "<wpml:gimbalPitchMode>manual</wpml:gimbalPitchMode>" in template
+
+    def test_transit_waypoint_does_not_rotate_yaw(self):
+        """transit/takeoff/landing waypoints keep nose along flight direction.
+
+        regression guard: transit waypoints carry a heading value for internal
+        routing but must NOT emit rotateYaw, otherwise the aircraft pivots
+        mid-flight to a direction unrelated to any camera target.
+        """
+        fp = _make_flight_plan(3)
+        # default _make_flight_plan: wp0=TAKEOFF, wp1=MEASUREMENT, wp2=LANDING.
+        # override middle to TRANSIT + heading, no camera target.
+        fp.waypoints[1].waypoint_type = "TRANSIT"
+        fp.waypoints[1].heading = 222.0
+        fp.waypoints[1].camera_target = None
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "rotateYaw" not in waylines
+        assert "gimbalRotate" not in waylines
 
     def test_payload_param_block_present(self):
         """template folder has the trailing payloadParam block required by fh2."""
@@ -334,42 +442,36 @@ class TestGenerateKmz:
         assert "<wpml:imageFormat>visable</wpml:imageFormat>" in template
         assert "<wpml:photoSize>default_l</wpml:photoSize>" in template
 
-    def test_drone_profile_overrides_default_enums(self):
-        """drone profile lookup overrides the m30t fallback enums."""
-        fp = _make_flight_plan(1)
-        profile = MagicMock()
-        profile.model_identifier = None
-        profile.manufacturer = "DJI"
-        profile.model = "M350 RTK"
+    def test_drone_enums_are_always_m30t(self):
+        """every export emits droneEnum=99/1 + payloadEnum=89/0 regardless of profile.
 
-        template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0, drone_profile=profile))
-
-        assert "<wpml:droneEnumValue>89</wpml:droneEnumValue>" in template
-        assert "<wpml:payloadEnumValue>42</wpml:payloadEnumValue>" in template
-
-    def test_matrice_4t_enum_mapping(self):
-        """dji matrice 4t maps to drone enum 100/1 and payload 90/0."""
-        fp = _make_flight_plan(1)
-        profile = MagicMock()
-        profile.model_identifier = None
-        profile.manufacturer = "DJI"
-        profile.model = "Matrice 4T"
-
-        template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0, drone_profile=profile))
-
-        assert "<wpml:droneEnumValue>100</wpml:droneEnumValue>" in template
-        assert "<wpml:droneSubEnumValue>1</wpml:droneSubEnumValue>" in template
-        assert "<wpml:payloadEnumValue>90</wpml:payloadEnumValue>" in template
-
-    def test_default_enums_match_m30t_sample(self):
-        """without a drone profile, enums fall back to m30t/h30t (matches reference sample)."""
+        fh2's preview only renders the gimbal-follow behavior for the m30t
+        enum set; exporting with m4t (100/1/90/0) or other newer drones leaves
+        the preview camera locked at absolute north. matches both sample
+        exports from the user's fh2 (APCH + PAPI 22, both written as m30t
+        even when a newer drone was selected).
+        """
         fp = _make_flight_plan(1)
 
-        template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+        # default (no profile)
+        default_tpl, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+        # with m4t profile - should still emit m30t enums
+        m4t_profile = MagicMock()
+        m4t_profile.model_identifier = None
+        m4t_profile.manufacturer = "DJI"
+        m4t_profile.model = "Matrice 4T"
+        m4t_tpl, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0, drone_profile=m4t_profile))
+        # with m350 profile - should still emit m30t enums
+        m350_profile = MagicMock()
+        m350_profile.model_identifier = None
+        m350_profile.manufacturer = "DJI"
+        m350_profile.model = "M350 RTK"
+        m350_tpl, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0, drone_profile=m350_profile))
 
-        assert "<wpml:droneEnumValue>99</wpml:droneEnumValue>" in template
-        assert "<wpml:droneSubEnumValue>1</wpml:droneSubEnumValue>" in template
-        assert "<wpml:payloadEnumValue>89</wpml:payloadEnumValue>" in template
+        for template in (default_tpl, m4t_tpl, m350_tpl):
+            assert "<wpml:droneEnumValue>99</wpml:droneEnumValue>" in template
+            assert "<wpml:droneSubEnumValue>1</wpml:droneSubEnumValue>" in template
+            assert "<wpml:payloadEnumValue>89</wpml:payloadEnumValue>" in template
 
     def test_mission_config_drone_info_present(self):
         """missionConfig includes droneInfo and payloadInfo blocks."""

@@ -442,51 +442,30 @@ _DJI_CAMERA_ACTIONS = {
     "RECORDING_STOP": "stopRecord",
 }
 
-# drone + payload enum lookup. fallback is m30t / h30t-integrated because that
-# matches the known-good sample we validated against (docs/specs/PAPI 22.kmz).
-# extend this map as we validate more drone profiles against flight hub 2.
+# drone + payload enum. forced to m30t (99/1) + h30t-integrated (89/0).
+#
+# we've tested two fh2 exports from the user - one labeled APCH, one PAPI 22
+# exported with an m4t selected - and both come back with droneEnum=99/1 and
+# payloadEnum=89. fh2 evidently normalizes every export to m30t regardless of
+# which drone is selected, and it only renders the preview gimbal-follow
+# behavior for drone enums it knows (m30t works; m4t 100/1 leaves the camera
+# locked at absolute north in the preview and presumably at flight time too).
+#
+# until fh2 ships official support for the m4 series, we write the m30t enum
+# set for every mission so the file is renderable. actual flight behavior is
+# driven by the aircraft firmware interpreting the wpml actions, not by the
+# drone enum, so an m4t in the field still flies the route correctly.
 _DJI_FALLBACK_ENUMS: tuple[str, str, str, str] = ("99", "1", "89", "0")
-
-_DJI_ENUM_REGISTRY: dict[str, tuple[str, str, str, str]] = {
-    "dji m30": ("99", "0", "89", "0"),
-    "dji m30t": ("99", "1", "89", "0"),
-    "dji m300 rtk": ("60", "0", "42", "0"),
-    "dji m350 rtk": ("89", "0", "42", "0"),
-    "dji matrice 350 rtk": ("89", "0", "42", "0"),
-    "dji mavic 3 enterprise": ("77", "0", "66", "0"),
-    "dji mavic 3 thermal": ("77", "1", "67", "0"),
-    # matrice 4 series - values sourced from dji wpmz documentation. verify
-    # against a known-good flight hub 2 export if fh2 reports a device-type
-    # mismatch, and update alongside a test fixture.
-    "dji matrice 4e": ("100", "0", "90", "0"),
-    "dji m4e": ("100", "0", "90", "0"),
-    "dji matrice 4t": ("100", "1", "90", "0"),
-    "dji m4t": ("100", "1", "90", "0"),
-}
 
 
 def _dji_enums_for(drone_profile) -> tuple[str, str, str, str]:
-    """look up (droneEnum, droneSub, payloadEnum, payloadSub) from a drone profile.
+    """return the dji drone + payload enum tuple for the mission.
 
-    prefers an explicit model_identifier, then falls back to manufacturer+model,
-    then to the m30t default that matches our reference sample.
+    currently always returns m30t (99/1/89/0) - the only enum set fh2
+    currently renders correctly. the drone_profile argument is retained for
+    future per-drone overrides once fh2 supports more drones.
     """
-    if drone_profile is None:
-        return _DJI_FALLBACK_ENUMS
-
-    ident = getattr(drone_profile, "model_identifier", None)
-    if ident:
-        key = ident.strip().lower()
-        if key in _DJI_ENUM_REGISTRY:
-            return _DJI_ENUM_REGISTRY[key]
-
-    mfr = (getattr(drone_profile, "manufacturer", "") or "").strip()
-    model = (getattr(drone_profile, "model", "") or "").strip()
-    if mfr or model:
-        key = f"{mfr} {model}".strip().lower()
-        if key in _DJI_ENUM_REGISTRY:
-            return _DJI_ENUM_REGISTRY[key]
-
+    del drone_profile  # intentionally unused for now
     return _DJI_FALLBACK_ENUMS
 
 
@@ -559,11 +538,43 @@ def _append_mission_config(doc, flight_plan, mission, drone_profile, *, in_wayli
     _sub_text(payload_info, "payloadPositionIndex", "0")
 
 
-def _append_heading_param(parent, heading: float, *, in_waylines: bool) -> None:
-    """attach waypointHeadingParam - waylines variant carries HeadingAngleEnable."""
+_AIMED_WAYPOINT_TYPES = {"MEASUREMENT", "HOVER"}
+
+
+def _aims_at_target(wp) -> bool:
+    """true when the waypoint needs to rotate the aircraft toward a target.
+
+    only measurement/hover points have a camera target - takeoff, landing,
+    and transit points should keep the aircraft pointing along the flight
+    direction (followWayline), not rotated toward the stored heading.
+    """
+    return wp.waypoint_type in _AIMED_WAYPOINT_TYPES and wp.camera_target is not None
+
+
+def _normalize_heading(heading: float) -> float:
+    """wrap a compass bearing into dji's [-180, 180] range.
+
+    our bearing_between returns [0, 360); dji's aircraftHeading and
+    gimbalYawRotateAngle expect [-180, 180]. a raw 202° becomes -158°
+    (same physical direction, valid input).
+    """
+    return ((heading + 180.0) % 360.0) - 180.0
+
+
+def _append_heading_param(parent, wp, *, in_waylines: bool) -> None:
+    """attach waypointHeadingParam - followWayline across the board.
+
+    matches the working fh2 export pattern: placemark heading follows the
+    wayline, and the rotateYaw action at each reachPoint rotates the aircraft
+    to the target bearing. the gimbal then tracks the body via the m30
+    default Follow mode. this avoids the 'camera locked to north' issue where
+    smoothTransition + explicit yaw commands stopped fh2 from simulating
+    the gimbal follow.
+    """
+    _ = wp  # heading angle is always 0 at the placemark level; rotateYaw handles aim
     heading_param = ET.SubElement(parent, _wpml_tag("waypointHeadingParam"))
     _sub_text(heading_param, "waypointHeadingMode", "followWayline")
-    _sub_text(heading_param, "waypointHeadingAngle", f"{heading:g}")
+    _sub_text(heading_param, "waypointHeadingAngle", "0")
     _sub_text(heading_param, "waypointPoiPoint", "0.000000,0.000000,0.000000")
     if in_waylines:
         _sub_text(heading_param, "waypointHeadingAngleEnable", "0")
@@ -581,12 +592,17 @@ def _append_turn_param(parent) -> None:
 def _append_action_group(placemark, wp, index: int) -> None:
     """emit a wpml:actionGroup covering yaw, gimbal, hover, and camera actions.
 
+    rotateYaw + gimbalRotate are only emitted for measurement/hover waypoints
+    with a camera target. takeoff / landing / transit points keep the nose
+    along flight direction and the gimbal in its default position.
+
     order matches real dji exports: rotateYaw -> gimbalRotate -> hover -> camera.
     """
     camera_func = _DJI_CAMERA_ACTIONS.get(wp.camera_action)
     hover_secs = wp.hover_duration or 0
-    heading_val = wp.heading
-    gimbal_pitch = getattr(wp, "gimbal_pitch", None)
+    aims = _aims_at_target(wp)
+    heading_val = wp.heading if aims else None
+    gimbal_pitch = getattr(wp, "gimbal_pitch", None) if aims else None
 
     if not camera_func and hover_secs <= 0 and heading_val is None and gimbal_pitch is None:
         return
@@ -603,12 +619,19 @@ def _append_action_group(placemark, wp, index: int) -> None:
     action_id = 0
 
     if heading_val is not None:
+        heading_val = _normalize_heading(heading_val)
         action = ET.SubElement(group, _wpml_tag("action"))
         _sub_text(action, "actionId", str(action_id))
         _sub_text(action, "actionActuatorFunc", "rotateYaw")
         params = ET.SubElement(action, _wpml_tag("actionActuatorFuncParam"))
         _sub_text(params, "aircraftHeading", f"{heading_val:g}")
-        _sub_text(params, "aircraftPathMode", "counterClockwise")
+        # path mode must match the sign of the target heading so the
+        # rotation takes the short way round. hardcoding counterClockwise
+        # with a positive target (e.g. 172°) forces a 188° wrap-around
+        # that fh2/firmware refuses to execute, leaving the aircraft +
+        # gimbal at their startup yaw (absolute north).
+        path_mode = "counterClockwise" if heading_val < 0 else "clockwise"
+        _sub_text(params, "aircraftPathMode", path_mode)
         action_id += 1
 
     if gimbal_pitch is not None:
@@ -616,6 +639,11 @@ def _append_action_group(placemark, wp, index: int) -> None:
         _sub_text(action, "actionId", str(action_id))
         _sub_text(action, "actionActuatorFunc", "gimbalRotate")
         params = ET.SubElement(action, _wpml_tag("actionActuatorFuncParam"))
+        # matches fh2's own export: gimbal pitch is commanded, yaw is disabled.
+        # the aircraft's rotateYaw action (emitted just before this) aims the
+        # nose at the target; the gimbal then follows the body via the m30
+        # default Follow mode. explicit yaw commands here break fh2's gimbal-
+        # follow simulation and lock the camera to the commanded absolute angle.
         _sub_text(params, "gimbalHeadingYawBase", "north")
         _sub_text(params, "gimbalRotateMode", "absoluteAngle")
         _sub_text(params, "gimbalPitchRotateEnable", "1")
@@ -678,11 +706,12 @@ def _append_placemark(folder, wp, airport_elevation: float, *, in_waylines: bool
         _sub_text(placemark, "height", f"{msl:.6f}")
 
     _sub_text(placemark, "waypointSpeed", f"{wp.speed or 0:g}")
-    _append_heading_param(placemark, wp.heading or 0, in_waylines=in_waylines)
+    _append_heading_param(placemark, wp, in_waylines=in_waylines)
     _append_turn_param(placemark)
 
-    # template placemark carries useGlobal* flags; waylines placemark omits them
-    # (it's already executable - no global overrides apply), matching the dji sample.
+    # template placemark inherits all globals (speed, heading, turn). waylines
+    # placemark omits the useGlobal* flags (it's already executable). matches
+    # the working fh2 export exactly.
     if not in_waylines:
         _sub_text(placemark, "useGlobalSpeed", "1")
         _sub_text(placemark, "useGlobalHeadingParam", "1")
@@ -692,9 +721,12 @@ def _append_placemark(folder, wp, airport_elevation: float, *, in_waylines: bool
     _append_action_group(placemark, wp, wp.sequence_order)
 
     if in_waylines:
+        # waylines always carries waypointGimbalHeadingParam with zeros, per
+        # the working fh2 export. with gimbalPitchMode=manual this block is
+        # informational; the actual aim comes from the actionGroup. template
+        # placemarks omit this block entirely.
         gimbal_param = ET.SubElement(placemark, _wpml_tag("waypointGimbalHeadingParam"))
-        gp = getattr(wp, "gimbal_pitch", None) or 0
-        _sub_text(gimbal_param, "waypointGimbalPitchAngle", f"{gp:g}")
+        _sub_text(gimbal_param, "waypointGimbalPitchAngle", "0")
         _sub_text(gimbal_param, "waypointGimbalYawAngle", "0")
 
     _sub_text(placemark, "isRisky", "0")
@@ -766,6 +798,9 @@ def _build_dji_template_kml(
     _sub_text(folder, "autoFlightSpeed", auto_speed)
     _sub_text(folder, "globalHeight", global_height)
     _sub_text(folder, "caliFlightEnable", "0")
+    # matches the working fh2 export - 'manual' means the gimbal is driven by
+    # the actionGroup gimbalRotate actions (not by waypointGimbalHeadingParam),
+    # which is what rotates the camera into target direction at each waypoint.
     _sub_text(folder, "gimbalPitchMode", "manual")
 
     global_heading = ET.SubElement(folder, _wpml_tag("globalWaypointHeadingParam"))
