@@ -56,7 +56,13 @@ async function fetchElevation(
     const data = await res.json();
     const elev = data?.results?.[0]?.elevation;
     return typeof elev === "number" ? elev : null;
-  } catch {
+  } catch (error) {
+    // swallow aborts silently; log everything else so abort/network/parse is observable
+    if (error instanceof DOMException && error.name === "AbortError") return null;
+    console.error(
+      "elevation lookup failed:",
+      error instanceof Error ? error.message : String(error),
+    );
     return null;
   }
 }

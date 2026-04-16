@@ -18,6 +18,10 @@ interface MissionConfigFormProps {
   onPickCoord?: (target: PickTarget) => void;
   defaultAltitude?: number;
   disabled?: boolean;
+  // optional controlled mirror-mode state - when omitted the checkbox is
+  // self-contained; the parent lifts this when pick-on-map also needs to mirror
+  useTakeoffAsLanding?: boolean;
+  onUseTakeoffAsLandingChange?: (value: boolean) => void;
 }
 
 function DroneProfileDropdown({
@@ -146,10 +150,17 @@ export default function MissionConfigForm({
   onPickCoord,
   defaultAltitude,
   disabled = false,
+  useTakeoffAsLanding: useTakeoffAsLandingProp,
+  onUseTakeoffAsLandingChange,
 }: MissionConfigFormProps) {
   /** mission-level configuration form with coordinate pick-on-map support. */
   const { t } = useTranslation();
-  const [useTakeoffAsLanding, setUseTakeoffAsLanding] = useState(false);
+  const [localUseTakeoffAsLanding, setLocalUseTakeoffAsLanding] = useState(false);
+  const useTakeoffAsLanding = useTakeoffAsLandingProp ?? localUseTakeoffAsLanding;
+  const setUseTakeoffAsLanding = (value: boolean) => {
+    if (onUseTakeoffAsLandingChange) onUseTakeoffAsLandingChange(value);
+    else setLocalUseTakeoffAsLanding(value);
+  };
 
   const droneProfileId =
     values.drone_profile_id !== undefined

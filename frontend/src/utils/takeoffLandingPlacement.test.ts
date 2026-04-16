@@ -97,8 +97,11 @@ describe("computePlacementUpdates", () => {
     );
     expect(result?.takeoff_coordinate).toEqual(pointZ(17.21, 48.17, 100));
     expect(result?.landing_coordinate).toEqual(pointZ(17.21, 48.17, 100));
-    // same value object reference is fine - both keys write the same coord
-    expect(result?.takeoff_coordinate).toBe(result?.landing_coordinate);
+    // coords must be independent objects - callers assume coord values are immutable
+    expect(result?.takeoff_coordinate).not.toBe(result?.landing_coordinate);
+    expect(result?.takeoff_coordinate?.coordinates).not.toBe(
+      result?.landing_coordinate?.coordinates,
+    );
   });
 
   it("does NOT mirror into takeoff when PLACE_LANDING is clicked with useTakeoffAsLanding on", () => {

@@ -386,6 +386,34 @@ describe("MissionConfigForm", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("calls onUseTakeoffAsLandingChange when the checkbox is toggled with controlled state", () => {
+    /** verify the parent-controlled mirror callback fires instead of local state. */
+    const onUseTakeoffAsLandingChange = vi.fn();
+    renderForm({
+      useTakeoffAsLanding: false,
+      onUseTakeoffAsLandingChange,
+    });
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    expect(onUseTakeoffAsLandingChange).toHaveBeenCalledWith(true);
+  });
+
+  it("hides the landing pick button when parent-controlled mirror is on", () => {
+    /** verify controlled useTakeoffAsLanding=true hides the landing pick button. */
+    renderForm({
+      values: {
+        takeoff_coordinate: {
+          type: "Point",
+          coordinates: [17.21, 48.17, 100],
+        } as never,
+      },
+      useTakeoffAsLanding: true,
+      onUseTakeoffAsLandingChange: vi.fn(),
+    });
+    expect(
+      screen.queryByTestId("mission.config.landingcoordinate-pick-map"),
+    ).not.toBeInTheDocument();
+  });
+
   it("updates both coordinates when takeoff changes while mirror is active", () => {
     /** verify editing takeoff while mirror is on writes landing_coordinate too. */
     const { onChange } = renderForm();

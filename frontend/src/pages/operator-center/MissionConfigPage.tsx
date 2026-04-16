@@ -43,6 +43,8 @@ import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
 import Modal from "@/components/common/Modal";
 import type { MapFeature } from "@/types/map";
+import { MapTool } from "@/hooks/useMapTools";
+import { computePlacementUpdates } from "@/utils/takeoffLandingPlacement";
 
 const STATUS_ORDER = [
   "DRAFT",
@@ -99,6 +101,8 @@ export default function MissionConfigPage() {
 
   // coordinate pick-on-map mode
   const [pickingCoord, setPickingCoord] = useState<"takeoff" | "landing" | null>(null);
+  // round-trip mission toggle lifted from form so pick-on-map clicks can mirror
+  const [useTakeoffAsLanding, setUseTakeoffAsLanding] = useState(false);
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
@@ -566,32 +570,29 @@ export default function MissionConfigPage() {
   missionRef.current = mission;
   const airportDetailRef = useRef(airportDetail);
   airportDetailRef.current = airportDetail;
+  const useTakeoffAsLandingRef = useRef(useTakeoffAsLanding);
+  useTakeoffAsLandingRef.current = useTakeoffAsLanding;
 
   const handleMapClick = useCallback(
     (lngLat: { lng: number; lat: number }) => {
-      /** set takeoff or landing coordinate from map click. */
+      /** set takeoff or landing coordinate from map click, mirroring into landing when round-trip mode is on. */
       const target = pickingCoordRef.current;
       if (!target) return;
-      const key =
-        target === "takeoff"
-          ? "takeoff_coordinate"
-          : "landing_coordinate";
 
-      // preserve existing altitude, fall back to airport elevation
       const dirty = missionDirtyRef.current;
       const m = missionRef.current;
-      const existing =
-        target === "takeoff"
-          ? dirty.takeoff_coordinate ?? m?.takeoff_coordinate
-          : dirty.landing_coordinate ?? m?.landing_coordinate;
-      const alt = existing ? existing.coordinates[2] : (airportDetailRef.current?.elevation ?? 0);
-
-      handleMissionChange({
-        [key]: {
-          type: "Point" as const,
-          coordinates: [lngLat.lng, lngLat.lat, alt],
+      const tool = target === "takeoff" ? MapTool.PLACE_TAKEOFF : MapTool.PLACE_LANDING;
+      const update = computePlacementUpdates(
+        tool,
+        lngLat,
+        {
+          takeoff_coordinate: dirty.takeoff_coordinate ?? m?.takeoff_coordinate ?? null,
+          landing_coordinate: dirty.landing_coordinate ?? m?.landing_coordinate ?? null,
         },
-      });
+        airportDetailRef.current?.elevation ?? null,
+        useTakeoffAsLandingRef.current,
+      );
+      if (update) handleMissionChange(update);
       setPickingCoord(null);
     },
     [],
@@ -724,6 +725,8 @@ export default function MissionConfigPage() {
               onPickCoord={setPickingCoord}
               defaultAltitude={airportDetail?.elevation ?? 0}
               disabled={!canModify}
+              useTakeoffAsLanding={useTakeoffAsLanding}
+              onUseTakeoffAsLandingChange={setUseTakeoffAsLanding}
             />
           </div>
 

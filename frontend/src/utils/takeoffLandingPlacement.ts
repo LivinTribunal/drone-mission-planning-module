@@ -41,9 +41,13 @@ export function computePlacementUpdates(
   const updates: PlacementUpdates = isTakeoff
     ? { takeoff_coordinate: newCoord }
     : { landing_coordinate: newCoord };
-  // round-trip mission: mirror the takeoff placement into landing in a single request
+  // round-trip mission: mirror the takeoff placement into landing in a single request.
+  // clone the coord so each key owns an independent value - callers assume immutable coords.
   if (isTakeoff && useTakeoffAsLanding) {
-    updates.landing_coordinate = newCoord;
+    updates.landing_coordinate = {
+      ...newCoord,
+      coordinates: [...newCoord.coordinates] as [number, number, number],
+    };
   }
   return updates;
 }
