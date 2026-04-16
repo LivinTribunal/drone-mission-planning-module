@@ -118,11 +118,19 @@ class TestGenerateKml:
         assert "<LineString" not in text
 
 
-class TestGenerateKmz:
-    """tests for kmz export generation."""
+def _read_wpmz(result: bytes) -> tuple[str, str]:
+    """unzip a generated kmz and return (template.kml, waylines.wpml) as text."""
+    with zipfile.ZipFile(BytesIO(result)) as zf:
+        template = zf.read("wpmz/template.kml").decode("utf-8")
+        waylines = zf.read("wpmz/waylines.wpml").decode("utf-8")
+    return template, waylines
 
-    def test_produces_valid_zip(self):
-        """kmz is a valid zip file containing doc.kml."""
+
+class TestGenerateKmz:
+    """tests for dji wpmz 1.0.6 (kmz) export generation."""
+
+    def test_produces_dji_wpmz_archive_layout(self):
+        """kmz is a valid zip with wpmz/template.kml + wpmz/waylines.wpml."""
         fp = _make_flight_plan(3)
 
         result = export_service.generate_kmz(fp, "Test", 0)
@@ -130,9 +138,373 @@ class TestGenerateKmz:
 
         assert zipfile.is_zipfile(buf)
         with zipfile.ZipFile(buf) as zf:
-            assert "doc.kml" in zf.namelist()
-            kml_content = zf.read("doc.kml").decode("utf-8")
-            assert "<kml" in kml_content
+            assert set(zf.namelist()) == {"wpmz/template.kml", "wpmz/waylines.wpml"}
+
+    def test_declares_wpmz_1_0_6_namespace(self):
+        """both files declare kml 2.2 and dji wpmz 1.0.6."""
+        fp = _make_flight_plan(2)
+
+        template, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
+
+        for content in (template, waylines):
+            assert "http://www.opengis.net/kml/2.2" in content
+            assert "http://www.dji.com/wpmz/1.0.6" in content
+            assert "1.0.2" not in content
+
+    def test_waylines_folder_uses_relative_to_start_point(self):
+        """waylines folder declares executeHeightMode=relativeToStartPoint.
+
+        fh2 then anchors waypoints against the takeoff's screen position and
+        offsets each by its AGL value - this avoids dependence on fh2's dem,
+        which is unreliable for non-commercial airports. absolute-altitude
+        modes (WGS84, EGM96) render routes under ground or floating above it
+        depending on the dem quality at that coordinate.
+        """
+        fp = _make_flight_plan(2)
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
+
+        assert "<wpml:executeHeightMode>relativeToStartPoint</wpml:executeHeightMode>" in waylines
+        assert "<wpml:realTimeFollowSurfaceByFov>0</wpml:realTimeFollowSurfaceByFov>" in waylines
+
+    def test_template_folder_uses_egm96_height_mode(self):
+        """template folder declares heightMode=EGM96 so msl-like values are honored."""
+        fp = _make_flight_plan(1)
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
+
+        assert "<wpml:heightMode>EGM96</wpml:heightMode>" in template
+        assert "<wpml:coordinateMode>WGS84</wpml:coordinateMode>" in template
+        # positioningType was non-standard and must not be emitted
+        assert "positioningType" not in template
+
+    def test_waylines_has_one_placemark_per_waypoint(self):
+        """every waypoint produces a placemark in waylines.wpml."""
+        fp = _make_flight_plan(4)
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
+
+        assert waylines.count("<Placemark") == 4
+
+    def test_execute_height_is_agl(self):
+        """waylines executeHeight is AGL (msl minus airport_elevation).
+
+        paired with executeHeightMode=relativeToStartPoint so fh2 offsets
+        each waypoint by this AGL from the takeoff anchor.
+        """
+        fp = _make_flight_plan(1)
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 290.0))
+
+        # msl 300 - airport_elevation 290 = 10m AGL
+        assert "<wpml:executeHeight>10.000000</wpml:executeHeight>" in waylines
+
+    def test_template_placemark_height_slots_match_msl(self):
+        """template ellipsoidHeight + height both carry the same msl value.
+
+        per the dji schema ellipsoidHeight is nominally HAE, but fh2 anchors
+        its ground reference to takeOffRefPoint (which we also write in msl),
+        so writing msl consistently positions waypoints against the same datum
+        and avoids the +44 m geoid drift we saw when ellipsoidHeight was HAE.
+        """
+        fp = _make_flight_plan(1)
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "Test", 290.0))
+
+        assert "<wpml:ellipsoidHeight>300.000000</wpml:ellipsoidHeight>" in template
+        assert "<wpml:height>300.000000</wpml:height>" in template
+
+    def test_placemark_has_use_global_flags(self):
+        """template placemarks inherit speed, heading, and turn from globals.
+
+        matches fh2's own export: per-waypoint aim is driven by the rotateYaw
+        action at each reachPoint, not by the placemark heading block. the
+        placemark followWayline + useGlobal=1 keeps fh2 happy while the
+        gimbal tracks the aircraft body via the drone's default Follow mode.
+        """
+        fp = _make_flight_plan(1)
+
+        template, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
+
+        assert "<wpml:useGlobalSpeed>1</wpml:useGlobalSpeed>" in template
+        assert "<wpml:useGlobalHeadingParam>1</wpml:useGlobalHeadingParam>" in template
+        assert "<wpml:useGlobalTurnParam>1</wpml:useGlobalTurnParam>" in template
+        assert "<wpml:useStraightLine>1</wpml:useStraightLine>" in template
+        assert "<wpml:useStraightLine>1</wpml:useStraightLine>" in waylines
+        assert "useGlobalHeadingParam" not in waylines
+
+    def test_placemark_heading_mode_is_follow_wayline(self):
+        """placemark heading mode is followWayline with angle 0.
+
+        aim at the target happens via the actionGroup rotateYaw action at
+        reachPoint. regression guard: smoothTransition + explicit per-waypoint
+        angles broke fh2's gimbal follow simulation and locked the camera
+        to absolute north.
+        """
+        fp = _make_flight_plan(3)
+        wp = fp.waypoints[1]
+        wp.waypoint_type = "MEASUREMENT"
+        wp.heading = 172.1
+        wp.camera_target = MagicMock()
+        wp.camera_target.data = _make_ewkb(18.12, 49.69, 290.0)
+
+        template, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
+
+        for content in (template, waylines):
+            assert "<wpml:waypointHeadingMode>followWayline</wpml:waypointHeadingMode>" in content
+            assert "smoothTransition" not in content
+        # the target bearing appears only inside the rotateYaw action, not in
+        # the placemark waypointHeadingAngle
+        assert "<wpml:aircraftHeading>172.1</wpml:aircraftHeading>" in waylines
+
+    def test_placemark_includes_isRisky_and_turn_damping(self):
+        """placemarks carry isRisky=0 and turnDampingDist=0.2."""
+        fp = _make_flight_plan(1)
+
+        template, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
+
+        for content in (template, waylines):
+            assert "<wpml:isRisky>0</wpml:isRisky>" in content
+            assert "<wpml:waypointTurnDampingDist>0.2</wpml:waypointTurnDampingDist>" in content
+
+    def test_waylines_placemark_has_gimbal_and_work_type(self):
+        """waylines placemark has waypointGimbalHeadingParam and waypointWorkType."""
+        fp = _make_flight_plan(1)
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
+
+        assert "<wpml:waypointGimbalHeadingParam>" in waylines
+        assert "<wpml:waypointGimbalPitchAngle>" in waylines
+        assert "<wpml:waypointWorkType>0</wpml:waypointWorkType>" in waylines
+
+    def test_mission_config_has_rc_lost_and_rth(self):
+        """missionConfig carries goContinue/goBack and globalRTHHeight=100."""
+        fp = _make_flight_plan(1)
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "Test", 0))
+
+        assert "<wpml:exitOnRCLost>goContinue</wpml:exitOnRCLost>" in template
+        assert "<wpml:executeRCLostAction>goBack</wpml:executeRCLostAction>" in template
+        assert "<wpml:globalRTHHeight>100</wpml:globalRTHHeight>" in template
+        assert "<wpml:waylineAvoidLimitAreaMode>0</wpml:waylineAvoidLimitAreaMode>" in template
+
+    def test_take_off_ref_point_from_mission(self):
+        """takeOffRefPoint is derived from mission.takeoff_coordinate (msl value)."""
+        fp = _make_flight_plan(1)
+        mission = MagicMock()
+        mission.takeoff_coordinate = MagicMock()
+        mission.takeoff_coordinate.data = _make_ewkb(17.123456, 48.987654, 175.5)
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "Test", 0, mission=mission))
+
+        expected = "<wpml:takeOffRefPoint>48.987654,17.123456,175.500000</wpml:takeOffRefPoint>"
+        assert expected in template
+        assert "<wpml:takeOffRefPointAGLHeight>0</wpml:takeOffRefPointAGLHeight>" in template
+
+    def test_take_off_ref_point_falls_back_to_first_waypoint(self):
+        """takeOffRefPoint falls back to the first waypoint's msl altitude."""
+        fp = _make_flight_plan(2)
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        # first waypoint default msl 300
+        expected = "<wpml:takeOffRefPoint>49.690000,18.110000,300.000000</wpml:takeOffRefPoint>"
+        assert expected in template
+
+    def test_camera_action_maps_to_dji_actuator_func(self):
+        """photo_capture waypoint produces a takePhoto action inside an actionGroup."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].camera_action = "PHOTO_CAPTURE"
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "wpml:actionGroup" in waylines
+        assert "takePhoto" in waylines
+        assert "wpml:actionTriggerType>reachPoint" in waylines
+
+    def test_hover_duration_produces_hover_action(self):
+        """waypoint with hover_duration > 0 emits a hover action with hoverTime."""
+        fp = _make_flight_plan(2)
+        fp.waypoints[0].hover_duration = 4.5
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "<wpml:actionActuatorFunc>hover</wpml:actionActuatorFunc>" in waylines
+        assert "<wpml:hoverTime>4.5</wpml:hoverTime>" in waylines
+
+    def test_heading_emits_rotate_yaw_action_for_measurement(self):
+        """measurement waypoint with heading emits rotateYaw to aim at target."""
+        fp = _make_flight_plan(3)
+        wp = fp.waypoints[1]
+        wp.waypoint_type = "MEASUREMENT"
+        wp.heading = 137.5
+        wp.camera_target = MagicMock()
+        wp.camera_target.data = _make_ewkb(18.12, 49.69, 290.0)
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "<wpml:actionActuatorFunc>rotateYaw</wpml:actionActuatorFunc>" in waylines
+        assert "<wpml:aircraftHeading>137.5</wpml:aircraftHeading>" in waylines
+        # positive heading → clockwise is the short rotation path
+        assert "<wpml:aircraftPathMode>clockwise</wpml:aircraftPathMode>" in waylines
+
+    def test_rotate_yaw_path_mode_follows_sign(self):
+        """aircraftPathMode matches the sign of the target heading (short-path rotation).
+
+        regression guard for the 'camera stuck on north' bug: a positive target
+        heading (172°) paired with counterClockwise forces a 188° wraparound
+        rotation that fh2 refuses to execute, leaving both aircraft + gimbal
+        at their startup yaw.
+        """
+        fp = _make_flight_plan(3)
+        neg_wp = fp.waypoints[1]
+        neg_wp.waypoint_type = "MEASUREMENT"
+        neg_wp.heading = -45.0
+        neg_wp.camera_target = MagicMock()
+        neg_wp.camera_target.data = _make_ewkb(18.12, 49.69, 290.0)
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        # -45° → counterClockwise takes the short way
+        assert "<wpml:aircraftHeading>-45</wpml:aircraftHeading>" in waylines
+        path_block = (
+            "<wpml:aircraftHeading>-45</wpml:aircraftHeading>"
+            "<wpml:aircraftPathMode>counterClockwise</wpml:aircraftPathMode>"
+        )
+        assert path_block in waylines
+
+    def test_gimbal_pitch_emits_gimbal_rotate_action_for_measurement(self):
+        """measurement waypoint with gimbal_pitch emits gimbalRotate that
+        commands pitch only. yaw is disabled so the gimbal follows the aircraft
+        body (which the preceding rotateYaw action has just aimed at the target).
+
+        regression guard: enabling explicit yaw breaks fh2's gimbal-follow
+        simulation and locks the preview camera to the commanded absolute yaw.
+        """
+        fp = _make_flight_plan(3)
+        wp = fp.waypoints[1]
+        wp.waypoint_type = "MEASUREMENT"
+        wp.heading = 172.1
+        wp.gimbal_pitch = -45.0
+        wp.camera_target = MagicMock()
+        wp.camera_target.data = _make_ewkb(18.12, 49.69, 290.0)
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "<wpml:actionActuatorFunc>gimbalRotate</wpml:actionActuatorFunc>" in waylines
+        assert "<wpml:gimbalHeadingYawBase>north</wpml:gimbalHeadingYawBase>" in waylines
+        assert "<wpml:gimbalPitchRotateEnable>1</wpml:gimbalPitchRotateEnable>" in waylines
+        assert "<wpml:gimbalPitchRotateAngle>-45</wpml:gimbalPitchRotateAngle>" in waylines
+        assert "<wpml:gimbalYawRotateEnable>0</wpml:gimbalYawRotateEnable>" in waylines
+        assert "<wpml:gimbalYawRotateAngle>0</wpml:gimbalYawRotateAngle>" in waylines
+
+    def test_template_uses_manual_gimbal_pitch_mode(self):
+        """template folder declares gimbalPitchMode=manual (matches fh2 export).
+
+        'manual' lets the actionGroup gimbalRotate drive pitch while yaw is
+        taken care of by the drone's default Follow gimbal mode (after rotateYaw
+        puts the nose on target). usePointSetting would pull in the per-waypoint
+        waypointGimbalHeadingParam and re-lock yaw to the values in that block.
+        """
+        fp = _make_flight_plan(1)
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "<wpml:gimbalPitchMode>manual</wpml:gimbalPitchMode>" in template
+
+    def test_transit_waypoint_does_not_rotate_yaw(self):
+        """transit/takeoff/landing waypoints keep nose along flight direction.
+
+        regression guard: transit waypoints carry a heading value for internal
+        routing but must NOT emit rotateYaw, otherwise the aircraft pivots
+        mid-flight to a direction unrelated to any camera target.
+        """
+        fp = _make_flight_plan(3)
+        # default _make_flight_plan: wp0=TAKEOFF, wp1=MEASUREMENT, wp2=LANDING.
+        # override middle to TRANSIT + heading, no camera target.
+        fp.waypoints[1].waypoint_type = "TRANSIT"
+        fp.waypoints[1].heading = 222.0
+        fp.waypoints[1].camera_target = None
+
+        _, waylines = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "rotateYaw" not in waylines
+        assert "gimbalRotate" not in waylines
+
+    def test_payload_param_block_present(self):
+        """template folder has the trailing payloadParam block required by fh2."""
+        fp = _make_flight_plan(1)
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "<wpml:payloadParam>" in template
+        assert "<wpml:focusMode>firstPoint</wpml:focusMode>" in template
+        assert "<wpml:imageFormat>visable</wpml:imageFormat>" in template
+        assert "<wpml:photoSize>default_l</wpml:photoSize>" in template
+
+    def test_drone_enums_are_always_m30t(self):
+        """every export emits droneEnum=99/1 + payloadEnum=89/0 regardless of profile.
+
+        fh2's preview only renders the gimbal-follow behavior for the m30t
+        enum set; exporting with m4t (100/1/90/0) or other newer drones leaves
+        the preview camera locked at absolute north. matches both sample
+        exports from the user's fh2 (APCH + PAPI 22, both written as m30t
+        even when a newer drone was selected).
+        """
+        fp = _make_flight_plan(1)
+
+        # default (no profile)
+        default_tpl, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+        # with m4t profile - should still emit m30t enums
+        m4t_profile = MagicMock()
+        m4t_profile.model_identifier = None
+        m4t_profile.manufacturer = "DJI"
+        m4t_profile.model = "Matrice 4T"
+        m4t_tpl, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0, drone_profile=m4t_profile))
+        # with m350 profile - should still emit m30t enums
+        m350_profile = MagicMock()
+        m350_profile.model_identifier = None
+        m350_profile.manufacturer = "DJI"
+        m350_profile.model = "M350 RTK"
+        m350_tpl, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0, drone_profile=m350_profile))
+
+        for template in (default_tpl, m4t_tpl, m350_tpl):
+            assert "<wpml:droneEnumValue>99</wpml:droneEnumValue>" in template
+            assert "<wpml:droneSubEnumValue>1</wpml:droneSubEnumValue>" in template
+            assert "<wpml:payloadEnumValue>89</wpml:payloadEnumValue>" in template
+
+    def test_mission_config_drone_info_present(self):
+        """missionConfig includes droneInfo and payloadInfo blocks."""
+        fp = _make_flight_plan(1)
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "wpml:droneInfo" in template
+        assert "wpml:droneEnumValue" in template
+        assert "wpml:payloadInfo" in template
+        assert "wpml:payloadEnumValue" in template
+
+    def test_template_kml_has_template_folder(self):
+        """template.kml folder declares templateType=waypoint and coordinate system."""
+        fp = _make_flight_plan(1)
+
+        template, _ = _read_wpmz(export_service.generate_kmz(fp, "", 0))
+
+        assert "<wpml:templateType>waypoint</wpml:templateType>" in template
+        assert "<wpml:coordinateMode>WGS84</wpml:coordinateMode>" in template
+        assert "<wpml:globalUseStraightLine>1</wpml:globalUseStraightLine>" in template
+
+    def test_empty_waypoints_produces_valid_archive(self):
+        """missions with zero waypoints still emit a structurally valid wpmz archive."""
+        fp = _make_flight_plan(0)
+
+        result = export_service.generate_kmz(fp, "", 0)
+        template, waylines = _read_wpmz(result)
+
+        assert "<Placemark" not in template
+        assert "<Placemark" not in waylines
+        # payloadParam must still be emitted so the schema stays valid
+        assert "<wpml:payloadParam>" in template
 
 
 class TestGenerateJson:
@@ -179,6 +551,22 @@ class TestGenerateJson:
 
         assert wp["altitude_msl"] == 300.0
         assert wp["altitude_agl"] == 10.0
+
+    def test_camera_target_when_set(self):
+        """waypoint with a camera_target geometry serializes it into the json."""
+        fp = _make_flight_plan(1)
+        fp.waypoints[0].camera_target = MagicMock()
+        fp.waypoints[0].camera_target.data = _make_ewkb(17.5, 48.5, 250.0)
+
+        result = export_service.generate_json(fp, "", 100.0)
+        data = json.loads(result)
+
+        ct = data["waypoints"][0]["camera_target"]
+        assert ct is not None
+        assert abs(ct["latitude"] - 48.5) < 1e-6
+        assert abs(ct["longitude"] - 17.5) < 1e-6
+        assert ct["altitude_msl"] == 250.0
+        assert ct["altitude_agl"] == 150.0
 
 
 class TestGenerateMavlink:
@@ -237,19 +625,21 @@ class TestGenerateMavlink:
 
 
 class TestSanitizeFilename:
-    """tests for filename sanitization."""
+    """tests for filename sanitization (fh2 + http safe)."""
 
     def test_strips_path_separators(self):
-        """path separators are removed to prevent zip slip."""
+        """path separators are replaced so traversal is impossible."""
+        # ../../evil -> "    evil" -> "evil" after collapse+trim
         assert export_service._sanitize_filename("../../evil") == "evil"
 
     def test_strips_backslashes(self):
-        """backslashes are removed."""
+        """backslashes are stripped."""
         assert export_service._sanitize_filename("..\\..\\evil") == "evil"
 
     def test_strips_quotes_and_newlines(self):
-        """quotes and newlines are removed."""
-        assert export_service._sanitize_filename('my"mission\r\n') == "mymission"
+        """quotes are stripped and control chars (incl. \\r\\n) removed."""
+        # " becomes space, \r\n are control chars (removed entirely) -> "my mission"
+        assert export_service._sanitize_filename('my"mission\r\n') == "my mission"
 
     def test_normal_name_unchanged(self):
         """normal mission names pass through unchanged."""
@@ -263,6 +653,50 @@ class TestSanitizeFilename:
         """combined dotdot and slash variants are stripped."""
         assert export_service._sanitize_filename("....//evil") == "evil"
 
+    def test_strips_fh2_banned_chars(self):
+        """all fh2-banned chars (< > : \" / | ? * . _) get replaced with spaces."""
+        result = export_service._sanitize_filename('my<file>:"name|with?*.chars_here')
+        for ch in '<>:"/|?*._':
+            assert ch not in result
+        assert result == "my file name with chars here"
+
+    def test_underscore_replaced(self):
+        """underscores - fh2-banned - are stripped even when the rest is fine."""
+        assert export_service._sanitize_filename("Test_2") == "Test 2"
+
+    def test_dot_replaced(self):
+        """dots are stripped from the base name (extension is added later)."""
+        assert export_service._sanitize_filename("v1.0.mission") == "v1 0 mission"
+
+    def test_fallback_when_empty_after_sanitize(self):
+        """when every char is stripped, fall back to 'mission' (no underscore)."""
+        assert export_service._sanitize_filename("___...") == "mission"
+        assert export_service._sanitize_filename("") == "mission"
+
+
+def _build_export_db_mock(mission, fp, airport, drone_profile=None):
+    """build a MagicMock Session that routes query(Model) to the right fixture.
+
+    mission/airport/drone_profile are looked up via query.filter.first,
+    flight_plan via query.options.filter.first.
+    """
+    db = MagicMock()
+
+    def query_side_effect(model):
+        mock_chain = MagicMock()
+        if model.__name__ == "Mission":
+            mock_chain.filter.return_value.first.return_value = mission
+        elif model.__name__ == "FlightPlan":
+            mock_chain.options.return_value.filter.return_value.first.return_value = fp
+        elif model.__name__ == "Airport":
+            mock_chain.filter.return_value.first.return_value = airport
+        elif model.__name__ == "DroneProfile":
+            mock_chain.filter.return_value.first.return_value = drone_profile
+        return mock_chain
+
+    db.query.side_effect = query_side_effect
+    return db
+
 
 class TestExportMissionFormats:
     """tests for export_mission format validation."""
@@ -271,11 +705,10 @@ class TestExportMissionFormats:
         """unknown format string raises DomainError 422 before any db mutation."""
         from app.core.exceptions import DomainError
 
-        db = MagicMock()
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "test"
-        db.query.return_value.filter.return_value.first.return_value = mission
+        mission.drone_profile_id = None
 
         fp = _make_flight_plan(1)
         fp.airport_id = uuid4()
@@ -283,21 +716,7 @@ class TestExportMissionFormats:
         airport = MagicMock()
         airport.elevation = 100.0
 
-        # first query().filter().first() -> mission
-        # second query().options().filter().first() -> flight_plan
-        # third query().filter().first() -> airport
-        def query_side_effect(model):
-            """route db.query to the right mock based on model."""
-            mock_chain = MagicMock()
-            if model.__name__ == "Mission":
-                mock_chain.filter.return_value.first.return_value = mission
-            elif model.__name__ == "FlightPlan":
-                mock_chain.options.return_value.filter.return_value.first.return_value = fp
-            elif model.__name__ == "Airport":
-                mock_chain.filter.return_value.first.return_value = airport
-            return mock_chain
-
-        db.query.side_effect = query_side_effect
+        db = _build_export_db_mock(mission, fp, airport)
 
         import pytest
 
@@ -308,10 +727,10 @@ class TestExportMissionFormats:
 
     def test_valid_format_exports_and_commits(self):
         """successful export transitions status, commits, and returns files."""
-        db = MagicMock()
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "Test Mission"
+        mission.drone_profile_id = None
 
         fp = _make_flight_plan(2)
         fp.airport_id = uuid4()
@@ -319,25 +738,15 @@ class TestExportMissionFormats:
         airport = MagicMock()
         airport.elevation = 100.0
 
-        def query_side_effect(model):
-            """route db.query to the right mock based on model."""
-            mock_chain = MagicMock()
-            if model.__name__ == "Mission":
-                mock_chain.filter.return_value.first.return_value = mission
-            elif model.__name__ == "FlightPlan":
-                mock_chain.options.return_value.filter.return_value.first.return_value = fp
-            elif model.__name__ == "Airport":
-                mock_chain.filter.return_value.first.return_value = airport
-            return mock_chain
-
-        db.query.side_effect = query_side_effect
+        db = _build_export_db_mock(mission, fp, airport)
 
         files, safe_name = export_service.export_mission(db, uuid4(), ["JSON"])
 
         assert safe_name == "Test Mission"
         assert len(files) == 1
         filename = list(files.keys())[0]
-        assert filename == "mission_Test Mission.json"
+        # no "mission_" prefix - fh2 rejects underscores in flight route names
+        assert filename == "Test Mission.json"
         content, content_type = files[filename]
         assert content_type == "application/json"
         assert len(content) > 0
@@ -346,10 +755,10 @@ class TestExportMissionFormats:
 
     def test_ugcs_format_exports_and_commits(self):
         """ugcs format export transitions status, commits, and returns files."""
-        db = MagicMock()
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "Test Mission"
+        mission.drone_profile_id = None
 
         fp = _make_flight_plan(2)
         fp.airport_id = uuid4()
@@ -357,30 +766,17 @@ class TestExportMissionFormats:
         airport = MagicMock()
         airport.elevation = 100.0
 
-        def query_side_effect(model):
-            """route db.query to the right mock based on model."""
-            mock_chain = MagicMock()
-            if model.__name__ == "Mission":
-                mock_chain.filter.return_value.first.return_value = mission
-            elif model.__name__ == "FlightPlan":
-                mock_chain.options.return_value.filter.return_value.first.return_value = fp
-            elif model.__name__ == "Airport":
-                mock_chain.filter.return_value.first.return_value = airport
-            return mock_chain
-
-        db.query.side_effect = query_side_effect
+        db = _build_export_db_mock(mission, fp, airport)
 
         files, safe_name = export_service.export_mission(db, uuid4(), ["UGCS"])
 
         assert safe_name == "Test Mission"
         assert len(files) == 1
         filename = list(files.keys())[0]
-        assert filename == "mission_Test Mission.ugcs.json"
+        assert filename == "Test Mission.ugcs.json"
         content, content_type = files[filename]
         assert content_type == "application/json"
-        assert len(content) > 0
 
-        # verify it's valid ugcs json with version and route
         data = json.loads(content)
         assert "version" in data
         assert "route" in data
@@ -388,6 +784,181 @@ class TestExportMissionFormats:
 
         mission.transition_to.assert_called_once_with("EXPORTED")
         db.commit.assert_called_once()
+
+    def test_exported_mission_reexport_skips_transition(self):
+        """re-exporting an EXPORTED mission must not call transition_to or commit."""
+        mission = MagicMock()
+        mission.status = "EXPORTED"
+        mission.name = "Already Done"
+        mission.drone_profile_id = None
+
+        fp = _make_flight_plan(1)
+        fp.airport_id = uuid4()
+
+        airport = MagicMock()
+        airport.elevation = 100.0
+
+        db = _build_export_db_mock(mission, fp, airport)
+
+        files, _ = export_service.export_mission(db, uuid4(), ["JSON"])
+
+        assert len(files) == 1
+        mission.transition_to.assert_not_called()
+        db.commit.assert_not_called()
+
+    def test_draft_status_rejected(self):
+        """missions in DRAFT status cannot be exported - DomainError 409."""
+        from app.core.exceptions import DomainError
+
+        mission = MagicMock()
+        mission.status = "DRAFT"
+        mission.name = "x"
+        mission.drone_profile_id = None
+
+        fp = _make_flight_plan(1)
+        airport = MagicMock()
+        airport.elevation = 100.0
+
+        db = _build_export_db_mock(mission, fp, airport)
+
+        import pytest
+
+        with pytest.raises(DomainError) as exc_info:
+            export_service.export_mission(db, uuid4(), ["JSON"])
+        assert exc_info.value.status_code == 409
+        db.commit.assert_not_called()
+
+    def test_missing_mission_raises_not_found(self):
+        """mission lookup returning None raises NotFoundError."""
+        from app.core.exceptions import NotFoundError
+
+        db = _build_export_db_mock(None, None, None)
+
+        import pytest
+
+        with pytest.raises(NotFoundError):
+            export_service.export_mission(db, uuid4(), ["JSON"])
+
+    def test_missing_flight_plan_raises_not_found(self):
+        """no flight plan for a validated mission raises NotFoundError."""
+        from app.core.exceptions import NotFoundError
+
+        mission = MagicMock()
+        mission.status = "VALIDATED"
+        mission.name = "x"
+        mission.drone_profile_id = None
+
+        db = _build_export_db_mock(mission, None, None)
+
+        import pytest
+
+        with pytest.raises(NotFoundError):
+            export_service.export_mission(db, uuid4(), ["JSON"])
+
+    def test_missing_airport_elevation_raises_domain_error(self):
+        """airport without elevation raises DomainError 422 - agl cannot be computed."""
+        from app.core.exceptions import DomainError
+
+        mission = MagicMock()
+        mission.status = "VALIDATED"
+        mission.name = "x"
+        mission.drone_profile_id = None
+
+        fp = _make_flight_plan(1)
+        fp.airport_id = uuid4()
+
+        airport = MagicMock()
+        airport.elevation = None
+
+        db = _build_export_db_mock(mission, fp, airport)
+
+        import pytest
+
+        with pytest.raises(DomainError) as exc_info:
+            export_service.export_mission(db, uuid4(), ["JSON"])
+        assert exc_info.value.status_code == 422
+
+    def test_transition_value_error_becomes_domain_error(self):
+        """ValueError from mission.transition_to is re-raised as DomainError 409."""
+        from app.core.exceptions import DomainError
+
+        mission = MagicMock()
+        mission.status = "VALIDATED"
+        mission.name = "x"
+        mission.drone_profile_id = None
+        mission.transition_to.side_effect = ValueError("bad transition")
+
+        fp = _make_flight_plan(1)
+        fp.airport_id = uuid4()
+
+        airport = MagicMock()
+        airport.elevation = 100.0
+
+        db = _build_export_db_mock(mission, fp, airport)
+
+        import pytest
+
+        with pytest.raises(DomainError) as exc_info:
+            export_service.export_mission(db, uuid4(), ["JSON"])
+        assert exc_info.value.status_code == 409
+
+    def test_kmz_export_loads_drone_profile(self):
+        """kmz export with a drone_profile_id loads the profile and applies its enums."""
+        mission = MagicMock()
+        mission.status = "VALIDATED"
+        mission.name = "Airport Inspection"
+        mission.drone_profile_id = uuid4()
+        mission.takeoff_coordinate = None
+
+        fp = _make_flight_plan(1)
+        fp.airport_id = uuid4()
+
+        airport = MagicMock()
+        airport.elevation = 100.0
+
+        drone_profile = MagicMock()
+        drone_profile.model_identifier = None
+        drone_profile.manufacturer = "DJI"
+        drone_profile.model = "M30T"
+
+        db = _build_export_db_mock(mission, fp, airport, drone_profile)
+
+        files, safe_name = export_service.export_mission(db, uuid4(), ["KMZ"])
+
+        assert safe_name == "Airport Inspection"
+        filename = list(files.keys())[0]
+        assert filename == "Airport Inspection.kmz"
+        content, _ = files[filename]
+
+        with zipfile.ZipFile(BytesIO(content)) as zf:
+            template = zf.read("wpmz/template.kml").decode("utf-8")
+
+        assert "<wpml:droneEnumValue>99</wpml:droneEnumValue>" in template
+        assert "<wpml:droneSubEnumValue>1</wpml:droneSubEnumValue>" in template
+
+    def test_banned_chars_in_mission_name_produce_safe_filename(self):
+        """mission names with fh2-banned chars round-trip to a clean filename."""
+        mission = MagicMock()
+        mission.status = "VALIDATED"
+        mission.name = "Test_2.Mission: runway / 22"
+        mission.drone_profile_id = None
+
+        fp = _make_flight_plan(1)
+        fp.airport_id = uuid4()
+
+        airport = MagicMock()
+        airport.elevation = 100.0
+
+        db = _build_export_db_mock(mission, fp, airport)
+
+        files, safe_name = export_service.export_mission(db, uuid4(), ["JSON"])
+        filename = list(files.keys())[0]
+
+        for banned in '<>:"/|?*_':
+            assert banned not in safe_name
+        # exactly one dot - the one separating extension from base
+        assert filename.count(".") == 1
+        assert filename.endswith(".json")
 
 
 class TestGenerateUgcs:
@@ -656,31 +1227,32 @@ class TestGenerateGpx:
 
 
 class TestGenerateWpml:
-    """tests for wpml (dji) export generation."""
+    """tests for standalone dji waylines.wpml export generation."""
 
     def test_generates_valid_wpml(self):
-        """wpml output contains xml declaration and wpml elements."""
+        """wpml output is a kml 2.2 document carrying dji wpmz 1.0.6 extensions."""
         fp = _make_flight_plan(3)
 
         result = export_service.generate_wpml(fp, "Test", 290.0)
         text = result.decode("utf-8")
 
         assert "<?xml" in text
-        assert "<wpml>" in text
-        assert "<missionConfig>" in text
-        assert "<waypoints>" in text
+        assert "http://www.opengis.net/kml/2.2" in text
+        assert "http://www.dji.com/wpmz/1.0.6" in text
+        assert "wpml:missionConfig" in text
+        assert "<wpml:executeHeightMode>relativeToStartPoint</wpml:executeHeightMode>" in text
 
     def test_waypoint_count(self):
-        """wpml has correct number of waypoint elements."""
+        """wpml has one placemark per waypoint."""
         fp = _make_flight_plan(4)
 
         result = export_service.generate_wpml(fp, "", 0)
         text = result.decode("utf-8")
 
-        assert text.count("<waypoint>") == 4
+        assert text.count("<Placemark") == 4
 
     def test_camera_action_mapping(self):
-        """dji camera action is mapped correctly."""
+        """dji camera action is mapped to wpml:actionActuatorFunc."""
         fp = _make_flight_plan(3)
         fp.waypoints[1].camera_action = "PHOTO_CAPTURE"
 
@@ -688,24 +1260,24 @@ class TestGenerateWpml:
         text = result.decode("utf-8")
 
         assert "takePhoto" in text
+        assert "wpml:actionGroup" in text
 
-    def test_agl_altitude(self):
-        """execute height is agl (msl minus elevation)."""
+    def test_execute_height_is_agl_relative_to_takeoff(self):
+        """executeHeight carries AGL; paired with relativeToStartPoint mode."""
         fp = _make_flight_plan(1)
-        elev = 290.0
 
-        result = export_service.generate_wpml(fp, "", elev)
+        result = export_service.generate_wpml(fp, "", 290.0)
         text = result.decode("utf-8")
 
-        assert "<executeHeight>" in text
-        # 300 - 290 = 10
-        assert "10.00" in text
+        # msl 300 - airport_elevation 290 = 10m above takeoff
+        assert "<wpml:executeHeight>10.000000</wpml:executeHeight>" in text
+        assert "<wpml:executeHeightMode>relativeToStartPoint</wpml:executeHeightMode>" in text
 
     def test_xml_encoding_declaration_utf8(self):
         """wpml xml declaration specifies utf-8 encoding."""
         fp = _make_flight_plan(1)
 
-        result = export_service.generate_wpml(fp, "Letisko Žilina", 0)
+        result = export_service.generate_wpml(fp, "", 0)
         text = result.decode("utf-8")
 
         assert "encoding='utf-8'" in text.lower() or 'encoding="utf-8"' in text.lower()
@@ -760,6 +1332,29 @@ class TestGenerateLitchiCsv:
         row = lines[2].split(",")
         curvesize_idx = 4  # curvesize(m)
         assert row[curvesize_idx] == "0"
+
+    def test_gimbal_mode_when_pitch_set(self):
+        """gimbal_pitch produces gimbalmode=2 (focus-point mode) in column 6."""
+        fp = _make_flight_plan(1)
+        fp.waypoints[0].gimbal_pitch = -45.0
+
+        result = export_service.generate_litchi_csv(fp, "", 0)
+        text = result.decode("utf-8")
+        row = text.strip().split("\n")[1].split(",")
+        gimbal_mode_idx = 6  # gimbalmode column
+        gimbal_pitch_idx = 7  # gimbalpitchangle column
+        assert row[gimbal_mode_idx] == "2"
+        assert row[gimbal_pitch_idx] == "-45.0"
+
+    def test_gimbal_mode_zero_when_pitch_missing(self):
+        """gimbal_pitch=None produces gimbalmode=0 (disabled)."""
+        fp = _make_flight_plan(1)
+        fp.waypoints[0].gimbal_pitch = None
+
+        result = export_service.generate_litchi_csv(fp, "", 0)
+        text = result.decode("utf-8")
+        row = text.strip().split("\n")[1].split(",")
+        assert row[6] == "0"
 
 
 class TestGenerateDronedeploy:
