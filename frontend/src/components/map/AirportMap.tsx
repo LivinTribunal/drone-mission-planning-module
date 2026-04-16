@@ -111,15 +111,15 @@ import PoiInfoPanel from "./overlays/PoiInfoPanel";
 import WarningInfoPanel from "./overlays/WarningInfoPanel";
 import MapHelpPanel from "./overlays/MapHelpPanel";
 import WaypointListPanel from "./overlays/WaypointListPanel";
+import {
+  ESRI_WORLD_IMAGERY_TILES,
+  OSM_TILES,
+} from "@/constants/mapTiles";
 
 export interface AirportMapHandle {
   /** get the underlying maplibre-gl map instance. */
   getMap: () => maplibregl.Map | null;
 }
-
-const ESRI_TILES =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 const GLYPHS_URL =
   "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
@@ -149,7 +149,7 @@ function makeSatelliteStyle(): maplibregl.StyleSpecification {
     sources: {
       satellite: {
         type: "raster",
-        tiles: [ESRI_TILES],
+        tiles: [ESRI_WORLD_IMAGERY_TILES],
         tileSize: 256,
         maxzoom: 18,
       },

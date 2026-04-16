@@ -46,6 +46,11 @@ import useMeasureDistance from "@/hooks/useMeasureDistance";
 import useHeadingTool from "@/hooks/useHeadingTool";
 import MeasureInfoCard from "@/components/map/overlays/MeasureInfoCard";
 import HeadingInfoCard from "@/components/map/overlays/HeadingInfoCard";
+import {
+  computePlacementUpdates,
+  computeMirrorLandingUpdate,
+  placementKeysFromUpdates,
+} from "@/utils/takeoffLandingPlacement";
 
 interface WaypointMoveAction {
   waypointId: string;
@@ -334,24 +339,18 @@ export default function MissionMapPage() {
     async (lngLat: { lng: number; lat: number }) => {
       if (activeTool === MapTool.PLACE_TAKEOFF || activeTool === MapTool.PLACE_LANDING) {
         if (!id || !mission) return;
-        const isTakeoff = activeTool === MapTool.PLACE_TAKEOFF;
-        const existing = isTakeoff ? mission.takeoff_coordinate : mission.landing_coordinate;
-        const alt = existing ? existing.coordinates[2] : (airportDetail?.elevation ?? 0);
-        const newCoord: PointZ = {
-          type: "Point",
-          coordinates: [lngLat.lng, lngLat.lat, alt],
-        };
+        const updates = computePlacementUpdates(
+          activeTool,
+          lngLat,
+          mission,
+          airportDetail?.elevation,
+          useTakeoffAsLanding,
+        );
+        if (!updates) return;
 
-        const updates: Partial<{ takeoff_coordinate: PointZ; landing_coordinate: PointZ }> = isTakeoff
-          ? { takeoff_coordinate: newCoord }
-          : { landing_coordinate: newCoord };
-        if (isTakeoff && useTakeoffAsLanding) {
-          updates.landing_coordinate = newCoord;
-        }
-
-        const pendingKeys = new Set<"takeoff" | "landing">();
-        if (updates.takeoff_coordinate) pendingKeys.add("takeoff");
-        if (updates.landing_coordinate) pendingKeys.add("landing");
+        const pendingKeys = new Set<"takeoff" | "landing">(
+          placementKeysFromUpdates(updates),
+        );
         setPendingPlacement((prev) => new Set([...prev, ...pendingKeys]));
 
         resetTool();
@@ -621,16 +620,13 @@ export default function MissionMapPage() {
     const next = !useTakeoffAsLanding;
     setUseTakeoffAsLanding(next);
 
-    if (!next) return;
-    if (!id || !mission?.takeoff_coordinate) return;
+    if (!next || !id) return;
+    const mirrorUpdate = computeMirrorLandingUpdate(mission?.takeoff_coordinate);
+    if (!mirrorUpdate) return;
 
-    const mirror: PointZ = {
-      type: "Point",
-      coordinates: [...mission.takeoff_coordinate.coordinates] as [number, number, number],
-    };
     setPendingPlacement((prev) => new Set([...prev, "landing"]));
     try {
-      await updateMission(id, { landing_coordinate: mirror });
+      await updateMission(id, mirrorUpdate);
       const fresh = await getMission(id);
       setMission(fresh);
       refreshMissions();

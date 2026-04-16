@@ -4,6 +4,11 @@ import maplibregl from "maplibre-gl";
 import { Maximize2, Minimize2, Loader2 } from "lucide-react";
 import Button from "@/components/common/Button";
 import Input from "@/components/common/Input";
+import {
+  ESRI_WORLD_IMAGERY_TILES,
+  ESRI_REFERENCE_TILES,
+  ESRI_ATTRIBUTION,
+} from "@/constants/mapTiles";
 
 interface MapCoordinatePickerProps {
   onConfirm: (coords: { lat: number; lon: number; alt: number }) => void;
@@ -12,12 +17,6 @@ interface MapCoordinatePickerProps {
   initialLon?: number;
 }
 
-const ESRI_IMAGERY_TILES =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const ESRI_REFERENCE_TILES =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
-const ESRI_ATTRIBUTION = "Tiles © Esri";
-
 function makeSatelliteStyle(): maplibregl.StyleSpecification {
   /** satellite base + esri reference overlay for country lines, cities, labels. */
   return {
@@ -25,7 +24,7 @@ function makeSatelliteStyle(): maplibregl.StyleSpecification {
     sources: {
       satellite: {
         type: "raster",
-        tiles: [ESRI_IMAGERY_TILES],
+        tiles: [ESRI_WORLD_IMAGERY_TILES],
         tileSize: 256,
         maxzoom: 18,
         attribution: ESRI_ATTRIBUTION,
@@ -257,7 +256,10 @@ export default function MapCoordinatePicker({
                 // cancel any in-flight elevation fetch and hide spinner immediately
                 elevReqRef.current++;
                 setAltLoading(false);
-                setAlt(parseFloat(e.target.value) || 0);
+                // altitude has no valid range; treat cleared/non-numeric input as 0
+                // (lat/lon block Confirm on NaN, but altitude is permissive by design)
+                const parsed = parseFloat(e.target.value);
+                setAlt(Number.isFinite(parsed) ? parsed : 0);
               }}
             />
             {altLoading && (
