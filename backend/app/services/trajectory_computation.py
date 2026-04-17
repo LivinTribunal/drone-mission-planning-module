@@ -410,9 +410,9 @@ def resolve_speed(
     else:
         chosen = default_speed
 
-    # warn if chosen speed exceeds camera frame rate ceiling
+    # warn if operator's configured speed exceeds camera frame rate ceiling
     warning = None
-    if optimal is not None and chosen > optimal:
+    if optimal is not None and default_speed > optimal:
         warning = (
             f"speed {chosen:.1f} m/s exceeds camera frame rate ceiling "
             f"{optimal:.1f} m/s - frames may be missed"

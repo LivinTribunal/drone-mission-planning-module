@@ -122,7 +122,8 @@ export interface AirportMapHandle {
 }
 
 const GLYPHS_URL =
-  "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
+  import.meta.env.VITE_GLYPHS_URL ??
+  "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf";
 
 /** polls map.isStyleLoaded() until true, then calls callback. returns cancel fn. */
 function waitForStyleLoaded(

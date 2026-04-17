@@ -156,7 +156,7 @@ export default function CreationForm({
     if (!lhaAglId) return 1;
     const agl = allAgls.find((a) => a.id === lhaAglId);
     if (!agl) return 1;
-    return agl.lhas.length + 1;
+    return Math.max(0, ...agl.lhas.map((l) => l.unit_number)) + 1;
   }, [lhaAglId, allAgls]);
 
   // manual coordinate entry for AGL/LHA

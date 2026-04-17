@@ -706,9 +706,17 @@ def _generate_trajectory_inner(
 
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
-        # note: uses per-pass speed for battery estimate; final duration uses per-waypoint speed
-        effective_speed = speed if speed is not None else MIN_SPEED_FLOOR
-        seg_dur = seg_dist / max(effective_speed, MIN_SPEED_FLOOR)
+
+        # use trapezoidal profile to match final flight-plan duration calculation
+        seg_dur = 0.0
+        for j in range(1, len(pass_wps)):
+            prev_wp = pass_wps[j - 1]
+            cur_wp = pass_wps[j]
+            h = distance_between(prev_wp.lon, prev_wp.lat, cur_wp.lon, cur_wp.lat)
+            d = math.sqrt(h**2 + (cur_wp.alt - prev_wp.alt) ** 2)
+            v_prev = max(prev_wp.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+            v_cur = max(cur_wp.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+            seg_dur += _segment_duration_with_accel(d, v_prev, v_cur)
 
         for wp in pass_wps:
             if wp.hover_duration is not None:
