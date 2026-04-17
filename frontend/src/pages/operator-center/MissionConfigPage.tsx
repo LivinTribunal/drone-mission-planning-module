@@ -242,7 +242,8 @@ export default function MissionConfigPage() {
         if (!isAxiosError(err) || err.response?.status !== 404) throw err;
         setFlightPlan(null);
       }
-    } catch {
+    } catch (err) {
+      console.error("mission load failed:", err instanceof Error ? err.message : String(err));
       setError(t("mission.config.loadError"));
     } finally {
       setLoading(false);

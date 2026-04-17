@@ -43,6 +43,8 @@ function makeSatelliteStyle(): maplibregl.StyleSpecification {
   };
 }
 
+// TODO: route elevation lookups through our backend proxy to avoid sending
+// airport coordinates to a third-party service (open-elevation.com)
 async function fetchElevation(
   lat: number,
   lon: number,
@@ -88,6 +90,8 @@ export default function MapCoordinatePicker({
   const altUserTouchedRef = useRef(false);
   // monotonic token to discard stale elevation responses when user clicks again.
   const elevReqRef = useRef(0);
+  // per-click abort controller so each new click cancels the previous in-flight fetch
+  const elevAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -100,9 +104,6 @@ export default function MapCoordinatePicker({
       attributionControl: { compact: true },
     });
 
-    // aborts any in-flight elevation fetch when the component unmounts
-    const controller = new AbortController();
-
     map.on("click", async (e) => {
       const { lat: clat, lng: clon } = e.lngLat;
       setLat(clat);
@@ -114,7 +115,10 @@ export default function MapCoordinatePicker({
           .setLngLat(e.lngLat)
           .addTo(map);
       }
-      // new click resets manual-edit flag and invalidates any in-flight request
+      // abort the previous in-flight request and reset manual-edit flag
+      elevAbortRef.current?.abort();
+      const controller = new AbortController();
+      elevAbortRef.current = controller;
       altUserTouchedRef.current = false;
       const token = ++elevReqRef.current;
       setAltLoading(true);
@@ -127,7 +131,7 @@ export default function MapCoordinatePicker({
 
     mapInstanceRef.current = map;
     return () => {
-      controller.abort();
+      elevAbortRef.current?.abort();
       map.remove();
     };
   }, []);

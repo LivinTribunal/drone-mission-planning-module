@@ -201,7 +201,7 @@ export default function MissionMapPage() {
     return new Set(
       mission.inspections
         .map((i) => i.id)
-        .filter((id) => !hiddenInspectionIds.has(id)),
+        .filter((inspId) => !hiddenInspectionIds.has(inspId)),
     );
   }, [mission, hiddenInspectionIds]);
 
