@@ -272,7 +272,8 @@ export default function MissionConfigPage() {
       for (const [inspId, override] of Object.entries(inspectionDirty)) {
         try {
           await updateInspection(id, inspId, { config: override });
-        } catch {
+        } catch (error) {
+          console.error(error instanceof Error ? error.message : String(error));
           failedInspections[inspId] = override;
         }
       }
@@ -325,8 +326,6 @@ export default function MissionConfigPage() {
       });
     };
   }, [setSaveContext, handleSave, isDirty, saving, lastSaved]);
-
-  computeRef.current = handleComputeTrajectory;
 
   // compute coordinate availability from dirty state or mission data
   const hasCoordinates = useMemo(() => {
@@ -431,7 +430,8 @@ export default function MissionConfigPage() {
           // persist lha_ids to backend immediately
           try {
             await updateInspection(id, newInsp.id, { config: { lha_ids: allLhaIds } });
-          } catch {
+          } catch (error) {
+            console.error(error instanceof Error ? error.message : String(error));
             showNotification(t("mission.config.lhaSaveError"));
           }
           setSelectedLhas((prev) => ({
@@ -512,7 +512,8 @@ export default function MissionConfigPage() {
       if (newIdx >= oldIdx) {
         showNotification(t("mission.config.saved"));
       }
-    } catch {
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
       showNotification(t("mission.config.saveError"));
     }
   }

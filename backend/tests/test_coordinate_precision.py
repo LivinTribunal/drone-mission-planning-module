@@ -72,6 +72,7 @@ def test_surface_threshold_roundtrip_preserves_precision(client):
     assert body["threshold_position"]["coordinates"][2] == PRECISE_ALT
     assert body["end_position"]["coordinates"][0] == precise_lon2
     assert body["end_position"]["coordinates"][1] == precise_lat2
+    assert body["end_position"]["coordinates"][2] == PRECISE_ALT
 
 
 def test_agl_position_lonlat_roundtrip_preserves_precision(client):
