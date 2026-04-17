@@ -865,6 +865,148 @@ describe("TemplatePicker", () => {
       ).toBeInTheDocument();
     });
   });
+
+  describe("sort by runway identifier", () => {
+    /** verify templates within an AGL-type bucket are ordered by surface id. */
+
+    const surfaces = [
+      { id: "s-22L", identifier: "22L" },
+      { id: "s-04R", identifier: "04R" },
+      { id: "s-09", identifier: "09" },
+    ];
+    const runwayAgls = [
+      {
+        id: "agl-22L",
+        surface_id: "s-22L",
+        agl_type: "RUNWAY_EDGE_LIGHTS",
+        name: "edge 22L",
+        position: { lat: 0, lng: 0, alt: 0 },
+        side: null,
+        glide_slope_angle: null,
+        distance_from_threshold: null,
+        offset_from_centerline: null,
+        lhas: [],
+      },
+      {
+        id: "agl-04R",
+        surface_id: "s-04R",
+        agl_type: "RUNWAY_EDGE_LIGHTS",
+        name: "edge 04R",
+        position: { lat: 0, lng: 0, alt: 0 },
+        side: null,
+        glide_slope_angle: null,
+        distance_from_threshold: null,
+        offset_from_centerline: null,
+        lhas: [],
+      },
+      {
+        id: "agl-09",
+        surface_id: "s-09",
+        agl_type: "RUNWAY_EDGE_LIGHTS",
+        name: "edge 09",
+        position: { lat: 0, lng: 0, alt: 0 },
+        side: null,
+        glide_slope_angle: null,
+        distance_from_threshold: null,
+        offset_from_centerline: null,
+        lhas: [],
+      },
+    ];
+
+    // deliberately shuffled input order so sort is observable
+    const shuffledTemplates = [
+      {
+        id: "t-22L",
+        name: "Template 22L",
+        description: null,
+        methods: ["FLY_OVER"],
+        target_agl_ids: ["agl-22L"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      },
+      {
+        id: "t-09",
+        name: "Template 09",
+        description: null,
+        methods: ["FLY_OVER"],
+        target_agl_ids: ["agl-09"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      },
+      {
+        id: "t-04R",
+        name: "Template 04R",
+        description: null,
+        methods: ["FLY_OVER"],
+        target_agl_ids: ["agl-04R"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      },
+    ];
+
+    it("orders templates by runway identifier with natural numeric sort", () => {
+      renderPicker({
+        templates: shuffledTemplates as never,
+        agls: runwayAgls as never,
+        surfaces: surfaces as never,
+      });
+      fireEvent.click(screen.getByTestId("agl-type-option-RUNWAY_EDGE_LIGHTS"));
+      const rendered = screen
+        .getAllByTestId(/^template-option-/)
+        .map((el) => el.getAttribute("data-testid"));
+      expect(rendered).toEqual([
+        "template-option-t-04R",
+        "template-option-t-09",
+        "template-option-t-22L",
+      ]);
+    });
+
+    it("preserves input order when surfaces prop is omitted", () => {
+      renderPicker({
+        templates: shuffledTemplates as never,
+        agls: runwayAgls as never,
+      });
+      fireEvent.click(screen.getByTestId("agl-type-option-RUNWAY_EDGE_LIGHTS"));
+      const rendered = screen
+        .getAllByTestId(/^template-option-/)
+        .map((el) => el.getAttribute("data-testid"));
+      expect(rendered).toEqual([
+        "template-option-t-22L",
+        "template-option-t-09",
+        "template-option-t-04R",
+      ]);
+    });
+
+    it("leaves special (hover-only) templates in their existing section", () => {
+      const hoverTemplate = {
+        id: "t-hover",
+        name: "Hover Template",
+        description: null,
+        methods: ["HOVER_POINT_LOCK"],
+        target_agl_ids: [],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      };
+      renderPicker({
+        templates: [...shuffledTemplates, hoverTemplate] as never,
+        agls: runwayAgls as never,
+        surfaces: surfaces as never,
+      });
+      // special templates render on the agl-type step
+      expect(screen.getByText("Hover Template")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("template-option-t-hover"),
+      ).toBeInTheDocument();
+    });
+  });
 });
 
 /* ------------------------------------------------------------------ */
