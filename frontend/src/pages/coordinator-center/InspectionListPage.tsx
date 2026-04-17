@@ -11,6 +11,7 @@ import {
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { AGLResponse } from "@/types/airport";
 import type { InspectionMethod } from "@/types/enums";
+import { methodBadgeStyle } from "@/utils/inspectionMethodBadge";
 import InspectionTemplateTable from "@/components/mission/InspectionTemplateTable";
 import CreateTemplateDialog from "@/components/mission/CreateTemplateDialog";
 import Modal from "@/components/common/Modal";
@@ -20,6 +21,14 @@ import {
   SearchBar,
   Pagination,
 } from "@/components/common/ListPageLayout";
+
+const ALL_METHODS: InspectionMethod[] = [
+  "ANGULAR_SWEEP",
+  "VERTICAL_PROFILE",
+  "FLY_OVER",
+  "PARALLEL_SIDE_SWEEP",
+  "HOVER_POINT_LOCK",
+];
 
 export default function InspectionListPage() {
   /**inspection template list page, styled like the missions list page.*/
@@ -104,7 +113,7 @@ export default function InspectionListPage() {
 
     if (methodFilter.size > 0) {
       list = list.filter((tpl) =>
-        tpl.methods.some((m) => methodFilter.has(m as InspectionMethod)),
+        tpl.methods.some((m) => methodFilter.has(m)),
       );
     }
 
@@ -145,7 +154,7 @@ export default function InspectionListPage() {
 
   async function handleDuplicate(id: string) {
     /**duplicate a template and navigate to the copy.*/
-    const tpl = templates.find((t) => t.id === id);
+    const tpl = templates.find((tmpl) => tmpl.id === id);
     if (!tpl) return;
     try {
       const result = await createInspectionTemplate({
@@ -161,7 +170,7 @@ export default function InspectionListPage() {
 
   function handleDeleteClick(id: string) {
     /**open delete confirmation for a template.*/
-    const tpl = templates.find((t) => t.id === id);
+    const tpl = templates.find((tmpl) => tmpl.id === id);
     if (tpl) setDeleteTarget(tpl);
   }
 
@@ -206,23 +215,20 @@ export default function InspectionListPage() {
       {/* filter row */}
       <div className="flex items-center w-full max-w-6xl mb-4 rounded-full border border-tv-border bg-tv-surface px-3 py-2">
         {/* method pills */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => toggleMethod("ANGULAR_SWEEP")}
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors bg-[var(--tv-method-angular-sweep-bg)] text-[var(--tv-method-angular-sweep-text)] ${
-              methodFilter.size > 0 && !methodFilter.has("ANGULAR_SWEEP") ? "opacity-40" : ""
-            }`}
-          >
-            {t("coordinator.inspections.angularSweep")}
-          </button>
-          <button
-            onClick={() => toggleMethod("VERTICAL_PROFILE")}
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors bg-[var(--tv-method-vertical-profile-bg)] text-[var(--tv-method-vertical-profile-text)] ${
-              methodFilter.size > 0 && !methodFilter.has("VERTICAL_PROFILE") ? "opacity-40" : ""
-            }`}
-          >
-            {t("coordinator.inspections.verticalProfile")}
-          </button>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {ALL_METHODS.map((method) => (
+            <button
+              key={method}
+              onClick={() => toggleMethod(method)}
+              style={methodBadgeStyle(method)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                methodFilter.size > 0 && !methodFilter.has(method) ? "opacity-40" : ""
+              }`}
+              data-testid={`method-pill-${method}`}
+            >
+              {t(`map.inspectionMethod.${method}`)}
+            </button>
+          ))}
         </div>
 
         <div className="w-px h-6 bg-tv-border mx-3" />
