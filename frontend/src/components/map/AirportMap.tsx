@@ -111,15 +111,15 @@ import PoiInfoPanel from "./overlays/PoiInfoPanel";
 import WarningInfoPanel from "./overlays/WarningInfoPanel";
 import MapHelpPanel from "./overlays/MapHelpPanel";
 import WaypointListPanel from "./overlays/WaypointListPanel";
+import {
+  ESRI_WORLD_IMAGERY_TILES,
+  OSM_TILES,
+} from "@/constants/mapTiles";
 
 export interface AirportMapHandle {
   /** get the underlying maplibre-gl map instance. */
   getMap: () => maplibregl.Map | null;
 }
-
-const ESRI_TILES =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 const GLYPHS_URL =
   "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
@@ -149,7 +149,7 @@ function makeSatelliteStyle(): maplibregl.StyleSpecification {
     sources: {
       satellite: {
         type: "raster",
-        tiles: [ESRI_TILES],
+        tiles: [ESRI_WORLD_IMAGERY_TILES],
         tileSize: 256,
         maxzoom: 18,
       },
@@ -1406,15 +1406,19 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       apply();
       map.triggerRepaint();
     } else {
-      // style may not be loaded yet after mount - fire once then detach from both events
-      const handler = () => {
-        map.off("load", handler);
-        map.off("styledata", handler);
-        apply();
+      // poll until style ready - load event already fired, styledata may not
+      let cancelled = false;
+      const poll = () => {
+        if (cancelled) return;
+        if (map.isStyleLoaded()) {
+          apply();
+          map.triggerRepaint();
+        } else {
+          requestAnimationFrame(poll);
+        }
       };
-      map.on("load", handler);
-      map.on("styledata", handler);
-      return () => { map.off("load", handler); map.off("styledata", handler); };
+      requestAnimationFrame(poll);
+      return () => { cancelled = true; };
     }
   }, [waypoints, takeoffCoordinate, landingCoordinate, inspectionIndexMap, addWaypointLayers]);
 
@@ -2291,7 +2295,6 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
               takeoffCoordinate={takeoffCoordinate}
               landingCoordinate={landingCoordinate}
               visibleInspectionIds={visibleInspectionIds}
-              inspectionIndexMap={inspectionIndexMap}
               terrainMode={terrainMode}
               onFeatureClick={(f) => setSelectedFeature(f)}
               onWaypointClick={onWaypointClick}
@@ -2303,7 +2306,6 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
               }}
               focusFeature={focusFeature}
               highlightedWaypointIds={highlightedWaypointIds}
-              highlightSeverity={highlightSeverity}
             />
           </Suspense>
         </div>

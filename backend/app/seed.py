@@ -727,7 +727,6 @@ def seed_inspection_templates():
         # default config for angular sweep
         sweep_config = InspectionConfiguration(
             altitude_offset=0.0,
-            speed_override=5.0,
             measurement_density=10,
         )
         db.add(sweep_config)
@@ -750,7 +749,6 @@ def seed_inspection_templates():
         # default config for vertical profile
         vp_config = InspectionConfiguration(
             altitude_offset=0.0,
-            speed_override=3.0,
             measurement_density=8,
         )
         db.add(vp_config)

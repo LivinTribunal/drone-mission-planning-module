@@ -447,7 +447,7 @@ class TestInspectionConfigurationResolve:
         """operator override takes precedence over template default."""
         config = InspectionConfiguration(
             altitude_offset=5.0,
-            speed_override=3.0,
+            measurement_speed_override=3.0,
             measurement_density=12,
         )
 
@@ -460,7 +460,7 @@ class TestInspectionConfigurationResolve:
 
         merged = config.resolve_with_defaults(template_config)
         assert merged["altitude_offset"] == 5.0
-        assert merged["speed_override"] == 3.0
+        assert merged["measurement_speed_override"] == 3.0
         assert merged["measurement_density"] == 12
         assert merged["hover_duration"] == 2.0
         assert merged["horizontal_distance"] == 400.0
@@ -471,7 +471,7 @@ class TestInspectionConfigurationResolve:
 
         merged = config.resolve_with_defaults(None)
         assert merged["altitude_offset"] == 5.0
-        assert merged["speed_override"] is None
+        assert merged["measurement_speed_override"] is None
 
 
 class TestFlightPlanCompile:

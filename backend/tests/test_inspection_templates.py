@@ -14,7 +14,7 @@ def test_create_template(client):
 
     assert data["name"] == "PAPI Angular Sweep"
     assert data["methods"] == ["ANGULAR_SWEEP"]
-    assert data["default_config"]["speed_override"] == 5.0
+    assert data["default_config"]["measurement_density"] == 10
 
 
 def test_list_templates(client):

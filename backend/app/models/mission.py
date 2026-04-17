@@ -36,6 +36,7 @@ TRANSITIONS = {
 TRAJECTORY_FIELDS = {
     "drone_profile_id",
     "default_speed",
+    "measurement_speed_override",
     "default_altitude_offset",
     "takeoff_coordinate",
     "landing_coordinate",
@@ -97,6 +98,7 @@ class Mission(Base):
     drone_profile_id = Column(UUID, ForeignKey("drone_profile.id", ondelete="SET NULL"))
     date_time = Column(DateTime(timezone=True))
     default_speed = Column(Float)
+    measurement_speed_override = Column(Float, nullable=True)
     default_altitude_offset = Column(Float)
     takeoff_coordinate = Column(Geometry("POINTZ", srid=4326))
     landing_coordinate = Column(Geometry("POINTZ", srid=4326))
