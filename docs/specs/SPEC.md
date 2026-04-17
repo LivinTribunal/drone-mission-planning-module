@@ -30,11 +30,11 @@
 
 **insp_template_methods** — template_id (FK), method (VARCHAR 30). Junction table.
 
-**inspection_configuration** — altitude_offset, speed_override, measurement_density (INTEGER), custom_tolerances, density, hover_duration, horizontal_distance, sweep_angle, lha_ids (JSONB — array of UUID)
+**inspection_configuration** — altitude_offset, measurement_speed_override, measurement_density (INTEGER), custom_tolerances, density, hover_duration, horizontal_distance, sweep_angle, lha_ids (JSONB — array of UUID)
 
 ### Mission & Inspection
 
-**mission** — name, status (MissionStatus enum), created_at, updated_at, operator_notes, drone_profile_id (FK), date_time, default_speed, default_altitude_offset, takeoff_coordinate (PointZ 4326), landing_coordinate (PointZ 4326)
+**mission** — name, status (MissionStatus enum), created_at, updated_at, operator_notes, drone_profile_id (FK), date_time, default_speed, measurement_speed_override, default_altitude_offset, takeoff_coordinate (PointZ 4326), landing_coordinate (PointZ 4326)
 
 **drone_profile** — name, manufacturer, model, max_speed, max_climb_rate, max_altitude, battery_capacity, endurance_minutes, camera_resolution, camera_frame_rate (INTEGER), sensor_fov, weight
 

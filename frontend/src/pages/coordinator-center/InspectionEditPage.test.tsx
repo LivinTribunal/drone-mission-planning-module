@@ -85,7 +85,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
     default_config: {
       id: "cfg-1",
       altitude_offset: 5,
-      speed_override: 2.0,
+      measurement_speed_override: null,
       measurement_density: null,
       custom_tolerances: null,
       hover_duration: null,

@@ -211,6 +211,7 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
         drone_profile_id=original.drone_profile_id,
         operator_notes=original.operator_notes,
         default_speed=original.default_speed,
+        measurement_speed_override=original.measurement_speed_override,
         default_altitude_offset=original.default_altitude_offset,
         takeoff_coordinate=original.takeoff_coordinate,
         landing_coordinate=original.landing_coordinate,

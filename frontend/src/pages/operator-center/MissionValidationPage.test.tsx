@@ -32,6 +32,7 @@ function makeMission(
     drone_profile_id: null,
     date_time: null,
     default_speed: null,
+    measurement_speed_override: null,
     default_altitude_offset: null,
     takeoff_coordinate: null,
     landing_coordinate: null,
