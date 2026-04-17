@@ -113,7 +113,7 @@ export default function InspectionListPage() {
 
     if (methodFilter.size > 0) {
       list = list.filter((tpl) =>
-        tpl.methods.some((m) => methodFilter.has(m as InspectionMethod)),
+        tpl.methods.some((m) => methodFilter.has(m)),
       );
     }
 
@@ -154,7 +154,7 @@ export default function InspectionListPage() {
 
   async function handleDuplicate(id: string) {
     /**duplicate a template and navigate to the copy.*/
-    const tpl = templates.find((t) => t.id === id);
+    const tpl = templates.find((tmpl) => tmpl.id === id);
     if (!tpl) return;
     try {
       const result = await createInspectionTemplate({
@@ -170,7 +170,7 @@ export default function InspectionListPage() {
 
   function handleDeleteClick(id: string) {
     /**open delete confirmation for a template.*/
-    const tpl = templates.find((t) => t.id === id);
+    const tpl = templates.find((tmpl) => tmpl.id === id);
     if (tpl) setDeleteTarget(tpl);
   }
 

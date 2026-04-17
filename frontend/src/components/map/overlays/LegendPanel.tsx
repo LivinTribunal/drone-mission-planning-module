@@ -319,8 +319,8 @@ function AglSystemsSection() {
   /** collapsible agl systems section with papi and rel sub-groups. */
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
-  const [papiOpen, setPapiOpen] = useState(true);
-  const [relOpen, setRelOpen] = useState(true);
+  const [papiOpen, setPapiOpen] = useState(false);
+  const [relOpen, setRelOpen] = useState(false);
 
   return (
     <div>
