@@ -25,12 +25,12 @@ export function addSafetyZoneLayers(
   map: MaplibreMap,
   zones: SafetyZoneResponse[],
 ): string[] {
-  // split boundary zones from regular zones
+  // split boundary zones from regular zones - include inactive for visibility
   const regularZones = zones.filter(
-    (z) => z.is_active && z.type !== "AIRPORT_BOUNDARY",
+    (z) => z.type !== "AIRPORT_BOUNDARY",
   );
   const boundaryZone = zones.find(
-    (z) => z.type === "AIRPORT_BOUNDARY" && z.is_active,
+    (z) => z.type === "AIRPORT_BOUNDARY",
   );
 
   // register hatch patterns per zone type
@@ -57,47 +57,53 @@ export function addSafetyZoneLayers(
           borderColor: zoneBorderColors[z.type as keyof typeof zoneBorderColors] ?? "#888888",
           hatchImage: `hatch-${z.type.toLowerCase()}`,
           entityType: "safety_zone",
+          isActive: z.is_active,
         },
         geometry: z.geometry,
       })),
     },
   });
 
-  // solid color fill
+  // solid color fill - reduced opacity for inactive zones
   map.addLayer({
     id: SAFETY_ZONE_FILL_LAYER,
     type: "fill",
     source: SAFETY_ZONE_SOURCE,
     paint: {
       "fill-color": ["get", "borderColor"],
-      "fill-opacity": 0.12,
+      "fill-opacity": ["case", ["get", "isActive"], 0.12, 0.04],
     },
   });
 
-  // hatch pattern overlay
+  // hatch pattern overlay - hidden for inactive zones
   map.addLayer({
     id: SAFETY_ZONE_HATCH_LAYER,
     type: "fill",
     source: SAFETY_ZONE_SOURCE,
+    filter: ["==", ["get", "isActive"], true],
     paint: {
       "fill-pattern": ["get", "hatchImage"],
       "fill-opacity": 0.5,
     },
   });
 
-  // dashed border
+  // dashed border - dotted for inactive zones
   map.addLayer({
     id: SAFETY_ZONE_BORDER_LAYER,
     type: "line",
     source: SAFETY_ZONE_SOURCE,
     paint: {
       "line-color": ["get", "borderColor"],
-      "line-width": 2,
-      "line-dasharray": [2, 2],
+      "line-width": ["case", ["get", "isActive"], 2, 1],
+      "line-dasharray": ["case", ["get", "isActive"],
+        ["literal", [2, 2]],
+        ["literal", [1, 3]],
+      ],
+      "line-opacity": ["case", ["get", "isActive"], 1, 0.5],
     },
   });
 
-  // zone type label
+  // zone type label - muted for inactive zones
   map.addLayer({
     id: SAFETY_ZONE_LABEL_LAYER,
     type: "symbol",
@@ -113,6 +119,7 @@ export function addSafetyZoneLayers(
       "text-color": ["get", "borderColor"],
       "text-halo-color": "#000000",
       "text-halo-width": 1,
+      "text-opacity": ["case", ["get", "isActive"], 1, 0.4],
     },
   });
 

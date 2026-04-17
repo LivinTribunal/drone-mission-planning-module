@@ -712,6 +712,16 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         if (!map) return;
         const wps = waypointsRef.current ?? [];
         const newCoords: [number, number, number] = [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt];
+
+        // live preview for standalone T/L markers
+        let dragTakeoff = takeoffRef.current;
+        let dragLanding = landingRef.current;
+        if (dragState.waypointId === "takeoff" && dragTakeoff) {
+          dragTakeoff = { ...dragTakeoff, coordinates: newCoords };
+        } else if (dragState.waypointId === "landing" && dragLanding) {
+          dragLanding = { ...dragLanding, coordinates: newCoords };
+        }
+
         const updated: WaypointResponse[] = wps.map((wp) => {
           if (wp.id !== dragState.waypointId) return wp;
           return {
@@ -727,7 +737,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         const pointSrc = map.getSource(WAYPOINT_SOURCE) as maplibregl.GeoJSONSource | undefined;
         if (pointSrc) {
           pointSrc.setData(
-            waypointsToGeoJSON(updated, takeoffRef.current, landingRef.current, indexMapRef.current),
+            waypointsToGeoJSON(updated, dragTakeoff, dragLanding, indexMapRef.current),
           );
         }
 

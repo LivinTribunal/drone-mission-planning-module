@@ -653,7 +653,36 @@ export default function MissionMapPage() {
 
   // handle waypoint drag from map
   const handleWaypointDrag = useCallback(
-    (wpId: string, newPos: [number, number, number]) => {
+    async (wpId: string, newPos: [number, number, number]) => {
+      // standalone T/L markers - persist directly as mission coordinate update
+      if (wpId === "takeoff" || wpId === "landing") {
+        if (!id) return;
+        const newCoord: PointZ = { type: "Point", coordinates: newPos };
+        const updates: Record<string, PointZ> =
+          wpId === "takeoff"
+            ? { takeoff_coordinate: newCoord }
+            : { landing_coordinate: newCoord };
+
+        // mirror takeoff to landing for round-trip missions
+        if (wpId === "takeoff" && useTakeoffAsLanding) {
+          updates.landing_coordinate = {
+            type: "Point",
+            coordinates: [...newPos] as [number, number, number],
+          };
+        }
+
+        try {
+          await updateMission(id, updates);
+          const fresh = await getMission(id);
+          setMission(fresh);
+          refreshMissions();
+        } catch (err) {
+          console.error("T/L drag save error:", err instanceof Error ? err.message : String(err));
+          showNotification(t("map.saveError"));
+        }
+        return;
+      }
+
       const wp = effectiveWaypoints.find((w) => w.id === wpId);
       if (!wp) return;
       const newPosition: PointZ = { type: "Point", coordinates: newPos };
@@ -667,7 +696,7 @@ export default function MissionMapPage() {
         [wpId]: { position: newPosition },
       }));
     },
-    [effectiveWaypoints, pushUndo],
+    [effectiveWaypoints, pushUndo, id, useTakeoffAsLanding, refreshMissions, t],
   );
 
   // handle transit waypoint insertion from map click on transit path

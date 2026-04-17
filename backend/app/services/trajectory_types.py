@@ -61,6 +61,13 @@ MAX_TURN_ANGLE: Degrees = 60.0
 MIN_SPEED_FLOOR: MetersPerSecond = 0.1
 assert MIN_SPEED_FLOOR > 0, "MIN_SPEED_FLOOR must be positive to prevent division by zero"
 
+# acceleration/deceleration for realistic duration estimation
+DEFAULT_ACCELERATION: float = 2.0  # m/s^2 - typical multirotor horizontal accel
+DEFAULT_DECELERATION: float = 2.0  # m/s^2 - typical multirotor horizontal decel
+TAKEOFF_DURATION: Seconds = 15.0  # lift off + climb to transit altitude
+LANDING_DURATION: Seconds = 15.0  # descend + touchdown
+GIMBAL_SETTLE_TIME: Seconds = 2.0  # gimbal repositioning between segments
+
 # surface edge node spacing for visibility graph
 SURFACE_NODE_SPACING: Meters = 200.0
 
