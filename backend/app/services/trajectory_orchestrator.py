@@ -61,6 +61,7 @@ from app.services.trajectory_types import (
     InspectionPass,
     MissionData,
     Point3D,
+    Violation,
     WaypointData,
 )
 from app.utils.geo import bearing_between, distance_between, total_path_distance
@@ -748,6 +749,7 @@ def _generate_trajectory_inner(
 
     # phase 5 - final assembly with A* transit
     all_waypoints: list[WaypointData] = []
+    measurement_index_maps: list[dict[int, int]] = []
 
     # terrain helper
     provider = data.elevation_provider
@@ -757,6 +759,14 @@ def _generate_trajectory_inner(
         # no takeoff, landing, or transit between passes
         pass_start_indices: list[int] = []
         for ipass in inspection_passes:
+            idx_map: dict[int, int] = {}
+            filtered_idx = 0
+            for orig_idx, wp in enumerate(ipass.waypoints):
+                if wp.waypoint_type in (WaypointType.MEASUREMENT, WaypointType.HOVER):
+                    idx_map[orig_idx] = filtered_idx
+                    filtered_idx += 1
+            measurement_index_maps.append(idx_map)
+
             measurement_wps = [
                 wp
                 for wp in ipass.waypoints
@@ -764,6 +774,9 @@ def _generate_trajectory_inner(
             ]
             pass_start_indices.append(len(all_waypoints))
             all_waypoints.extend(measurement_wps)
+
+        if not all_waypoints:
+            raise TrajectoryGenerationError("no measurement waypoints generated")
 
     elif scope == "NO_TAKEOFF_LANDING":
         # no-takeoff-landing: start at transit altitude above takeoff point,
@@ -959,15 +972,40 @@ def _generate_trajectory_inner(
 
     # build waypoint index -> inspection sequence mapping from explicit start indices
     wp_inspection_seq: dict[int, int] = {}
+    is_measurements_only = scope == "MEASUREMENTS_ONLY"
     for i, (pass_start, ipass) in enumerate(zip(pass_start_indices, inspection_passes)):
-        for k in range(pass_start, pass_start + len(ipass.waypoints)):
+        pass_wp_count = (
+            len(measurement_index_maps[i]) if is_measurements_only else len(ipass.waypoints)
+        )
+        for k in range(pass_start, pass_start + pass_wp_count):
             if k < len(all_waypoints):
                 wp_inspection_seq[k] = i + 1
 
         # format deferred per-pass warnings now that global offsets are known
         if i < len(deferred_pass_data):
             d_label, d_violations, d_obstructed = deferred_pass_data[i]
-            _format_soft_warnings(d_violations, d_label, warnings, wp_offset=pass_start)
+
+            if is_measurements_only:
+                # remap violation waypoint indices from full-pass to filtered-pass
+                idx_map = measurement_index_maps[i]
+                remapped_violations = []
+                for v in d_violations:
+                    if v.waypoint_index is not None and v.waypoint_index not in idx_map:
+                        continue
+                    if v.waypoint_index is not None:
+                        v = Violation(
+                            is_warning=v.is_warning,
+                            message=v.message,
+                            violation_kind=v.violation_kind,
+                            constraint_id=v.constraint_id,
+                            waypoint_index=idx_map[v.waypoint_index],
+                        )
+                    remapped_violations.append(v)
+                _format_soft_warnings(remapped_violations, d_label, warnings, wp_offset=pass_start)
+
+                d_obstructed = [idx_map[wi] for wi in d_obstructed if wi in idx_map]
+            else:
+                _format_soft_warnings(d_violations, d_label, warnings, wp_offset=pass_start)
 
             if d_obstructed:
                 display_wps = [wi + 1 for wi in d_obstructed]

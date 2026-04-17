@@ -1,6 +1,5 @@
 """tests for flight plan scope selector feature."""
 
-
 from app.models.mission import TRAJECTORY_FIELDS, Mission
 from app.schemas.mission import MissionCreate, MissionUpdate
 from tests.data.trajectory import (
@@ -23,7 +22,11 @@ def test_flight_plan_scope_in_trajectory_fields():
 
 def test_mission_defaults_scope_to_full():
     """new Mission instance has flight_plan_scope == FULL."""
-    m = Mission(name="x", airport_id="00000000-0000-0000-0000-000000000001")
+    m = Mission(
+        name="x",
+        airport_id="00000000-0000-0000-0000-000000000001",
+        flight_plan_scope="FULL",
+    )
     assert m.flight_plan_scope == "FULL"
 
 
@@ -66,7 +69,7 @@ def test_create_mission_with_scope(client):
     """POST /missions with flight_plan_scope returns field in response."""
     airport = client.post(
         "/api/v1/airports",
-        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "SCOP"},
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "ZFSP"},
     ).json()
 
     resp = client.post(
@@ -85,7 +88,7 @@ def test_mission_scope_defaults_to_full_via_api(client):
     """POST /missions without scope returns FULL in response."""
     airport = client.post(
         "/api/v1/airports",
-        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "SCDF"},
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "ZFDF"},
     ).json()
 
     resp = client.post(
@@ -100,7 +103,7 @@ def test_update_mission_scope_regresses_status(client):
     """PATCH scope on a PLANNED mission regresses it to DRAFT."""
     airport = client.post(
         "/api/v1/airports",
-        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "SCRG"},
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "ZFRG"},
     ).json()
     airport_id = airport["id"]
 
@@ -152,17 +155,17 @@ def test_update_mission_scope_regresses_status(client):
     )
 
     # generate trajectory to get to PLANNED
-    gen = client.post(f"/api/v1/missions/{mission_id}/trajectory")
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     assert gen.status_code == 200
     assert client.get(f"/api/v1/missions/{mission_id}").json()["status"] == "PLANNED"
 
     # changing scope must regress to DRAFT
-    patch = client.patch(
+    resp = client.put(
         f"/api/v1/missions/{mission_id}",
         json={"flight_plan_scope": "NO_TAKEOFF_LANDING"},
     )
-    assert patch.status_code == 200
-    assert patch.json()["status"] == "DRAFT"
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "DRAFT"
 
 
 # trajectory generation tests
@@ -229,8 +232,8 @@ def _setup_trajectory_mission(client, icao: str, scope: str, with_coordinates: b
 
 def test_full_scope_produces_takeoff_and_landing_waypoints(client):
     """FULL scope generates first TAKEOFF waypoint and last LANDING waypoint."""
-    mission_id = _setup_trajectory_mission(client, "FULL", "FULL")
-    gen = client.post(f"/api/v1/missions/{mission_id}/trajectory")
+    mission_id = _setup_trajectory_mission(client, "ZFFL", "FULL")
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     assert gen.status_code == 200
 
     fp = client.get(f"/api/v1/missions/{mission_id}/flight-plan").json()
@@ -242,8 +245,8 @@ def test_full_scope_produces_takeoff_and_landing_waypoints(client):
 
 def test_no_takeoff_landing_scope_omits_takeoff_landing_waypoints(client):
     """NO_TAKEOFF_LANDING scope produces no TAKEOFF or LANDING waypoints."""
-    mission_id = _setup_trajectory_mission(client, "NOTL", "NO_TAKEOFF_LANDING")
-    gen = client.post(f"/api/v1/missions/{mission_id}/trajectory")
+    mission_id = _setup_trajectory_mission(client, "ZFNL", "NO_TAKEOFF_LANDING")
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     assert gen.status_code == 200
 
     fp = client.get(f"/api/v1/missions/{mission_id}/flight-plan").json()
@@ -255,8 +258,8 @@ def test_no_takeoff_landing_scope_omits_takeoff_landing_waypoints(client):
 
 def test_measurements_only_scope_contains_only_measurement_waypoints(client):
     """MEASUREMENTS_ONLY scope produces only MEASUREMENT and HOVER waypoints."""
-    mission_id = _setup_trajectory_mission(client, "MEAS", "MEASUREMENTS_ONLY")
-    gen = client.post(f"/api/v1/missions/{mission_id}/trajectory")
+    mission_id = _setup_trajectory_mission(client, "ZFMS", "MEASUREMENTS_ONLY")
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     assert gen.status_code == 200
 
     fp = client.get(f"/api/v1/missions/{mission_id}/flight-plan").json()
@@ -270,18 +273,18 @@ def test_measurements_only_scope_contains_only_measurement_waypoints(client):
 def test_measurements_only_does_not_require_coordinates(client):
     """MEASUREMENTS_ONLY scope succeeds without takeoff/landing coordinates."""
     mission_id = _setup_trajectory_mission(
-        client, "MNOC", "MEASUREMENTS_ONLY", with_coordinates=False
+        client, "ZFNC", "MEASUREMENTS_ONLY", with_coordinates=False
     )
-    gen = client.post(f"/api/v1/missions/{mission_id}/trajectory")
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     assert gen.status_code == 200
 
 
 def test_no_takeoff_landing_requires_coordinates(client):
     """NO_TAKEOFF_LANDING scope fails without takeoff/landing coordinates."""
     mission_id = _setup_trajectory_mission(
-        client, "NTNC", "NO_TAKEOFF_LANDING", with_coordinates=False
+        client, "ZFTC", "NO_TAKEOFF_LANDING", with_coordinates=False
     )
-    gen = client.post(f"/api/v1/missions/{mission_id}/trajectory")
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     assert gen.status_code == 400
 
 
@@ -289,7 +292,7 @@ def test_measurements_only_two_inspections_no_transit_between_passes(client):
     """MEASUREMENTS_ONLY with two inspections has no TRANSIT waypoints."""
     airport = client.post(
         "/api/v1/airports",
-        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "M2IN"},
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "ZFMI"},
     ).json()
     airport_id = airport["id"]
 
@@ -353,7 +356,7 @@ def test_measurements_only_two_inspections_no_transit_between_passes(client):
         json={"template_id": template2["id"], "method": "ANGULAR_SWEEP"},
     )
 
-    gen = client.post(f"/api/v1/missions/{mission_id}/trajectory")
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     assert gen.status_code == 200
 
     fp = client.get(f"/api/v1/missions/{mission_id}/flight-plan").json()

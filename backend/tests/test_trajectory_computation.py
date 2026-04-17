@@ -208,7 +208,7 @@ class TestResolveSpeed:
         assert speed == 5.0
 
     def test_clamped_to_optimal_warns_when_default_exceeds_ceiling(self):
-        """warns when operator's configured speed exceeds the camera ceiling, even though chosen is clamped."""
+        """warns when configured speed exceeds camera ceiling, even though chosen is clamped."""
         drone = FakeDrone(camera_frame_rate=1, max_speed=20.0)
         # spacing=10m, frame_rate=1 => optimal=10; default=15 => chosen=min(10,15)=10
         # default_speed(15) > optimal(10) so a warning is emitted

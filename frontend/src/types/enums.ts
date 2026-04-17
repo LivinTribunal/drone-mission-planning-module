@@ -22,7 +22,17 @@ export type CameraAction =
 
 export type CaptureMode = "VIDEO_CAPTURE" | "PHOTO_CAPTURE";
 
-export type ExportFormat = "MAVLINK" | "KML" | "KMZ" | "JSON" | "UGCS";
+export type ExportFormat =
+  | "MAVLINK"
+  | "KML"
+  | "KMZ"
+  | "JSON"
+  | "UGCS"
+  | "WPML"
+  | "CSV"
+  | "GPX"
+  | "LITCHI"
+  | "DRONEDEPLOY";
 
 export type InspectionMethod =
   | "VERTICAL_PROFILE"
