@@ -292,9 +292,7 @@ def _generate_trajectory_inner(
 
     # operator opt-in: allow shortest-geodesic crossing instead of perpendicular,
     # reducing the runway closure window. defaults True for legacy behavior.
-    require_perpendicular = getattr(data.mission, "require_perpendicular_runway_crossing", True)
-    if require_perpendicular is None:
-        require_perpendicular = True
+    require_perpendicular = data.mission.require_perpendicular_runway_crossing
 
     sorted_inspections = sorted(mission.inspections, key=lambda i: i.sequence_order)
 
@@ -590,6 +588,7 @@ def _generate_trajectory_inner(
                 center,
                 data.surfaces,
                 buffer_distance_override=config.buffer_distance,
+                require_perpendicular_runway_crossing=require_perpendicular,
             )
 
             # re-validate after rerouting

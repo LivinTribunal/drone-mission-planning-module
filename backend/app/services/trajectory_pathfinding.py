@@ -444,6 +444,7 @@ def resolve_inspection_collisions(
     center: Point3D,
     surfaces: list[AirfieldSurface] | None = None,
     buffer_distance_override: float | None = None,
+    require_perpendicular_runway_crossing: bool = True,
 ) -> list[WaypointData]:
     """A*-based rerouting of measurement waypoints around obstacles and safety zones.
 
@@ -514,6 +515,7 @@ def resolve_inspection_collisions(
             nearby_zones,
             surfaces,
             buffer_distance_override=buffer_distance_override,
+            require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
         )
         if path is None:
             raise TrajectoryGenerationError("no obstacle-free reroute path found")

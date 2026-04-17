@@ -12,6 +12,7 @@ from app.services.trajectory_pathfinding import (
     _max_effective_buffer,
     _max_turn_angle,
     compute_transit_path,
+    resolve_inspection_collisions,
 )
 from app.services.trajectory_types import DEFAULT_OBSTACLE_RADIUS, Point3D, WaypointData
 from app.utils.geo import bearing_between, total_path_distance
@@ -448,7 +449,7 @@ class TestRequirePerpendicularRunwayCrossing:
         """without any runways, both flag values produce the same straight-line path."""
         airport = Airport(
             id=uuid4(),
-            icao_code="LKNR",
+            icao_code=_unique_icao(),
             name="No Runway Airport",
             elevation=300.0,
             location=WKTElement("SRID=4326;POINTZ(14.26 50.10 300)", srid=4326),
@@ -483,3 +484,71 @@ class TestRequirePerpendicularRunwayCrossing:
         assert len(wps_true) == 1 and len(wps_false) == 1
         assert wps_true[0].lon == wps_false[0].lon
         assert wps_true[0].lat == wps_false[0].lat
+
+    def test_flag_forwarded_through_resolve_collisions(self, db_session):
+        """resolve_inspection_collisions forwards the flag into _run_astar."""
+        airport, runway = _make_perpendicular_runway_airport(db_session)
+
+        center = Point3D(lon=14.26, lat=50.10, alt=300.0)
+
+        # obstacle on the south side of the runway, straddling a measurement waypoint
+        obstacle = Obstacle(
+            id=uuid4(),
+            airport_id=airport.id,
+            name="reroute-block",
+            height=80.0,
+            type="BUILDING",
+            buffer_distance=5.0,
+            boundary=WKTElement(
+                "SRID=4326;POLYGONZ(("
+                "14.2595 50.0985 300, "
+                "14.2605 50.0985 300, "
+                "14.2605 50.0995 300, "
+                "14.2595 50.0995 300, "
+                "14.2595 50.0985 300"
+                "))",
+                srid=4326,
+            ),
+        )
+        db_session.add(obstacle)
+        db_session.commit()
+        db_session.refresh(obstacle)
+
+        # waypoints: anchor south -> colliding wp inside obstacle -> anchor north of runway
+        # buffer_distance_override=50 ensures the search radius is large enough
+        # for _collect_nearby_objects to find the obstacle
+        wps = [
+            WaypointData(lon=14.260, lat=50.096, alt=350.0, heading=0.0),
+            WaypointData(lon=14.260, lat=50.099, alt=350.0, heading=0.0),
+            WaypointData(lon=14.260, lat=50.104, alt=350.0, heading=0.0),
+        ]
+
+        result_perp = resolve_inspection_collisions(
+            db_session,
+            wps,
+            [obstacle],
+            [],
+            center,
+            [runway],
+            buffer_distance_override=50.0,
+            require_perpendicular_runway_crossing=True,
+        )
+        result_short = resolve_inspection_collisions(
+            db_session,
+            wps,
+            [obstacle],
+            [],
+            center,
+            [runway],
+            buffer_distance_override=50.0,
+            require_perpendicular_runway_crossing=False,
+        )
+
+        perp_pts = [(w.lon, w.lat, w.alt) for w in result_perp]
+        short_pts = [(w.lon, w.lat, w.alt) for w in result_short]
+        perp_dist = total_path_distance(perp_pts)
+        short_dist = total_path_distance(short_pts)
+
+        assert (
+            short_dist < perp_dist
+        ), f"flag=False reroute {short_dist:.1f} not shorter than flag=True {perp_dist:.1f}"
