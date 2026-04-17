@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info, RotateCcw } from "lucide-react";
 import type { InspectionResponse, InspectionConfigOverride } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -731,23 +731,40 @@ export default function InspectionConfigForm({
                 </button>
               ))}
             </div>
-            <input
-              type="number"
-              step="1"
-              min="-360"
-              max="360"
-              value={hoverBearing}
-              onChange={(e) =>
-                handleNumberChange("hover_bearing", e.target.value)
-              }
-              placeholder={t(
-                hoverBearingReference === "COMPASS"
-                  ? "mission.config.hoverBearingCompassHint"
-                  : "mission.config.hoverBearingRunwayHint",
-              )}
-              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
-              data-testid="inspection-hover-bearing"
-            />
+            <div className="flex gap-1.5 items-center">
+              <input
+                type="number"
+                step="1"
+                min="-360"
+                max="360"
+                value={hoverBearing}
+                onChange={(e) =>
+                  handleNumberChange("hover_bearing", e.target.value)
+                }
+                placeholder={t(
+                  hoverBearingReference === "COMPASS"
+                    ? "mission.config.hoverBearingCompassHint"
+                    : "mission.config.hoverBearingRunwayHint",
+                )}
+                className="flex-1 px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                data-testid="inspection-hover-bearing"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const current = parseFloat(String(hoverBearing));
+                  if (!isNaN(current)) {
+                    onChange({ ...configOverride, hover_bearing: (current + 180) % 360 });
+                  }
+                }}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-[10px] border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors flex-shrink-0"
+                title={t("coordinator.detail.oppositeHeading")}
+                data-testid="inspection-hover-bearing-opposite"
+              >
+                <RotateCcw className="h-3 w-3" />
+                {t("coordinator.detail.opposite")}
+              </button>
+            </div>
             <p className="text-[11px] text-tv-text-muted leading-snug">
               {t(
                 hoverBearingReference === "COMPASS"
