@@ -731,7 +731,7 @@ export default function InspectionConfigForm({
                 </button>
               ))}
             </div>
-            <div className="flex gap-1.5 items-center">
+            <div className="flex gap-1.5 items-center justify-end">
               <input
                 type="number"
                 step="1"
@@ -746,7 +746,7 @@ export default function InspectionConfigForm({
                     ? "mission.config.hoverBearingCompassHint"
                     : "mission.config.hoverBearingRunwayHint",
                 )}
-                className="flex-1 px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                className="w-48 px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary text-right placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
                 data-testid="inspection-hover-bearing"
               />
               <button

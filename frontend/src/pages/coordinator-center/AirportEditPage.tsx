@@ -1357,7 +1357,9 @@ export default function AirportEditPage() {
             />
             <TerrainSettingsCard
               airport={airport}
-              onUpdate={() => fetchAirport()}
+              onUpdate={async () => {
+                await fetchAirport();
+              }}
             />
             {/* creation form or feature editor */}
             {(pendingGeometry || pendingPointPosition) ? (

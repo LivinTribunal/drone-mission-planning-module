@@ -1036,7 +1036,8 @@
       "selectSurface": "Select a surface",
       "area": "Area",
       "touchpoint": "Touchpoint (TDP)",
-      "noRunwayWarning": "Create a runway first - AGLs must be linked to a runway surface"
+      "noRunwayWarning": "Create a runway first - AGLs must be linked to a runway surface",
+      "altFromAirport": "derived from airport elevation"
     },
     "geoJsonEditor": {
       "title": "GeoJSON Editor",
