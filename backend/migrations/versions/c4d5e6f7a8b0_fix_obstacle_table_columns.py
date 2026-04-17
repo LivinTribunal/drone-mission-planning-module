@@ -19,30 +19,40 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """rename boundary->geometry, add position and radius columns."""
-    # rename boundary to geometry to match the ORM model
-    op.alter_column('obstacle', 'boundary', new_column_name='geometry')
-
-    # add position column (nullable initially for existing data)
-    op.add_column(
-        'obstacle',
-        sa.Column(
-            'position',
-            geoalchemy2.types.Geometry(
-                geometry_type='POINTZ', srid=4326,
-                from_text='ST_GeomFromEWKT', name='geometry',
-            ),
-            nullable=True,
-        ),
-    )
-
-    # add radius column (nullable initially for existing data)
-    op.add_column(
-        'obstacle',
-        sa.Column('radius', sa.Float(), nullable=True),
-    )
-
-    # abort if any obstacles have null geometry - cannot backfill position/radius
     conn = op.get_bind()
+
+    def _has_column(table: str, column: str) -> bool:
+        """check if a column exists on a table."""
+        return bool(conn.execute(
+            sa.text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = :t AND column_name = :c"
+            ),
+            {"t": table, "c": column},
+        ).scalar())
+
+    if _has_column("obstacle", "boundary"):
+        op.alter_column('obstacle', 'boundary', new_column_name='geometry')
+
+    if not _has_column("obstacle", "position"):
+        op.add_column(
+            'obstacle',
+            sa.Column(
+                'position',
+                geoalchemy2.types.Geometry(
+                    geometry_type='POINTZ', srid=4326,
+                    from_text='ST_GeomFromEWKT', name='geometry',
+                ),
+                nullable=True,
+            ),
+        )
+
+    if not _has_column("obstacle", "radius"):
+        op.add_column(
+            'obstacle',
+            sa.Column('radius', sa.Float(), nullable=True),
+        )
+
     null_count = conn.execute(
         sa.text("SELECT COUNT(*) FROM obstacle WHERE geometry IS NULL")
     ).scalar()
@@ -52,11 +62,6 @@ def upgrade() -> None:
             "backfilled. resolve these rows manually before running this migration."
         )
 
-    # backfill position from centroid of geometry, radius from sqrt(area/pi).
-    # note: radius here approximates the circle-equivalent of the polygon area,
-    # which differs from the ORM's recalculate_dimensions() that uses OBB minor
-    # axis (width/2). this is acceptable for backfill since downstream code uses
-    # obs.buffer_distance for visibility graph, not radius directly.
     op.execute(
         """
         UPDATE obstacle
@@ -66,9 +71,6 @@ def upgrade() -> None:
         """
     )
 
-    # position and radius remain nullable - ORM does not consume them yet,
-    # so enforcing NOT NULL would break every Obstacle INSERT from the service layer.
-    # a follow-up migration can enforce NOT NULL after the ORM adopts these columns.
     op.alter_column('obstacle', 'geometry', nullable=False)
 
 

@@ -27,13 +27,10 @@ services:
         required: true
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tarmacview}:${POSTGRES_PASSWORD:-tarmacview}@postgres:5432/${POSTGRES_DB:-tarmacview}
-      JWT_SECRET: ${JWT_SECRET:-REPLACE_ME_minimum_256_bits_of_entropy}
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "8000:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 10s

@@ -18,16 +18,24 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "airport",
-        sa.Column("terrain_source", sa.String(20), nullable=False, server_default="FLAT"),
-    )
-    op.add_column("airport", sa.Column("dem_file_path", sa.String(), nullable=True))
-    op.create_check_constraint(
-        "ck_airport_terrain_source",
-        "airport",
-        "terrain_source IN ('FLAT', 'DEM')",
-    )
+    conn = op.get_bind()
+    has_col = conn.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'airport' AND column_name = 'terrain_source'"
+        )
+    ).scalar()
+    if not has_col:
+        op.add_column(
+            "airport",
+            sa.Column("terrain_source", sa.String(20), nullable=False, server_default="FLAT"),
+        )
+        op.add_column("airport", sa.Column("dem_file_path", sa.String(), nullable=True))
+        op.create_check_constraint(
+            "ck_airport_terrain_source",
+            "airport",
+            "terrain_source IN ('FLAT', 'DEM')",
+        )
 
 
 def downgrade() -> None:
