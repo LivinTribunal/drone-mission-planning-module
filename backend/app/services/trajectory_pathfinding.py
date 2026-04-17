@@ -173,12 +173,14 @@ def _build_visibility_graph(
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface] | None = None,
     buffer_distance: Meters = 0.0,
+    require_perpendicular_runway_crossing: bool = True,
 ) -> dict[int, list[tuple[int, float]]]:
     """build adjacency list where edges connect unobstructed node pairs.
 
-    edges crossing runways get a distance penalty proportional to crossing
-    length, making A* prefer routes that go around runways or cross
-    perpendicularly.
+    when require_perpendicular_runway_crossing is True, edges crossing runways
+    get a distance penalty proportional to crossing length, making A* prefer
+    routes that go around runways or cross perpendicularly. when False, no
+    crossing penalty is applied so the planner picks the shortest geodesic.
     """
     graph: dict[int, list[tuple[int, float]]] = {i: [] for i in range(len(nodes))}
 
@@ -191,8 +193,9 @@ def _build_visibility_graph(
 
             dist = distance_between(nodes[i].lon, nodes[i].lat, nodes[j].lon, nodes[j].lat)
 
-            # add penalty for runway crossing
-            if surfaces:
+            # add penalty for runway crossing - skipped when operator opts into
+            # shortest-geodesic crossing to minimise runway closure window
+            if surfaces and require_perpendicular_runway_crossing:
                 for surface in surfaces:
                     crossing = segment_runway_crossing_length(
                         db,
@@ -219,6 +222,7 @@ def _collect_graph_nodes_in_circle(
     center: Point3D,
     radius: Meters,
     buffer_distance_override: float | None = None,
+    require_perpendicular_runway_crossing: bool = True,
 ) -> list[Point3D]:
     """collect nodes within search circle for visibility graph construction.
 
@@ -295,8 +299,10 @@ def _collect_graph_nodes_in_circle(
                     nodes.append(pt_r)
 
             # perpendicular crossing nodes - intersect the from->to line with
-            # the runway centerline so A* always has the shortest-crossing option
-            if len(endpoints) >= 2:
+            # the runway centerline so A* always has the shortest-crossing option.
+            # skipped when shortest-geodesic crossing is enabled because the
+            # extra anchor nodes would bias A* back toward perpendicular paths.
+            if len(endpoints) >= 2 and require_perpendicular_runway_crossing:
                 p0, p1 = endpoints[0], endpoints[1]
                 rdx = end[0] - start[0]
                 rdy = end[1] - start[1]
@@ -333,6 +339,7 @@ def _run_astar(
     zones: list[SafetyZone],
     surfaces: list[AirfieldSurface] | None = None,
     buffer_distance_override: float | None = None,
+    require_perpendicular_runway_crossing: bool = True,
 ) -> list[Point3D] | None:
     """circle-based A* pathfinding with expanding search radius on failure.
 
@@ -357,6 +364,7 @@ def _run_astar(
             mid,
             radius,
             buffer_distance_override=buffer_distance_override,
+            require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
         )
         graph = _build_visibility_graph(
             db,
@@ -367,6 +375,7 @@ def _run_astar(
             buffer_distance=(
                 buffer_distance_override if buffer_distance_override is not None else 0.0
             ),
+            require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
         )
         node_tuples = [n.to_tuple() for n in nodes]
 
@@ -435,6 +444,7 @@ def resolve_inspection_collisions(
     center: Point3D,
     surfaces: list[AirfieldSurface] | None = None,
     buffer_distance_override: float | None = None,
+    require_perpendicular_runway_crossing: bool = True,
 ) -> list[WaypointData]:
     """A*-based rerouting of measurement waypoints around obstacles and safety zones.
 
@@ -505,6 +515,7 @@ def resolve_inspection_collisions(
             nearby_zones,
             surfaces,
             buffer_distance_override=buffer_distance_override,
+            require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
         )
         if path is None:
             raise TrajectoryGenerationError("no obstacle-free reroute path found")
@@ -626,11 +637,16 @@ def compute_transit_path(
     elevation_provider=None,
     transit_agl: Meters = TRANSIT_AGL,
     buffer_distance_override: float | None = None,
+    require_perpendicular_runway_crossing: bool = True,
 ) -> list[WaypointData]:
     """compute A* transit path - shortest obstacle-free route with runway crossing penalties.
 
     all returned transit waypoints share ground + transit_agl as their altitude
     so the vertical profile stays flat between inspection passes.
+
+    when require_perpendicular_runway_crossing is False, runway crossings are
+    treated like any other clear segment so the planner picks the shortest
+    geodesic, minimising the runway-closure window the operator must request.
     """
     # straight-line if path is clear and doesn't cross runway
     fast_path_buffer = buffer_distance_override if buffer_distance_override is not None else 0.0
@@ -638,7 +654,7 @@ def compute_transit_path(
         db, from_point, to_point, obstacles, zones, buffer_distance=fast_path_buffer
     ):
         crosses_runway = False
-        if surfaces:
+        if surfaces and require_perpendicular_runway_crossing:
             for surface in surfaces:
                 crossing = segment_runway_crossing_length(
                     db,
@@ -680,6 +696,7 @@ def compute_transit_path(
         zones,
         surfaces,
         buffer_distance_override=buffer_distance_override,
+        require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
     )
     if path is None:
         raise TrajectoryGenerationError("no obstacle-free transit path found")

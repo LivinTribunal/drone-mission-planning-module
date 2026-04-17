@@ -202,6 +202,10 @@ export default function MissionConfigForm({
     values.transit_agl !== undefined
       ? values.transit_agl
       : mission.transit_agl;
+  const requirePerpendicularCrossing =
+    values.require_perpendicular_runway_crossing !== undefined
+      ? values.require_perpendicular_runway_crossing
+      : mission.require_perpendicular_runway_crossing ?? true;
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -291,7 +295,7 @@ export default function MissionConfigForm({
           <input
             type="number"
             step="0.5"
-            min="1"
+            min="5"
             value={transitAgl ?? ""}
             onChange={(e) =>
               onChange({ transit_agl: e.target.value ? parseFloat(e.target.value) : null })
@@ -338,6 +342,29 @@ export default function MissionConfigForm({
             data-testid="default-buffer-distance-input"
           />
         </div>
+      </div>
+
+      {/* perpendicular runway crossing toggle */}
+      <div>
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={requirePerpendicularCrossing}
+            onChange={(e) =>
+              onChange({ require_perpendicular_runway_crossing: e.target.checked })
+            }
+            className="mt-0.5 h-4 w-4 rounded border-tv-border bg-tv-bg accent-tv-accent"
+            data-testid="require-perpendicular-crossing-toggle"
+          />
+          <span className="text-xs text-tv-text-secondary">
+            <span className="block font-medium text-tv-text-primary">
+              {t("mission.config.requirePerpendicularCrossing")}
+            </span>
+            <span className="block text-tv-text-muted">
+              {t("mission.config.requirePerpendicularCrossingHint")}
+            </span>
+          </span>
+        </label>
       </div>
 
       {/* takeoff + landing */}

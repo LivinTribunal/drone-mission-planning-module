@@ -327,3 +327,55 @@ def test_duplicate_mission_preserves_transit_agl(client, airport_id):
     dup = client.post(f"/api/v1/missions/{mission['id']}/duplicate")
     assert dup.status_code == 201
     assert dup.json()["transit_agl"] == 75.0
+
+
+# require_perpendicular_runway_crossing
+
+
+def test_create_mission_defaults_require_perpendicular_true(client, airport_id):
+    """new missions default to perpendicular crossing for backward compatibility."""
+    response = client.post(
+        "/api/v1/missions",
+        json={"name": "Default Perp", "airport_id": airport_id},
+    )
+    assert response.status_code == 201
+    assert response.json()["require_perpendicular_runway_crossing"] is True
+
+
+def test_create_mission_persists_require_perpendicular_false(client, airport_id):
+    """operator opt-in to shortest-geodesic crossing persists on create."""
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Shortest Geodesic",
+            "airport_id": airport_id,
+            "require_perpendicular_runway_crossing": False,
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["require_perpendicular_runway_crossing"] is False
+
+
+def test_update_require_perpendicular_invalidates_trajectory(client, airport_id, db_session):
+    """toggling the flag on a PLANNED mission regresses it to DRAFT."""
+    from app.models.enums import MissionStatus
+    from app.models.mission import Mission
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={"name": "Invalidate Perp", "airport_id": airport_id},
+    ).json()
+    mission_id = mission["id"]
+
+    # flip status directly so we don't need a full inspection fixture
+    db_mission = db_session.query(Mission).filter(Mission.id == mission_id).first()
+    db_mission.status = MissionStatus.PLANNED
+    db_session.commit()
+
+    response = client.put(
+        f"/api/v1/missions/{mission_id}",
+        json={"require_perpendicular_runway_crossing": False},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "DRAFT"
+    assert response.json()["require_perpendicular_runway_crossing"] is False
