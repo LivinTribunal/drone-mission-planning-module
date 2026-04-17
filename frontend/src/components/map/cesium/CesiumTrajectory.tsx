@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useCesium } from "resium";
 import {
+  ArcType,
   Cartesian3,
   Color,
   LabelStyle,
@@ -30,18 +31,40 @@ interface CesiumTrajectoryProps {
   takeoffCoordinate?: PointZ | null;
   landingCoordinate?: PointZ | null;
   visibleInspectionIds?: Set<string>;
-  inspectionIndexMap?: Record<string, number>;
   showSimplified?: boolean;
   airportElevation?: number;
   /** ellipsoid-geoid offset: cesium terrain height minus airport MSL elevation. */
   terrainOffset?: number;
   highlightedWaypointIds?: string[] | null;
-  highlightSeverity?: string | null;
 }
 
 /** convert MSL altitude to cesium ellipsoidal height. */
 function toEllipsoidal(lng: number, lat: number, altMsl: number, offset: number): Cartesian3 {
   return Cartesian3.fromDegrees(lng, lat, altMsl + offset);
+}
+
+/** polyline material can be a solid color or a dashed material property. */
+type PolylineMaterial = Color | PolylineDashMaterialProperty;
+
+/** build polyline entity options with explicit non-clamping 3D rendering.
+ * ensures the line is drawn at absolute ellipsoidal altitudes, not snapped
+ * to terrain. exported for unit testing. */
+export function buildPolylineOptions(
+  positions: Cartesian3[],
+  width: number,
+  material: PolylineMaterial,
+  depthFailMaterial: PolylineMaterial,
+): CesiumEntity.ConstructorOptions {
+  return {
+    polyline: {
+      positions,
+      width,
+      material,
+      depthFailMaterial,
+      clampToGround: false,
+      arcType: ArcType.NONE,
+    },
+  } as CesiumEntity.ConstructorOptions;
 }
 
 /** get color for a waypoint dot based on its type and inspection index. */
@@ -83,21 +106,19 @@ function addPathSegments(
   if (sorted.length < 1) return;
 
   // takeoff -> first waypoint
-  if (showTakeoffLanding && takeoff && sorted.length > 0) {
+  if (showTakeoffLanding && takeoff) {
     const [tLng, tLat, tAlt] = takeoff.coordinates;
     const [wLng, wLat, wAlt] = sorted[0].position.coordinates;
     const color = TRANSIT_COLOR;
-    ds.entities.add({
-      polyline: {
-        positions: [
-          toEllipsoidal(tLng, tLat, tAlt ?? 0, terrainOffset),
-          toEllipsoidal(wLng, wLat, wAlt ?? 0, terrainOffset),
-        ],
-        width,
-        material: color,
-        depthFailMaterial: color,
-      },
-    });
+    ds.entities.add(buildPolylineOptions(
+      [
+        toEllipsoidal(tLng, tLat, tAlt ?? 0, terrainOffset),
+        toEllipsoidal(wLng, wLat, wAlt ?? 0, terrainOffset),
+      ],
+      width,
+      color,
+      color,
+    ));
   }
 
   // waypoint-to-waypoint segments
@@ -107,36 +128,32 @@ function addPathSegments(
     const [fLng, fLat, fAlt] = from.position.coordinates;
     const [tLng, tLat, tAlt] = to.position.coordinates;
     const color = getSegmentColor(to.waypoint_type);
-    ds.entities.add({
-      polyline: {
-        positions: [
-          toEllipsoidal(fLng, fLat, fAlt ?? 0, terrainOffset),
-          toEllipsoidal(tLng, tLat, tAlt ?? 0, terrainOffset),
-        ],
-        width,
-        material: color,
-        depthFailMaterial: color,
-      },
-    });
+    ds.entities.add(buildPolylineOptions(
+      [
+        toEllipsoidal(fLng, fLat, fAlt ?? 0, terrainOffset),
+        toEllipsoidal(tLng, tLat, tAlt ?? 0, terrainOffset),
+      ],
+      width,
+      color,
+      color,
+    ));
   }
 
   // last waypoint -> landing
-  if (showTakeoffLanding && landing && sorted.length > 0) {
+  if (showTakeoffLanding && landing) {
     const last = sorted[sorted.length - 1];
     const [wLng, wLat, wAlt] = last.position.coordinates;
     const [lLng, lLat, lAlt] = landing.coordinates;
     const color = TRANSIT_COLOR;
-    ds.entities.add({
-      polyline: {
-        positions: [
-          toEllipsoidal(wLng, wLat, wAlt ?? 0, terrainOffset),
-          toEllipsoidal(lLng, lLat, lAlt ?? 0, terrainOffset),
-        ],
-        width,
-        material: color,
-        depthFailMaterial: color,
-      },
-    });
+    ds.entities.add(buildPolylineOptions(
+      [
+        toEllipsoidal(wLng, wLat, wAlt ?? 0, terrainOffset),
+        toEllipsoidal(lLng, lLat, lAlt ?? 0, terrainOffset),
+      ],
+      width,
+      color,
+      color,
+    ));
   }
 }
 
@@ -290,17 +307,15 @@ function addTakeoffLanding(
     } as CesiumEntity.ConstructorOptions);
 
     // vertical line from ground to marker
-    ds.entities.add({
-      polyline: {
-        positions: [
-          toEllipsoidal(lng, lat, airportElevation, terrainOffset),
-          toEllipsoidal(lng, lat, alt ?? 0, terrainOffset),
-        ],
-        width: 1.5,
-        material: color.withAlpha(0.5),
-        depthFailMaterial: color.withAlpha(0.2),
-      },
-    });
+    ds.entities.add(buildPolylineOptions(
+      [
+        toEllipsoidal(lng, lat, airportElevation, terrainOffset),
+        toEllipsoidal(lng, lat, alt ?? 0, terrainOffset),
+      ],
+      1.5,
+      color.withAlpha(0.5),
+      color.withAlpha(0.2),
+    ));
   };
 
   if (takeoff) addMarker(takeoff, TAKEOFF_COLOR, takeoffLabel, "TAKEOFF");
@@ -318,20 +333,18 @@ function addCameraHeadingLines(
     const [lng, lat, alt] = wp.position.coordinates;
     const [tLng, tLat, tAlt] = wp.camera_target.coordinates;
     const color = getWaypointColor(wp).withAlpha(0.4);
-    ds.entities.add({
-      polyline: {
-        positions: [
-          toEllipsoidal(lng, lat, alt ?? 0, terrainOffset),
-          toEllipsoidal(tLng, tLat, tAlt ?? 0, terrainOffset),
-        ],
-        width: 1,
-        material: new PolylineDashMaterialProperty({
-          color,
-          dashLength: 8,
-        }),
-        depthFailMaterial: color,
-      },
-    });
+    ds.entities.add(buildPolylineOptions(
+      [
+        toEllipsoidal(lng, lat, alt ?? 0, terrainOffset),
+        toEllipsoidal(tLng, tLat, tAlt ?? 0, terrainOffset),
+      ],
+      1,
+      new PolylineDashMaterialProperty({
+        color,
+        dashLength: 8,
+      }),
+      color,
+    ));
   }
 }
 
@@ -437,7 +450,6 @@ export default function CesiumTrajectory({
   takeoffCoordinate,
   landingCoordinate,
   visibleInspectionIds,
-  inspectionIndexMap,
   showSimplified,
   airportElevation = 0,
   terrainOffset = 0,
@@ -547,7 +559,7 @@ export default function CesiumTrajectory({
         terrainOffset, highlightedWaypointIds);
     }
   }, [viewer, visibleWaypoints, selectedWaypointId, terrainOffset,
-    takeoffCoordinate, landingCoordinate, inspectionIndexMap,
+    takeoffCoordinate, landingCoordinate,
     showSimplified, layers.path, layers.takeoffLanding, layers.cameraHeading,
     layers.pathHeading, airportElevation, highlightedWaypointIds, t]);
 

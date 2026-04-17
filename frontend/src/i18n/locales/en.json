@@ -272,6 +272,9 @@
     "validateTrajectory": "Validate Trajectory",
     "placeTakeoff": "Place Takeoff",
     "placeLanding": "Place Landing",
+    "useTakeoffAsLanding": "Use takeoff as landing",
+    "useTakeoffAsLandingHint": "Landing will match the takeoff point",
+    "markerUnsaved": "Unsaved",
     "computeTrajectory": "Compute Trajectory",
     "recomputeTrajectory": "Recompute Trajectory",
     "noChangesToRecompute": "No changes to recompute",
@@ -637,8 +640,8 @@
       "export": "Export Mission Data",
       "formatKml": "KML",
       "formatKmlDesc": "Google Earth viewer format",
-      "formatKmz": "KMZ",
-      "formatKmzDesc": "Compressed KML",
+      "formatKmz": "KMZ (DJI)",
+      "formatKmzDesc": "DJI WPMZ archive for Pilot 2 and Flight Hub 2",
       "formatJson": "JSON",
       "formatJsonDesc": "Machine-readable waypoint data",
       "formatMavlink": "MAVLink",
@@ -1038,7 +1041,12 @@
     "coordinatePicker": {
       "title": "Pick Location",
       "instructions": "Click on the map to set coordinates",
-      "confirm": "Confirm"
+      "confirm": "Confirm",
+      "enlarge": "Enlarge map",
+      "collapse": "Collapse map",
+      "altitudeLoading": "Fetching altitude",
+      "latRange": "Latitude must be between -90 and 90",
+      "lonRange": "Longitude must be between -180 and 180"
     },
     "inspections": {
       "title": "Inspection Templates",

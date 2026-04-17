@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.airport import Airport
 from app.models.flight_plan import FlightPlan
-from app.models.mission import Mission
+from app.models.mission import DroneProfile, Mission
 from app.schemas.geometry import parse_ewkb
 
 
@@ -94,13 +94,22 @@ def generate_kmz(
     flight_plan: FlightPlan,
     mission_name: str = "",
     airport_elevation: float = 0,
+    *,
+    mission=None,
+    drone_profile=None,
 ) -> bytes:
-    """serialize flight plan waypoints to kmz (zipped kml) format."""
-    kml_bytes = generate_kml(flight_plan, mission_name, airport_elevation)
+    """serialize flight plan to a dji wpmz archive consumable by flight hub 2."""
+    template_kml = _build_dji_template_kml(
+        flight_plan, mission_name, airport_elevation, mission, drone_profile
+    )
+    waylines_wpml = _build_dji_waylines_wpml(
+        flight_plan, mission_name, airport_elevation, mission, drone_profile
+    )
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("doc.kml", kml_bytes)
+        zf.writestr("wpmz/template.kml", template_kml)
+        zf.writestr("wpmz/waylines.wpml", waylines_wpml)
 
     return buf.getvalue()
 
@@ -417,63 +426,453 @@ def generate_gpx(
     return ET.tostring(gpx, encoding="utf-8", xml_declaration=True)
 
 
-# dji camera action mapping
+# dji wpmz 1.0.6 - flight hub 2 / pilot 2 schema used by real dji exports
+_KML_NS = "http://www.opengis.net/kml/2.2"
+_WPML_NS = "http://www.dji.com/wpmz/1.0.6"
+_KML = f"{{{_KML_NS}}}"
+_WPML = f"{{{_WPML_NS}}}"
+
+ET.register_namespace("", _KML_NS)
+ET.register_namespace("wpml", _WPML_NS)
+
+# dji camera action mapping - values match actionActuatorFunc in the dji wpml schema
 _DJI_CAMERA_ACTIONS = {
     "PHOTO_CAPTURE": "takePhoto",
     "RECORDING_START": "startRecord",
     "RECORDING_STOP": "stopRecord",
 }
 
+# drone + payload enum. forced to m30t (99/1) + h30t-integrated (89/0).
+#
+# we've tested two fh2 exports from the user - one labeled APCH, one PAPI 22
+# exported with an m4t selected - and both come back with droneEnum=99/1 and
+# payloadEnum=89. fh2 evidently normalizes every export to m30t regardless of
+# which drone is selected, and it only renders the preview gimbal-follow
+# behavior for drone enums it knows (m30t works; m4t 100/1 leaves the camera
+# locked at absolute north in the preview and presumably at flight time too).
+#
+# until fh2 ships official support for the m4 series, we write the m30t enum
+# set for every mission so the file is renderable. actual flight behavior is
+# driven by the aircraft firmware interpreting the wpml actions, not by the
+# drone enum, so an m4t in the field still flies the route correctly.
+_DJI_FALLBACK_ENUMS: tuple[str, str, str, str] = ("99", "1", "89", "0")
+
+
+def _dji_enums_for(drone_profile) -> tuple[str, str, str, str]:
+    """return the dji drone + payload enum tuple for the mission.
+
+    currently always returns m30t (99/1/89/0) - the only enum set fh2
+    currently renders correctly. the drone_profile argument is retained for
+    future per-drone overrides once fh2 supports more drones.
+    """
+    del drone_profile  # intentionally unused for now
+    return _DJI_FALLBACK_ENUMS
+
+
+def _kml_tag(name: str) -> str:
+    """qualify an element name with the kml namespace."""
+    return f"{_KML}{name}"
+
+
+def _wpml_tag(name: str) -> str:
+    """qualify an element name with the dji wpml namespace."""
+    return f"{_WPML}{name}"
+
+
+def _sub_text(parent, tag: str, text: str):
+    """create a child element in the wpml namespace with text content."""
+    el = ET.SubElement(parent, _wpml_tag(tag))
+    el.text = text
+    return el
+
+
+def _takeoff_ref_point(mission, flight_plan) -> str:
+    """build the 'lat,lon,alt' string for wpml:takeOffRefPoint.
+
+    dji schema nominally calls the z-field HAE, but fh2 anchors its ground
+    reference and waypoint rendering against this value directly. writing a
+    consistent MSL value here (matching executeHeight + heightMode=EGM96)
+    keeps the whole route positioned against the same datum; introducing a
+    geoid offset causes fh2 to render waypoints ~44 m above ground.
+
+    prefers mission.takeoff_coordinate; falls back to the first waypoint.
+    """
+    takeoff = getattr(mission, "takeoff_coordinate", None) if mission else None
+    if takeoff is not None:
+        lon, lat, alt = _extract_coords(takeoff)
+        return f"{lat:.6f},{lon:.6f},{alt:.6f}"
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+    if waypoints:
+        lon, lat, alt = _extract_coords(waypoints[0].position)
+        return f"{lat:.6f},{lon:.6f},{alt:.6f}"
+    return "0.000000,0.000000,0.000000"
+
+
+def _append_mission_config(doc, flight_plan, mission, drone_profile, *, in_waylines: bool) -> None:
+    """build wpml:missionConfig. takeOffRefPoint belongs to template.kml only."""
+    drone_enum, drone_sub, payload_enum, payload_sub = _dji_enums_for(drone_profile)
+
+    config = ET.SubElement(doc, _wpml_tag("missionConfig"))
+    _sub_text(config, "flyToWaylineMode", "safely")
+    _sub_text(config, "finishAction", "goHome")
+    _sub_text(config, "exitOnRCLost", "goContinue")
+    _sub_text(config, "executeRCLostAction", "goBack")
+    _sub_text(config, "takeOffSecurityHeight", "20")
+    if not in_waylines:
+        # takeOffRefPoint lives in template.kml only; the real dji sample omits
+        # it from waylines.wpml to keep the executable file minimal.
+        _sub_text(config, "takeOffRefPoint", _takeoff_ref_point(mission, flight_plan))
+        _sub_text(config, "takeOffRefPointAGLHeight", "0")
+    _sub_text(config, "globalTransitionalSpeed", "15")
+    _sub_text(config, "globalRTHHeight", "100")
+
+    drone_info = ET.SubElement(config, _wpml_tag("droneInfo"))
+    _sub_text(drone_info, "droneEnumValue", drone_enum)
+    _sub_text(drone_info, "droneSubEnumValue", drone_sub)
+
+    _sub_text(config, "waylineAvoidLimitAreaMode", "0")
+
+    payload_info = ET.SubElement(config, _wpml_tag("payloadInfo"))
+    _sub_text(payload_info, "payloadEnumValue", payload_enum)
+    _sub_text(payload_info, "payloadSubEnumValue", payload_sub)
+    _sub_text(payload_info, "payloadPositionIndex", "0")
+
+
+_AIMED_WAYPOINT_TYPES = {"MEASUREMENT", "HOVER"}
+
+
+def _aims_at_target(wp) -> bool:
+    """true when the waypoint needs to rotate the aircraft toward a target.
+
+    only measurement/hover points have a camera target - takeoff, landing,
+    and transit points should keep the aircraft pointing along the flight
+    direction (followWayline), not rotated toward the stored heading.
+    """
+    return wp.waypoint_type in _AIMED_WAYPOINT_TYPES and wp.camera_target is not None
+
+
+def _normalize_heading(heading: float) -> float:
+    """wrap a compass bearing into dji's [-180, 180] range.
+
+    our bearing_between returns [0, 360); dji's aircraftHeading and
+    gimbalYawRotateAngle expect [-180, 180]. a raw 202° becomes -158°
+    (same physical direction, valid input).
+    """
+    return ((heading + 180.0) % 360.0) - 180.0
+
+
+def _append_heading_param(parent, wp, *, in_waylines: bool) -> None:
+    """attach waypointHeadingParam - followWayline across the board.
+
+    matches the working fh2 export pattern: placemark heading follows the
+    wayline, and the rotateYaw action at each reachPoint rotates the aircraft
+    to the target bearing. the gimbal then tracks the body via the m30
+    default Follow mode. this avoids the 'camera locked to north' issue where
+    smoothTransition + explicit yaw commands stopped fh2 from simulating
+    the gimbal follow.
+    """
+    _ = wp  # heading angle is always 0 at the placemark level; rotateYaw handles aim
+    heading_param = ET.SubElement(parent, _wpml_tag("waypointHeadingParam"))
+    _sub_text(heading_param, "waypointHeadingMode", "followWayline")
+    _sub_text(heading_param, "waypointHeadingAngle", "0")
+    _sub_text(heading_param, "waypointPoiPoint", "0.000000,0.000000,0.000000")
+    if in_waylines:
+        _sub_text(heading_param, "waypointHeadingAngleEnable", "0")
+    _sub_text(heading_param, "waypointHeadingPathMode", "followBadArc")
+    _sub_text(heading_param, "waypointHeadingPoiIndex", "0")
+
+
+def _append_turn_param(parent) -> None:
+    """attach waypointTurnParam - stop at each point for inspection missions."""
+    turn_param = ET.SubElement(parent, _wpml_tag("waypointTurnParam"))
+    _sub_text(turn_param, "waypointTurnMode", "toPointAndStopWithDiscontinuityCurvature")
+    _sub_text(turn_param, "waypointTurnDampingDist", "0.2")
+
+
+def _append_action_group(placemark, wp, index: int) -> None:
+    """emit a wpml:actionGroup covering yaw, gimbal, hover, and camera actions.
+
+    rotateYaw + gimbalRotate are only emitted for measurement/hover waypoints
+    with a camera target. takeoff / landing / transit points keep the nose
+    along flight direction and the gimbal in its default position.
+
+    order matches real dji exports: rotateYaw -> gimbalRotate -> hover -> camera.
+    """
+    camera_func = _DJI_CAMERA_ACTIONS.get(wp.camera_action)
+    hover_secs = wp.hover_duration or 0
+    aims = _aims_at_target(wp)
+    heading_val = wp.heading if aims else None
+    gimbal_pitch = getattr(wp, "gimbal_pitch", None) if aims else None
+
+    if not camera_func and hover_secs <= 0 and heading_val is None and gimbal_pitch is None:
+        return
+
+    group = ET.SubElement(placemark, _wpml_tag("actionGroup"))
+    _sub_text(group, "actionGroupId", str(index))
+    _sub_text(group, "actionGroupStartIndex", str(index))
+    _sub_text(group, "actionGroupEndIndex", str(index))
+    _sub_text(group, "actionGroupMode", "sequence")
+
+    trigger = ET.SubElement(group, _wpml_tag("actionTrigger"))
+    _sub_text(trigger, "actionTriggerType", "reachPoint")
+
+    action_id = 0
+
+    if heading_val is not None:
+        heading_val = _normalize_heading(heading_val)
+        action = ET.SubElement(group, _wpml_tag("action"))
+        _sub_text(action, "actionId", str(action_id))
+        _sub_text(action, "actionActuatorFunc", "rotateYaw")
+        params = ET.SubElement(action, _wpml_tag("actionActuatorFuncParam"))
+        _sub_text(params, "aircraftHeading", f"{heading_val:g}")
+        # path mode must match the sign of the target heading so the
+        # rotation takes the short way round. hardcoding counterClockwise
+        # with a positive target (e.g. 172°) forces a 188° wrap-around
+        # that fh2/firmware refuses to execute, leaving the aircraft +
+        # gimbal at their startup yaw (absolute north).
+        path_mode = "counterClockwise" if heading_val < 0 else "clockwise"
+        _sub_text(params, "aircraftPathMode", path_mode)
+        action_id += 1
+
+    if gimbal_pitch is not None:
+        action = ET.SubElement(group, _wpml_tag("action"))
+        _sub_text(action, "actionId", str(action_id))
+        _sub_text(action, "actionActuatorFunc", "gimbalRotate")
+        params = ET.SubElement(action, _wpml_tag("actionActuatorFuncParam"))
+        # matches fh2's own export: gimbal pitch is commanded, yaw is disabled.
+        # the aircraft's rotateYaw action (emitted just before this) aims the
+        # nose at the target; the gimbal then follows the body via the m30
+        # default Follow mode. explicit yaw commands here break fh2's gimbal-
+        # follow simulation and lock the camera to the commanded absolute angle.
+        _sub_text(params, "gimbalHeadingYawBase", "north")
+        _sub_text(params, "gimbalRotateMode", "absoluteAngle")
+        _sub_text(params, "gimbalPitchRotateEnable", "1")
+        _sub_text(params, "gimbalPitchRotateAngle", f"{gimbal_pitch:g}")
+        _sub_text(params, "gimbalRollRotateEnable", "0")
+        _sub_text(params, "gimbalRollRotateAngle", "0")
+        _sub_text(params, "gimbalYawRotateEnable", "0")
+        _sub_text(params, "gimbalYawRotateAngle", "0")
+        _sub_text(params, "gimbalRotateTimeEnable", "0")
+        _sub_text(params, "gimbalRotateTime", "0")
+        _sub_text(params, "payloadPositionIndex", "0")
+        action_id += 1
+
+    if hover_secs > 0:
+        action = ET.SubElement(group, _wpml_tag("action"))
+        _sub_text(action, "actionId", str(action_id))
+        _sub_text(action, "actionActuatorFunc", "hover")
+        params = ET.SubElement(action, _wpml_tag("actionActuatorFuncParam"))
+        _sub_text(params, "hoverTime", f"{hover_secs:g}")
+        action_id += 1
+
+    if camera_func:
+        action = ET.SubElement(group, _wpml_tag("action"))
+        _sub_text(action, "actionId", str(action_id))
+        _sub_text(action, "actionActuatorFunc", camera_func)
+        params = ET.SubElement(action, _wpml_tag("actionActuatorFuncParam"))
+        _sub_text(params, "payloadPositionIndex", "0")
+        if camera_func == "takePhoto":
+            _sub_text(params, "fileSuffix", "")
+            _sub_text(params, "useGlobalPayloadLensIndex", "1")
+        elif camera_func == "startRecord":
+            _sub_text(params, "useGlobalPayloadLensIndex", "1")
+
+
+def _append_placemark(folder, wp, airport_elevation: float, *, in_waylines: bool) -> None:
+    """add a wpml waypoint placemark.
+
+    waylines executeHeight is written as AGL relative to the takeoff point,
+    paired with executeHeightMode=relativeToStartPoint so fh2's renderer
+    anchors against the takeoff's screen-space position (no reliance on
+    fh2's terrain dem, which is unreliable for non-commercial airports).
+
+    template ellipsoidHeight / height stay as raw msl - they're only used
+    for preview and stay consistent with takeOffRefPoint.
+    """
+    lon, lat, alt = _extract_coords(wp.position)
+    msl = alt
+    agl = alt - airport_elevation
+
+    placemark = ET.SubElement(folder, _kml_tag("Placemark"))
+    point = ET.SubElement(placemark, _kml_tag("Point"))
+    ET.SubElement(point, _kml_tag("coordinates")).text = f"{lon:.8f},{lat:.8f}"
+
+    _sub_text(placemark, "index", str(wp.sequence_order))
+
+    if in_waylines:
+        _sub_text(placemark, "executeHeight", f"{agl:.6f}")
+    else:
+        _sub_text(placemark, "ellipsoidHeight", f"{msl:.6f}")
+        _sub_text(placemark, "height", f"{msl:.6f}")
+
+    _sub_text(placemark, "waypointSpeed", f"{wp.speed or 0:g}")
+    _append_heading_param(placemark, wp, in_waylines=in_waylines)
+    _append_turn_param(placemark)
+
+    # template placemark inherits all globals (speed, heading, turn). waylines
+    # placemark omits the useGlobal* flags (it's already executable). matches
+    # the working fh2 export exactly.
+    if not in_waylines:
+        _sub_text(placemark, "useGlobalSpeed", "1")
+        _sub_text(placemark, "useGlobalHeadingParam", "1")
+        _sub_text(placemark, "useGlobalTurnParam", "1")
+    _sub_text(placemark, "useStraightLine", "1")
+
+    _append_action_group(placemark, wp, wp.sequence_order)
+
+    if in_waylines:
+        # waylines always carries waypointGimbalHeadingParam with zeros, per
+        # the working fh2 export. with gimbalPitchMode=manual this block is
+        # informational; the actual aim comes from the actionGroup. template
+        # placemarks omit this block entirely.
+        gimbal_param = ET.SubElement(placemark, _wpml_tag("waypointGimbalHeadingParam"))
+        _sub_text(gimbal_param, "waypointGimbalPitchAngle", "0")
+        _sub_text(gimbal_param, "waypointGimbalYawAngle", "0")
+
+    _sub_text(placemark, "isRisky", "0")
+
+    if in_waylines:
+        _sub_text(placemark, "waypointWorkType", "0")
+
+
+def _append_payload_param(folder) -> None:
+    """attach the Folder-trailing wpml:payloadParam block.
+
+    values mirror the dji pilot 2 defaults for an h20t-class inspection payload;
+    flight hub 2 rejects the file if this block is missing.
+    """
+    payload = ET.SubElement(folder, _wpml_tag("payloadParam"))
+    _sub_text(payload, "payloadPositionIndex", "0")
+    _sub_text(payload, "focusMode", "firstPoint")
+    _sub_text(payload, "meteringMode", "average")
+    _sub_text(payload, "returnMode", "singleReturnStrongest")
+    _sub_text(payload, "samplingRate", "240000")
+    _sub_text(payload, "scanningMode", "repetitive")
+    _sub_text(payload, "imageFormat", "visable")
+    _sub_text(payload, "photoSize", "default_l")
+
+
+def _max_agl(waypoints, airport_elevation: float) -> float:
+    """highest AGL across the waypoint set, or 100m fallback when empty."""
+    heights = []
+    for wp in waypoints:
+        try:
+            _, _, alt = _extract_coords(wp.position)
+            heights.append(alt - airport_elevation)
+        except ValueError:
+            continue
+    return max(heights) if heights else 100.0
+
+
+def _build_dji_template_kml(
+    flight_plan: FlightPlan,
+    mission_name: str,
+    airport_elevation: float,
+    mission=None,
+    drone_profile=None,
+) -> bytes:
+    """build wpmz/template.kml - mission config plus reference waypoint template."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+    auto_speed = f"{waypoints[0].speed or 5:g}" if waypoints else "10"
+    # keep global ceiling above the highest waypoint so the drone honors per-point altitude
+    global_height = str(max(50, int(_max_agl(waypoints, airport_elevation) + 5)))
+    now = datetime.now(timezone.utc)
+    timestamp_ms = str(int(now.timestamp() * 1000))
+
+    kml = ET.Element(_kml_tag("kml"))
+    doc = ET.SubElement(kml, _kml_tag("Document"))
+    _sub_text(doc, "author", "TarmacView")
+    _sub_text(doc, "createTime", timestamp_ms)
+    _sub_text(doc, "updateTime", timestamp_ms)
+
+    _append_mission_config(doc, flight_plan, mission, drone_profile, in_waylines=False)
+
+    folder = ET.SubElement(doc, _kml_tag("Folder"))
+    _sub_text(folder, "templateType", "waypoint")
+    _sub_text(folder, "templateId", "0")
+
+    coord_sys = ET.SubElement(folder, _wpml_tag("waylineCoordinateSysParam"))
+    _sub_text(coord_sys, "coordinateMode", "WGS84")
+    _sub_text(coord_sys, "heightMode", "EGM96")
+
+    _sub_text(folder, "autoFlightSpeed", auto_speed)
+    _sub_text(folder, "globalHeight", global_height)
+    _sub_text(folder, "caliFlightEnable", "0")
+    # matches the working fh2 export - 'manual' means the gimbal is driven by
+    # the actionGroup gimbalRotate actions (not by waypointGimbalHeadingParam),
+    # which is what rotates the camera into target direction at each waypoint.
+    _sub_text(folder, "gimbalPitchMode", "manual")
+
+    global_heading = ET.SubElement(folder, _wpml_tag("globalWaypointHeadingParam"))
+    _sub_text(global_heading, "waypointHeadingMode", "followWayline")
+    _sub_text(global_heading, "waypointHeadingAngle", "0")
+    _sub_text(global_heading, "waypointPoiPoint", "0.000000,0.000000,0.000000")
+    _sub_text(global_heading, "waypointHeadingPathMode", "followBadArc")
+    _sub_text(global_heading, "waypointHeadingPoiIndex", "0")
+
+    _sub_text(folder, "globalWaypointTurnMode", "toPointAndStopWithDiscontinuityCurvature")
+    _sub_text(folder, "globalUseStraightLine", "1")
+
+    for wp in waypoints:
+        _append_placemark(folder, wp, airport_elevation, in_waylines=False)
+
+    _append_payload_param(folder)
+
+    return ET.tostring(kml, encoding="utf-8", xml_declaration=True)
+
+
+def _build_dji_waylines_wpml(
+    flight_plan: FlightPlan,
+    mission_name: str,
+    airport_elevation: float,
+    mission=None,
+    drone_profile=None,
+) -> bytes:
+    """build wpmz/waylines.wpml - executable wayline consumed by the aircraft."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+    auto_speed = f"{waypoints[0].speed or 5:g}" if waypoints else "10"
+
+    kml = ET.Element(_kml_tag("kml"))
+    doc = ET.SubElement(kml, _kml_tag("Document"))
+
+    _append_mission_config(doc, flight_plan, mission, drone_profile, in_waylines=True)
+
+    folder = ET.SubElement(doc, _kml_tag("Folder"))
+    _sub_text(folder, "templateId", "0")
+    # relativeToStartPoint: executeHeight is AGL relative to takeoff. fh2
+    # anchors against the takeoff's screen position in its 3d view so we
+    # don't depend on fh2's DEM being accurate at the airport (it isn't,
+    # for non-commercial fields like JARO). WGS84 / EGM96 modes asked fh2
+    # to place waypoints at absolute ellipsoidal or geoid heights, which
+    # rendered either under ground or floating above it depending on the
+    # dem quality at that coordinate.
+    _sub_text(folder, "executeHeightMode", "relativeToStartPoint")
+    _sub_text(folder, "waylineId", "0")
+    if flight_plan.total_distance is not None:
+        _sub_text(folder, "distance", f"{flight_plan.total_distance:g}")
+    if flight_plan.estimated_duration is not None:
+        _sub_text(folder, "duration", f"{flight_plan.estimated_duration:g}")
+    _sub_text(folder, "autoFlightSpeed", auto_speed)
+    _sub_text(folder, "realTimeFollowSurfaceByFov", "0")
+
+    for wp in waypoints:
+        _append_placemark(folder, wp, airport_elevation, in_waylines=True)
+
+    return ET.tostring(kml, encoding="utf-8", xml_declaration=True)
+
 
 def generate_wpml(
     flight_plan: FlightPlan,
     mission_name: str = "",
     airport_elevation: float = 0,
+    *,
+    mission=None,
+    drone_profile=None,
 ) -> bytes:
-    """serialize flight plan to dji wpml (waypoint mission) xml format."""
-    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
-
-    wpml = ET.Element("wpml")
-
-    # mission config
-    config = ET.SubElement(wpml, "missionConfig")
-    ET.SubElement(config, "flyToWaylineMode").text = "safely"
-    ET.SubElement(config, "finishAction").text = "goHome"
-    ET.SubElement(config, "maxFlightSpeed").text = "15"
-    auto_speed = str(waypoints[0].speed or 5) if waypoints else "5"
-    ET.SubElement(config, "autoFlightSpeed").text = auto_speed
-    drone_info = ET.SubElement(config, "droneInfo")
-    ET.SubElement(drone_info, "droneEnumValue").text = "68"
-    ET.SubElement(drone_info, "droneSubEnumValue").text = "0"
-
-    folder = ET.SubElement(wpml, "folder")
-    ET.SubElement(folder, "waylineId").text = "0"
-
-    wps_elem = ET.SubElement(folder, "waypoints")
-    for wp in waypoints:
-        lon, lat, alt = _extract_coords(wp.position)
-        agl = alt - airport_elevation
-
-        point = ET.SubElement(wps_elem, "waypoint")
-        ET.SubElement(point, "index").text = str(wp.sequence_order)
-        loc = ET.SubElement(point, "point")
-        ET.SubElement(loc, "latitude").text = f"{lat:.8f}"
-        ET.SubElement(loc, "longitude").text = f"{lon:.8f}"
-        ET.SubElement(point, "executeHeight").text = f"{agl:.2f}"
-        ET.SubElement(point, "waypointSpeed").text = str(wp.speed or 0)
-
-        heading_param = ET.SubElement(point, "waypointHeadingParam")
-        ET.SubElement(heading_param, "waypointHeadingMode").text = "smoothTransition"
-        ET.SubElement(heading_param, "waypointHeadingAngle").text = str(wp.heading or 0)
-
-        dji_action = _DJI_CAMERA_ACTIONS.get(wp.camera_action)
-        if dji_action:
-            action_group = ET.SubElement(point, "actionGroup")
-            ET.SubElement(action_group, "actionGroupId").text = "0"
-            action = ET.SubElement(action_group, "action")
-            ET.SubElement(action, "actionActuatorFunc").text = dji_action
-
-    return ET.tostring(wpml, encoding="utf-8", xml_declaration=True)
+    """serialize flight plan to dji waylines.wpml - the executable wayline file."""
+    return _build_dji_waylines_wpml(
+        flight_plan, mission_name, airport_elevation, mission, drone_profile
+    )
 
 
 # litchi camera action codes
@@ -623,17 +1022,21 @@ _EXPORT_GENERATORS = {
 
 
 def _sanitize_filename(name: str) -> str:
-    """remove characters unsafe for content-disposition header filenames."""
-    # strip non-ASCII for RFC 7230 compliance
+    """produce a base filename safe for content-disposition AND dji flight hub 2.
+
+    fh2 rejects flight route names containing < > : " / | ? * . _ — so we
+    strip those (plus backslash and control chars), collapse whitespace, and
+    fall back to "mission" when everything gets stripped away.
+    """
     sanitized = name.encode("ascii", errors="ignore").decode("ascii")
 
-    # strip control characters (RFC 7230 prohibits octets 0-31 and 127)
+    # control chars (RFC 7230 prohibits 0-31 and 127)
     sanitized = re.sub(r"[\x00-\x1f\x7f]", "", sanitized)
-    sanitized = re.sub(r'["\\/]', "", sanitized)
+    # fh2-banned chars + backslash - replace with space so adjacent words do not merge
+    sanitized = re.sub(r'[<>:"/|?*._\\]', " ", sanitized)
+    # collapse repeated whitespace into a single space
+    sanitized = re.sub(r"\s+", " ", sanitized)
 
-    # prevent path traversal sequences
-    while ".." in sanitized:
-        sanitized = sanitized.replace("..", "")
     return sanitized.strip() or "mission"
 
 
@@ -690,11 +1093,29 @@ def export_mission(
 
     safe_name = _sanitize_filename(mission.name)
 
+    # load the drone profile for dji enum lookup - cheap, single-row query, only
+    # needed for KMZ/WPML but simpler than branching inside the loop.
+    drone_profile = None
+    if mission.drone_profile_id is not None:
+        drone_profile = (
+            db.query(DroneProfile).filter(DroneProfile.id == mission.drone_profile_id).first()
+        )
+
     files: dict[str, tuple[bytes, str]] = {}
     for fmt in formats:
         generator = _EXPORT_GENERATORS[fmt]
         content_type, ext = _EXPORT_CONTENT_TYPES[fmt]
-        filename = f"mission_{safe_name}.{ext}"
-        files[filename] = (generator(flight_plan, mission.name, airport_elevation), content_type)
+        filename = f"{safe_name}.{ext}"
+        if fmt in ("KMZ", "WPML"):
+            content = generator(
+                flight_plan,
+                mission.name,
+                airport_elevation,
+                mission=mission,
+                drone_profile=drone_profile,
+            )
+        else:
+            content = generator(flight_plan, mission.name, airport_elevation)
+        files[filename] = (content, content_type)
 
     return files, safe_name
