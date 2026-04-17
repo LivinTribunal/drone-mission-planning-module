@@ -127,12 +127,6 @@ export function waypointsToGeoJSON(
       const ids = group.map((w) => w.id).join(",");
       const seqs = group.map((w) => w.sequence_order);
 
-      console.debug(
-        `[waypointLayers] stack at ${coordKey(group[0].position.coordinates[0], group[0].position.coordinates[1])}: ` +
-        `${group.length} wps, types=[${group.map((w) => w.waypoint_type).join(",")}], ` +
-        `representative=${representative.waypoint_type}`,
-      );
-
       features.push({
         type: "Feature",
         properties: {
@@ -216,14 +210,6 @@ export function waypointsToGeoJSON(
     const idx = features.findIndex((f) => f.properties?.waypoint_type === "LANDING");
     if (idx >= 0) features.splice(idx, 1);
   }
-
-  // log type distribution for debugging
-  const typeCounts: Record<string, number> = {};
-  for (const f of features) {
-    const t = f.properties?.waypoint_type as string;
-    typeCounts[t] = (typeCounts[t] ?? 0) + 1;
-  }
-  console.debug("[waypointLayers] geojson feature types:", typeCounts, `(${features.length} total)`);
 
   return { type: "FeatureCollection", features };
 }
