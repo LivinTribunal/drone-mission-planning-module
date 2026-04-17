@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
 import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
-import { getMission, getFlightPlan, generateTrajectory } from "@/api/missions";
+import { getMission, getFlightPlan, generateTrajectory, downloadFlightBrief } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -42,6 +42,7 @@ export default function MissionOverviewPage() {
   const [selectedWarning, setSelectedWarning] = useState<ValidationViolation | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
+  const [isDownloadingBrief, setIsDownloadingBrief] = useState(false);
 
   const inspectionIndexMap = useMemo(() => {
     if (!mission) return undefined;
@@ -77,6 +78,33 @@ export default function MissionOverviewPage() {
       setComputing(false);
     }
   }, [id, mission, t, refreshMissions, showNotification]);
+
+  const handleDownloadBrief = useCallback(async () => {
+    if (!id || !mission) return;
+    setIsDownloadingBrief(true);
+    try {
+      const { blob, filename } = await downloadFlightBrief(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename ?? `FlightBrief_${mission.name}.pdf`;
+      document.body.appendChild(a);
+      try {
+        a.click();
+      } finally {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      showNotification(
+        isAxiosError(err) && err.response?.data?.detail
+          ? String(err.response.data.detail)
+          : t("mission.flightBrief.error"),
+      );
+    } finally {
+      setIsDownloadingBrief(false);
+    }
+  }, [id, mission, t, showNotification]);
 
   // wire up disabled save button
   useEffect(() => {
@@ -223,6 +251,28 @@ export default function MissionOverviewPage() {
               selectedWarningId={selectedWarning?.id}
             />
           </div>
+
+          {/* flight brief download */}
+          <button
+            onClick={handleDownloadBrief}
+            disabled={!flightPlan || isDownloadingBrief}
+            title={!flightPlan ? t("mission.flightBrief.noFlightPlan") : undefined}
+            className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-full border transition-colors ${
+              flightPlan && !isDownloadingBrief
+                ? "border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover"
+                : "opacity-50 cursor-not-allowed border-tv-border bg-tv-surface text-tv-text-muted"
+            }`}
+            data-testid="overview-download-brief-btn"
+          >
+            {isDownloadingBrief ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            {isDownloadingBrief
+              ? t("mission.flightBrief.generating")
+              : t("mission.flightBrief.download")}
+          </button>
 
         </>,
         leftPanelEl,

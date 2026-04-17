@@ -101,6 +101,15 @@ function parseContentDispositionFilename(
   return plain?.[1] ?? null;
 }
 
+export async function downloadFlightBrief(
+  id: string,
+): Promise<{ blob: Blob; filename: string | null }> {
+  const res = await client.get(`/missions/${id}/flight-brief`, {
+    responseType: "blob",
+  });
+  return { blob: res.data, filename: parseContentDispositionFilename(res.headers) };
+}
+
 export async function completeMission(
   id: string,
 ): Promise<MissionResponse> {

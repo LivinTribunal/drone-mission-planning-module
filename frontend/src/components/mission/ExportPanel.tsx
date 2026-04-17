@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronUp, Download } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, FileText, Loader2 } from "lucide-react";
 import type { MissionStatus } from "@/types/enums";
 import type { MissionDetailResponse } from "@/types/mission";
 import Button from "@/components/common/Button";
@@ -14,6 +14,9 @@ export interface ExportPanelProps {
   onDelete: () => void;
   isExporting: boolean;
   statsSlot?: ReactNode;
+  onDownloadBrief?: () => void;
+  isDownloadingBrief?: boolean;
+  hasFlightPlan?: boolean;
 }
 
 const EXPORT_FORMATS = [
@@ -45,6 +48,9 @@ export default function ExportPanel({
   onDelete,
   isExporting,
   statsSlot,
+  onDownloadBrief,
+  isDownloadingBrief = false,
+  hasFlightPlan = false,
 }: ExportPanelProps) {
   const { t } = useTranslation();
   const [exportCollapsed, setExportCollapsed] = useState(false);
@@ -211,6 +217,35 @@ export default function ExportPanel({
             </Button>
           </div>
         )}
+      </div>
+
+      {/* flight brief */}
+      <div className="bg-tv-surface border border-tv-border rounded-2xl p-4" data-testid="flight-brief-section">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border text-sm font-semibold text-tv-text-primary">
+            {t("mission.flightBrief.title")}
+          </span>
+        </div>
+        <p className="text-xs text-tv-text-muted mb-3">
+          {t("mission.flightBrief.description")}
+        </p>
+        <Button
+          variant="secondary"
+          onClick={onDownloadBrief}
+          disabled={!hasFlightPlan || isDownloadingBrief || !onDownloadBrief}
+          title={!hasFlightPlan ? t("mission.flightBrief.noFlightPlan") : undefined}
+          className="w-full flex items-center justify-center gap-2"
+          data-testid="download-brief-btn"
+        >
+          {isDownloadingBrief ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <FileText className="h-4 w-4" />
+          )}
+          {isDownloadingBrief
+            ? t("mission.flightBrief.generating")
+            : t("mission.flightBrief.download")}
+        </Button>
       </div>
 
       {statsSlot}

@@ -9,6 +9,7 @@ import {
   getFlightPlan,
   validateMission,
   exportMissionFiles,
+  downloadFlightBrief,
   completeMission,
   cancelMission,
   deleteMission,
@@ -44,6 +45,7 @@ export default function MissionValidationPage() {
   const [error, setError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isDownloadingBrief, setIsDownloadingBrief] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">(
     "satellite",
@@ -203,6 +205,30 @@ export default function MissionValidationPage() {
       showNotification(t("mission.validationExportPage.exportError"));
     } finally {
       setIsExporting(false);
+    }
+  }
+
+  async function handleDownloadBrief() {
+    if (!id || !mission) return;
+    setIsDownloadingBrief(true);
+    try {
+      const { blob, filename } = await downloadFlightBrief(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename ?? `FlightBrief_${mission.name}.pdf`;
+      document.body.appendChild(a);
+      try {
+        a.click();
+      } finally {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      console.error("flight brief failed:", err instanceof Error ? err.message : String(err));
+      showNotification(t("mission.flightBrief.error"));
+    } finally {
+      setIsDownloadingBrief(false);
     }
   }
 
@@ -411,6 +437,9 @@ export default function MissionValidationPage() {
               onCancel={handleCancel}
               onDelete={handleDelete}
               isExporting={isExporting}
+              onDownloadBrief={handleDownloadBrief}
+              isDownloadingBrief={isDownloadingBrief}
+              hasFlightPlan={flightPlan !== null}
               statsSlot={
                 <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
                   <StatsPanel
