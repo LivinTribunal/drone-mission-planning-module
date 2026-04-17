@@ -123,7 +123,7 @@ def export_mission(mission_id: UUID, body: ExportRequest, db: Session = Depends(
     )
 
 
-@router.get("/{mission_id}/flight-brief")
+@router.get("/{mission_id}/flight-brief", response_class=Response)
 def get_flight_brief(mission_id: UUID, db: Session = Depends(get_db)):
     """generate and download flight brief pdf for atc coordination."""
     pdf_bytes, filename = flight_brief_service.generate_flight_brief(db, mission_id)

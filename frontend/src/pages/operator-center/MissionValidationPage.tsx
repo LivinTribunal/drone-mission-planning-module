@@ -163,7 +163,7 @@ export default function MissionValidationPage() {
       setNotification(msg);
       notificationTimer.current = setTimeout(() => setNotification(null), 4000);
     },
-    [notificationTimer],
+    [],
   );
 
   const { isDownloadingBrief, handleDownloadBrief } = useDownloadFlightBrief(

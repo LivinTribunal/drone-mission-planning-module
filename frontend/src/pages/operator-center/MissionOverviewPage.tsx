@@ -2,17 +2,15 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FileText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
 import { getMission, getFlightPlan, generateTrajectory } from "@/api/missions";
-import useDownloadFlightBrief from "@/hooks/useDownloadFlightBrief";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { DroneProfileResponse } from "@/types/droneProfile";
 import type { FlightPlanResponse, ValidationViolation } from "@/types/flightPlan";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
-import Button from "@/components/common/Button";
 import MissionInfoPanel from "@/components/mission/MissionInfoPanel";
 import WarningsPanel from "@/components/mission/WarningsPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
@@ -78,12 +76,6 @@ export default function MissionOverviewPage() {
       setComputing(false);
     }
   }, [id, mission, t, refreshMissions, showNotification]);
-
-  const { isDownloadingBrief, handleDownloadBrief } = useDownloadFlightBrief(
-    id,
-    mission?.name,
-    showNotification,
-  );
 
   // wire up disabled save button
   useEffect(() => {
@@ -230,25 +222,6 @@ export default function MissionOverviewPage() {
               selectedWarningId={selectedWarning?.id}
             />
           </div>
-
-          {/* flight brief download */}
-          <Button
-            variant="secondary"
-            onClick={handleDownloadBrief}
-            disabled={!flightPlan || isDownloadingBrief}
-            title={!flightPlan ? t("mission.flightBrief.noFlightPlan") : undefined}
-            className="w-full flex items-center justify-center gap-2"
-            data-testid="overview-download-brief-btn"
-          >
-            {isDownloadingBrief ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <FileText className="h-4 w-4" />
-            )}
-            {isDownloadingBrief
-              ? t("mission.flightBrief.generating")
-              : t("mission.flightBrief.download")}
-          </Button>
 
         </>,
         leftPanelEl,

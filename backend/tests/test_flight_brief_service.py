@@ -409,3 +409,66 @@ class TestHelpers:
         """point far from all edges returns false."""
         poly = [(0, 0), (0.001, 0), (0.001, 0.001), (0, 0.001), (0, 0)]
         assert flight_brief_service._point_near_polygon(1.0, 1.0, poly, 50) is False
+
+
+class TestBuildActivities:
+    """tests for the timeline activity builder."""
+
+    def test_basic_activity_sequence(self):
+        """activities are built with correct names and colors."""
+        data = _make_brief_data(num_waypoints=5, num_inspections=1)
+        activities = flight_brief_service._build_activities(data)
+
+        names = [a["name"] for a in activities]
+        assert "Takeoff" in names
+        assert "Landing" in names
+
+    def test_activity_colors_match_type(self):
+        """each activity gets the correct color for its type."""
+        data = _make_brief_data(num_waypoints=5, num_inspections=1)
+        activities = flight_brief_service._build_activities(data)
+
+        for act in activities:
+            if act["name"] == "Takeoff":
+                assert act["color"] == "#3bbb3b"
+            elif act["name"] == "Landing":
+                assert act["color"] == "#e54545"
+            elif act["name"] == "Transit":
+                assert act["color"] == "#888888"
+
+    def test_no_zero_duration_activities(self):
+        """all returned activities have positive duration."""
+        data = _make_brief_data(num_waypoints=10, num_inspections=2)
+        activities = flight_brief_service._build_activities(data)
+
+        for act in activities:
+            assert act["duration"] > 0
+
+    def test_empty_waypoints(self):
+        """empty waypoint list produces no activities."""
+        data = _make_brief_data(num_waypoints=0, num_inspections=0)
+        data.waypoints = []
+        activities = flight_brief_service._build_activities(data)
+
+        assert activities == []
+
+
+class TestRouteEndpoint:
+    """tests for the flight brief route."""
+
+    @patch.object(flight_brief_service, "generate_flight_brief")
+    def test_get_flight_brief_returns_pdf(self, mock_gen):
+        """endpoint returns pdf with correct content type."""
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        mock_gen.return_value = (b"%PDF-1.4 fake", "FlightBrief_LZTT_Test_2026-04-17.pdf")
+        client = TestClient(app)
+        fake_id = str(uuid4())
+        resp = client.get(f"/api/v1/missions/{fake_id}/flight-brief")
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "application/pdf"
+        assert "FlightBrief_LZTT_Test" in resp.headers["content-disposition"]
+        assert resp.content == b"%PDF-1.4 fake"
