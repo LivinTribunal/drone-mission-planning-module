@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field, field_validator
 from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
 
+# flight plan scope values - mirrors FlightPlanScope enum
+FlightPlanScopeStr = Literal["FULL", "NO_TAKEOFF_LANDING", "MEASUREMENTS_ONLY"]
+
 # inspection method values - mirrors InspectionMethod enum
 InspectionMethodStr = Literal[
     "VERTICAL_PROFILE",
@@ -154,6 +157,7 @@ class MissionCreate(BaseModel):
     default_buffer_distance: float | None = Field(default=None, ge=0)
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool = True
+    flight_plan_scope: FlightPlanScopeStr = "FULL"
 
     @field_validator("transit_agl")
     @classmethod
@@ -178,6 +182,7 @@ class MissionUpdate(BaseModel):
     default_buffer_distance: float | None = Field(default=None, ge=0)
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool | None = None
+    flight_plan_scope: FlightPlanScopeStr | None = None
 
     @field_validator("transit_agl")
     @classmethod
@@ -207,6 +212,7 @@ class MissionResponse(BaseModel):
     default_buffer_distance: float | None = None
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool = True
+    flight_plan_scope: FlightPlanScopeStr = "FULL"
     has_unsaved_map_changes: bool = False
     inspection_count: int = 0
     estimated_duration: float | None = None

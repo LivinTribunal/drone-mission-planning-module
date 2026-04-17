@@ -123,7 +123,7 @@ export interface AirportMapHandle {
 
 const GLYPHS_URL =
   import.meta.env.VITE_GLYPHS_URL ??
-  "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf";
+  "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
 
 /** polls map.isStyleLoaded() until true, then calls callback. returns cancel fn. */
 function waitForStyleLoaded(
@@ -342,6 +342,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   onWarningClose,
   pendingGeometry,
   pendingPointPosition,
+  flightPlanScope,
 }, ref) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1438,6 +1439,22 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       return () => { cancelled = true; };
     }
   }, [waypoints, takeoffCoordinate, landingCoordinate, inspectionIndexMap, addWaypointLayers]);
+
+  // hide takeoff/landing waypoint symbols when scope omits them
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const show = !flightPlanScope || flightPlanScope === "FULL";
+    const visibility = show ? "visible" : "none";
+    try {
+      if (map.getLayer(WAYPOINT_TAKEOFF_LAYER))
+        map.setLayoutProperty(WAYPOINT_TAKEOFF_LAYER, "visibility", visibility);
+      if (map.getLayer(WAYPOINT_LANDING_LAYER))
+        map.setLayoutProperty(WAYPOINT_LANDING_LAYER, "visibility", visibility);
+    } catch {
+      // layers may not exist yet
+    }
+  }, [flightPlanScope, waypoints]);
 
   // update selected waypoint highlight and feature info
   useEffect(() => {

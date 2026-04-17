@@ -108,6 +108,7 @@ export interface AirportMapProps {
   terrainMode?: "map" | "satellite";
   onTerrainChange?: (mode: "map" | "satellite") => void;
   missionStatus?: MissionStatus;
+  flightPlanScope?: string;
   onMapClick?: (lngLat: { lng: number; lat: number }) => void;
   visibleInspectionIds?: Set<string>;
   takeoffCoordinate?: PointZ | null;

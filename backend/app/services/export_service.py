@@ -1091,7 +1091,12 @@ def export_mission(
         except ValueError as e:
             raise DomainError("invalid status transition", status_code=409) from e
 
-    safe_name = _sanitize_filename(mission.name)
+    scope = mission.flight_plan_scope or "FULL"
+    scope_suffix = {
+        "NO_TAKEOFF_LANDING": " no tl",
+        "MEASUREMENTS_ONLY": " measurements only",
+    }.get(scope, "")
+    safe_name = _sanitize_filename(mission.name + scope_suffix)
 
     # load the drone profile for dji enum lookup - cheap, single-row query, only
     # needed for KMZ/WPML but simpler than branching inside the loop.

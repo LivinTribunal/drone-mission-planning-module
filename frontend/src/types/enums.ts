@@ -22,7 +22,17 @@ export type CameraAction =
 
 export type CaptureMode = "VIDEO_CAPTURE" | "PHOTO_CAPTURE";
 
-export type ExportFormat = "MAVLINK" | "KML" | "KMZ" | "JSON" | "UGCS";
+export type ExportFormat =
+  | "MAVLINK"
+  | "KML"
+  | "KMZ"
+  | "JSON"
+  | "UGCS"
+  | "WPML"
+  | "CSV"
+  | "GPX"
+  | "LITCHI"
+  | "DRONEDEPLOY";
 
 export type InspectionMethod =
   | "VERTICAL_PROFILE"
@@ -50,6 +60,8 @@ export type LampType = "HALOGEN" | "LED";
 export type PAPISide = "LEFT" | "RIGHT";
 
 export type SurfaceType = "RUNWAY" | "TAXIWAY";
+
+export type FlightPlanScope = "FULL" | "NO_TAKEOFF_LANDING" | "MEASUREMENTS_ONLY";
 
 export type ConstraintType = "NO_FLY" | "ALTITUDE_LIMIT" | "SPEED_LIMIT";
 
