@@ -157,11 +157,14 @@ export default function MissionValidationPage() {
     };
   }, []);
 
-  function showNotification(msg: string) {
-    if (notificationTimer.current) clearTimeout(notificationTimer.current);
-    setNotification(msg);
-    notificationTimer.current = setTimeout(() => setNotification(null), 4000);
-  }
+  const showNotification = useCallback(
+    (msg: string) => {
+      if (notificationTimer.current) clearTimeout(notificationTimer.current);
+      setNotification(msg);
+      notificationTimer.current = setTimeout(() => setNotification(null), 4000);
+    },
+    [notificationTimer],
+  );
 
   const { isDownloadingBrief, handleDownloadBrief } = useDownloadFlightBrief(
     id,

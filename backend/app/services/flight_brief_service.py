@@ -810,6 +810,7 @@ def _build_timeline_page(c: canvas.Canvas, data: BriefData):
     c.setFillColor(colors.HexColor("#555555"))
 
     elapsed = 0.0
+    prev_coords = None
     for wp in data.waypoints[:30]:
         if y < 20 * mm:
             break
@@ -828,10 +829,13 @@ def _build_timeline_page(c: canvas.Canvas, data: BriefData):
         y -= 4 * mm
 
         # estimate time advance
-        if wp.speed and wp.speed > 0:
-            elapsed += 10.0  # approximate segment time
+        if prev_coords and wp.speed and wp.speed > 0:
+            dist = _haversine(prev_coords[0], prev_coords[1], lon, lat)
+            elapsed += dist / wp.speed
         if wp.hover_duration:
             elapsed += wp.hover_duration
+
+        prev_coords = (lon, lat)
 
     _draw_footer(c)
     c.showPage()
@@ -1357,9 +1361,15 @@ def _point_near_polygon(
     for i in range(len(polygon) - 1):
         x1, y1 = polygon[i]
         x2, y2 = polygon[i + 1]
-        mid_x = (x1 + x2) / 2
-        mid_y = (y1 + y2) / 2
-        dist = _haversine(px, py, mid_x, mid_y)
+        dx, dy = x2 - x1, y2 - y1
+        len_sq = dx * dx + dy * dy
+        if len_sq == 0:
+            nearest_x, nearest_y = x1, y1
+        else:
+            t = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / len_sq))
+            nearest_x = x1 + t * dx
+            nearest_y = y1 + t * dy
+        dist = _haversine(px, py, nearest_x, nearest_y)
         if dist < threshold_m:
             return True
     return _point_in_polygon(px, py, polygon)

@@ -394,3 +394,18 @@ class TestHelpers:
         assert lon == 0.0
         assert lat == 0.0
         assert alt == 0.0
+
+    def test_point_near_polygon_near_midpoint(self):
+        """point close to edge midpoint is detected."""
+        poly = [(0, 0), (0.01, 0), (0.01, 0.01), (0, 0.01), (0, 0)]
+        assert flight_brief_service._point_near_polygon(0.005, 0.0001, poly, 50) is True
+
+    def test_point_near_polygon_near_endpoint(self):
+        """point near edge endpoint - not just midpoint - is detected."""
+        poly = [(0, 0), (0.1, 0), (0.1, 0.1), (0, 0.1), (0, 0)]
+        assert flight_brief_service._point_near_polygon(0.0001, 0.0001, poly, 50) is True
+
+    def test_point_near_polygon_far_away(self):
+        """point far from all edges returns false."""
+        poly = [(0, 0), (0.001, 0), (0.001, 0.001), (0, 0.001), (0, 0)]
+        assert flight_brief_service._point_near_polygon(1.0, 1.0, poly, 50) is False
