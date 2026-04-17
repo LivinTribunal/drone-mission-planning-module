@@ -504,6 +504,8 @@ def calculate_arc_path(
     # arc centered on approach heading (facing PAPI front)
     approach = _opposite_bearing(runway_heading)
 
+    measurement_speed = _resolve_measurement_speed(config, speed)
+
     waypoints = []
     for i in range(density):
         # interpolate angle from -sweep to +sweep in density steps
@@ -532,7 +534,7 @@ def calculate_arc_path(
                 lat=lat,
                 alt=arc_alt,
                 heading=heading_to_center,
-                speed=speed,
+                speed=measurement_speed,
                 waypoint_type=WaypointType.MEASUREMENT,
                 camera_action=cam_action,
                 camera_target=center,

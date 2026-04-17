@@ -9,6 +9,8 @@ import pytest
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
 from app.services.trajectory_computation import (
     calculate_arc_path,
+    calculate_fly_over_path,
+    calculate_parallel_side_sweep_path,
     calculate_vertical_path,
     check_sensor_fov,
     check_speed_framerate,
@@ -364,6 +366,23 @@ class TestCalculateArcPath:
         wps = calculate_arc_path(center, 60.0, 3.0, config, insp_id, 5.0)
         assert all(wp.inspection_id == insp_id for wp in wps)
 
+    def test_measurement_speed_override_applies(self):
+        """measurement_speed_override wins over transit speed."""
+        config = self._default_config(measurement_speed_override=2.0)
+        center = Point3D(lon=14.26, lat=50.1, alt=300.0)
+        wps = calculate_arc_path(center, 60.0, 3.0, config, uuid4(), 7.0)
+        assert wps, "expected at least one waypoint"
+        for wp in wps:
+            assert wp.speed == 2.0
+
+    def test_measurement_speed_falls_back_to_transit(self):
+        """without measurement_speed_override, waypoints use the transit speed."""
+        config = self._default_config()
+        center = Point3D(lon=14.26, lat=50.1, alt=300.0)
+        wps = calculate_arc_path(center, 60.0, 3.0, config, uuid4(), 7.0)
+        for wp in wps:
+            assert wp.speed == 7.0
+
 
 # calculate_vertical_path
 
@@ -534,3 +553,78 @@ class TestComputeMeasurementTrajectory:
         # flat terrain should produce same altitudes as no terrain correction
         for flat, raw in zip(wps_flat, wps_no_terrain):
             assert abs(flat.alt - raw.alt) < 0.1
+
+
+# calculate_fly_over_path
+
+
+class TestCalculateFlyOverPath:
+    """tests for fly-over path measurement speed handling."""
+
+    @staticmethod
+    def _lha_row() -> list[Point3D]:
+        """two LHA positions forming a short row."""
+        return [
+            Point3D(lon=14.260, lat=50.100, alt=300.0),
+            Point3D(lon=14.261, lat=50.100, alt=300.0),
+        ]
+
+    def test_measurement_speed_override_applies(self):
+        """measurement_speed_override wins over transit speed."""
+        config = ResolvedConfig(
+            measurement_speed_override=2.0,
+            capture_mode="PHOTO_CAPTURE",
+        )
+        wps = calculate_fly_over_path(self._lha_row(), config, uuid4(), 7.0)
+        assert wps, "expected at least one waypoint"
+        for wp in wps:
+            assert wp.speed == 2.0
+
+    def test_measurement_speed_falls_back_to_transit(self):
+        """without measurement_speed_override, waypoints use the transit speed."""
+        config = ResolvedConfig(capture_mode="PHOTO_CAPTURE")
+        wps = calculate_fly_over_path(self._lha_row(), config, uuid4(), 7.0)
+        for wp in wps:
+            assert wp.speed == 7.0
+
+
+# calculate_parallel_side_sweep_path
+
+
+class TestCalculateParallelSideSweepPath:
+    """tests for parallel-side-sweep path measurement speed handling."""
+
+    @staticmethod
+    def _lha_row() -> list[Point3D]:
+        """two LHA positions forming a short row."""
+        return [
+            Point3D(lon=14.260, lat=50.100, alt=300.0),
+            Point3D(lon=14.261, lat=50.100, alt=300.0),
+        ]
+
+    @staticmethod
+    def _runway_center() -> Point3D:
+        """runway centerline reference point."""
+        return Point3D(lon=14.2605, lat=50.101, alt=300.0)
+
+    def test_measurement_speed_override_applies(self):
+        """measurement_speed_override wins over transit speed."""
+        config = ResolvedConfig(
+            measurement_speed_override=2.0,
+            capture_mode="PHOTO_CAPTURE",
+        )
+        wps = calculate_parallel_side_sweep_path(
+            self._lha_row(), self._runway_center(), config, uuid4(), 7.0
+        )
+        assert wps, "expected at least one waypoint"
+        for wp in wps:
+            assert wp.speed == 2.0
+
+    def test_measurement_speed_falls_back_to_transit(self):
+        """without measurement_speed_override, waypoints use the transit speed."""
+        config = ResolvedConfig(capture_mode="PHOTO_CAPTURE")
+        wps = calculate_parallel_side_sweep_path(
+            self._lha_row(), self._runway_center(), config, uuid4(), 7.0
+        )
+        for wp in wps:
+            assert wp.speed == 7.0

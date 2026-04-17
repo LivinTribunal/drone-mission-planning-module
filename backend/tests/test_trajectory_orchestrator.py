@@ -1149,6 +1149,6 @@ def test_measurement_speed_override_governs_only_measurement_waypoints(client):
     # at least one TRANSIT waypoint should carry the speed_override
     # (inspection-owned climb/descent transits use the resolved per-inspection speed)
     transit_speeds = [wp["speed"] for wp in fp["waypoints"] if wp["waypoint_type"] == "TRANSIT"]
-    assert any(
-        s == pytest.approx(7.0) for s in transit_speeds
-    ), f"expected at least one transit at speed_override=7.0, got speeds: {transit_speeds}"
+    assert any(s == pytest.approx(7.0) for s in transit_speeds), (
+        f"expected at least one transit at speed_override=7.0, got speeds: {transit_speeds}"
+    )

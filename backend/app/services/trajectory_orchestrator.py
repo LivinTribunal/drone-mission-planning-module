@@ -482,6 +482,14 @@ def _generate_trajectory_inner(
             if warning:
                 warnings.append((warning, []))
 
+            # separate check for measurement speed when it differs from transit
+            if config.measurement_speed_override is not None:
+                ms_warning = check_speed_framerate(
+                    config.measurement_speed_override, drone, optimal_speed
+                )
+                if ms_warning:
+                    warnings.append((f"measurement speed: {ms_warning}", []))
+
         # FOV check only applies to methods where the drone hovers/approaches at a fixed
         # standoff radius - fly-over and parallel-side-sweep fly along the lights so
         # horizontal_distance is not a meaningful approach distance for them.
