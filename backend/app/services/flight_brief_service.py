@@ -18,7 +18,8 @@ from reportlab.pdfgen import canvas
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models.airport import Airport
+from app.models.agl import AGL
+from app.models.airport import AirfieldSurface, Airport
 from app.models.flight_plan import (
     ConstraintRule,
     FlightPlan,
@@ -146,22 +147,27 @@ def generate_flight_brief(db: Session, mission_id: UUID) -> tuple[bytes, str]:
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
 
-    _build_cover_page(c, data)
-    _build_inspection_detail_pages(c, data)
-    _build_2d_map_page(c, data)
-    _build_altitude_profile_page(c, data)
-    _build_timeline_page(c, data)
-    _build_waypoint_table_page(c, data)
-    _build_crossing_analysis_page(c, data)
-    _build_validation_summary_page(c, data)
-
-    c.save()
-
     icao = data.airport.icao_code or "XXXX"
     mission_name = _sanitize_filename(data.mission.name or "Mission")
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    filename = f"FlightBrief_{icao}_{mission_name}_{date_str}.pdf"
+    pdf_title = f"FlightBrief_{icao}_{mission_name}_{date_str}"
+    c.setTitle(pdf_title)
 
+    page = 1
+    _build_cover_page(c, data)
+    if data.inspections:
+        page += 1
+    page = _build_inspection_detail_pages(c, data, page + 1)
+    page = _build_2d_map_page(c, data, page + 1)
+    page = _build_altitude_profile_page(c, data, page + 1)
+    page = _build_timeline_page(c, data, page + 1)
+    page = _build_waypoint_table_page(c, data, page + 1)
+    page = _build_crossing_analysis_page(c, data, page + 1)
+    _build_validation_summary_page(c, data, page + 1)
+
+    c.save()
+
+    filename = f"{pdf_title}.pdf"
     return buf.getvalue(), filename
 
 
@@ -197,7 +203,9 @@ def _load_brief_data(db: Session, mission_id: UUID) -> BriefData:
     airport = (
         db.query(Airport)
         .options(
-            joinedload(Airport.surfaces),
+            joinedload(Airport.surfaces)
+            .joinedload(AirfieldSurface.agls)
+            .joinedload(AGL.lhas),
             joinedload(Airport.safety_zones),
         )
         .filter(Airport.id == mission.airport_id)
@@ -302,8 +310,7 @@ def _build_cover_page(c: canvas.Canvas, data: BriefData):
     c.drawString(MARGIN + 10 * mm, y, "Mission")
     y -= 8 * mm
     y = _label_value("Name", data.mission.name or "N/A", y)
-    y = _label_value("ID", str(data.mission.id)[:8] + "...", y)
-    y = _label_value("Status", data.mission.status, y)
+    y = _label_value("ID", str(data.mission.id), y)
     y -= 5 * mm
 
     # drone info
@@ -322,10 +329,24 @@ def _build_cover_page(c: canvas.Canvas, data: BriefData):
     c.setFillColor(colors.HexColor("#333333"))
     c.drawString(MARGIN + 10 * mm, y, "Flight Summary")
     y -= 8 * mm
+    y = _label_value("Operator", "N/A", y)
     y = _label_value("Total Flight Time", _format_duration(data.flight_plan.estimated_duration), y)
     y = _label_value("Total Distance", _format_distance(data.flight_plan.total_distance), y)
+    transit_speed = data.mission.default_speed
+    y = _label_value("Transit Speed", f"{transit_speed} m/s" if transit_speed else "N/A", y)
     y = _label_value("Inspections", str(len(data.inspections)), y)
     y = _label_value("Waypoints", str(len(data.waypoints)), y)
+
+    # min/max altitude from waypoints
+    airport_elev = data.airport.elevation if data.airport and data.airport.elevation else 0
+    if data.waypoints:
+        alts = [_extract_coords(w.position)[2] for w in data.waypoints]
+        min_msl = min(alts)
+        max_msl = max(alts)
+        min_agl = min_msl - airport_elev
+        max_agl = max_msl - airport_elev
+        y = _label_value("Min Altitude", f"{min_agl:.1f} m AGL / {min_msl:.1f} m MSL", y)
+        y = _label_value("Max Altitude", f"{max_agl:.1f} m AGL / {max_msl:.1f} m MSL", y)
     y -= 5 * mm
 
     # date
@@ -335,44 +356,81 @@ def _build_cover_page(c: canvas.Canvas, data: BriefData):
         y,
     )
 
-    # inspection list summary
+    _draw_footer(c)
+    c.showPage()
+
+    # inspection summary on separate page
     if data.inspections:
-        y -= 8 * mm
-        c.setFont("Helvetica-Bold", 12)
+        _build_inspection_summary_page(c, data)
+
+
+
+def _build_inspection_summary_page(c: canvas.Canvas, data: BriefData):
+    """inspection summary page - list of all inspections with method and template."""
+    y = PAGE_H - 40 * mm
+
+    c.setFont("Helvetica-Bold", 14)
+    c.setFillColor(colors.HexColor("#333333"))
+    c.drawString(MARGIN + 10 * mm, y, "Inspection Summary")
+    y -= 10 * mm
+
+    airport_elev = data.airport.elevation if data.airport and data.airport.elevation else 0
+
+    for idx, insp in enumerate(data.inspections):
+        if y < 30 * mm:
+            break
+        method_label = METHOD_LABELS.get(insp.method, insp.method)
+        template_name = insp.template.name if insp.template else "N/A"
+        color_hex = SEGMENT_COLORS[idx % len(SEGMENT_COLORS)]
+
+        c.setFillColor(colors.HexColor(color_hex))
+        c.rect(MARGIN + 10 * mm, y - 1, 3 * mm, 5 * mm, fill=1, stroke=0)
+        c.setFont("Helvetica-Bold", 10)
         c.setFillColor(colors.HexColor("#333333"))
-        c.drawString(MARGIN + 10 * mm, y, "Inspection Summary")
-        y -= 8 * mm
-        for idx, insp in enumerate(data.inspections):
-            method_label = METHOD_LABELS.get(insp.method, insp.method)
-            template_name = insp.template.name if insp.template else "N/A"
-            c.setFont("Helvetica", 9)
-            c.setFillColor(colors.HexColor("#333333"))
+        c.drawString(
+            MARGIN + 15 * mm,
+            y,
+            f"#{idx + 1} — {template_name} ({method_label})",
+        )
+        y -= 7 * mm
+
+        # per-inspection altitude range
+        insp_wps = [
+            w for w in data.waypoints if w.inspection_id and str(w.inspection_id) == str(insp.id)
+        ]
+        if insp_wps:
+            alts = [_extract_coords(w.position)[2] for w in insp_wps]
+            min_alt = min(alts)
+            max_alt = max(alts)
+            c.setFont("Helvetica", 8)
+            c.setFillColor(colors.HexColor("#555555"))
             c.drawString(
                 MARGIN + 15 * mm,
                 y,
-                f"#{idx + 1} — {template_name} ({method_label})",
+                f"Altitude range: {min_alt - airport_elev:.1f} - {max_alt - airport_elev:.1f} m AGL"
+                f" ({min_alt:.1f} - {max_alt:.1f} m MSL)"
+                f"  |  Waypoints: {len(insp_wps)}",
             )
-            y -= 6 * mm
-            if y < 30 * mm:
-                break
+            y -= 7 * mm
+        else:
+            y -= 3 * mm
 
     _draw_footer(c)
     c.showPage()
 
 
-def _build_inspection_detail_pages(c: canvas.Canvas, data: BriefData):
-    """page 2+ - one section per inspection with flight/camera/measurement params."""
+def _build_inspection_detail_pages(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+    """inspection detail pages - one section per inspection."""
     if not data.inspections:
-        _draw_header(c, "Inspection Procedures Detail", 2)
+        _draw_header(c, "Inspection Procedures Detail", page_num)
         c.setFont("Helvetica", 10)
         c.drawString(MARGIN, PAGE_H - 30 * mm, "No inspections configured.")
         _draw_footer(c)
         c.showPage()
-        return
+        return page_num
 
     y = PAGE_H - 25 * mm
-    _draw_header(c, "Inspection Procedures Detail", 2)
-    page_num = 2
+    _draw_header(c, "Inspection Procedures Detail", page_num)
 
     for idx, insp in enumerate(data.inspections):
         if y < 60 * mm:
@@ -416,10 +474,13 @@ def _build_inspection_detail_pages(c: canvas.Canvas, data: BriefData):
         c.drawString(MARGIN + 10 * mm, y, f"Altitude Offset: {alt_offset} m")
         y -= 4.5 * mm
 
-        speed_override = resolved.get("measurement_speed_override")
-        speed = speed_override or data.mission.default_speed or 0
-        c.drawString(MARGIN + 10 * mm, y, f"Speed: {speed} m/s")
-        y -= 4.5 * mm
+        meas_speed = (
+            resolved.get("measurement_speed_override")
+            or data.mission.measurement_speed_override
+        )
+        if meas_speed:
+            c.drawString(MARGIN + 10 * mm, y, f"Measurement Speed: {meas_speed} m/s")
+            y -= 4.5 * mm
 
         buffer_dist = resolved.get("buffer_distance") or data.mission.default_buffer_distance
         if buffer_dist:
@@ -507,15 +568,28 @@ def _build_inspection_detail_pages(c: canvas.Canvas, data: BriefData):
             )
             y -= 4.5 * mm
 
+            airport_elev = data.airport.elevation if data.airport and data.airport.elevation else 0
+            insp_alts = [_extract_coords(w.position)[2] for w in insp_wps]
+            min_alt = min(insp_alts)
+            max_alt = max(insp_alts)
+            c.drawString(
+                MARGIN + 10 * mm,
+                y,
+                f"Altitude: {min_alt - airport_elev:.1f} - {max_alt - airport_elev:.1f} m AGL"
+                f" ({min_alt:.1f} - {max_alt:.1f} m MSL)",
+            )
+            y -= 4.5 * mm
+
         y -= 6 * mm
 
     _draw_footer(c)
     c.showPage()
+    return page_num
 
 
-def _build_2d_map_page(c: canvas.Canvas, data: BriefData):
-    """page 3 - 2d top-down map rendered with matplotlib."""
-    _draw_header(c, "2D Top-Down Map", 3)
+def _build_2d_map_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+    """2d top-down map rendered with matplotlib."""
+    _draw_header(c, "2D Top-Down Map", page_num)
 
     fig, ax = plt.subplots(1, 1, figsize=(7, 5.5))
     ax.set_aspect("equal")
@@ -561,15 +635,48 @@ def _build_2d_map_page(c: canvas.Canvas, data: BriefData):
                         color="#222222",
                     )
 
+    # agl / lha positions
+    if data.airport and data.airport.surfaces:
+        for surface in data.airport.surfaces:
+            for agl in getattr(surface, "agls", []):
+                agl_lon, agl_lat, _ = _extract_coords(agl.position)
+                ax.plot(
+                    agl_lon, agl_lat, "s",
+                    color="#FF6F00", markersize=6, zorder=5,
+                    markeredgecolor="#333333", markeredgewidth=0.5,
+                )
+                ax.annotate(
+                    agl.name or agl.agl_type,
+                    (agl_lon, agl_lat),
+                    fontsize=5, color="#FF6F00", fontweight="bold",
+                    textcoords="offset points", xytext=(4, 4),
+                    zorder=7,
+                )
+                for lha in getattr(agl, "lhas", []):
+                    lha_lon, lha_lat, _ = _extract_coords(lha.position)
+                    ax.plot(
+                        lha_lon, lha_lat, "d",
+                        color="#FFB300", markersize=3, zorder=5,
+                        markeredgecolor="#333333", markeredgewidth=0.3,
+                    )
+
+    # build inspection method lookup
+    insp_methods = {}
+    for ins in data.inspections:
+        insp_methods[str(ins.id)] = ins.method
+
     # trajectory path
     if data.waypoints:
         wp_lons = []
         wp_lats = []
+        wp_alts = []
         wp_colors = []
+        wp_is_vp = []
         for wp in data.waypoints:
-            lon, lat, _ = _extract_coords(wp.position)
+            lon, lat, alt = _extract_coords(wp.position)
             wp_lons.append(lon)
             wp_lats.append(lat)
+            wp_alts.append(alt)
             if wp.inspection_id:
                 insp_idx = next(
                     (
@@ -580,8 +687,11 @@ def _build_2d_map_page(c: canvas.Canvas, data: BriefData):
                     0,
                 )
                 wp_colors.append(SEGMENT_COLORS[insp_idx % len(SEGMENT_COLORS)])
+                method = insp_methods.get(str(wp.inspection_id), "")
+                wp_is_vp.append(method == "VERTICAL_PROFILE")
             else:
                 wp_colors.append("#888888")
+                wp_is_vp.append(False)
 
         # draw path segments
         for i in range(len(wp_lons) - 1):
@@ -591,11 +701,50 @@ def _build_2d_map_page(c: canvas.Canvas, data: BriefData):
                 color=wp_colors[i],
                 linewidth=1.5,
                 alpha=0.8,
+                zorder=3,
             )
 
+        # non-vertical-profile waypoint dots first (lower z)
+        for i in range(len(wp_lons)):
+            if not wp_is_vp[i]:
+                ax.plot(
+                    wp_lons[i], wp_lats[i], "o",
+                    color=wp_colors[i], markersize=2, zorder=4,
+                )
+
+        # vertical profile waypoints on top
+        for i in range(len(wp_lons)):
+            if wp_is_vp[i]:
+                ax.plot(
+                    wp_lons[i], wp_lats[i], "o",
+                    color=wp_colors[i], markersize=3, zorder=6,
+                )
+
         # takeoff/landing markers
-        ax.plot(wp_lons[0], wp_lats[0], "^", color="#3bbb3b", markersize=10, zorder=5)
-        ax.plot(wp_lons[-1], wp_lats[-1], "v", color="#e54545", markersize=10, zorder=5)
+        ax.plot(wp_lons[0], wp_lats[0], "^", color="#3bbb3b", markersize=10, zorder=8)
+        ax.plot(wp_lons[-1], wp_lats[-1], "v", color="#e54545", markersize=10, zorder=8)
+
+    # zoom to trajectory extent with padding
+    if data.waypoints:
+        all_lons = list(wp_lons)
+        all_lats = list(wp_lats)
+
+        # include runway/taxiway surfaces in bounds
+        if data.airport and data.airport.surfaces:
+            for surface in data.airport.surfaces:
+                if surface.boundary:
+                    coords = _extract_polygon_coords(surface.boundary)
+                    if coords:
+                        s_lons, s_lats = zip(*coords)
+                        all_lons.extend(s_lons)
+                        all_lats.extend(s_lats)
+
+        lon_min, lon_max = min(all_lons), max(all_lons)
+        lat_min, lat_max = min(all_lats), max(all_lats)
+        lon_pad = (lon_max - lon_min) * 0.15 or 0.0005
+        lat_pad = (lat_max - lat_min) * 0.15 or 0.0005
+        ax.set_xlim(lon_min - lon_pad, lon_max + lon_pad)
+        ax.set_ylim(lat_min - lat_pad, lat_max + lat_pad)
 
     # legend
     legend_items = [
@@ -605,13 +754,39 @@ def _build_2d_map_page(c: canvas.Canvas, data: BriefData):
     ]
     for idx, insp in enumerate(data.inspections):
         name = insp.template.name if insp.template else f"Inspection {idx + 1}"
+        resolved = {}
+        if insp.config:
+            tmpl_cfg = insp.template.default_config if insp.template else None
+            resolved = insp.config.resolve_with_defaults(tmpl_cfg)
+        alt_offset = resolved.get("altitude_offset") or 0
+        h_lights = resolved.get("height_above_lights")
+        h_lha = resolved.get("height_above_lha")
+        detail_parts = [f"AGL offset {alt_offset}m"]
+        if h_lights is not None:
+            detail_parts.append(f"HAL {h_lights}m")
+        if h_lha is not None:
+            detail_parts.append(f"H-LHA {h_lha}m")
+        label = f"{name} ({', '.join(detail_parts)})"
         legend_items.append(
             mpatches.Patch(
                 color=SEGMENT_COLORS[idx % len(SEGMENT_COLORS)],
-                label=name,
+                label=label,
             )
         )
-    ax.legend(handles=legend_items, loc="upper left", fontsize=6, framealpha=0.8)
+    if data.airport and data.airport.safety_zones:
+        seen_types = set()
+        for zone in data.airport.safety_zones:
+            if zone.type not in seen_types:
+                seen_types.add(zone.type)
+                color = zone_colors.get(zone.type, "#CCCCCC44")
+                label = zone.type.replace("_", " ").title()
+                legend_items.append(mpatches.Patch(color=color, alpha=0.3, label=label))
+    legend_items.append(mpatches.Patch(color="#FF6F00", label="AGL"))
+    legend_items.append(mpatches.Patch(color="#FFB300", label="LHA"))
+    ax.legend(
+        handles=legend_items, loc="upper left",
+        bbox_to_anchor=(1.02, 1), fontsize=5.5, framealpha=0.8,
+    )
 
     # north arrow
     ax.annotate(
@@ -635,6 +810,7 @@ def _build_2d_map_page(c: canvas.Canvas, data: BriefData):
     ax.set_xlabel("Longitude", fontsize=8)
     ax.set_ylabel("Latitude", fontsize=8)
     ax.tick_params(labelsize=6)
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right")
     ax.set_title("Flight Plan - Top Down View", fontsize=10)
     fig.tight_layout()
 
@@ -654,11 +830,12 @@ def _build_2d_map_page(c: canvas.Canvas, data: BriefData):
 
     _draw_footer(c)
     c.showPage()
+    return page_num
 
 
-def _build_altitude_profile_page(c: canvas.Canvas, data: BriefData):
-    """page 4 - vertical altitude profile chart."""
-    _draw_header(c, "Vertical Altitude Profile", 4)
+def _build_altitude_profile_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+    """vertical altitude profile chart."""
+    _draw_header(c, "Vertical Altitude Profile", page_num)
 
     fig, ax = plt.subplots(1, 1, figsize=(7, 4))
     airport_elev = data.airport.elevation if data.airport and data.airport.elevation else 0
@@ -695,7 +872,7 @@ def _build_altitude_profile_page(c: canvas.Canvas, data: BriefData):
             alts_agl.append(alt - airport_elev)
             prev_lon, prev_lat = lon, lat
 
-        # color-coded altitude segments
+        # color-coded altitude segments (AGL)
         for i in range(len(distances) - 1):
             ax.plot(
                 [distances[i], distances[i + 1]],
@@ -705,7 +882,10 @@ def _build_altitude_profile_page(c: canvas.Canvas, data: BriefData):
             )
 
         # ground level
-        ax.axhline(y=0, color="#8B4513", linewidth=1.5, linestyle="--", alpha=0.6, label="Ground")
+        ax.axhline(
+            y=0, color="#8B4513", linewidth=1.5,
+            linestyle="--", alpha=0.6, label="Ground",
+        )
 
         # max altitude constraint
         for constraint in data.constraints:
@@ -723,9 +903,18 @@ def _build_altitude_profile_page(c: canvas.Canvas, data: BriefData):
         ax.set_xlabel("Distance Along Path (m)", fontsize=8)
         ax.set_ylabel("Altitude AGL (m)", fontsize=8)
         ax.tick_params(labelsize=6)
-        ax.legend(fontsize=6)
-        ax.set_title("Altitude Profile", fontsize=10)
         ax.grid(True, alpha=0.3)
+
+        # secondary y-axis for MSL with dashed grid lines
+        ax2 = ax.twinx()
+        agl_min, agl_max = ax.get_ylim()
+        ax2.set_ylim(agl_min + airport_elev, agl_max + airport_elev)
+        ax2.set_ylabel("Altitude MSL (m)", fontsize=8)
+        ax2.tick_params(labelsize=6)
+        ax2.grid(True, alpha=0.3, linestyle="--")
+
+        ax.legend(fontsize=6, loc="upper right")
+        ax.set_title("Altitude Profile", fontsize=10)
 
     fig.tight_layout()
     img_buf = io.BytesIO()
@@ -744,11 +933,12 @@ def _build_altitude_profile_page(c: canvas.Canvas, data: BriefData):
 
     _draw_footer(c)
     c.showPage()
+    return page_num
 
 
-def _build_timeline_page(c: canvas.Canvas, data: BriefData):
-    """page 5 - gantt-style timeline and time-based flight plan table."""
-    _draw_header(c, "Time-Based Flight Plan", 5)
+def _build_timeline_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+    """gantt-style timeline and time-based flight plan table."""
+    _draw_header(c, "Time-Based Flight Plan", page_num)
 
     # build activity segments from waypoints
     activities = _build_activities(data)
@@ -839,6 +1029,7 @@ def _build_timeline_page(c: canvas.Canvas, data: BriefData):
 
     _draw_footer(c)
     c.showPage()
+    return page_num
 
 
 def _build_activities(data: BriefData) -> list[dict]:
@@ -885,19 +1076,10 @@ def _build_activities(data: BriefData) -> list[dict]:
             color = "#888888"
 
         if activity_name != current_activity:
-            if current_activity is not None:
-                activities.append(
-                    {
-                        "name": current_activity,
-                        "start": activity_start,
-                        "duration": max(current_time - activity_start, 1.0),
-                        "color": activities[-1]["color"] if activities else "#888888",
-                    }
-                )
+            if current_activity is not None and activities:
+                activities[-1]["duration"] = max(current_time - activity_start, 1.0)
             current_activity = activity_name
             activity_start = current_time
-
-            # store color for this activity
             activities.append(
                 {
                     "name": activity_name,
@@ -918,9 +1100,9 @@ def _build_activities(data: BriefData) -> list[dict]:
     return [a for a in activities if a["duration"] > 0]
 
 
-def _build_waypoint_table_page(c: canvas.Canvas, data: BriefData):
-    """page 6 - full waypoint table."""
-    _draw_header(c, "Waypoint Table", 6)
+def _build_waypoint_table_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+    """full waypoint table."""
+    _draw_header(c, "Waypoint Table", page_num)
     airport_elev = data.airport.elevation if data.airport and data.airport.elevation else 0
 
     y = PAGE_H - 25 * mm
@@ -963,7 +1145,6 @@ def _build_waypoint_table_page(c: canvas.Canvas, data: BriefData):
 
     c.setFont("Helvetica", 6.5)
     c.setFillColor(colors.HexColor("#555555"))
-    page_num = 6
 
     for wp in data.waypoints:
         if y < 20 * mm:
@@ -1017,11 +1198,11 @@ def _build_waypoint_table_page(c: canvas.Canvas, data: BriefData):
 
     _draw_footer(c)
     c.showPage()
+    return page_num
 
 
-def _build_crossing_analysis_page(c: canvas.Canvas, data: BriefData):
-    """page 7 - runway crossing and safety zone conflict analysis."""
-    page_num = 7
+def _build_crossing_analysis_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+    """runway crossing and safety zone conflict analysis."""
     _draw_header(c, "Crossing & Conflict Analysis", page_num)
     y = PAGE_H - 25 * mm
     airport_elev = data.airport.elevation if data.airport and data.airport.elevation else 0
@@ -1198,11 +1379,11 @@ def _build_crossing_analysis_page(c: canvas.Canvas, data: BriefData):
 
     _draw_footer(c)
     c.showPage()
+    return page_num
 
 
-def _build_validation_summary_page(c: canvas.Canvas, data: BriefData):
-    """page 8 - validation summary with constraint results and battery analysis."""
-    page_num = 8
+def _build_validation_summary_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+    """validation summary with constraint results and battery analysis."""
     _draw_header(c, "Validation Summary", page_num)
     y = PAGE_H - 25 * mm
 
@@ -1332,6 +1513,7 @@ def _build_validation_summary_page(c: canvas.Canvas, data: BriefData):
 
     _draw_footer(c)
     c.showPage()
+    return page_num
 
 
 # geometry helpers
