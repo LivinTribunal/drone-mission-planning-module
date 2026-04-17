@@ -119,7 +119,7 @@ def export_mission(mission_id: UUID, body: ExportRequest, db: Session = Depends(
     return Response(
         content=buf.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="mission_{safe_name}_export.zip"'},
+        headers={"Content-Disposition": f'attachment; filename="{safe_name} export.zip"'},
     )
 
 

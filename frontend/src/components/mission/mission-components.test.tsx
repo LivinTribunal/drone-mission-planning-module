@@ -315,6 +315,129 @@ describe("MissionConfigForm", () => {
     });
     expect(onChange).toHaveBeenCalledWith({ transit_agl: null });
   });
+
+  it("invokes onPickCoord with target when takeoff pick-on-map clicked", () => {
+    /** verify the takeoff pick button toggles onPickCoord to 'takeoff'. */
+    const onPickCoord = vi.fn();
+    renderForm({ onPickCoord });
+    fireEvent.click(
+      screen.getByTestId("mission.config.takeoffcoordinate-pick-map"),
+    );
+    expect(onPickCoord).toHaveBeenCalledWith("takeoff");
+  });
+
+  it("invokes onPickCoord with null when a takeoff pick is already active", () => {
+    /** verify clicking the already-active takeoff pick button clears it. */
+    const onPickCoord = vi.fn();
+    renderForm({ onPickCoord, pickingCoord: "takeoff" });
+    fireEvent.click(
+      screen.getByTestId("mission.config.takeoffcoordinate-pick-map"),
+    );
+    expect(onPickCoord).toHaveBeenCalledWith(null);
+  });
+
+  it("invokes onPickCoord with 'landing' when landing pick-on-map clicked", () => {
+    /** verify the landing pick button toggles onPickCoord to 'landing'. */
+    const onPickCoord = vi.fn();
+    renderForm({ onPickCoord });
+    fireEvent.click(
+      screen.getByTestId("mission.config.landingcoordinate-pick-map"),
+    );
+    expect(onPickCoord).toHaveBeenCalledWith("landing");
+  });
+
+  it("hides the landing pick button while 'use takeoff as landing' is checked", () => {
+    /** verify the landing pick button disappears when mirror mode is active. */
+    renderForm({
+      values: {
+        takeoff_coordinate: {
+          type: "Point",
+          coordinates: [17.21, 48.17, 100],
+        } as never,
+      },
+    });
+    // landing is still null, so the checkbox + both pick buttons render initially
+    expect(
+      screen.getByTestId("mission.config.landingcoordinate-pick-map"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    expect(
+      screen.queryByTestId("mission.config.landingcoordinate-pick-map"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("mirrors takeoff into landing when 'use takeoff as landing' is toggled on", () => {
+    /** verify checking the checkbox copies takeoff into landing via onChange. */
+    const takeoff = {
+      type: "Point",
+      coordinates: [17.21, 48.17, 100],
+    } as never;
+    const { onChange } = renderForm({
+      values: { takeoff_coordinate: takeoff },
+    });
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    expect(onChange).toHaveBeenCalledWith({ landing_coordinate: takeoff });
+  });
+
+  it("does not mirror landing when takeoff is not set", () => {
+    /** verify checking the checkbox with no takeoff does not call onChange. */
+    const { onChange } = renderForm();
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("calls onUseTakeoffAsLandingChange when the checkbox is toggled with controlled state", () => {
+    /** verify the parent-controlled mirror callback fires instead of local state. */
+    const onUseTakeoffAsLandingChange = vi.fn();
+    renderForm({
+      useTakeoffAsLanding: false,
+      onUseTakeoffAsLandingChange,
+    });
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    expect(onUseTakeoffAsLandingChange).toHaveBeenCalledWith(true);
+  });
+
+  it("hides the landing pick button when parent-controlled mirror is on", () => {
+    /** verify controlled useTakeoffAsLanding=true hides the landing pick button. */
+    renderForm({
+      values: {
+        takeoff_coordinate: {
+          type: "Point",
+          coordinates: [17.21, 48.17, 100],
+        } as never,
+      },
+      useTakeoffAsLanding: true,
+      onUseTakeoffAsLandingChange: vi.fn(),
+    });
+    expect(
+      screen.queryByTestId("mission.config.landingcoordinate-pick-map"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("updates both coordinates when takeoff changes while mirror is active", () => {
+    /** verify editing takeoff while mirror is on writes landing_coordinate too. */
+    const { onChange } = renderForm();
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    // typing a lat/lon/alt triggers CoordinateInput.onChange eventually;
+    // easier: fire change on the three numeric inputs in the takeoff group
+    fireEvent.change(
+      screen.getByTestId("mission.config.takeoffcoordinate-lat"),
+      { target: { value: "48.17" } },
+    );
+    fireEvent.change(
+      screen.getByTestId("mission.config.takeoffcoordinate-lon"),
+      { target: { value: "17.21" } },
+    );
+    fireEvent.change(
+      screen.getByTestId("mission.config.takeoffcoordinate-alt"),
+      { target: { value: "130" } },
+    );
+    // the last change commits, and since the mirror flag is on, onChange is
+    // called with both takeoff_coordinate and landing_coordinate set to the
+    // same point value
+    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1][0];
+    expect(lastCall.takeoff_coordinate).toEqual(lastCall.landing_coordinate);
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -739,6 +862,148 @@ describe("TemplatePicker", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByTestId("template-option-t-runway"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("sort by runway identifier", () => {
+    /** verify templates within an AGL-type bucket are ordered by surface id. */
+
+    const surfaces = [
+      { id: "s-22L", identifier: "22L" },
+      { id: "s-04R", identifier: "04R" },
+      { id: "s-09", identifier: "09" },
+    ];
+    const runwayAgls = [
+      {
+        id: "agl-22L",
+        surface_id: "s-22L",
+        agl_type: "RUNWAY_EDGE_LIGHTS",
+        name: "edge 22L",
+        position: { lat: 0, lng: 0, alt: 0 },
+        side: null,
+        glide_slope_angle: null,
+        distance_from_threshold: null,
+        offset_from_centerline: null,
+        lhas: [],
+      },
+      {
+        id: "agl-04R",
+        surface_id: "s-04R",
+        agl_type: "RUNWAY_EDGE_LIGHTS",
+        name: "edge 04R",
+        position: { lat: 0, lng: 0, alt: 0 },
+        side: null,
+        glide_slope_angle: null,
+        distance_from_threshold: null,
+        offset_from_centerline: null,
+        lhas: [],
+      },
+      {
+        id: "agl-09",
+        surface_id: "s-09",
+        agl_type: "RUNWAY_EDGE_LIGHTS",
+        name: "edge 09",
+        position: { lat: 0, lng: 0, alt: 0 },
+        side: null,
+        glide_slope_angle: null,
+        distance_from_threshold: null,
+        offset_from_centerline: null,
+        lhas: [],
+      },
+    ];
+
+    // deliberately shuffled input order so sort is observable
+    const shuffledTemplates = [
+      {
+        id: "t-22L",
+        name: "Template 22L",
+        description: null,
+        methods: ["FLY_OVER"],
+        target_agl_ids: ["agl-22L"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      },
+      {
+        id: "t-09",
+        name: "Template 09",
+        description: null,
+        methods: ["FLY_OVER"],
+        target_agl_ids: ["agl-09"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      },
+      {
+        id: "t-04R",
+        name: "Template 04R",
+        description: null,
+        methods: ["FLY_OVER"],
+        target_agl_ids: ["agl-04R"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      },
+    ];
+
+    it("orders templates by runway identifier with natural numeric sort", () => {
+      renderPicker({
+        templates: shuffledTemplates as never,
+        agls: runwayAgls as never,
+        surfaces: surfaces as never,
+      });
+      fireEvent.click(screen.getByTestId("agl-type-option-RUNWAY_EDGE_LIGHTS"));
+      const rendered = screen
+        .getAllByTestId(/^template-option-/)
+        .map((el) => el.getAttribute("data-testid"));
+      expect(rendered).toEqual([
+        "template-option-t-04R",
+        "template-option-t-09",
+        "template-option-t-22L",
+      ]);
+    });
+
+    it("preserves input order when surfaces prop is omitted", () => {
+      renderPicker({
+        templates: shuffledTemplates as never,
+        agls: runwayAgls as never,
+      });
+      fireEvent.click(screen.getByTestId("agl-type-option-RUNWAY_EDGE_LIGHTS"));
+      const rendered = screen
+        .getAllByTestId(/^template-option-/)
+        .map((el) => el.getAttribute("data-testid"));
+      expect(rendered).toEqual([
+        "template-option-t-22L",
+        "template-option-t-09",
+        "template-option-t-04R",
+      ]);
+    });
+
+    it("leaves special (hover-only) templates in their existing section", () => {
+      const hoverTemplate = {
+        id: "t-hover",
+        name: "Hover Template",
+        description: null,
+        methods: ["HOVER_POINT_LOCK"],
+        target_agl_ids: [],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+      };
+      renderPicker({
+        templates: [...shuffledTemplates, hoverTemplate] as never,
+        agls: runwayAgls as never,
+        surfaces: surfaces as never,
+      });
+      // special templates render on the agl-type step
+      expect(screen.getByText("Hover Template")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("template-option-t-hover"),
       ).toBeInTheDocument();
     });
   });
