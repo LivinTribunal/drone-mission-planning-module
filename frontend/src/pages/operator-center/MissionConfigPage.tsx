@@ -320,10 +320,7 @@ export default function MissionConfigPage() {
     };
   }, [setSaveContext, handleSave, isDirty, saving, lastSaved]);
 
-  // keep compute ref pointed at the latest handler without re-running on every render
-  useEffect(() => {
-    computeRef.current = handleComputeTrajectory;
-  }, [handleComputeTrajectory]);
+  computeRef.current = handleComputeTrajectory;
 
   // compute coordinate availability from dirty state or mission data
   const hasCoordinates = useMemo(() => {

@@ -134,12 +134,17 @@ export default function TemplatePicker({
     return compatibleMethods(tpl.methods, types);
   }
 
+  function handleClose() {
+    setSelectedAgl(null);
+    onClose();
+  }
+
   function handleSelect(tpl: InspectionTemplateResponse) {
     const methods = compatMethods(tpl);
     const method =
       selectedMethod[tpl.id] ?? methods[0] ?? tpl.methods[0] ?? "ANGULAR_SWEEP";
     onSelect(tpl.id, method);
-    onClose();
+    handleClose();
   }
 
   function renderTemplateRow(tpl: InspectionTemplateResponse) {
@@ -215,7 +220,7 @@ export default function TemplatePicker({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       title={t("mission.config.selectTemplate")}
     >
       <div
@@ -233,7 +238,7 @@ export default function TemplatePicker({
             <p className="text-xs font-medium text-tv-text-secondary">
               {t("mission.config.pickAglType")}
             </p>
-            {(["PAPI", "RUNWAY_EDGE_LIGHTS"] as AglType[]).map((type) => {
+            {(Object.keys(grouped.byType) as AglType[]).map((type) => {
               const count = grouped.byType[type].length;
               return (
                 <button

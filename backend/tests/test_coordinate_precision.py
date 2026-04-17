@@ -36,7 +36,7 @@ def test_airport_location_roundtrip_preserves_precision(client):
 
 def test_surface_threshold_roundtrip_preserves_precision(client):
     """surface threshold_position and end_position keep all decimals."""
-    apt = client.post(
+    r_apt = client.post(
         "/api/v1/airports",
         json={
             **AIRPORT_PAYLOAD,
@@ -47,7 +47,9 @@ def test_surface_threshold_roundtrip_preserves_precision(client):
                 "coordinates": [PRECISE_LON, PRECISE_LAT, PRECISE_ALT],
             },
         },
-    ).json()
+    )
+    assert r_apt.status_code == 201
+    apt = r_apt.json()
 
     precise_lon2 = -14.987654321
     precise_lat2 = 50.987654321
@@ -78,7 +80,7 @@ def test_agl_position_lonlat_roundtrip_preserves_precision(client):
     altitude is normalized to ground at creation, so we fix airport elevation
     to PRECISE_ALT and assert equality on all three axes.
     """
-    apt = client.post(
+    r_apt = client.post(
         "/api/v1/airports",
         json={
             **AIRPORT_PAYLOAD,
@@ -89,8 +91,13 @@ def test_agl_position_lonlat_roundtrip_preserves_precision(client):
                 "coordinates": [PRECISE_LON, PRECISE_LAT, PRECISE_ALT],
             },
         },
-    ).json()
-    surface = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD).json()
+    )
+    assert r_apt.status_code == 201
+    apt = r_apt.json()
+
+    r_surf = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD)
+    assert r_surf.status_code == 201
+    surface = r_surf.json()
 
     agl_payload = {
         "agl_type": "PAPI",
@@ -112,7 +119,7 @@ def test_agl_position_lonlat_roundtrip_preserves_precision(client):
 
 def test_lha_position_lonlat_roundtrip_preserves_precision(client):
     """LHA position lon/lat (and altitude when airport elevation matches) survive round-trip."""
-    apt = client.post(
+    r_apt = client.post(
         "/api/v1/airports",
         json={
             **AIRPORT_PAYLOAD,
@@ -123,9 +130,15 @@ def test_lha_position_lonlat_roundtrip_preserves_precision(client):
                 "coordinates": [PRECISE_LON, PRECISE_LAT, PRECISE_ALT],
             },
         },
-    ).json()
-    surface = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD).json()
-    agl = client.post(
+    )
+    assert r_apt.status_code == 201
+    apt = r_apt.json()
+
+    r_surf = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD)
+    assert r_surf.status_code == 201
+    surface = r_surf.json()
+
+    r_agl = client.post(
         f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls",
         json={
             "agl_type": "PAPI",
@@ -137,7 +150,9 @@ def test_lha_position_lonlat_roundtrip_preserves_precision(client):
             "side": "LEFT",
             "glide_slope_angle": 3.0,
         },
-    ).json()
+    )
+    assert r_agl.status_code == 201
+    agl = r_agl.json()
 
     lha_payload = {
         **LHA_PAYLOAD,
@@ -159,12 +174,18 @@ def test_lha_position_lonlat_roundtrip_preserves_precision(client):
 
 def test_agl_update_preserve_altitude_keeps_full_precision(client):
     """updating an AGL with preserve_altitude=True retains full Z precision."""
-    apt = client.post(
+    r_apt = client.post(
         "/api/v1/airports",
         json={**AIRPORT_PAYLOAD, "icao_code": "LXPE"},
-    ).json()
-    surface = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD).json()
-    agl = client.post(
+    )
+    assert r_apt.status_code == 201
+    apt = r_apt.json()
+
+    r_surf = client.post(f"/api/v1/airports/{apt['id']}/surfaces", json=SURFACE_PAYLOAD)
+    assert r_surf.status_code == 201
+    surface = r_surf.json()
+
+    r_agl = client.post(
         f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls",
         json={
             "agl_type": "PAPI",
@@ -173,7 +194,9 @@ def test_agl_update_preserve_altitude_keeps_full_precision(client):
             "side": "LEFT",
             "glide_slope_angle": 3.0,
         },
-    ).json()
+    )
+    assert r_agl.status_code == 201
+    agl = r_agl.json()
 
     precise_alt = 777.123456789
     new_position = {
