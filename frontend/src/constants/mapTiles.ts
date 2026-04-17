@@ -8,4 +8,5 @@ export const ESRI_REFERENCE_TILES =
 
 export const ESRI_ATTRIBUTION = "Tiles © Esri";
 
-export const OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+export const OSM_TILES =
+  "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
