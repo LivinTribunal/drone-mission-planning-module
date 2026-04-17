@@ -363,6 +363,17 @@ export default function AirportEditPage() {
         return;
       }
 
+      // pick touchpoint during creation mode (no selected feature)
+      if (pickingTouchpoint && !selectedFeature) {
+        const lat = Math.round(lngLat.lat * 1e6) / 1e6;
+        const lon = Math.round(lngLat.lng * 1e6) / 1e6;
+        const alt = airport?.elevation ?? 0;
+        setPickedTouchpointCoord({ lat, lon, alt });
+        setTouchpointPickedMarker([lon, lat]);
+        setPickingTouchpoint(false);
+        return;
+      }
+
       const m = measureRef.current;
       const h = headingRef.current;
       if (mapTool === MapTool.MEASURE && (m.isDrawing || !m.hasPoints)) {
@@ -377,11 +388,22 @@ export default function AirportEditPage() {
   // cancel touchpoint picking when selection changes or panel closes
   useEffect(() => {
     if (!selectedFeature || selectedFeature.type !== "surface") {
+      // don't cancel if creation form is open (no selected feature but pending geometry)
+      if (pendingGeometry || pendingPointPosition) return;
       setPickingTouchpoint(false);
       setPickedTouchpointCoord(null);
       setTouchpointPickedMarker(null);
     }
-  }, [selectedFeature]);
+  }, [selectedFeature, pendingGeometry, pendingPointPosition]);
+
+  // cancel touchpoint picking when creation form closes
+  useEffect(() => {
+    if (!pendingGeometry && !pendingPointPosition) {
+      setPickingTouchpoint(false);
+      setPickedTouchpointCoord(null);
+      setTouchpointPickedMarker(null);
+    }
+  }, [pendingGeometry, pendingPointPosition]);
 
   // cancel LHA picking when selection changes away from agl
   useEffect(() => {
@@ -1335,7 +1357,9 @@ export default function AirportEditPage() {
             />
             <TerrainSettingsCard
               airport={airport}
-              onUpdate={() => fetchAirport()}
+              onUpdate={async () => {
+                await fetchAirport();
+              }}
             />
             {/* creation form or feature editor */}
             {(pendingGeometry || pendingPointPosition) ? (
@@ -1354,6 +1378,10 @@ export default function AirportEditPage() {
                 obstacles={obstacles}
                 airportElevation={airport?.elevation}
                 prefilledEntityType={boundaryEntityOverride ?? undefined}
+                pickingTouchpoint={pickingTouchpoint}
+                onPickTouchpointToggle={() => setPickingTouchpoint((v) => !v)}
+                pickedTouchpointCoord={pickedTouchpointCoord}
+                onPickedTouchpointConsumed={() => setPickedTouchpointCoord(null)}
               />
             ) : measure.isComplete ? (
               <MeasureInfoCard
