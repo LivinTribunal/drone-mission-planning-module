@@ -40,6 +40,7 @@ function makeMission(
     default_buffer_distance: null,
     transit_agl: null,
     require_perpendicular_runway_crossing: true,
+    flight_plan_scope: "FULL" as const,
     has_unsaved_map_changes: false,
     inspection_count: 0,
     estimated_duration: null,

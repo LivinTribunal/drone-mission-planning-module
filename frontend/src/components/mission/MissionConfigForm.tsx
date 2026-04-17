@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Search } from "lucide-react";
 import type { MissionDetailResponse, MissionUpdate } from "@/types/mission";
-import type { CaptureMode } from "@/types/enums";
+import type { CaptureMode, FlightPlanScope } from "@/types/enums";
+import FlightPlanScopeSelector from "./FlightPlanScopeSelector";
 import type { DroneProfileResponse } from "@/types/droneProfile";
 import type { PointZ } from "@/types/common";
 import Toggle from "@/components/common/Toggle";
@@ -207,6 +208,10 @@ export default function MissionConfigForm({
     values.require_perpendicular_runway_crossing !== undefined
       ? values.require_perpendicular_runway_crossing
       : mission.require_perpendicular_runway_crossing ?? true;
+  const flightPlanScope: FlightPlanScope =
+    values.flight_plan_scope !== undefined
+      ? (values.flight_plan_scope as FlightPlanScope)
+      : mission.flight_plan_scope ?? "FULL";
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -427,6 +432,13 @@ export default function MissionConfigForm({
           />
         </div>
       </div>
+
+      {/* flight plan scope */}
+      <FlightPlanScopeSelector
+        value={flightPlanScope}
+        onChange={(scope) => onChange({ flight_plan_scope: scope })}
+        disabled={disabled}
+      />
 
       {/* operator notes */}
       <div>

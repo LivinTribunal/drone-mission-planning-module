@@ -171,6 +171,21 @@ export default function ExportPanel({
               ))}
             </div>
 
+            {/* scope info */}
+            {!terminal && (
+              <p className="text-xs text-tv-text-muted italic px-1">
+                {t(
+                  `mission.validationExportPage.scopeInfo.${
+                    mission.flight_plan_scope === "NO_TAKEOFF_LANDING"
+                      ? "noTakeoffLanding"
+                      : mission.flight_plan_scope === "MEASUREMENTS_ONLY"
+                        ? "measurementsOnly"
+                        : "full"
+                  }`,
+                )}
+              </p>
+            )}
+
             {/* terminal status message */}
             {terminal && (
               <p className="text-xs text-tv-text-muted italic">

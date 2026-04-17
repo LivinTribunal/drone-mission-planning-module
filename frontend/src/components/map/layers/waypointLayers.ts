@@ -120,21 +120,29 @@ export function waypointsToGeoJSON(
         geometry: { type: "Point", coordinates: wp.position.coordinates },
       });
     } else {
-      // collapsed stack - use first waypoint's position and color
-      const first = group[0];
+      // collapsed stack - prefer MEASUREMENT as representative type so circle
+      // layers with waypoint_type == "MEASUREMENT" filter actually match
+      const representative = group.find((w) => w.waypoint_type === "MEASUREMENT") ?? group[0];
       const alts = group.map((w) => w.position.coordinates[2] ?? 0);
       const ids = group.map((w) => w.id).join(",");
       const seqs = group.map((w) => w.sequence_order);
+
+      console.debug(
+        `[waypointLayers] stack at ${coordKey(group[0].position.coordinates[0], group[0].position.coordinates[1])}: ` +
+        `${group.length} wps, types=[${group.map((w) => w.waypoint_type).join(",")}], ` +
+        `representative=${representative.waypoint_type}`,
+      );
+
       features.push({
         type: "Feature",
         properties: {
           id: ids,
           sequence_order: Math.min(...seqs),
-          waypoint_type: first.waypoint_type,
-          camera_action: first.camera_action ?? "NONE",
-          inspection_id: first.inspection_id,
-          label: resolveLabel(first.waypoint_type, first.inspection_id, inspectionIndexMap),
-          color: resolveWaypointColor(first.waypoint_type),
+          waypoint_type: representative.waypoint_type,
+          camera_action: representative.camera_action ?? "NONE",
+          inspection_id: representative.inspection_id,
+          label: resolveLabel(representative.waypoint_type, representative.inspection_id, inspectionIndexMap),
+          color: resolveWaypointColor(representative.waypoint_type),
           has_camera_target: "no",
           stack_count: group.length,
           seq_min: Math.min(...seqs),
@@ -142,7 +150,7 @@ export function waypointsToGeoJSON(
           alt_min: Math.min(...alts),
           alt_max: Math.max(...alts),
         },
-        geometry: { type: "Point", coordinates: first.position.coordinates },
+        geometry: { type: "Point", coordinates: group[0].position.coordinates },
       });
     }
   }
@@ -208,6 +216,14 @@ export function waypointsToGeoJSON(
     const idx = features.findIndex((f) => f.properties?.waypoint_type === "LANDING");
     if (idx >= 0) features.splice(idx, 1);
   }
+
+  // log type distribution for debugging
+  const typeCounts: Record<string, number> = {};
+  for (const f of features) {
+    const t = f.properties?.waypoint_type as string;
+    typeCounts[t] = (typeCounts[t] ?? 0) + 1;
+  }
+  console.debug("[waypointLayers] geojson feature types:", typeCounts, `(${features.length} total)`);
 
   return { type: "FeatureCollection", features };
 }

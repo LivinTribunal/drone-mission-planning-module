@@ -51,6 +51,8 @@ export type PAPISide = "LEFT" | "RIGHT";
 
 export type SurfaceType = "RUNWAY" | "TAXIWAY";
 
+export type FlightPlanScope = "FULL" | "NO_TAKEOFF_LANDING" | "MEASUREMENTS_ONLY";
+
 export type ConstraintType = "NO_FLY" | "ALTITUDE_LIMIT" | "SPEED_LIMIT";
 
 export type UserRole = "OPERATOR" | "COORDINATOR" | "SUPER_ADMIN";
