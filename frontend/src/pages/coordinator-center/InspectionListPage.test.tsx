@@ -180,4 +180,30 @@ describe("InspectionListPage", () => {
       expect(screen.getByText("coordinator.inspections.createTitle")).toBeInTheDocument();
     });
   });
+
+  it("renders all 5 method filter pills", async () => {
+    /** verify all inspection method pills are present. */
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId("method-pill-ANGULAR_SWEEP")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("method-pill-VERTICAL_PROFILE")).toBeInTheDocument();
+    expect(screen.getByTestId("method-pill-FLY_OVER")).toBeInTheDocument();
+    expect(screen.getByTestId("method-pill-PARALLEL_SIDE_SWEEP")).toBeInTheDocument();
+    expect(screen.getByTestId("method-pill-HOVER_POINT_LOCK")).toBeInTheDocument();
+  });
+
+  it("toggles method filter when pill is clicked", async () => {
+    /** verify clicking a method pill toggles the filter. */
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId("method-pill-FLY_OVER")).toBeInTheDocument();
+    });
+    const flyOverPill = screen.getByTestId("method-pill-FLY_OVER");
+    fireEvent.click(flyOverPill);
+    expect(flyOverPill.className).not.toContain("opacity-40");
+
+    const angularPill = screen.getByTestId("method-pill-ANGULAR_SWEEP");
+    expect(angularPill.className).toContain("opacity-40");
+  });
 });

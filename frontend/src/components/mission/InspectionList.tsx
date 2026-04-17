@@ -185,7 +185,7 @@ export default function InspectionList({
                 </span>
 
                 <span
-                  className="flex-shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium leading-none"
+                  className="flex-shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium leading-none"
                   style={methodBadgeStyle(insp.method)}
                   data-testid={`inspection-method-badge-${insp.id}`}
                 >
