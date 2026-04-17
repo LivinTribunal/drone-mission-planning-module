@@ -44,6 +44,7 @@ TRAJECTORY_FIELDS = {
     "default_buffer_distance",
     "transit_agl",
     "require_perpendicular_runway_crossing",
+    "flight_plan_scope",
 }
 
 # minimum allowable cruise altitude (AGL meters) - kept in sync with
@@ -108,6 +109,7 @@ class Mission(Base):
     require_perpendicular_runway_crossing = Column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    flight_plan_scope = Column(String(25), nullable=False, default="FULL", server_default="FULL")
     has_unsaved_map_changes = Column(Boolean, nullable=False, default=False, server_default="false")
 
     airport = relationship("Airport")
@@ -119,6 +121,10 @@ class Mission(Base):
         CheckConstraint(
             "status IN ('DRAFT', 'PLANNED', 'VALIDATED', 'EXPORTED', 'COMPLETED', 'CANCELLED')",
             name="ck_mission_status",
+        ),
+        CheckConstraint(
+            "flight_plan_scope IN ('FULL', 'NO_TAKEOFF_LANDING', 'MEASUREMENTS_ONLY')",
+            name="ck_mission_flight_plan_scope",
         ),
     )
 

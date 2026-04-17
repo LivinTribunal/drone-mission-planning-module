@@ -120,21 +120,23 @@ export function waypointsToGeoJSON(
         geometry: { type: "Point", coordinates: wp.position.coordinates },
       });
     } else {
-      // collapsed stack - use first waypoint's position and color
-      const first = group[0];
+      // collapsed stack - prefer MEASUREMENT as representative type so circle
+      // layers with waypoint_type == "MEASUREMENT" filter actually match
+      const representative = group.find((w) => w.waypoint_type === "MEASUREMENT") ?? group[0];
       const alts = group.map((w) => w.position.coordinates[2] ?? 0);
       const ids = group.map((w) => w.id).join(",");
       const seqs = group.map((w) => w.sequence_order);
+
       features.push({
         type: "Feature",
         properties: {
           id: ids,
           sequence_order: Math.min(...seqs),
-          waypoint_type: first.waypoint_type,
-          camera_action: first.camera_action ?? "NONE",
-          inspection_id: first.inspection_id,
-          label: resolveLabel(first.waypoint_type, first.inspection_id, inspectionIndexMap),
-          color: resolveWaypointColor(first.waypoint_type),
+          waypoint_type: representative.waypoint_type,
+          camera_action: representative.camera_action ?? "NONE",
+          inspection_id: representative.inspection_id,
+          label: resolveLabel(representative.waypoint_type, representative.inspection_id, inspectionIndexMap),
+          color: resolveWaypointColor(representative.waypoint_type),
           has_camera_target: "no",
           stack_count: group.length,
           seq_min: Math.min(...seqs),
@@ -142,7 +144,7 @@ export function waypointsToGeoJSON(
           alt_min: Math.min(...alts),
           alt_max: Math.max(...alts),
         },
-        geometry: { type: "Point", coordinates: first.position.coordinates },
+        geometry: { type: "Point", coordinates: group[0].position.coordinates },
       });
     }
   }

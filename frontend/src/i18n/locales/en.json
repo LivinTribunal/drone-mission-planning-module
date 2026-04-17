@@ -610,7 +610,16 @@
       "hoverBearingRunwayHint": "0 = opposite RWY heading (approach side)",
       "hoverBearingCompassHint": "0 = true north, 90 = east",
       "hoverBearingRunwayHelp": "0° = drone faces approach side (180° from runway heading). Positive values rotate clockwise around the LHA.",
-      "hoverBearingCompassHelp": "Absolute compass heading from LHA to drone. 0° = N, 90° = E, 180° = S, 270° = W."
+      "hoverBearingCompassHelp": "Absolute compass heading from LHA to drone. 0° = N, 90° = E, 180° = S, 270° = W.",
+      "flightPlanScope": {
+        "label": "Flight plan scope",
+        "full": "Full",
+        "fullDescription": "Takeoff, transit, measurements, transit, landing",
+        "noTakeoffLanding": "No takeoff / landing",
+        "noTakeoffLandingDescription": "Starts and ends at transit altitude above takeoff/landing points",
+        "measurementsOnly": "Measurements only",
+        "measurementsOnlyDescription": "Only inspection measurement waypoints, no transit"
+      }
     },
     "validationExportPage": {
       "validationResults": "Validation Results",
@@ -693,7 +702,12 @@
       "deleteError": "Failed to delete mission",
       "deleteBlocked": "Cannot delete mission in this status",
       "openMap": "Open Map",
-      "mapPreview": "Map Preview"
+      "mapPreview": "Map Preview",
+      "scopeInfo": {
+        "full": "Export includes full flight: takeoff → transit → measurements → transit → landing",
+        "noTakeoffLanding": "Export starts/ends at transit altitude - no ground-level takeoff or landing",
+        "measurementsOnly": "Export includes measurement waypoints only - no takeoff, landing, or transit"
+      }
     }
   },
   "missionList": {
@@ -737,7 +751,43 @@
     "CANCELLED": "Cancelled"
   },
   "coordinator": {
-    "airports": "Airports",
+    "airports": {
+      "tools": {
+        "select": "Select and edit features (S)",
+        "pan": "Pan the map (P)",
+        "measurement": "Measure distances between points (M)",
+        "drawPolygon": "Draw polygon boundary (G)",
+        "drawCircle": "Draw circle with radius (C)",
+        "drawRectangle": "Draw rectangle (E)",
+        "placePoint": "Place a point on the map (T)",
+        "geoJsonEditor": "GeoJSON Editor",
+        "zoom": "Left click zoom in, right click zoom out (Z)",
+        "zoomReset": "Fit all features in view (R)",
+        "undo": "Undo last change (Ctrl+Z)",
+        "redo": "Redo (Ctrl+Shift+Z)",
+        "heading": "Measure heading between two points (H)"
+      },
+      "help": {
+        "title": "Controls Help",
+        "controls": "Controls",
+        "shortcutSelect": "Select features",
+        "shortcutPan": "Pan the map",
+        "shortcutMeasurement": "Measurement tool",
+        "shortcutDrawPolygon": "Draw polygon",
+        "shortcutDrawCircle": "Draw circle",
+        "shortcutDrawRectangle": "Draw rectangle",
+        "shortcutPlacePoint": "Place point",
+        "shortcutZoom": "Zoom tool",
+        "shortcutHeading": "Heading tool",
+        "shortcutReset": "Fit all features",
+        "shortcutUndo": "Undo",
+        "shortcutRedo": "Redo",
+        "shortcutShiftDrag": "Move entire polygon",
+        "shortcutRightClickVertex": "Delete vertex",
+        "shortcutEscape": "Cancel / deselect",
+        "shortcutDelete": "Delete selected feature"
+      }
+    },
     "airportEditor": "Airport Editor",
     "droneProfiles": "Drone Profiles",
     "droneProfileEditor": "Drone Profile Editor",
@@ -954,43 +1004,6 @@
       "radius": "Radius",
       "area": "Area",
       "shiftToMove": "Hold Shift + drag to move"
-    },
-    "airports": {
-      "tools": {
-        "select": "Select and edit features (S)",
-        "pan": "Pan the map (P)",
-        "measurement": "Measure distances between points (M)",
-        "drawPolygon": "Draw polygon boundary (G)",
-        "drawCircle": "Draw circle with radius (C)",
-        "drawRectangle": "Draw rectangle (E)",
-        "placePoint": "Place a point on the map (T)",
-        "geoJsonEditor": "GeoJSON Editor",
-        "zoom": "Left click zoom in, right click zoom out (Z)",
-        "zoomReset": "Fit all features in view (R)",
-        "undo": "Undo last change (Ctrl+Z)",
-        "redo": "Redo (Ctrl+Shift+Z)",
-        "heading": "Measure heading between two points (H)"
-      },
-      "help": {
-        "title": "Controls Help",
-        "controls": "Controls",
-        "shortcutSelect": "Select features",
-        "shortcutPan": "Pan the map",
-        "shortcutMeasurement": "Measurement tool",
-        "shortcutDrawPolygon": "Draw polygon",
-        "shortcutDrawCircle": "Draw circle",
-        "shortcutDrawRectangle": "Draw rectangle",
-        "shortcutPlacePoint": "Place point",
-        "shortcutZoom": "Zoom tool",
-        "shortcutHeading": "Heading tool",
-        "shortcutReset": "Fit all features",
-        "shortcutUndo": "Undo",
-        "shortcutRedo": "Redo",
-        "shortcutShiftDrag": "Move entire polygon",
-        "shortcutRightClickVertex": "Delete vertex",
-        "shortcutEscape": "Cancel / deselect",
-        "shortcutDelete": "Delete selected feature"
-      }
     },
     "creation": {
       "title": "Create Feature",
