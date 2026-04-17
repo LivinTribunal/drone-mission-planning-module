@@ -115,6 +115,7 @@ export interface AirportMapProps {
   inspectionIndexMap?: Record<string, number>;
   onLayerChange?: (layers: MapLayerConfig) => void;
   leftPanelChildren?: ReactNode;
+  useTakeoffAsLanding?: boolean;
   onPlaceTakeoff?: () => void;
   onPlaceLanding?: () => void;
   measureData?: {
