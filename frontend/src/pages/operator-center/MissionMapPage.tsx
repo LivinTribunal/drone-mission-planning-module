@@ -48,7 +48,6 @@ import MeasureInfoCard from "@/components/map/overlays/MeasureInfoCard";
 import HeadingInfoCard from "@/components/map/overlays/HeadingInfoCard";
 import {
   computePlacementUpdates,
-  computeMirrorLandingUpdate,
   placementKeysFromUpdates,
 } from "@/utils/takeoffLandingPlacement";
 
@@ -99,8 +98,13 @@ export default function MissionMapPage() {
   // pending (optimistic) save state for takeoff/landing placement
   const [pendingPlacement, setPendingPlacement] = useState<Set<"takeoff" | "landing">>(new Set());
 
-  // mirror takeoff to landing for round-trip missions
-  const [useTakeoffAsLanding, setUseTakeoffAsLanding] = useState(false);
+  // mirror mode is derived: true when takeoff and landing coordinates match
+  const useTakeoffAsLanding = useMemo(() => {
+    const t = mission?.takeoff_coordinate?.coordinates;
+    const l = mission?.landing_coordinate?.coordinates;
+    if (!t || !l) return false;
+    return t[0] === l[0] && t[1] === l[1] && t[2] === l[2];
+  }, [mission?.takeoff_coordinate, mission?.landing_coordinate]);
 
   // tools
   const { activeTool, is3D, setTool, resetTool, setIs3D } = useMapTools();
@@ -615,34 +619,6 @@ export default function MissionMapPage() {
     setTool(MapTool.PLACE_LANDING);
   }, [setTool]);
 
-  // toggle handler for "use takeoff as landing" - mirrors landing to takeoff when enabled
-  const handleToggleUseTakeoffAsLanding = useCallback(async () => {
-    const next = !useTakeoffAsLanding;
-    setUseTakeoffAsLanding(next);
-
-    if (!next || !id) return;
-    const mirrorUpdate = computeMirrorLandingUpdate(mission?.takeoff_coordinate);
-    if (!mirrorUpdate) return;
-
-    setPendingPlacement((prev) => new Set([...prev, "landing"]));
-    try {
-      await updateMission(id, mirrorUpdate);
-      const fresh = await getMission(id);
-      setMission(fresh);
-      refreshMissions();
-    } catch (err) {
-      console.error("map save error:", err instanceof Error ? err.message : String(err));
-      showNotification(t("map.saveError"));
-    } finally {
-      setPendingPlacement((prev) => {
-        const next = new Set(prev);
-        next.delete("landing");
-        return next;
-      });
-    }
-  }, [useTakeoffAsLanding, id, mission, refreshMissions, t]);
-
-
   // zoom reset - not yet wired to map API
   const handleZoomReset = useCallback(() => {}, []);
 
@@ -900,28 +876,9 @@ export default function MissionMapPage() {
             highlightSeverity={selectedWarning?.severity}
             selectedWarning={selectedWarning}
             onWarningClose={() => setSelectedWarning(null)}
+            useTakeoffAsLanding={useTakeoffAsLanding}
             leftPanelChildren={
               <>
-                {isDraft && (!mission.takeoff_coordinate || !mission.landing_coordinate) && (
-                  <label
-                    className="flex items-start gap-2 rounded-2xl border border-tv-border bg-tv-bg px-3 py-2 text-xs text-tv-text-primary cursor-pointer"
-                    data-testid="use-takeoff-as-landing"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 accent-tv-accent"
-                      checked={useTakeoffAsLanding}
-                      onChange={handleToggleUseTakeoffAsLanding}
-                      data-testid="use-takeoff-as-landing-checkbox"
-                    />
-                    <span className="flex flex-col">
-                      <span className="font-semibold">{t("map.useTakeoffAsLanding")}</span>
-                      <span className="text-tv-text-secondary">
-                        {t("map.useTakeoffAsLandingHint")}
-                      </span>
-                    </span>
-                  </label>
-                )}
                 {pendingPlacement.size > 0 && (
                   <div
                     className="flex items-center justify-between rounded-2xl border border-tv-warning bg-tv-bg px-3 py-1.5 text-xs font-semibold text-tv-warning"

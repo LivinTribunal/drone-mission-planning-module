@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 from geoalchemy2.elements import WKTElement
 
+from app.core.exceptions import TrajectoryGenerationError
 from app.models.airport import Airport, Obstacle, Runway
 from app.models.enums import CameraAction, WaypointType
 from app.services.trajectory_pathfinding import (
@@ -245,22 +246,87 @@ class TestFastPathBufferOverride:
     """regression: compute_transit_path must pass buffer_distance_override to the
     fast-path _is_segment_blocked call, not just the A* branch."""
 
-    def test_override_resolved_for_fast_path(self):
-        """buffer_distance_override is included in the fast-path expression."""
-        # verify the fix at source level - the fast-path buffer expression
-        # must resolve buffer_distance_override before calling _is_segment_blocked
-        import inspect
+    def test_override_triggers_fast_path_detour(self, db_session):
+        """buffer override must reach the fast-path check, not just the A* branch.
 
-        from app.services.trajectory_pathfinding import compute_transit_path
+        regression for a bug where compute_transit_path's fast-path segment check
+        ignored buffer_distance_override and fell through to the straight-line
+        path even when the override should have flagged the segment as blocked.
+        """
+        airport, runway = _make_perpendicular_runway_airport(db_session)
 
-        source = inspect.getsource(compute_transit_path)
+        # straight line endpoints well north of the runway to avoid runway crossing
+        from_pt = Point3D(lon=14.262, lat=50.1100, alt=350.0)
+        to_pt = Point3D(lon=14.258, lat=50.1100, alt=350.0)
 
-        # the fast-path _is_segment_blocked call should include buffer_distance
-        # prior to fix it was: _is_segment_blocked(db, from_point, to_point, obstacles, zones)
-        # after fix: _is_segment_blocked(..., buffer_distance=fast_path_buffer)
-        assert (
-            "fast_path_buffer" in source
-        ), "compute_transit_path must resolve buffer_distance_override for fast-path check"
+        # small obstacle sitting ~30m north of the line with a 2m intrinsic buffer.
+        # with no override: line clear, fast-path returns 1 waypoint.
+        # with 50m override: inflated footprint crosses the line, forcing A* detour.
+        obstacle = Obstacle(
+            id=uuid4(),
+            airport_id=airport.id,
+            name="side-block",
+            height=80.0,
+            type="BUILDING",
+            buffer_distance=2.0,
+            boundary=WKTElement(
+                "SRID=4326;POLYGONZ(("
+                "14.25998 50.11027 300, "
+                "14.26002 50.11027 300, "
+                "14.26002 50.11030 300, "
+                "14.25998 50.11030 300, "
+                "14.25998 50.11027 300"
+                "))",
+                srid=4326,
+            ),
+        )
+        db_session.add(obstacle)
+        db_session.commit()
+        db_session.refresh(obstacle)
+
+        # baseline: no override - fast-path returns single waypoint (straight line)
+        wps_no_override = compute_transit_path(
+            db_session,
+            from_pt,
+            to_pt,
+            obstacles=[obstacle],
+            zones=[],
+            speed=8.0,
+            surfaces=[runway],
+            buffer_distance_override=None,
+            require_perpendicular_runway_crossing=False,
+        )
+        assert len(wps_no_override) == 1, (
+            f"without override, fast-path should return direct path (1 waypoint), "
+            f"got {len(wps_no_override)}"
+        )
+
+        # with 50m override - fast-path must detect the inflated obstacle.
+        # before the fix, fast-path ignored override and returned a single-waypoint
+        # straight line regardless. after the fix, either A* reroutes with >1
+        # intermediate waypoints OR raises when no detour is found - both prove
+        # the override reached the fast-path segment check.
+        try:
+            wps_with_override = compute_transit_path(
+                db_session,
+                from_pt,
+                to_pt,
+                obstacles=[obstacle],
+                zones=[],
+                speed=8.0,
+                surfaces=[runway],
+                buffer_distance_override=50.0,
+                require_perpendicular_runway_crossing=False,
+            )
+        except TrajectoryGenerationError as exc:
+            # A* couldn't route around the aggressively inflated obstacle - that's
+            # still evidence the fast-path rejected the straight line as expected
+            assert "no obstacle-free transit path found" in str(exc)
+        else:
+            assert len(wps_with_override) > 1, (
+                f"with override, fast-path must reject the direct path; "
+                f"got {len(wps_with_override)} waypoints (straight-line fallback bug)"
+            )
 
 
 # perpendicular vs shortest-geodesic runway crossing flag
@@ -357,9 +423,9 @@ class TestRequirePerpendicularRunwayCrossing:
         def perp_delta(b):
             return min(abs(b - 0.0), abs(b - 180.0), abs(b - 360.0))
 
-        assert any(
-            perp_delta(b) <= 5.0 for b in bearings
-        ), f"no perpendicular segment found in bearings {bearings}"
+        assert any(perp_delta(b) <= 5.0 for b in bearings), (
+            f"no perpendicular segment found in bearings {bearings}"
+        )
 
     def test_flag_false_is_strictly_shorter_and_clears_runway(self, db_session):
         """flag off lets A* (or the fast-path) pick the shortest geodesic crossing."""
@@ -391,9 +457,9 @@ class TestRequirePerpendicularRunwayCrossing:
 
         perp_dist = _path_distance(perp_wps, from_pt)
         short_dist = _path_distance(short_wps, from_pt)
-        assert (
-            short_dist < perp_dist
-        ), f"shortest-geodesic distance {short_dist:.1f} not < perpendicular {perp_dist:.1f}"
+        assert short_dist < perp_dist, (
+            f"shortest-geodesic distance {short_dist:.1f} not < perpendicular {perp_dist:.1f}"
+        )
 
     def test_flag_false_still_avoids_obstacle(self, db_session):
         """flag off must still detour around an obstacle on the straight line."""
@@ -441,9 +507,9 @@ class TestRequirePerpendicularRunwayCrossing:
             [(from_pt.lon, from_pt.lat, from_pt.alt), (to_pt.lon, to_pt.lat, to_pt.alt)]
         )
         rerouted = _path_distance(wps, from_pt)
-        assert (
-            rerouted > straight
-        ), f"rerouted distance {rerouted:.1f} not greater than straight {straight:.1f}"
+        assert rerouted > straight, (
+            f"rerouted distance {rerouted:.1f} not greater than straight {straight:.1f}"
+        )
 
     def test_flag_false_no_runways_matches_default(self, db_session):
         """without any runways, both flag values produce the same straight-line path."""
@@ -549,6 +615,6 @@ class TestRequirePerpendicularRunwayCrossing:
         perp_dist = total_path_distance(perp_pts)
         short_dist = total_path_distance(short_pts)
 
-        assert (
-            short_dist < perp_dist
-        ), f"flag=False reroute {short_dist:.1f} not shorter than flag=True {perp_dist:.1f}"
+        assert short_dist < perp_dist, (
+            f"flag=False reroute {short_dist:.1f} not shorter than flag=True {perp_dist:.1f}"
+        )

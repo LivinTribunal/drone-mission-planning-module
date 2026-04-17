@@ -71,7 +71,7 @@ export function addSafetyZoneLayers(
     source: SAFETY_ZONE_SOURCE,
     paint: {
       "fill-color": ["get", "borderColor"],
-      "fill-opacity": ["case", ["get", "isActive"], 0.12, 0.04],
+      "fill-opacity": ["case", ["get", "isActive"], 0.12, 0.08],
     },
   });
 
@@ -99,7 +99,7 @@ export function addSafetyZoneLayers(
         ["literal", [2, 2]],
         ["literal", [1, 3]],
       ],
-      "line-opacity": ["case", ["get", "isActive"], 1, 0.5],
+      "line-opacity": ["case", ["get", "isActive"], 1, 0.6],
     },
   });
 
@@ -119,7 +119,7 @@ export function addSafetyZoneLayers(
       "text-color": ["get", "borderColor"],
       "text-halo-color": "#000000",
       "text-halo-width": 1,
-      "text-opacity": ["case", ["get", "isActive"], 1, 0.4],
+      "text-opacity": ["case", ["get", "isActive"], 1, 0.55],
     },
   });
 

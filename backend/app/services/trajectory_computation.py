@@ -182,6 +182,27 @@ def get_lha_positions(template, lha_ids: list | None = None) -> list[Point3D]:
     return positions
 
 
+def get_lha_positions_from_surfaces(surfaces, lha_ids: list) -> list[Point3D]:
+    """resolve LHA positions from all airport surfaces instead of template targets.
+
+    used for AGL-agnostic methods (hover-point-lock) where the template has
+    no target AGLs and the operator selects LHAs from any surface.
+    """
+    lha_id_set = {str(i) for i in lha_ids}
+    positions = []
+    for surface in surfaces:
+        for agl in surface.agls:
+            for lha in agl.lhas:
+                if str(lha.id) not in lha_id_set:
+                    continue
+                pos = _parse_lha_position(lha)
+                if pos is None:
+                    continue
+                positions.append(pos)
+
+    return positions
+
+
 def get_lha_setting_angles(template, lha_ids=None) -> list[Degrees]:
     """collect and sort setting angles from all LHA units in template."""
     # precompute set to avoid O(m*n) list rebuild per iteration

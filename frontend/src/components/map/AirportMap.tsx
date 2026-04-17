@@ -308,6 +308,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   visibleInspectionIds,
   onLayerChange,
   leftPanelChildren,
+  useTakeoffAsLanding,
   activeTool,
   onPlaceTakeoff,
   onPlaceLanding,
@@ -352,6 +353,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   takeoffRef.current = takeoffCoordinate;
   const landingRef = useRef(landingCoordinate);
   landingRef.current = landingCoordinate;
+  const useTakeoffAsLandingRef = useRef(useTakeoffAsLanding);
+  useTakeoffAsLandingRef.current = useTakeoffAsLanding;
   const indexMapRef = useRef(inspectionIndexMap);
   indexMapRef.current = inspectionIndexMap;
   const highlightedIdsRef = useRef(highlightedWaypointIds);
@@ -718,6 +721,9 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         let dragLanding = landingRef.current;
         if (dragState.waypointId === "takeoff" && dragTakeoff) {
           dragTakeoff = { ...dragTakeoff, coordinates: newCoords };
+          if (useTakeoffAsLandingRef.current) {
+            dragLanding = { ...dragTakeoff };
+          }
         } else if (dragState.waypointId === "landing" && dragLanding) {
           dragLanding = { ...dragLanding, coordinates: newCoords };
         }

@@ -30,6 +30,7 @@ from app.services.trajectory_computation import (
     find_lha_in_surfaces,
     get_glide_slope_angle,
     get_lha_positions,
+    get_lha_positions_from_surfaces,
     get_lha_setting_angles,
     get_ordered_lha_positions,
     get_runway_centerline_midpoint,
@@ -405,6 +406,11 @@ def _generate_trajectory_inner(
 
         lha_ids = inspection.lha_ids
         lha_positions = get_lha_positions(template, lha_ids)
+
+        # AGL-agnostic methods (hover-point-lock) may have LHAs outside template targets
+        if not lha_positions and lha_ids:
+            lha_positions = get_lha_positions_from_surfaces(data.surfaces, lha_ids)
+
         if not lha_positions:
             warnings.append(
                 (
@@ -699,7 +705,8 @@ def _generate_trajectory_inner(
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
         # note: uses per-pass speed for battery estimate; final duration uses per-waypoint speed
-        seg_dur = seg_dist / max(speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+        effective_speed = speed if speed is not None else MIN_SPEED_FLOOR
+        seg_dur = seg_dist / max(effective_speed, MIN_SPEED_FLOOR)
 
         for wp in pass_wps:
             if wp.hover_duration is not None:
@@ -754,8 +761,7 @@ def _generate_trajectory_inner(
         )
 
         # ascend to transit altitude at takeoff position before horizontal flight
-        ground_at_takeoff = provider.get_elevation(tc[1], tc[0]) if provider else takeoff_alt
-        climb_alt = ground_at_takeoff + transit_agl
+        climb_alt = takeoff_alt + transit_agl
         all_waypoints.append(
             WaypointData(
                 lon=tc[0],
@@ -948,7 +954,6 @@ def _generate_trajectory_inner(
     # compute final totals with trapezoidal speed profile
     total_dist = 0.0
     total_dur = TAKEOFF_DURATION + LANDING_DURATION
-    prev_wp_type = None
     for j in range(len(all_waypoints)):
         if j > 0:
             prev = all_waypoints[j - 1]
@@ -958,21 +963,25 @@ def _generate_trajectory_inner(
             d = math.sqrt(seg**2 + altitude_diff**2)
             total_dist += d
 
-            v_prev = max(prev.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
-            v_cur = max(cur.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+            v_prev = max(
+                prev.speed if prev.speed is not None else MIN_SPEED_FLOOR,
+                MIN_SPEED_FLOOR,
+            )
+            v_cur = max(
+                cur.speed if cur.speed is not None else MIN_SPEED_FLOOR,
+                MIN_SPEED_FLOOR,
+            )
             total_dur += _segment_duration_with_accel(d, v_prev, v_cur)
 
             # gimbal settle when transitioning between segment types
-            if (
-                prev_wp_type is not None
-                and prev.waypoint_type != cur.waypoint_type
-                and cur.waypoint_type in (WaypointType.MEASUREMENT, WaypointType.HOVER)
+            if prev.waypoint_type != cur.waypoint_type and cur.waypoint_type in (
+                WaypointType.MEASUREMENT,
+                WaypointType.HOVER,
             ):
                 total_dur += GIMBAL_SETTLE_TIME
 
         if all_waypoints[j].hover_duration is not None:
             total_dur += all_waypoints[j].hover_duration
-        prev_wp_type = all_waypoints[j].waypoint_type
 
     flight_plan = persist_flight_plan(
         db,
