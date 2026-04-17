@@ -43,6 +43,7 @@ TRAJECTORY_FIELDS = {
     "default_capture_mode",
     "default_buffer_distance",
     "transit_agl",
+    "require_perpendicular_runway_crossing",
 }
 
 # minimum allowable cruise altitude (AGL meters) - kept in sync with
@@ -104,6 +105,9 @@ class Mission(Base):
     default_capture_mode = Column(String(20), nullable=True, default="VIDEO_CAPTURE")
     default_buffer_distance = Column(Float, nullable=True)
     transit_agl = Column(Float, nullable=True)
+    require_perpendicular_runway_crossing = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     has_unsaved_map_changes = Column(Boolean, nullable=False, default=False, server_default="false")
 
     airport = relationship("Airport")

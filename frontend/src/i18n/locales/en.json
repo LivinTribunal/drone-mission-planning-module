@@ -460,6 +460,8 @@
       "defaultBufferDistanceHint": "Leave empty to keep object-level values",
       "transitAgl": "Transit Height (m)",
       "transitAglHint": "Minimum 5 m - leave empty for safe default",
+      "requirePerpendicularCrossing": "Force perpendicular runway crossing",
+      "requirePerpendicularCrossingHint": "Off = shortest geodesic crossing, minimises runway closure window",
       "takeoffCoordinate": "Takeoff Coordinate",
       "landingCoordinate": "Landing Coordinate",
       "operatorNotes": "Operator Notes",

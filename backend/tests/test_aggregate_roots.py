@@ -625,3 +625,9 @@ class TestTrajectoryFieldsCompleteness:
         from app.models.mission import TRAJECTORY_FIELDS
 
         assert "transit_agl" in TRAJECTORY_FIELDS
+
+    def test_require_perpendicular_in_trajectory_fields(self):
+        """require_perpendicular_runway_crossing is a trajectory-affecting field."""
+        from app.models.mission import TRAJECTORY_FIELDS
+
+        assert "require_perpendicular_runway_crossing" in TRAJECTORY_FIELDS
