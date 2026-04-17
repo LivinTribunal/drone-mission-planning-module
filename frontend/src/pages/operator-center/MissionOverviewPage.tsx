@@ -5,12 +5,14 @@ import { useTranslation } from "react-i18next";
 import { FileText, Loader2 } from "lucide-react";
 import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
-import { getMission, getFlightPlan, generateTrajectory, downloadFlightBrief } from "@/api/missions";
+import { getMission, getFlightPlan, generateTrajectory } from "@/api/missions";
+import useDownloadFlightBrief from "@/hooks/useDownloadFlightBrief";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { DroneProfileResponse } from "@/types/droneProfile";
 import type { FlightPlanResponse, ValidationViolation } from "@/types/flightPlan";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
+import Button from "@/components/common/Button";
 import MissionInfoPanel from "@/components/mission/MissionInfoPanel";
 import WarningsPanel from "@/components/mission/WarningsPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
@@ -42,8 +44,6 @@ export default function MissionOverviewPage() {
   const [selectedWarning, setSelectedWarning] = useState<ValidationViolation | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
-  const [isDownloadingBrief, setIsDownloadingBrief] = useState(false);
-
   const inspectionIndexMap = useMemo(() => {
     if (!mission) return undefined;
     const sorted = [...mission.inspections].sort((a, b) => a.sequence_order - b.sequence_order);
@@ -79,32 +79,11 @@ export default function MissionOverviewPage() {
     }
   }, [id, mission, t, refreshMissions, showNotification]);
 
-  const handleDownloadBrief = useCallback(async () => {
-    if (!id || !mission) return;
-    setIsDownloadingBrief(true);
-    try {
-      const { blob, filename } = await downloadFlightBrief(id);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename ?? `FlightBrief_${mission.name}.pdf`;
-      document.body.appendChild(a);
-      try {
-        a.click();
-      } finally {
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
-    } catch (err) {
-      showNotification(
-        isAxiosError(err) && err.response?.data?.detail
-          ? String(err.response.data.detail)
-          : t("mission.flightBrief.error"),
-      );
-    } finally {
-      setIsDownloadingBrief(false);
-    }
-  }, [id, mission, t, showNotification]);
+  const { isDownloadingBrief, handleDownloadBrief } = useDownloadFlightBrief(
+    id,
+    mission?.name,
+    showNotification,
+  );
 
   // wire up disabled save button
   useEffect(() => {
@@ -253,15 +232,12 @@ export default function MissionOverviewPage() {
           </div>
 
           {/* flight brief download */}
-          <button
+          <Button
+            variant="secondary"
             onClick={handleDownloadBrief}
             disabled={!flightPlan || isDownloadingBrief}
             title={!flightPlan ? t("mission.flightBrief.noFlightPlan") : undefined}
-            className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-full border transition-colors ${
-              flightPlan && !isDownloadingBrief
-                ? "border-tv-border bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover"
-                : "opacity-50 cursor-not-allowed border-tv-border bg-tv-surface text-tv-text-muted"
-            }`}
+            className="w-full flex items-center justify-center gap-2"
             data-testid="overview-download-brief-btn"
           >
             {isDownloadingBrief ? (
@@ -272,7 +248,7 @@ export default function MissionOverviewPage() {
             {isDownloadingBrief
               ? t("mission.flightBrief.generating")
               : t("mission.flightBrief.download")}
-          </button>
+          </Button>
 
         </>,
         leftPanelEl,

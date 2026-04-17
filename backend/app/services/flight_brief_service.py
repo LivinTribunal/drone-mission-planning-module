@@ -19,7 +19,13 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.airport import Airport
-from app.models.flight_plan import FlightPlan, ValidationResult
+from app.models.flight_plan import (
+    ConstraintRule,
+    FlightPlan,
+    ValidationResult,
+    ValidationViolation,
+    Waypoint,
+)
 from app.models.inspection import Inspection, InspectionTemplate
 from app.models.mission import DroneProfile, Mission
 from app.schemas.geometry import parse_ewkb
@@ -61,11 +67,11 @@ class BriefData:
     flight_plan: FlightPlan
     airport: Airport
     drone_profile: DroneProfile | None
-    waypoints: list
-    inspections: list
+    waypoints: list[Waypoint]
+    inspections: list[Inspection]
     validation_result: ValidationResult | None
-    violations: list
-    constraints: list
+    violations: list[ValidationViolation]
+    constraints: list[ConstraintRule]
 
 
 def _extract_coords(geom) -> tuple[float, float, float]:
@@ -197,10 +203,12 @@ def _load_brief_data(db: Session, mission_id: UUID) -> BriefData:
         .filter(Airport.id == mission.airport_id)
         .first()
     )
+    if not airport:
+        raise NotFoundError("airport not found")
 
     drone_profile = None
     if mission.drone_profile_id:
-        drone_profile = db.query(DroneProfile).get(mission.drone_profile_id)
+        drone_profile = db.get(DroneProfile, mission.drone_profile_id)
 
     waypoints = sorted(flight_plan.waypoints, key=lambda w: w.sequence_order)
     inspections = sorted(mission.inspections, key=lambda i: i.sequence_order)

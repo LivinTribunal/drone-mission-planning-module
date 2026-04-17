@@ -9,11 +9,11 @@ import {
   getFlightPlan,
   validateMission,
   exportMissionFiles,
-  downloadFlightBrief,
   completeMission,
   cancelMission,
   deleteMission,
 } from "@/api/missions";
+import useDownloadFlightBrief from "@/hooks/useDownloadFlightBrief";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
@@ -45,7 +45,6 @@ export default function MissionValidationPage() {
   const [error, setError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [isDownloadingBrief, setIsDownloadingBrief] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">(
     "satellite",
@@ -164,6 +163,12 @@ export default function MissionValidationPage() {
     notificationTimer.current = setTimeout(() => setNotification(null), 4000);
   }
 
+  const { isDownloadingBrief, handleDownloadBrief } = useDownloadFlightBrief(
+    id,
+    mission?.name,
+    showNotification,
+  );
+
   async function handleValidate() {
     if (!id) return;
     setIsValidating(true);
@@ -205,30 +210,6 @@ export default function MissionValidationPage() {
       showNotification(t("mission.validationExportPage.exportError"));
     } finally {
       setIsExporting(false);
-    }
-  }
-
-  async function handleDownloadBrief() {
-    if (!id || !mission) return;
-    setIsDownloadingBrief(true);
-    try {
-      const { blob, filename } = await downloadFlightBrief(id);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename ?? `FlightBrief_${mission.name}.pdf`;
-      document.body.appendChild(a);
-      try {
-        a.click();
-      } finally {
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
-    } catch (err) {
-      console.error("flight brief failed:", err instanceof Error ? err.message : String(err));
-      showNotification(t("mission.flightBrief.error"));
-    } finally {
-      setIsDownloadingBrief(false);
     }
   }
 
