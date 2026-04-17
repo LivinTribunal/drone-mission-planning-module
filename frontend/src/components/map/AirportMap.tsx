@@ -122,7 +122,8 @@ export interface AirportMapHandle {
 }
 
 const GLYPHS_URL =
-  "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
+  import.meta.env.VITE_GLYPHS_URL ??
+  "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf";
 
 /** polls map.isStyleLoaded() until true, then calls callback. returns cancel fn. */
 function waitForStyleLoaded(
@@ -308,6 +309,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   visibleInspectionIds,
   onLayerChange,
   leftPanelChildren,
+  useTakeoffAsLanding,
   activeTool,
   onPlaceTakeoff,
   onPlaceLanding,
@@ -352,6 +354,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   takeoffRef.current = takeoffCoordinate;
   const landingRef = useRef(landingCoordinate);
   landingRef.current = landingCoordinate;
+  const useTakeoffAsLandingRef = useRef(useTakeoffAsLanding);
+  useTakeoffAsLandingRef.current = useTakeoffAsLanding;
   const indexMapRef = useRef(inspectionIndexMap);
   indexMapRef.current = inspectionIndexMap;
   const highlightedIdsRef = useRef(highlightedWaypointIds);
@@ -712,6 +716,19 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         if (!map) return;
         const wps = waypointsRef.current ?? [];
         const newCoords: [number, number, number] = [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt];
+
+        // live preview for standalone T/L markers
+        let dragTakeoff = takeoffRef.current;
+        let dragLanding = landingRef.current;
+        if (dragState.waypointId === "takeoff" && dragTakeoff) {
+          dragTakeoff = { ...dragTakeoff, coordinates: newCoords };
+          if (useTakeoffAsLandingRef.current) {
+            dragLanding = { ...dragTakeoff };
+          }
+        } else if (dragState.waypointId === "landing" && dragLanding) {
+          dragLanding = { ...dragLanding, coordinates: newCoords };
+        }
+
         const updated: WaypointResponse[] = wps.map((wp) => {
           if (wp.id !== dragState.waypointId) return wp;
           return {
@@ -727,7 +744,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         const pointSrc = map.getSource(WAYPOINT_SOURCE) as maplibregl.GeoJSONSource | undefined;
         if (pointSrc) {
           pointSrc.setData(
-            waypointsToGeoJSON(updated, takeoffRef.current, landingRef.current, indexMapRef.current),
+            waypointsToGeoJSON(updated, dragTakeoff, dragLanding, indexMapRef.current),
           );
         }
 

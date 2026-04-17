@@ -30,6 +30,7 @@ from app.services.trajectory_computation import (
     find_lha_in_surfaces,
     get_glide_slope_angle,
     get_lha_positions,
+    get_lha_positions_from_surfaces,
     get_lha_setting_angles,
     get_ordered_lha_positions,
     get_runway_centerline_midpoint,
@@ -44,12 +45,17 @@ from app.services.trajectory_pathfinding import (
     resolve_inspection_collisions,
 )
 from app.services.trajectory_types import (
+    DEFAULT_ACCELERATION,
+    DEFAULT_DECELERATION,
     DEFAULT_FLY_OVER_SPEED,
     DEFAULT_PARALLEL_SPEED,
     DEFAULT_RESERVE_MARGIN,
     DEFAULT_SPEED,
+    GIMBAL_SETTLE_TIME,
+    LANDING_DURATION,
     MIN_ARC_RADIUS,
     MIN_SPEED_FLOOR,
+    TAKEOFF_DURATION,
     TRANSIT_AGL,
     VERTICAL_POSITION_TOLERANCE_DEG,
     InspectionPass,
@@ -79,6 +85,53 @@ def _parse_coordinate(ewkb_data, label: str) -> list[float]:
         raise TrajectoryGenerationError(f"invalid {label} coordinate: {e}")
 
     return coords
+
+
+def _segment_duration_with_accel(
+    distance: float,
+    v_start: float,
+    v_end: float,
+    accel: float = DEFAULT_ACCELERATION,
+    decel: float = DEFAULT_DECELERATION,
+) -> float:
+    """compute segment travel time using a trapezoidal speed profile.
+
+    models acceleration from v_start to cruise speed, constant cruise, then
+    deceleration to v_end. falls back to triangular profile when the segment
+    is too short for full accel/decel phases.
+    """
+    if distance <= 0:
+        return 0.0
+    v_start = max(v_start, MIN_SPEED_FLOOR)
+    v_end = max(v_end, MIN_SPEED_FLOOR)
+    v_cruise = max(v_start, v_end)
+
+    # distance needed for accel and decel phases
+    d_accel = (v_cruise**2 - v_start**2) / (2 * accel) if v_cruise > v_start else 0.0
+    d_decel = (v_cruise**2 - v_end**2) / (2 * decel) if v_cruise > v_end else 0.0
+
+    if d_accel + d_decel <= distance:
+        # full trapezoidal profile
+        d_cruise = distance - d_accel - d_decel
+        t_accel = (v_cruise - v_start) / accel if v_cruise > v_start else 0.0
+        t_decel = (v_cruise - v_end) / decel if v_cruise > v_end else 0.0
+        t_cruise = d_cruise / v_cruise if v_cruise > 0 else 0.0
+        return t_accel + t_cruise + t_decel
+
+    # triangular profile - can't reach cruise speed
+    # solve for peak velocity: d_accel + d_decel = distance
+    # v_peak^2 = (2*accel*decel*distance + decel*v_start^2 + accel*v_end^2) / (accel + decel)
+    numerator = 2 * accel * decel * distance + decel * v_start**2 + accel * v_end**2
+    denominator = accel + decel
+    if denominator == 0:
+        return distance / max(v_start, MIN_SPEED_FLOOR)
+    v_peak_sq = numerator / denominator
+    if v_peak_sq < 0:
+        return distance / max(v_start, MIN_SPEED_FLOOR)
+    v_peak = math.sqrt(v_peak_sq)
+    t_accel = (v_peak - v_start) / accel if v_peak > v_start else 0.0
+    t_decel = (v_peak - v_end) / decel if v_peak > v_end else 0.0
+    return t_accel + t_decel
 
 
 def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
@@ -355,6 +408,11 @@ def _generate_trajectory_inner(
 
         lha_ids = inspection.lha_ids
         lha_positions = get_lha_positions(template, lha_ids)
+
+        # AGL-agnostic methods (hover-point-lock) may have LHAs outside template targets
+        if not lha_positions and lha_ids:
+            lha_positions = get_lha_positions_from_surfaces(data.surfaces, lha_ids)
+
         if not lha_positions:
             warnings.append(
                 (
@@ -648,8 +706,17 @@ def _generate_trajectory_inner(
 
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
-        # note: uses per-pass speed for battery estimate; final duration uses per-waypoint speed
-        seg_dur = seg_dist / max(speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+
+        # use trapezoidal profile to match final flight-plan duration calculation
+        seg_dur = 0.0
+        for j in range(1, len(pass_wps)):
+            prev_wp = pass_wps[j - 1]
+            cur_wp = pass_wps[j]
+            h = distance_between(prev_wp.lon, prev_wp.lat, cur_wp.lon, cur_wp.lat)
+            d = math.sqrt(h**2 + (cur_wp.alt - prev_wp.alt) ** 2)
+            v_prev = max(prev_wp.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+            v_cur = max(cur_wp.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+            seg_dur += _segment_duration_with_accel(d, v_prev, v_cur)
 
         for wp in pass_wps:
             if wp.hover_duration is not None:
@@ -664,9 +731,13 @@ def _generate_trajectory_inner(
     if not inspection_passes:
         raise TrajectoryGenerationError("no waypoints generated")
 
-    # battery check after all inspections are computed
+    # battery check after all inspections are computed - include T/L overhead
     if drone:
-        bw = check_battery(cumulative_duration, drone, DEFAULT_RESERVE_MARGIN)
+        bw = check_battery(
+            cumulative_duration + TAKEOFF_DURATION + LANDING_DURATION,
+            drone,
+            DEFAULT_RESERVE_MARGIN,
+        )
         if bw:
             warnings.append((bw.message, []))
 
@@ -700,8 +771,7 @@ def _generate_trajectory_inner(
         )
 
         # ascend to transit altitude at takeoff position before horizontal flight
-        ground_at_takeoff = provider.get_elevation(tc[1], tc[0]) if provider else takeoff_alt
-        climb_alt = ground_at_takeoff + transit_agl
+        climb_alt = takeoff_alt + transit_agl
         all_waypoints.append(
             WaypointData(
                 lon=tc[0],
@@ -891,9 +961,9 @@ def _generate_trajectory_inner(
 
     _format_soft_warnings(final_violations, "final validation", warnings)
 
-    # compute final totals per-segment
+    # compute final totals with trapezoidal speed profile
     total_dist = 0.0
-    total_dur = 0.0
+    total_dur = TAKEOFF_DURATION + LANDING_DURATION
     for j in range(len(all_waypoints)):
         if j > 0:
             prev = all_waypoints[j - 1]
@@ -902,7 +972,23 @@ def _generate_trajectory_inner(
             altitude_diff = cur.alt - prev.alt
             d = math.sqrt(seg**2 + altitude_diff**2)
             total_dist += d
-            total_dur += d / max(cur.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+
+            v_prev = max(
+                prev.speed if prev.speed is not None else MIN_SPEED_FLOOR,
+                MIN_SPEED_FLOOR,
+            )
+            v_cur = max(
+                cur.speed if cur.speed is not None else MIN_SPEED_FLOOR,
+                MIN_SPEED_FLOOR,
+            )
+            total_dur += _segment_duration_with_accel(d, v_prev, v_cur)
+
+            # gimbal settle when transitioning between segment types
+            if prev.waypoint_type != cur.waypoint_type and cur.waypoint_type in (
+                WaypointType.MEASUREMENT,
+                WaypointType.HOVER,
+            ):
+                total_dur += GIMBAL_SETTLE_TIME
 
         if all_waypoints[j].hover_duration is not None:
             total_dur += all_waypoints[j].hover_duration
