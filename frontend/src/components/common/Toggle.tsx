@@ -2,6 +2,7 @@ interface ToggleProps {
   checked: boolean;
   onChange: () => void;
   disabled?: boolean;
+  "aria-label"?: string;
   "data-testid"?: string;
 }
 
@@ -9,6 +10,7 @@ export default function Toggle({
   checked,
   onChange,
   disabled,
+  "aria-label": ariaLabel,
   "data-testid": testId,
 }: ToggleProps) {
   /** custom toggle switch. */
@@ -18,6 +20,7 @@ export default function Toggle({
       disabled={disabled}
       role="switch"
       aria-checked={checked}
+      aria-label={ariaLabel}
       data-testid={testId}
       className="ml-auto flex-shrink-0 relative inline-block w-[36px] h-[18px] rounded-full transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
       style={{

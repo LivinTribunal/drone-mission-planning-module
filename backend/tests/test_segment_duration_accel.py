@@ -78,13 +78,10 @@ def test_min_speed_floor_applied():
 
 
 def test_realistic_dji_segment():
-    """check a realistic segment approximates expected DJI flight behavior.
-
-    100m at 5 m/s with accel/decel from/to 3 m/s should take more than 100/5=20s.
-    """
-    dur = _segment_duration_with_accel(100.0, 3.0, 3.0)
-    simple = 100.0 / 5.0
-    assert dur > simple
+    """100m accelerating from 3 m/s to cruise 5 m/s takes longer than constant 5 m/s."""
+    dur = _segment_duration_with_accel(100.0, 3.0, 5.0)
+    constant_at_cruise = _segment_duration_with_accel(100.0, 5.0, 5.0)
+    assert dur > constant_at_cruise
 
 
 def test_takeoff_landing_constants_are_positive():

@@ -123,6 +123,8 @@ def _segment_duration_with_accel(
     # v_peak^2 = (2*accel*decel*distance + decel*v_start^2 + accel*v_end^2) / (accel + decel)
     numerator = 2 * accel * decel * distance + decel * v_start**2 + accel * v_end**2
     denominator = accel + decel
+    if denominator == 0:
+        return distance / max(v_start, MIN_SPEED_FLOOR)
     v_peak_sq = numerator / denominator
     if v_peak_sq < 0:
         return distance / max(v_start, MIN_SPEED_FLOOR)

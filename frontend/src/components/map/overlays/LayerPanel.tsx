@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import type { MapLayerConfig } from "@/types/map";
@@ -31,6 +31,10 @@ export default function LayerPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [trajectoryExpanded, setTrajectoryExpanded] = useState(layers.trajectory);
   const [waypointsExpanded, setWaypointsExpanded] = useState(true);
+
+  useEffect(() => {
+    setTrajectoryExpanded(layers.trajectory);
+  }, [layers.trajectory]);
 
   const waypointsOn = layers.transitWaypoints && layers.measurementWaypoints;
 
@@ -107,6 +111,7 @@ export default function LayerPanel({
                       <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${waypointsExpanded ? "rotate-180" : ""}`} />
                     </button>
                     <span>{t("dashboard.waypoints")}</span>
+                    {/* synthetic key - parent toggles both transit + measurement */}
                     <Toggle checked={waypointsOn} onChange={() => onToggle("waypoints")} />
                   </div>
 
