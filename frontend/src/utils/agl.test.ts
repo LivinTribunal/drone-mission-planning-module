@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { formatAglDisplayName } from "./agl";
 import type { AglType } from "@/types/airport";
-import type { SurfaceType } from "@/types/enums";
+import type { PAPISide, SurfaceType } from "@/types/enums";
 
 describe("formatAglDisplayName", () => {
   it("formats PAPI on a runway as 'PAPI RWY {designator}'", () => {
@@ -11,7 +11,7 @@ describe("formatAglDisplayName", () => {
   });
 
   it("formats PAPI with side on a runway", () => {
-    const agl = { agl_type: "PAPI" as AglType, name: "PAPI 1", side: "LEFT" };
+    const agl = { agl_type: "PAPI" as AglType, name: "PAPI 1", side: "LEFT" as PAPISide };
     const surface = { surface_type: "RUNWAY" as SurfaceType, identifier: "12/30" };
     expect(formatAglDisplayName(agl, surface)).toBe("PAPI RWY 12/30 (Left side)");
   });
@@ -22,7 +22,7 @@ describe("formatAglDisplayName", () => {
   });
 
   it("falls back to agl.name with side when surface is missing", () => {
-    const agl = { agl_type: "PAPI" as AglType, name: "PAPI 1", side: "RIGHT" };
+    const agl = { agl_type: "PAPI" as AglType, name: "PAPI 1", side: "RIGHT" as PAPISide };
     expect(formatAglDisplayName(agl, undefined)).toBe("PAPI 1 (Right side)");
   });
 
@@ -45,7 +45,7 @@ describe("formatAglDisplayName", () => {
   });
 
   it("formats RUNWAY_EDGE_LIGHTS with side on a runway", () => {
-    const agl = { agl_type: "RUNWAY_EDGE_LIGHTS" as AglType, name: "Edge Left", side: "LEFT" };
+    const agl = { agl_type: "RUNWAY_EDGE_LIGHTS" as AglType, name: "Edge Left", side: "LEFT" as PAPISide };
     const surface = { surface_type: "RUNWAY" as SurfaceType, identifier: "06/24" };
     expect(formatAglDisplayName(agl, surface)).toBe("REL RWY 06/24 (Left side)");
   });

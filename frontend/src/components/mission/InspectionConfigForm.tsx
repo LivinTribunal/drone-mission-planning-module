@@ -249,7 +249,7 @@ export default function InspectionConfigForm({
                         {t("mission.config.unitNumber")} {lha.unit_number}
                       </span>
                       <span className="text-tv-text-muted text-xs">
-                        {lha.setting_angle}°
+                        {lha.setting_angle != null ? `${lha.setting_angle}°` : "—"}
                       </span>
                     </label>
                   ))}

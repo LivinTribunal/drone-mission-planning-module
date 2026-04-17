@@ -509,7 +509,6 @@ export default function CesiumMapViewer({
         airport={airport}
         layers={layers}
         selectedFeatureKey={selectedFeatureKey}
-        terrainOffset={terrainOffset}
       />
       {waypoints.length > 0 && (
         <CesiumTrajectory

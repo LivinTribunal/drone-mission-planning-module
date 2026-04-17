@@ -1,5 +1,4 @@
 import logging
-import sys
 
 from geoalchemy2.elements import WKTElement
 
@@ -9,7 +8,6 @@ from app.models.inspection import (
     InspectionConfiguration,
     InspectionTemplate,
     insp_template_methods,
-    insp_template_targets,
 )
 from app.models.mission import DroneProfile
 from app.services.geometry_converter import geojson_to_ewkt
@@ -207,8 +205,7 @@ def seed_airport(icao: str) -> None:
 
         db.commit()
         print(
-            f"  {icao} seeded: {rw_count} runways, "
-            f"{obs_count} obstacles, {sz_count} safety zones"
+            f"  {icao} seeded: {rw_count} runways, {obs_count} obstacles, {sz_count} safety zones"
         )
     except Exception as e:
         db.rollback()

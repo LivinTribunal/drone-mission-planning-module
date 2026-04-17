@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import type { AGLResponse, LHAResponse, SurfaceResponse } from "@/types/airport";
 import type { MapFeature, MapLayerConfig } from "@/types/map";
+import { formatAglDisplayName } from "@/utils/agl";
 
 interface AGLPanelProps {
   surfaces: SurfaceResponse[];
@@ -23,6 +24,17 @@ export default function AGLPanel({
   const allAgls = surfaces.flatMap((s) => s.agls);
   const count = allAgls.length;
   const grayed = !layerConfig.aglSystems;
+
+  const aglDisplayNames = useMemo(() => {
+    /** pre-compute display names keyed by agl id. */
+    const map = new Map<string, string>();
+    for (const s of surfaces) {
+      for (const agl of s.agls) {
+        map.set(agl.id, formatAglDisplayName(agl, s));
+      }
+    }
+    return map;
+  }, [surfaces]);
 
   function toggleExpand(aglId: string) {
     /** toggle expand/collapse state for an agl item. */
@@ -107,7 +119,7 @@ export default function AGLPanel({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-medium text-tv-text-primary truncate">
-                          {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()})` : ""}
+                          {aglDisplayNames.get(agl.id) ?? agl.name}
                         </span>
                         <span
                           className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border"
@@ -117,11 +129,6 @@ export default function AGLPanel({
                         </span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        {agl.side && (
-                          <span className="text-[10px] text-tv-text-secondary">
-                            {agl.side}
-                          </span>
-                        )}
                         <span className="text-[10px] text-tv-text-secondary">
                           {agl.lhas.length} {t("airport.units")}
                         </span>
@@ -156,7 +163,7 @@ export default function AGLPanel({
                               {t("airport.lhaUnit", { number: lha.unit_number })}
                             </span>
                             <span className="text-xs text-tv-text-secondary ml-2">
-                              {lha.setting_angle}°
+                              {lha.setting_angle != null ? `${lha.setting_angle}°` : "—"}
                             </span>
                             <p className="text-[10px] text-tv-text-muted mt-0.5">
                               {lha.position.coordinates[1].toFixed(4)}, {lha.position.coordinates[0].toFixed(4)}

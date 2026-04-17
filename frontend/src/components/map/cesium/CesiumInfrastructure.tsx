@@ -37,7 +37,6 @@ interface CesiumInfrastructureProps {
   airport: AirportDetailResponse;
   layers: MapLayerConfig;
   selectedFeatureKey?: string | null;
-  terrainOffset?: number;
 }
 
 /** renders airport infrastructure entities (runways, taxiways, safety zones, obstacles, agl) in cesium. */
@@ -45,7 +44,6 @@ export default function CesiumInfrastructure({
   airport,
   layers,
   selectedFeatureKey,
-  terrainOffset = 0,
 }: CesiumInfrastructureProps) {
   const { t } = useTranslation();
   const surfaces = useMemo(() => {
@@ -484,7 +482,7 @@ export default function CesiumInfrastructure({
       }
     }
     return entities;
-  }, [airport.surfaces, layers.aglSystems, t, selectedFeatureKey, terrainOffset]);
+  }, [airport.surfaces, layers.aglSystems, t, selectedFeatureKey]);
 
   return (
     <>
