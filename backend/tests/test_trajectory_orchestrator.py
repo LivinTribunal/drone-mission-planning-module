@@ -77,7 +77,7 @@ def test_generate_trajectory_no_waypoints_generated(client):
             "name": "No LHA Template",
             "methods": ["ANGULAR_SWEEP"],
             "target_agl_ids": [agl["id"]],
-            "default_config": {"measurement_density": 6, "speed_override": 5.0},
+            "default_config": {"measurement_density": 6},
         },
     ).json()
 
@@ -161,7 +161,7 @@ def test_validation_result_always_created(client):
             "name": "Val Result Template",
             "methods": ["ANGULAR_SWEEP"],
             "target_agl_ids": [agl_id],
-            "default_config": {"measurement_density": 6, "speed_override": 5.0},
+            "default_config": {"measurement_density": 6},
         },
     ).json()
 
@@ -225,7 +225,7 @@ def test_regeneration_replaces_flight_plan(client):
             "name": "Regen Template",
             "methods": ["ANGULAR_SWEEP"],
             "target_agl_ids": [agl_id],
-            "default_config": {"measurement_density": 6, "speed_override": 5.0},
+            "default_config": {"measurement_density": 6},
         },
     ).json()
 
@@ -296,7 +296,7 @@ def _create_mission_with_inspection(client, icao_code, **mission_extras):
             "name": f"Template {icao_code}",
             "methods": ["ANGULAR_SWEEP"],
             "target_agl_ids": [agl_id],
-            "default_config": {"measurement_density": 6, "speed_override": 5.0},
+            "default_config": {"measurement_density": 6},
         },
     ).json()
 
@@ -430,7 +430,8 @@ def test_pipeline_computes_distance_and_duration(client):
 
 
 def test_vertical_profile_generates_hover_waypoints(client):
-    """vertical profile method generates waypoints including hover at transition angles"""
+    """vertical profile is one continuous measurement pass - HOVER only appears as
+    video recording bookends, not at LHA setting-angle transitions."""
     airport = client.post(
         "/api/v1/airports",
         json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "VPRO"},
@@ -460,7 +461,7 @@ def test_vertical_profile_generates_hover_waypoints(client):
             "name": "Vertical Profile Template",
             "methods": ["VERTICAL_PROFILE"],
             "target_agl_ids": [agl_id],
-            "default_config": {"measurement_density": 8, "speed_override": 3.0},
+            "default_config": {"measurement_density": 8},
         },
     ).json()
 
@@ -491,9 +492,16 @@ def test_vertical_profile_generates_hover_waypoints(client):
     wps = fp["waypoints"]
     assert len(wps) > 0
 
-    # vertical profile should produce HOVER waypoints at transition angles
-    wp_types = [w["waypoint_type"] for w in wps]
-    assert "HOVER" in wp_types, "vertical profile should include HOVER waypoints"
+    # vertical profile emits continuous MEASUREMENT waypoints; the only HOVERs
+    # that may appear are the RECORDING_START / RECORDING_STOP video bookends.
+    inspection_hover_wps = [
+        w for w in wps if w["waypoint_type"] == "HOVER" and w.get("inspection_id") is not None
+    ]
+    for wp in inspection_hover_wps:
+        assert wp["camera_action"] in (
+            "RECORDING_START",
+            "RECORDING_STOP",
+        ), "vertical profile should not hover mid-climb at setting angles"
 
     # altitudes should vary (vertical sweep changes altitude)
     measurement_wps = [w for w in wps if w["waypoint_type"] == "MEASUREMENT"]
@@ -803,7 +811,7 @@ def _setup_airport_template_for_method(
             "name": f"Template {icao_code}",
             "methods": [method],
             "target_agl_ids": [agl_id],
-            "default_config": {"measurement_density": 4, "speed_override": 3.0},
+            "default_config": {"measurement_density": 4},
         },
     ).json()
 
@@ -1036,7 +1044,7 @@ def test_fly_over_speed_uses_lha_count_as_density(client):
     recommended a higher optimal_speed. fix: density = 4 -> lower optimal speed,
     no spurious framerate warning when speed <= optimal.
     """
-    # no speed_override -> fall back to method default (5 m/s for fly-over)
+    # falls back to method default (5 m/s for fly-over)
     _, lha_ids, gen = _run_new_method_mission(
         client,
         "FLSP",
@@ -1083,7 +1091,7 @@ def test_hover_point_lock_missing_selected_lha_raises(client, db_engine):
             "name": "Hover Template",
             "methods": ["HOVER_POINT_LOCK"],
             "target_agl_ids": [agl_id],
-            "default_config": {"measurement_density": 4, "speed_override": 5.0},
+            "default_config": {"measurement_density": 4},
         },
     ).json()
 
@@ -1114,3 +1122,138 @@ def test_hover_point_lock_missing_selected_lha_raises(client, db_engine):
             match="hover-point-lock requires a selected LHA",
         ):
             generate_trajectory(db, mission_id)
+
+
+def test_measurement_speed_override_governs_only_measurement_waypoints(client):
+    """measurement_speed_override sets measurement speed; mission default_speed drives
+    transit waypoints (climb/descent bracketing the pass)."""
+    airport_id, _, template_id, lha_ids = _setup_airport_template_for_method(
+        client, "MSPD", "FLY_OVER"
+    )
+    drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
+
+    # mission default_speed = 7.0 drives transit segments
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Test MSPD",
+            "airport_id": airport_id,
+            "drone_profile_id": drone["id"],
+            "default_speed": 7.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
+        },
+    ).json()
+    mission_id = mission["id"]
+
+    r = client.post(
+        f"/api/v1/missions/{mission_id}/inspections",
+        json={
+            "template_id": template_id,
+            "method": "FLY_OVER",
+            "config": {
+                "measurement_speed_override": 2.0,
+                "height_above_lights": 12.0,
+                "capture_mode": "PHOTO_CAPTURE",
+            },
+        },
+    )
+    assert r.status_code == 201, r.text
+
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert gen.status_code == 200, gen.text
+    fp = gen.json()["flight_plan"]
+
+    measurements = [w for w in fp["waypoints"] if w["waypoint_type"] == "MEASUREMENT"]
+    assert measurements, "expected measurement waypoints"
+    for wp in measurements:
+        assert wp["speed"] == pytest.approx(2.0)
+
+    # transit waypoints use the mission default_speed
+    transit_speeds = [wp["speed"] for wp in fp["waypoints"] if wp["waypoint_type"] == "TRANSIT"]
+    assert any(s == pytest.approx(7.0) for s in transit_speeds), (
+        f"expected at least one transit at default_speed=7.0, got speeds: {transit_speeds}"
+    )
+
+
+def test_mission_measurement_speed_override_fallback(client):
+    """mission measurement_speed_override applies to inspections without their own override;
+    per-inspection override takes precedence when set."""
+    airport_id, _, template_id, lha_ids = _setup_airport_template_for_method(
+        client, "MMSO", "FLY_OVER"
+    )
+    drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
+
+    # mission-level measurement_speed_override = 1.0
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Test MMSO",
+            "airport_id": airport_id,
+            "drone_profile_id": drone["id"],
+            "default_speed": 5.0,
+            "measurement_speed_override": 1.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
+        },
+    ).json()
+    mission_id = mission["id"]
+
+    # inspection A: per-inspection override = 10.0
+    r = client.post(
+        f"/api/v1/missions/{mission_id}/inspections",
+        json={
+            "template_id": template_id,
+            "method": "FLY_OVER",
+            "config": {
+                "measurement_speed_override": 10.0,
+                "height_above_lights": 12.0,
+                "capture_mode": "PHOTO_CAPTURE",
+            },
+        },
+    )
+    assert r.status_code == 201, r.text
+    insp_a_id = r.json()["id"]
+
+    # inspection B: no per-inspection override - should fall back to mission's 1.0
+    r = client.post(
+        f"/api/v1/missions/{mission_id}/inspections",
+        json={
+            "template_id": template_id,
+            "method": "FLY_OVER",
+            "config": {
+                "height_above_lights": 12.0,
+                "capture_mode": "PHOTO_CAPTURE",
+            },
+        },
+    )
+    assert r.status_code == 201, r.text
+    insp_b_id = r.json()["id"]
+
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert gen.status_code == 200, gen.text
+    fp = gen.json()["flight_plan"]
+
+    # inspection A measurements should use 10.0
+    a_measurements = [
+        w
+        for w in fp["waypoints"]
+        if w["waypoint_type"] == "MEASUREMENT" and w.get("inspection_id") == insp_a_id
+    ]
+    assert a_measurements, "expected measurement waypoints for inspection A"
+    for wp in a_measurements:
+        assert wp["speed"] == pytest.approx(10.0), (
+            f"inspection A should use per-inspection override 10.0, got {wp['speed']}"
+        )
+
+    # inspection B measurements should use mission fallback 1.0
+    b_measurements = [
+        w
+        for w in fp["waypoints"]
+        if w["waypoint_type"] == "MEASUREMENT" and w.get("inspection_id") == insp_b_id
+    ]
+    assert b_measurements, "expected measurement waypoints for inspection B"
+    for wp in b_measurements:
+        assert wp["speed"] == pytest.approx(1.0), (
+            f"inspection B should use mission fallback 1.0, got {wp['speed']}"
+        )

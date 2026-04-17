@@ -50,7 +50,7 @@ export default function InspectionConfigForm({
   }
 
   const altitudeOffset = resolveNumber("altitude_offset");
-  const speedOverride = resolveNumber("speed_override");
+  const measurementSpeedOverride = resolveNumber("measurement_speed_override");
   const measurementDensity = resolveNumber("measurement_density");
   const hoverDuration = resolveNumber("hover_duration");
   const bufferDistance = resolveNumber("buffer_distance");
@@ -100,9 +100,12 @@ export default function InspectionConfigForm({
   // effective capture mode for conditional display
   const effectiveCaptureMode = captureMode ?? "VIDEO_CAPTURE";
 
-  // speed/framerate warning - checks max_speed since path_distance is not available here
+  // measurement speed warning - checks max_speed since path_distance is not available here
   const speedWarning = useMemo(() => {
-    const speed = configOverride.speed_override ?? savedCfg?.speed_override ?? defaultCfg?.speed_override;
+    const speed =
+      configOverride.measurement_speed_override ??
+      savedCfg?.measurement_speed_override ??
+      defaultCfg?.measurement_speed_override;
     if (!speed || !droneProfile) return false;
 
     if (droneProfile.max_speed && speed > droneProfile.max_speed) {
@@ -275,24 +278,27 @@ export default function InspectionConfigForm({
             data-testid="inspection-altitude-offset"
           />
         </div>
-        <div>
-          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-            {t("mission.config.speedOverride")}
-          </label>
-          <input
-            type="number"
-            step="0.1"
-            min="0"
-            value={speedOverride}
-            onChange={(e) =>
-              handleNumberChange("speed_override", e.target.value)
-            }
-            className={`w-full px-3 py-2 rounded-full text-sm border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors ${
-              speedWarning ? "border-tv-warning" : "border-tv-border"
-            }`}
-            data-testid="inspection-speed-override"
-          />
-        </div>
+        {inspection.method !== "HOVER_POINT_LOCK" && (
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.measurementSpeedOverride")}
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={measurementSpeedOverride}
+              onChange={(e) =>
+                handleNumberChange("measurement_speed_override", e.target.value)
+              }
+              placeholder={t("mission.config.measurementSpeedOverrideHint")}
+              className={`w-full px-3 py-2 rounded-full text-sm border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors ${
+                speedWarning ? "border-tv-warning" : "border-tv-border"
+              }`}
+              data-testid="inspection-measurement-speed-override"
+            />
+          </div>
+        )}
         {inspection.method !== "HOVER_POINT_LOCK" && (
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">

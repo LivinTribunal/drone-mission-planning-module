@@ -33,7 +33,6 @@ def test_create_template_with_config(db_session):
         methods=["VERTICAL_PROFILE"],
         default_config={
             "altitude_offset": 2.5,
-            "speed_override": 4.0,
             "measurement_density": 8,
         },
     )
@@ -42,7 +41,6 @@ def test_create_template_with_config(db_session):
     assert result.name == "Template With Config"
     assert result.default_config is not None
     assert result.default_config.altitude_offset == 2.5
-    assert result.default_config.speed_override == 4.0
     assert result.default_config.measurement_density == 8
 
 
@@ -107,17 +105,17 @@ def test_update_template_config(db_session):
         InspectionTemplateCreate(
             name="Config Update",
             methods=[],
-            default_config={"speed_override": 3.0},
+            default_config={"measurement_density": 6},
         ),
     )
 
     schema = InspectionTemplateUpdate(
-        default_config={"speed_override": 7.0, "altitude_offset": 1.5},
+        default_config={"measurement_density": 10, "altitude_offset": 1.5},
     )
     result = update_template(db_session, created.id, schema)
 
     assert result.default_config is not None
-    assert result.default_config.speed_override == 7.0
+    assert result.default_config.measurement_density == 10
     assert result.default_config.altitude_offset == 1.5
 
 
@@ -164,7 +162,7 @@ def test_delete_template_with_config(db_session):
         InspectionTemplateCreate(
             name="Delete With Config",
             methods=[],
-            default_config={"speed_override": 2.0},
+            default_config={"measurement_density": 5},
         ),
     )
     config_id = created.default_config.id

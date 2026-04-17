@@ -9,6 +9,8 @@ import pytest
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
 from app.services.trajectory_computation import (
     calculate_arc_path,
+    calculate_fly_over_path,
+    calculate_parallel_side_sweep_path,
     calculate_vertical_path,
     check_sensor_fov,
     check_speed_framerate,
@@ -74,7 +76,7 @@ class TestResolveWithDefaults:
         result = resolve_with_defaults(insp, tmpl)
         assert result.measurement_density == 8
         assert result.altitude_offset == 0.0
-        assert result.speed_override is None
+        assert result.measurement_speed_override is None
 
     def test_template_config_applied(self):
         """template defaults are applied when inspection has no config."""
@@ -194,29 +196,24 @@ class TestResolveDensity:
 class TestResolveSpeed:
     """tests for speed resolution."""
 
-    def test_override_used(self):
-        """speed_override takes precedence."""
-        config = ResolvedConfig(speed_override=7.0)
-        speed, warning, optimal = resolve_speed(config, 100.0, 11, FakeDrone(), 5.0)
-        assert speed == 7.0
-
     def test_optimal_clamped_to_default(self):
         """optimal speed is clamped to default_speed."""
-        config = ResolvedConfig(speed_override=None)
         drone = FakeDrone(camera_frame_rate=30, max_speed=20.0)
-        speed, _, _ = resolve_speed(config, 100.0, 11, drone, 3.0)
-        # optimal is high, but clamped to default_speed=3.0
+        speed, _, _ = resolve_speed(100.0, 11, drone, 3.0)
         assert speed == 3.0
 
-    def test_warning_when_speed_exceeds_optimal(self):
-        """warns when chosen speed exceeds frame rate ceiling."""
-        config = ResolvedConfig(speed_override=15.0)
+    def test_default_used_when_no_optimal(self):
+        """default_speed used when no drone for optimal calculation."""
+        speed, _, _ = resolve_speed(100.0, 11, None, 5.0)
+        assert speed == 5.0
+
+    def test_clamped_to_optimal_no_warning(self):
+        """speed is clamped to min(optimal, default) so no warning when optimal < default."""
         drone = FakeDrone(camera_frame_rate=1, max_speed=20.0)
-        # spacing=10m, frame_rate=1 => optimal=10*1=10 clamped to 20*0.8=16 => optimal=10
-        speed, warning, _ = resolve_speed(config, 100.0, 11, drone, 5.0)
-        assert speed == 15.0
-        assert warning is not None
-        assert "exceeds" in warning
+        # spacing=10m, frame_rate=1 => optimal=10; default=15 => min(10,15)=10
+        speed, warning, _ = resolve_speed(100.0, 11, drone, 15.0)
+        assert speed == 10.0
+        assert warning is None
 
 
 # check_speed_framerate
@@ -364,6 +361,23 @@ class TestCalculateArcPath:
         wps = calculate_arc_path(center, 60.0, 3.0, config, insp_id, 5.0)
         assert all(wp.inspection_id == insp_id for wp in wps)
 
+    def test_measurement_speed_override_applies(self):
+        """measurement_speed_override wins over transit speed."""
+        config = self._default_config(measurement_speed_override=2.0)
+        center = Point3D(lon=14.26, lat=50.1, alt=300.0)
+        wps = calculate_arc_path(center, 60.0, 3.0, config, uuid4(), 7.0)
+        assert wps, "expected at least one waypoint"
+        for wp in wps:
+            assert wp.speed == 2.0
+
+    def test_measurement_speed_falls_back_to_transit(self):
+        """without measurement_speed_override, waypoints use the transit speed."""
+        config = self._default_config()
+        center = Point3D(lon=14.26, lat=50.1, alt=300.0)
+        wps = calculate_arc_path(center, 60.0, 3.0, config, uuid4(), 7.0)
+        for wp in wps:
+            assert wp.speed == 7.0
+
 
 # calculate_vertical_path
 
@@ -410,16 +424,19 @@ class TestCalculateVerticalPath:
         assert max(lons) - min(lons) < 1e-8
         assert max(lats) - min(lats) < 1e-8
 
-    def test_hover_at_transition_angles(self):
-        """waypoints near setting angles get HOVER type."""
-        config = self._default_config(measurement_density=100)
+    def test_no_hover_at_setting_angles(self):
+        """vertical profile is one continuous measurement pass - no HOVER stops at
+        LHA setting angles even when density is high enough to land on them."""
+        config = self._default_config(measurement_density=5)
         center = Point3D(lon=14.26, lat=50.1, alt=300.0)
-        # setting angle in the middle of min-max range
         mid_angle = (MIN_ELEVATION_ANGLE + MAX_ELEVATION_ANGLE) / 2
         wps = calculate_vertical_path(center, 60.0, config, uuid4(), 5.0, [mid_angle])
 
         hover_wps = [wp for wp in wps if wp.waypoint_type == WaypointType.HOVER]
-        assert len(hover_wps) > 0, "should have at least one HOVER waypoint at transition angle"
+        assert len(hover_wps) == 0
+        # every waypoint is a measurement and carries no hover_duration
+        assert all(wp.waypoint_type == WaypointType.MEASUREMENT for wp in wps)
+        assert all(wp.hover_duration is None for wp in wps)
 
     def test_no_hover_without_angles(self):
         """no HOVER waypoints when no setting angles."""
@@ -429,15 +446,22 @@ class TestCalculateVerticalPath:
         hover_wps = [wp for wp in wps if wp.waypoint_type == WaypointType.HOVER]
         assert len(hover_wps) == 0
 
-    def test_hover_duration_set(self):
-        """HOVER waypoints get the configured hover_duration."""
-        config = self._default_config(measurement_density=100, hover_duration=5.0)
+    def test_measurement_speed_override_applies(self):
+        """measurement_speed_override wins over the passed transit speed."""
+        config = self._default_config(measurement_speed_override=2.0)
         center = Point3D(lon=14.26, lat=50.1, alt=300.0)
-        mid_angle = (MIN_ELEVATION_ANGLE + MAX_ELEVATION_ANGLE) / 2
-        wps = calculate_vertical_path(center, 60.0, config, uuid4(), 5.0, [mid_angle])
-        hover_wps = [wp for wp in wps if wp.waypoint_type == WaypointType.HOVER]
-        for wp in hover_wps:
-            assert wp.hover_duration == 5.0
+        wps = calculate_vertical_path(center, 60.0, config, uuid4(), 7.0, [])
+        assert wps, "expected at least one waypoint"
+        for wp in wps:
+            assert wp.speed == 2.0
+
+    def test_measurement_speed_falls_back_to_transit(self):
+        """without measurement_speed_override, waypoints use the transit speed."""
+        config = self._default_config()
+        center = Point3D(lon=14.26, lat=50.1, alt=300.0)
+        wps = calculate_vertical_path(center, 60.0, config, uuid4(), 7.0, [])
+        for wp in wps:
+            assert wp.speed == 7.0
 
 
 # compute_measurement_trajectory
@@ -524,3 +548,78 @@ class TestComputeMeasurementTrajectory:
         # flat terrain should produce same altitudes as no terrain correction
         for flat, raw in zip(wps_flat, wps_no_terrain):
             assert abs(flat.alt - raw.alt) < 0.1
+
+
+# calculate_fly_over_path
+
+
+class TestCalculateFlyOverPath:
+    """tests for fly-over path measurement speed handling."""
+
+    @staticmethod
+    def _lha_row() -> list[Point3D]:
+        """two LHA positions forming a short row."""
+        return [
+            Point3D(lon=14.260, lat=50.100, alt=300.0),
+            Point3D(lon=14.261, lat=50.100, alt=300.0),
+        ]
+
+    def test_measurement_speed_override_applies(self):
+        """measurement_speed_override wins over transit speed."""
+        config = ResolvedConfig(
+            measurement_speed_override=2.0,
+            capture_mode="PHOTO_CAPTURE",
+        )
+        wps = calculate_fly_over_path(self._lha_row(), config, uuid4(), 7.0)
+        assert wps, "expected at least one waypoint"
+        for wp in wps:
+            assert wp.speed == 2.0
+
+    def test_measurement_speed_falls_back_to_transit(self):
+        """without measurement_speed_override, waypoints use the transit speed."""
+        config = ResolvedConfig(capture_mode="PHOTO_CAPTURE")
+        wps = calculate_fly_over_path(self._lha_row(), config, uuid4(), 7.0)
+        for wp in wps:
+            assert wp.speed == 7.0
+
+
+# calculate_parallel_side_sweep_path
+
+
+class TestCalculateParallelSideSweepPath:
+    """tests for parallel-side-sweep path measurement speed handling."""
+
+    @staticmethod
+    def _lha_row() -> list[Point3D]:
+        """two LHA positions forming a short row."""
+        return [
+            Point3D(lon=14.260, lat=50.100, alt=300.0),
+            Point3D(lon=14.261, lat=50.100, alt=300.0),
+        ]
+
+    @staticmethod
+    def _runway_center() -> Point3D:
+        """runway centerline reference point."""
+        return Point3D(lon=14.2605, lat=50.101, alt=300.0)
+
+    def test_measurement_speed_override_applies(self):
+        """measurement_speed_override wins over transit speed."""
+        config = ResolvedConfig(
+            measurement_speed_override=2.0,
+            capture_mode="PHOTO_CAPTURE",
+        )
+        wps = calculate_parallel_side_sweep_path(
+            self._lha_row(), self._runway_center(), config, uuid4(), 7.0
+        )
+        assert wps, "expected at least one waypoint"
+        for wp in wps:
+            assert wp.speed == 2.0
+
+    def test_measurement_speed_falls_back_to_transit(self):
+        """without measurement_speed_override, waypoints use the transit speed."""
+        config = ResolvedConfig(capture_mode="PHOTO_CAPTURE")
+        wps = calculate_parallel_side_sweep_path(
+            self._lha_row(), self._runway_center(), config, uuid4(), 7.0
+        )
+        for wp in wps:
+            assert wp.speed == 7.0
