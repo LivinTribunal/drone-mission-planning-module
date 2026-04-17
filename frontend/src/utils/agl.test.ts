@@ -49,4 +49,16 @@ describe("formatAglDisplayName", () => {
     const surface = { surface_type: "RUNWAY" as SurfaceType, identifier: "06/24" };
     expect(formatAglDisplayName(agl, surface)).toBe("REL RWY 06/24 (Left side)");
   });
+
+  it("falls back to empty string name when agl.name is empty", () => {
+    const agl = { agl_type: "PAPI" as AglType, name: "", side: null };
+    const surface = { surface_type: "TAXIWAY" as SurfaceType, identifier: "B2" };
+    expect(formatAglDisplayName(agl, surface)).toBe("");
+  });
+
+  it("falls back to agl.name when surface identifier is empty string", () => {
+    const agl = { agl_type: "PAPI" as AglType, name: "PAPI 1", side: null };
+    const surface = { surface_type: "RUNWAY" as SurfaceType, identifier: "" };
+    expect(formatAglDisplayName(agl, surface)).toBe("PAPI 1");
+  });
 });
