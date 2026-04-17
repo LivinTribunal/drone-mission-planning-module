@@ -41,9 +41,10 @@ import WarningsPanel from "@/components/mission/WarningsPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
 import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
-import PoiInfoPanel from "@/components/map/overlays/PoiInfoPanel";
 import Modal from "@/components/common/Modal";
 import type { MapFeature } from "@/types/map";
+import { MapTool } from "@/hooks/useMapTools";
+import { computePlacementUpdates } from "@/utils/takeoffLandingPlacement";
 
 const STATUS_ORDER = [
   "DRAFT",
@@ -100,6 +101,8 @@ export default function MissionConfigPage() {
 
   // coordinate pick-on-map mode
   const [pickingCoord, setPickingCoord] = useState<"takeoff" | "landing" | null>(null);
+  // round-trip mission toggle lifted from form so pick-on-map clicks can mirror
+  const [useTakeoffAsLanding, setUseTakeoffAsLanding] = useState(false);
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
@@ -128,6 +131,8 @@ export default function MissionConfigPage() {
     : false;
 
   const computeRef = useRef<() => void>(() => {});
+  // keep compute ref pointed at the latest handler; safe to mutate during render
+  computeRef.current = handleComputeTrajectory;
 
   const isDirty =
     Object.keys(missionDirty).length > 0 ||
@@ -237,7 +242,8 @@ export default function MissionConfigPage() {
         if (!isAxiosError(err) || err.response?.status !== 404) throw err;
         setFlightPlan(null);
       }
-    } catch {
+    } catch (err) {
+      console.error("mission load failed:", err instanceof Error ? err.message : String(err));
       setError(t("mission.config.loadError"));
     } finally {
       setLoading(false);
@@ -319,11 +325,6 @@ export default function MissionConfigPage() {
       });
     };
   }, [setSaveContext, handleSave, isDirty, saving, lastSaved]);
-
-  // keep compute ref pointed at the latest handler without re-running on every render
-  useEffect(() => {
-    computeRef.current = handleComputeTrajectory;
-  }, [handleComputeTrajectory]);
 
   // compute coordinate availability from dirty state or mission data
   const hasCoordinates = useMemo(() => {
@@ -570,32 +571,29 @@ export default function MissionConfigPage() {
   missionRef.current = mission;
   const airportDetailRef = useRef(airportDetail);
   airportDetailRef.current = airportDetail;
+  const useTakeoffAsLandingRef = useRef(useTakeoffAsLanding);
+  useTakeoffAsLandingRef.current = useTakeoffAsLanding;
 
   const handleMapClick = useCallback(
     (lngLat: { lng: number; lat: number }) => {
-      /** set takeoff or landing coordinate from map click. */
+      /** set takeoff or landing coordinate from map click, mirroring into landing when round-trip mode is on. */
       const target = pickingCoordRef.current;
       if (!target) return;
-      const key =
-        target === "takeoff"
-          ? "takeoff_coordinate"
-          : "landing_coordinate";
 
-      // preserve existing altitude, fall back to airport elevation
       const dirty = missionDirtyRef.current;
       const m = missionRef.current;
-      const existing =
-        target === "takeoff"
-          ? dirty.takeoff_coordinate ?? m?.takeoff_coordinate
-          : dirty.landing_coordinate ?? m?.landing_coordinate;
-      const alt = existing ? existing.coordinates[2] : (airportDetailRef.current?.elevation ?? 0);
-
-      handleMissionChange({
-        [key]: {
-          type: "Point" as const,
-          coordinates: [lngLat.lng, lngLat.lat, alt],
+      const tool = target === "takeoff" ? MapTool.PLACE_TAKEOFF : MapTool.PLACE_LANDING;
+      const update = computePlacementUpdates(
+        tool,
+        lngLat,
+        {
+          takeoff_coordinate: dirty.takeoff_coordinate ?? m?.takeoff_coordinate ?? null,
+          landing_coordinate: dirty.landing_coordinate ?? m?.landing_coordinate ?? null,
         },
-      });
+        airportDetailRef.current?.elevation ?? null,
+        useTakeoffAsLandingRef.current,
+      );
+      if (update) handleMissionChange(update);
       setPickingCoord(null);
     },
     [],
@@ -728,6 +726,8 @@ export default function MissionConfigPage() {
               onPickCoord={setPickingCoord}
               defaultAltitude={airportDetail?.elevation ?? 0}
               disabled={!canModify}
+              useTakeoffAsLanding={useTakeoffAsLanding}
+              onUseTakeoffAsLandingChange={setUseTakeoffAsLanding}
             />
           </div>
 
@@ -781,15 +781,7 @@ export default function MissionConfigPage() {
               selectedWarning={selectedWarning}
               onWarningClose={() => setSelectedWarning(null)}
             >
-              {/* feature info panel */}
-              {selectedFeature && (
-                <div className="absolute top-3 right-3 z-10 w-56">
-                  <PoiInfoPanel
-                    feature={selectedFeature}
-                    onClose={() => setSelectedFeature(null)}
-                  />
-                </div>
-              )}
+              {/* feature info panel renders on the left inside AirportMap for all feature types */}
 
               {/* pick-on-map banner */}
               {pickingCoord && (

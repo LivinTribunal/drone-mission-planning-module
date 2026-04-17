@@ -315,6 +315,129 @@ describe("MissionConfigForm", () => {
     });
     expect(onChange).toHaveBeenCalledWith({ transit_agl: null });
   });
+
+  it("invokes onPickCoord with target when takeoff pick-on-map clicked", () => {
+    /** verify the takeoff pick button toggles onPickCoord to 'takeoff'. */
+    const onPickCoord = vi.fn();
+    renderForm({ onPickCoord });
+    fireEvent.click(
+      screen.getByTestId("mission.config.takeoffcoordinate-pick-map"),
+    );
+    expect(onPickCoord).toHaveBeenCalledWith("takeoff");
+  });
+
+  it("invokes onPickCoord with null when a takeoff pick is already active", () => {
+    /** verify clicking the already-active takeoff pick button clears it. */
+    const onPickCoord = vi.fn();
+    renderForm({ onPickCoord, pickingCoord: "takeoff" });
+    fireEvent.click(
+      screen.getByTestId("mission.config.takeoffcoordinate-pick-map"),
+    );
+    expect(onPickCoord).toHaveBeenCalledWith(null);
+  });
+
+  it("invokes onPickCoord with 'landing' when landing pick-on-map clicked", () => {
+    /** verify the landing pick button toggles onPickCoord to 'landing'. */
+    const onPickCoord = vi.fn();
+    renderForm({ onPickCoord });
+    fireEvent.click(
+      screen.getByTestId("mission.config.landingcoordinate-pick-map"),
+    );
+    expect(onPickCoord).toHaveBeenCalledWith("landing");
+  });
+
+  it("hides the landing pick button while 'use takeoff as landing' is checked", () => {
+    /** verify the landing pick button disappears when mirror mode is active. */
+    renderForm({
+      values: {
+        takeoff_coordinate: {
+          type: "Point",
+          coordinates: [17.21, 48.17, 100],
+        } as never,
+      },
+    });
+    // landing is still null, so the checkbox + both pick buttons render initially
+    expect(
+      screen.getByTestId("mission.config.landingcoordinate-pick-map"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    expect(
+      screen.queryByTestId("mission.config.landingcoordinate-pick-map"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("mirrors takeoff into landing when 'use takeoff as landing' is toggled on", () => {
+    /** verify checking the checkbox copies takeoff into landing via onChange. */
+    const takeoff = {
+      type: "Point",
+      coordinates: [17.21, 48.17, 100],
+    } as never;
+    const { onChange } = renderForm({
+      values: { takeoff_coordinate: takeoff },
+    });
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    expect(onChange).toHaveBeenCalledWith({ landing_coordinate: takeoff });
+  });
+
+  it("does not mirror landing when takeoff is not set", () => {
+    /** verify checking the checkbox with no takeoff does not call onChange. */
+    const { onChange } = renderForm();
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("calls onUseTakeoffAsLandingChange when the checkbox is toggled with controlled state", () => {
+    /** verify the parent-controlled mirror callback fires instead of local state. */
+    const onUseTakeoffAsLandingChange = vi.fn();
+    renderForm({
+      useTakeoffAsLanding: false,
+      onUseTakeoffAsLandingChange,
+    });
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    expect(onUseTakeoffAsLandingChange).toHaveBeenCalledWith(true);
+  });
+
+  it("hides the landing pick button when parent-controlled mirror is on", () => {
+    /** verify controlled useTakeoffAsLanding=true hides the landing pick button. */
+    renderForm({
+      values: {
+        takeoff_coordinate: {
+          type: "Point",
+          coordinates: [17.21, 48.17, 100],
+        } as never,
+      },
+      useTakeoffAsLanding: true,
+      onUseTakeoffAsLandingChange: vi.fn(),
+    });
+    expect(
+      screen.queryByTestId("mission.config.landingcoordinate-pick-map"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("updates both coordinates when takeoff changes while mirror is active", () => {
+    /** verify editing takeoff while mirror is on writes landing_coordinate too. */
+    const { onChange } = renderForm();
+    fireEvent.click(screen.getByTestId("use-takeoff-as-landing-checkbox"));
+    // typing a lat/lon/alt triggers CoordinateInput.onChange eventually;
+    // easier: fire change on the three numeric inputs in the takeoff group
+    fireEvent.change(
+      screen.getByTestId("mission.config.takeoffcoordinate-lat"),
+      { target: { value: "48.17" } },
+    );
+    fireEvent.change(
+      screen.getByTestId("mission.config.takeoffcoordinate-lon"),
+      { target: { value: "17.21" } },
+    );
+    fireEvent.change(
+      screen.getByTestId("mission.config.takeoffcoordinate-alt"),
+      { target: { value: "130" } },
+    );
+    // the last change commits, and since the mirror flag is on, onChange is
+    // called with both takeoff_coordinate and landing_coordinate set to the
+    // same point value
+    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1][0];
+    expect(lastCall.takeoff_coordinate).toEqual(lastCall.landing_coordinate);
+  });
 });
 
 /* ------------------------------------------------------------------ */
