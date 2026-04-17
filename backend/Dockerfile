@@ -16,4 +16,6 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 COPY . .
 RUN mkdir -p /app/static
 EXPOSE 8000
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+RUN useradd --no-create-home --shell /bin/false appuser
+USER appuser
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]

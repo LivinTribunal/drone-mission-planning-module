@@ -6,8 +6,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-tarmacview}
       POSTGRES_USER: ${POSTGRES_USER:-tarmacview}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tarmacview}
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,9 +24,11 @@ services:
     container_name: tarmacview-backend
     env_file:
       - path: .env.docker
-        required: false
+        required: true
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tarmacview}:${POSTGRES_PASSWORD:-tarmacview}@postgres:5432/${POSTGRES_DB:-tarmacview}
+      JWT_SECRET: ${JWT_SECRET:-REPLACE_ME_minimum_256_bits_of_entropy}
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,6 +48,7 @@ services:
       args:
         VITE_CESIUM_ION_TOKEN: ${VITE_CESIUM_ION_TOKEN:-}
     container_name: tarmacview-frontend
+    restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
