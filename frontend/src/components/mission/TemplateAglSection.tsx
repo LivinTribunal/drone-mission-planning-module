@@ -46,14 +46,10 @@ export default function TemplateAglSection({
         )}
         <div className="flex-1 min-w-0">
           <span className="text-sm font-semibold text-tv-text-primary">
-            {agl.name}
+            {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
           </span>
           <span className="ml-2 text-xs text-tv-text-secondary">
-            {agl.side
-              ? t("coordinator.inspections.sideLabel", {
-                  side: `${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()}`,
-                })
-              : agl.agl_type}
+            {agl.agl_type}
           </span>
         </div>
         <span className="text-xs text-tv-text-muted">

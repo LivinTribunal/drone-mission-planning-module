@@ -189,8 +189,7 @@ export default function InspectionConfigForm({
               <option value="">{t("mission.config.targetAglSelect")}</option>
               {agls.map((agl) => (
                 <option key={agl.id} value={agl.id}>
-                  {agl.name}
-                  {agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()})` : ""}
+                  {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
                 </option>
               ))}
             </select>
@@ -231,7 +230,7 @@ export default function InspectionConfigForm({
             {targetAgls.map((agl) => (
               <div key={agl.id}>
                 <p className="text-xs font-medium text-tv-text-secondary mb-1">
-                  {agl.name}
+                  {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
                 </p>
                 <div className="space-y-1 pl-2">
                   {agl.lhas.map((lha) => (

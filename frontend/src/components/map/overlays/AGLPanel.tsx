@@ -107,7 +107,7 @@ export default function AGLPanel({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-medium text-tv-text-primary truncate">
-                          {agl.name}
+                          {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()})` : ""}
                         </span>
                         <span
                           className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border"

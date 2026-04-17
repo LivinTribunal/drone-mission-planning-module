@@ -730,7 +730,7 @@ export default function CreationForm({
                     <option value="">{t("coordinator.creation.selectAgl")}</option>
                     {allAgls.map((a) => (
                       <option key={a.id} value={a.id}>
-                        {a.name}
+                        {a.name}{a.side ? ` (${a.side.charAt(0)}${a.side.slice(1).toLowerCase()} side)` : ""}
                       </option>
                     ))}
                   </select>

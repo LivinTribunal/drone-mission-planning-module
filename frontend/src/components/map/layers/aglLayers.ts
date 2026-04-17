@@ -28,6 +28,7 @@ export function addAglLayers(
         properties: {
           id: a.id,
           name: a.name,
+          side: a.side ?? "",
           aglType: a.agl_type,
           entityType: "agl",
           color: aglColorForType(a.agl_type),
@@ -58,7 +59,12 @@ export function addAglLayers(
     type: "symbol",
     source: AGL_SOURCE,
     layout: {
-      "text-field": ["get", "name"],
+      "text-field": [
+        "case",
+        ["!=", ["get", "side"], ""],
+        ["concat", ["get", "name"], " (", ["get", "side"], ")"],
+        ["get", "name"],
+      ],
       "text-size": 11,
       "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
       "text-offset": [0, 1.5],
