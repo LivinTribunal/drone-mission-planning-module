@@ -603,9 +603,9 @@
         "RUNWAY": "Relative to RWY",
         "COMPASS": "Compass"
       },
-      "hoverBearingRunwayHint": "0 = approach side (opposite RWY heading)",
+      "hoverBearingRunwayHint": "0 = opposite RWY heading (approach side)",
       "hoverBearingCompassHint": "0 = true north, 90 = east",
-      "hoverBearingRunwayHelp": "0° places the drone on the runway approach side of the LHA (opposite runway heading). 90° rotates the drone clockwise around the LHA.",
+      "hoverBearingRunwayHelp": "0° = drone faces approach side (180° from runway heading). Positive values rotate clockwise around the LHA.",
       "hoverBearingCompassHelp": "Absolute compass heading from LHA to drone. 0° = N, 90° = E, 180° = S, 270° = W."
     },
     "validationExportPage": {
@@ -1035,7 +1035,9 @@
       "createError": "Failed to create feature",
       "selectSurface": "Select a surface",
       "area": "Area",
-      "touchpoint": "Touchpoint (TDP)"
+      "touchpoint": "Touchpoint (TDP)",
+      "noRunwayWarning": "Create a runway first - AGLs must be linked to a runway surface",
+      "altFromAirport": "derived from airport elevation"
     },
     "geoJsonEditor": {
       "title": "GeoJSON Editor",
