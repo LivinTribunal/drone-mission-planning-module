@@ -170,10 +170,10 @@ export default function TemplateConfigSection({
       />
 
       <Input
-        label={t("coordinator.inspections.speed")}
+        label={t("coordinator.inspections.measurementSpeedOverride")}
         type="number"
-        value={config?.speed_override ?? ""}
-        onChange={(e) => handleNumber("speed_override", e.target.value)}
+        value={config?.measurement_speed_override ?? ""}
+        onChange={(e) => handleNumber("measurement_speed_override", e.target.value)}
         step="0.1"
       />
 

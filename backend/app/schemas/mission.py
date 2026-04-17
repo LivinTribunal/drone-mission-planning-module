@@ -38,7 +38,6 @@ class InspectionConfigOverride(BaseModel):
     """config overrides for an inspection within a mission"""
 
     altitude_offset: float | None = None
-    speed_override: float | None = Field(default=None, gt=0)
     measurement_speed_override: float | None = Field(default=None, gt=0)
     measurement_density: int | None = Field(default=None, ge=1)
     custom_tolerances: dict[str, float] | None = None
@@ -89,7 +88,6 @@ class InspectionConfigResponse(BaseModel):
     """inspection configuration values"""
 
     altitude_offset: float | None = None
-    speed_override: float | None = None
     measurement_speed_override: float | None = None
     measurement_density: int | None = None
     custom_tolerances: dict[str, float] | None = None
@@ -148,6 +146,7 @@ class MissionCreate(BaseModel):
     drone_profile_id: UUID | None = None
     operator_notes: str | None = None
     default_speed: float | None = None
+    measurement_speed_override: float | None = Field(default=None, gt=0)
     default_altitude_offset: float | None = None
     takeoff_coordinate: PointZ | None = None
     landing_coordinate: PointZ | None = None
@@ -169,6 +168,7 @@ class MissionUpdate(BaseModel):
     drone_profile_id: UUID | None = None
     operator_notes: str | None = None
     default_speed: float | None = None
+    measurement_speed_override: float | None = Field(default=None, gt=0)
     default_altitude_offset: float | None = None
     takeoff_coordinate: PointZ | None = None
     landing_coordinate: PointZ | None = None
@@ -197,6 +197,7 @@ class MissionResponse(BaseModel):
     drone_profile_id: UUID | None = None
     date_time: datetime | None = None
     default_speed: float | None = None
+    measurement_speed_override: float | None = None
     default_altitude_offset: float | None = None
     takeoff_coordinate: PointZ | None = None
     landing_coordinate: PointZ | None = None

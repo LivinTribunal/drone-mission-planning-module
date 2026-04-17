@@ -200,7 +200,6 @@ def test_resolve_with_defaults_merge():
 
     template_config = InspectionConfiguration(
         measurement_density=10,
-        speed_override=5.0,
         altitude_offset=2.0,
     )
 
@@ -213,7 +212,6 @@ def test_resolve_with_defaults_merge():
     result = _resolve_with_defaults(inspection, template)
 
     assert result.measurement_density == 15
-    assert result.speed_override == 5.0
     assert result.altitude_offset == 2.0
 
 
@@ -584,7 +582,7 @@ def test_full_pipeline(client):
             "name": "E2E Test Template",
             "methods": ["ANGULAR_SWEEP"],
             "target_agl_ids": [agl_id],
-            "default_config": {"measurement_density": 6, "speed_override": 5.0},
+            "default_config": {"measurement_density": 6},
         },
     ).json()
 

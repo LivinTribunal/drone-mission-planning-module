@@ -318,20 +318,23 @@ def _generate_trajectory_inner(
         if insp_bd is None and tmpl_bd is None and mission.default_buffer_distance is not None:
             config.buffer_distance = mission.default_buffer_distance
 
+        # inject mission-level measurement speed override when neither inspection
+        # nor template set it
+        insp_ms = (
+            getattr(inspection.config, "measurement_speed_override", None)
+            if inspection.config
+            else None
+        )
+        tmpl_ms = (
+            getattr(template.default_config, "measurement_speed_override", None)
+            if template.default_config
+            else None
+        )
+        if insp_ms is None and tmpl_ms is None and mission.measurement_speed_override is not None:
+            config.measurement_speed_override = mission.measurement_speed_override
+
         # generate suggestions for fields using template defaults
         label = f"{template.name} #{inspection.sequence_order}"
-        if not inspection.config or inspection.config.speed_override is None:
-            default_spd = (
-                template.default_config.speed_override
-                if template.default_config and template.default_config.speed_override
-                else default_speed
-            )
-            suggestions.append(
-                (
-                    f"{label}: no speed override - using default ({default_spd:.1f} m/s)",
-                    [],
-                )
-            )
         if not inspection.config or inspection.config.measurement_density is None:
             default_density = (
                 template.default_config.measurement_density
@@ -467,7 +470,7 @@ def _generate_trajectory_inner(
             density_for_speed = config.measurement_density
 
         speed, speed_warning, optimal_speed = resolve_speed(
-            config, path_dist, density_for_speed, drone, method_default_speed
+            path_dist, density_for_speed, drone, method_default_speed
         )
         if speed_warning:
             warnings.append(

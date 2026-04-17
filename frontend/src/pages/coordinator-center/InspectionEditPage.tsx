@@ -149,7 +149,6 @@ export default function InspectionEditPage() {
       cfg
         ? {
             altitude_offset: cfg.altitude_offset,
-            speed_override: cfg.speed_override,
             measurement_speed_override: cfg.measurement_speed_override,
             measurement_density: cfg.measurement_density,
             custom_tolerances: cfg.custom_tolerances,
@@ -172,7 +171,6 @@ export default function InspectionEditPage() {
           }
         : {
             altitude_offset: null,
-            speed_override: null,
             measurement_speed_override: null,
             measurement_density: null,
             custom_tolerances: null,

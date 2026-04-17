@@ -76,7 +76,7 @@ class TestResolveWithDefaults:
         result = resolve_with_defaults(insp, tmpl)
         assert result.measurement_density == 8
         assert result.altitude_offset == 0.0
-        assert result.speed_override is None
+        assert result.measurement_speed_override is None
 
     def test_template_config_applied(self):
         """template defaults are applied when inspection has no config."""
@@ -196,29 +196,24 @@ class TestResolveDensity:
 class TestResolveSpeed:
     """tests for speed resolution."""
 
-    def test_override_used(self):
-        """speed_override takes precedence."""
-        config = ResolvedConfig(speed_override=7.0)
-        speed, warning, optimal = resolve_speed(config, 100.0, 11, FakeDrone(), 5.0)
-        assert speed == 7.0
-
     def test_optimal_clamped_to_default(self):
         """optimal speed is clamped to default_speed."""
-        config = ResolvedConfig(speed_override=None)
         drone = FakeDrone(camera_frame_rate=30, max_speed=20.0)
-        speed, _, _ = resolve_speed(config, 100.0, 11, drone, 3.0)
-        # optimal is high, but clamped to default_speed=3.0
+        speed, _, _ = resolve_speed(100.0, 11, drone, 3.0)
         assert speed == 3.0
 
-    def test_warning_when_speed_exceeds_optimal(self):
-        """warns when chosen speed exceeds frame rate ceiling."""
-        config = ResolvedConfig(speed_override=15.0)
+    def test_default_used_when_no_optimal(self):
+        """default_speed used when no drone for optimal calculation."""
+        speed, _, _ = resolve_speed(100.0, 11, None, 5.0)
+        assert speed == 5.0
+
+    def test_clamped_to_optimal_no_warning(self):
+        """speed is clamped to min(optimal, default) so no warning when optimal < default."""
         drone = FakeDrone(camera_frame_rate=1, max_speed=20.0)
-        # spacing=10m, frame_rate=1 => optimal=10*1=10 clamped to 20*0.8=16 => optimal=10
-        speed, warning, _ = resolve_speed(config, 100.0, 11, drone, 5.0)
-        assert speed == 15.0
-        assert warning is not None
-        assert "exceeds" in warning
+        # spacing=10m, frame_rate=1 => optimal=10; default=15 => min(10,15)=10
+        speed, warning, _ = resolve_speed(100.0, 11, drone, 15.0)
+        assert speed == 10.0
+        assert warning is None
 
 
 # check_speed_framerate

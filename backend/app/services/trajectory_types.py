@@ -128,7 +128,6 @@ class ResolvedConfig:
     """merged inspection config: operator override > template default > hardcoded"""
 
     altitude_offset: Meters = 0.0
-    speed_override: MetersPerSecond | None = None
     measurement_speed_override: MetersPerSecond | None = None
     measurement_density: int = 8
     custom_tolerances: dict | None = None

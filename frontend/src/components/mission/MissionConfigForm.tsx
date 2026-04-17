@@ -158,6 +158,10 @@ export default function MissionConfigForm({
     values.default_speed !== undefined
       ? values.default_speed
       : mission.default_speed;
+  const measurementSpeedOverride =
+    values.measurement_speed_override !== undefined
+      ? values.measurement_speed_override
+      : mission.measurement_speed_override;
   const defaultAltitudeOffset =
     values.default_altitude_offset !== undefined
       ? values.default_altitude_offset
@@ -214,11 +218,11 @@ export default function MissionConfigForm({
         onSelect={(id) => onChange({ drone_profile_id: id || null })}
       />
 
-      {/* speed + altitude offset */}
+      {/* speed overrides + altitude offset */}
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-            {t("mission.config.defaultSpeed")}
+            {t("mission.config.transitSpeedOverride")}
           </label>
           <input
             type="number"
@@ -228,11 +232,30 @@ export default function MissionConfigForm({
             onChange={(e) =>
               onChange({ default_speed: e.target.value ? parseFloat(e.target.value) : null })
             }
-            placeholder={t("mission.config.defaultSpeedHint")}
+            placeholder={t("mission.config.transitSpeedOverrideHint")}
             className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
             data-testid="default-speed-input"
           />
         </div>
+        <div>
+          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+            {t("mission.config.measurementSpeedOverride")}
+          </label>
+          <input
+            type="number"
+            step="0.1"
+            min="0"
+            value={measurementSpeedOverride ?? ""}
+            onChange={(e) =>
+              onChange({ measurement_speed_override: e.target.value ? parseFloat(e.target.value) : null })
+            }
+            placeholder={t("mission.config.missionMeasurementSpeedHint")}
+            className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+            data-testid="measurement-speed-override-input"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
             {t("mission.config.defaultAltitudeOffset")}
@@ -247,6 +270,23 @@ export default function MissionConfigForm({
             placeholder={t("mission.config.defaultAltitudeOffsetHint")}
             className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
             data-testid="default-altitude-offset-input"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+            {t("mission.config.transitAgl")}
+          </label>
+          <input
+            type="number"
+            step="0.5"
+            min="1"
+            value={transitAgl ?? ""}
+            onChange={(e) =>
+              onChange({ transit_agl: e.target.value ? parseFloat(e.target.value) : null })
+            }
+            placeholder={t("mission.config.transitAglHint")}
+            className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+            data-testid="transit-agl-input"
           />
         </div>
       </div>
@@ -286,25 +326,6 @@ export default function MissionConfigForm({
             data-testid="default-buffer-distance-input"
           />
         </div>
-      </div>
-
-      {/* transit height */}
-      <div>
-        <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-          {t("mission.config.transitAgl")}
-        </label>
-        <input
-          type="number"
-          step="0.5"
-          min="1"
-          value={transitAgl ?? ""}
-          onChange={(e) =>
-            onChange({ transit_agl: e.target.value ? parseFloat(e.target.value) : null })
-          }
-          placeholder={t("mission.config.transitAglHint")}
-          className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
-          data-testid="transit-agl-input"
-        />
       </div>
 
       {/* takeoff + landing */}

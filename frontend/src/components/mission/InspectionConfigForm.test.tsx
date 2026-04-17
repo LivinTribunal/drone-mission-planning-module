@@ -210,11 +210,12 @@ describe("InspectionConfigForm method variants", () => {
     }
   });
 
-  it("renders measurement speed field for vertical-profile/fly-over/parallel-side-sweep", () => {
+  it("renders measurement speed field for all methods except hover-point-lock", () => {
     for (const method of [
       "VERTICAL_PROFILE",
       "FLY_OVER",
       "PARALLEL_SIDE_SWEEP",
+      "ANGULAR_SWEEP",
     ] as const) {
       const { unmount } = renderForm({
         inspection: baseInspection({ method }),
@@ -227,17 +228,15 @@ describe("InspectionConfigForm method variants", () => {
     }
   });
 
-  it("hides measurement speed field for hover-point-lock and angular-sweep", () => {
-    for (const method of ["HOVER_POINT_LOCK", "ANGULAR_SWEEP"] as const) {
-      const { unmount } = renderForm({
-        inspection: baseInspection({ method }),
-        template: papiTemplate as never,
-      });
-      expect(
-        screen.queryByTestId("inspection-measurement-speed-override"),
-      ).not.toBeInTheDocument();
-      unmount();
-    }
+  it("hides measurement speed field for hover-point-lock", () => {
+    const { unmount } = renderForm({
+      inspection: baseInspection({ method: "HOVER_POINT_LOCK" }),
+      template: papiTemplate as never,
+    });
+    expect(
+      screen.queryByTestId("inspection-measurement-speed-override"),
+    ).not.toBeInTheDocument();
+    unmount();
   });
 
   it("propagates measurement_speed_override changes", () => {

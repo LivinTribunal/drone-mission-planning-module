@@ -12,6 +12,7 @@ export interface MissionResponse {
   drone_profile_id: string | null;
   date_time: string | null;
   default_speed: number | null;
+  measurement_speed_override: number | null;
   default_altitude_offset: number | null;
   takeoff_coordinate: PointZ | null;
   landing_coordinate: PointZ | null;
@@ -29,7 +30,6 @@ export interface MissionDetailResponse extends MissionResponse {
 
 export interface InspectionConfigResponse {
   altitude_offset: number | null;
-  speed_override: number | null;
   measurement_speed_override: number | null;
   measurement_density: number | null;
   custom_tolerances: Record<string, number> | null;
@@ -64,7 +64,6 @@ export interface InspectionResponse {
 
 export interface InspectionConfigOverride {
   altitude_offset?: number | null;
-  speed_override?: number | null;
   measurement_speed_override?: number | null;
   measurement_density?: number | null;
   custom_tolerances?: Record<string, number> | null;
@@ -93,6 +92,7 @@ export interface MissionCreate {
   drone_profile_id?: string | null;
   date_time?: string | null;
   default_speed?: number | null;
+  measurement_speed_override?: number | null;
   default_altitude_offset?: number | null;
   takeoff_coordinate?: PointZ | null;
   landing_coordinate?: PointZ | null;
@@ -107,6 +107,7 @@ export interface MissionUpdate {
   drone_profile_id?: string | null;
   date_time?: string | null;
   default_speed?: number | null;
+  measurement_speed_override?: number | null;
   default_altitude_offset?: number | null;
   takeoff_coordinate?: PointZ | null;
   landing_coordinate?: PointZ | null;

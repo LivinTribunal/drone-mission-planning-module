@@ -371,13 +371,12 @@ def resolve_density(
 
 
 def resolve_speed(
-    config: ResolvedConfig,
     path_distance: Meters,
     density: int,
     drone,
     default_speed: MetersPerSecond,
 ) -> tuple[MetersPerSecond, str | None, MetersPerSecond | None]:
-    """resolve measurement speed from override, optimal calculation, or default.
+    """resolve transit speed from optimal calculation or mission default.
 
     optimal speed is the max that still captures one frame per waypoint spacing,
     clamped to default_speed so measurement passes stay slow and precise.
@@ -385,10 +384,7 @@ def resolve_speed(
     """
     optimal = compute_optimal_speed(path_distance, density, drone)
 
-    if config.speed_override is not None:
-        chosen = config.speed_override
-    elif optimal is not None:
-        # use optimal for frame rate but never exceed default speed
+    if optimal is not None:
         chosen = min(optimal, default_speed)
     else:
         chosen = default_speed

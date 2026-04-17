@@ -3,7 +3,6 @@ import type { CaptureMode, InspectionMethod } from "./enums";
 export interface InspectionConfigResponse {
   id: string;
   altitude_offset: number | null;
-  speed_override: number | null;
   measurement_speed_override: number | null;
   measurement_density: number | null;
   custom_tolerances: Record<string, number> | null;
