@@ -537,25 +537,24 @@ def test_extract_polygon_vertices_buffer_offset(client, db_engine):
         proj = LocalProjection(ref_lon=14.27, ref_lat=50.10)
         poly = ewkb_to_local_polygon(proj, obs.boundary.data)
 
-        # extract with zero buffer
+        # extract with zero buffer - same shape as original polygon
         verts_zero = _extract_local_polygon_vertices(poly, buffer_m=0.0)
         unique_coords = coords[:-1]
         assert len(verts_zero) == len(unique_coords)
 
-        # extract with 25m buffer
+        # extract with 25m buffer - Shapely buffer adds rounded corners
         buffer_m = 25.0
         verts_buffered = _extract_local_polygon_vertices(poly, buffer_m=buffer_m)
-        assert len(verts_buffered) == len(unique_coords)
+        assert len(verts_buffered) >= len(unique_coords)
 
-        # each buffered vertex should be ~25m farther from centroid than the original
-        cx = sum(v[0] for v in verts_zero) / len(verts_zero)
-        cy = sum(v[1] for v in verts_zero) / len(verts_zero)
+        # every buffered vertex must be at least buffer_m from the original polygon
+        from shapely.geometry import Point as ShapelyPoint
 
-        for v_buf, v_orig in zip(verts_buffered, verts_zero):
-            dist_orig = math.sqrt((v_orig[0] - cx) ** 2 + (v_orig[1] - cy) ** 2)
-            dist_buf = math.sqrt((v_buf[0] - cx) ** 2 + (v_buf[1] - cy) ** 2)
-            offset = dist_buf - dist_orig
-            assert abs(offset - buffer_m) < 2.0, f"expected ~{buffer_m}m offset, got {offset:.1f}m"
+        for v in verts_buffered:
+            dist = poly.exterior.distance(ShapelyPoint(v[0], v[1]))
+            assert dist >= buffer_m - 1.0, (
+                f"buffered vertex too close to original: {dist:.1f}m < {buffer_m}m"
+            )
 
 
 # full pipeline e2e test
@@ -978,9 +977,9 @@ def test_extract_polygon_vertices_skips_closing_duplicate(client, db_engine):
         poly = ewkb_to_local_polygon(proj, obs.boundary.data)
         verts = _extract_local_polygon_vertices(poly, buffer_m=5.0)
 
-        # should have 4 vertices, not 5 (closing duplicate removed)
-        assert len(verts) == 4
+        # buffer expands polygon - must have at least the original 4 vertices
+        assert len(verts) >= 4
 
-        # first and last should NOT be at the same position
+        # closing duplicate must be removed
         first, last = verts[0], verts[-1]
         assert not (abs(first[0] - last[0]) < 1e-8 and abs(first[1] - last[1]) < 1e-8)

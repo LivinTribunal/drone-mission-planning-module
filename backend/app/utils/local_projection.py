@@ -190,6 +190,7 @@ def build_local_geometries(
             continue
         poly = ewkb_to_local_polygon(proj, obs.boundary.data)
         if poly is None:
+            logger.error("obstacle %s skipped - geometry could not be parsed", obs.name)
             continue
         base_alt = obstacle_base_altitude_from_ewkb(obs.boundary.data)
         local_obstacles.append(
@@ -209,6 +210,7 @@ def build_local_geometries(
             continue
         poly = ewkb_to_local_polygon(proj, zone.geometry.data)
         if poly is None:
+            logger.error("safety zone %s skipped - geometry could not be parsed", zone.name)
             continue
 
         if zone.type == SafetyZoneType.AIRPORT_BOUNDARY.value:
@@ -235,6 +237,7 @@ def build_local_geometries(
             continue
         ls = ewkb_to_local_linestring(proj, surface.geometry.data)
         if ls is None:
+            logger.error("surface %s skipped - geometry could not be parsed", surface.name)
             continue
         half_width = (surface.width or 45.0) / 2.0
         runway_poly = ls.buffer(half_width, cap_style="flat")

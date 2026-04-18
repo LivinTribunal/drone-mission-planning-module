@@ -52,33 +52,19 @@ def _extract_local_polygon_vertices(
     polygon, buffer_m: float | None = None
 ) -> list[tuple[float, float]]:
     """extract vertices from Shapely polygon in local coords, offset outward by buffer distance."""
-    coords = list(polygon.exterior.coords)
+    offset = buffer_m if buffer_m is not None else settings.vertex_buffer_m
+
+    buffered = polygon.buffer(offset)
+    if buffered.is_empty:
+        return []
+
+    coords = list(buffered.exterior.coords)
 
     # skip closing duplicate of a closed ring
     if len(coords) > 1 and coords[0] == coords[-1]:
         coords = coords[:-1]
 
-    if len(coords) < 3:
-        return []
-
-    offset = buffer_m if buffer_m is not None else settings.vertex_buffer_m
-
-    # compute centroid for offset direction
-    cx = sum(c[0] for c in coords) / len(coords)
-    cy = sum(c[1] for c in coords) / len(coords)
-
-    vertices = []
-    for c in coords:
-        dx, dy = c[0] - cx, c[1] - cy
-        d = math.sqrt(dx * dx + dy * dy)
-        if d > 0:
-            x = c[0] + (dx / d) * offset
-            y = c[1] + (dy / d) * offset
-        else:
-            x, y = c[0], c[1]
-        vertices.append((x, y))
-
-    return vertices
+    return [(c[0], c[1]) for c in coords]
 
 
 def _collect_nearby_objects_local(

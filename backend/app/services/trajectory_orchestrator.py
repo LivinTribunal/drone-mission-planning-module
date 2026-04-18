@@ -845,18 +845,6 @@ def _generate_trajectory_inner(
         )
         all_waypoints.extend(landing_transit)
 
-        all_waypoints.append(
-            WaypointData(
-                lon=lc[0],
-                lat=lc[1],
-                alt=landing_alt + transit_agl,
-                heading=all_waypoints[-1].heading,
-                speed=default_speed,
-                waypoint_type=WaypointType.TRANSIT,
-                camera_action=CameraAction.NONE,
-            )
-        )
-
     else:
         # FULL scope (default): takeoff at ground level -> climb -> transit -> landing
         if mission.takeoff_coordinate:
