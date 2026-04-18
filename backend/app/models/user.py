@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import uuid4
 
 import bcrypt
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Table, func
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, String, Table, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -22,6 +22,12 @@ class User(Base):
     """application user with role-based access."""
 
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('OPERATOR', 'COORDINATOR', 'SUPER_ADMIN')",
+            name="ck_users_role_valid",
+        ),
+    )
 
     id = Column(UUID, primary_key=True, default=uuid4)
     email = Column(String, unique=True, nullable=False, index=True)

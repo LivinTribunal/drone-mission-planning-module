@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers
 revision = "a1b2c3d4e5f8"
-down_revision = "a8f1c2d3e4b5"
+down_revision = "b435c08f47f1"
 branch_labels = None
 depends_on = None
 

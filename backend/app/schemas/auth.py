@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class AirportSummary(BaseModel):
@@ -20,9 +20,9 @@ class UserResponse(BaseModel):
     email: str
     name: str
     role: str
-    assigned_airports: list[AirportSummary] = []
+    airports: list[AirportSummary] = []
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 class LoginRequest(BaseModel):
@@ -59,6 +59,13 @@ class UserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=8)
     current_password: str | None = None
 
+    @model_validator(mode="after")
+    def require_current_password_for_change(self):
+        """enforce current_password when setting a new password."""
+        if self.password is not None and not self.current_password:
+            raise ValueError("current password is required to set a new password")
+        return self
+
 
 class SetupPasswordRequest(BaseModel):
     """set password from invitation link."""
@@ -72,3 +79,9 @@ class ResetPasswordRequest(BaseModel):
 
     token: str
     new_password: str = Field(min_length=8)
+
+
+class MessageResponse(BaseModel):
+    """simple message response."""
+
+    message: str

@@ -7,27 +7,16 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import axios from "axios";
 import client from "@/api/client";
 import {
+  REFRESH_TOKEN_KEY,
   setAccessToken as setGlobalAccessToken,
   setLogoutHandler,
 } from "@/auth/tokenStore";
+import type { AuthUser } from "@/types/auth";
 
-const REFRESH_TOKEN_KEY = "tarmacview_refresh_token";
-
-interface AirportSummary {
-  id: string;
-  icao_code: string;
-  name: string;
-}
-
-export interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-  assigned_airports: AirportSummary[];
-}
+export type { AuthUser };
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -60,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [logout]);
 
+  // mount-time refresh uses raw axios to avoid going through the interceptor
+  // which also triggers refresh on 401, preventing a double-refresh race
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
@@ -70,13 +61,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    client
-      .post("/auth/refresh", { refresh_token: refreshToken })
+    axios
+      .post("/api/v1/auth/refresh", { refresh_token: refreshToken })
       .then((res) => {
         const token = res.data.access_token;
         setAccessToken(token);
         setGlobalAccessToken(token);
-        return client.get("/auth/me", {
+        return axios.get("/api/v1/auth/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
       })

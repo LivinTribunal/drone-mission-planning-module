@@ -76,23 +76,11 @@ def auth_client(auth_engine, auth_session_factory):
 @pytest.fixture(scope="module")
 def seeded_auth_client(auth_client, auth_session_factory):
     """auth client with seed users created."""
-    from app.core.config import settings
-
-    original_admin = settings.seed_admin_password
-    original_coord = settings.seed_coordinator_password
-    original_op = settings.seed_operator_password
-    settings.seed_admin_password = "admin123"
-    settings.seed_coordinator_password = "coord123"
-    settings.seed_operator_password = "operator123"
-
     db = auth_session_factory()
     try:
         auth_service.seed_users(db)
     finally:
         db.close()
-        settings.seed_admin_password = original_admin
-        settings.seed_coordinator_password = original_coord
-        settings.seed_operator_password = original_op
 
     return auth_client
 
@@ -159,69 +147,29 @@ class TestAuthService:
 
     def test_seed_users(self, auth_db):
         """seed creates users when none exist."""
-        from app.core.config import settings
-
-        settings.seed_admin_password = "admin123"
-        settings.seed_coordinator_password = "coord123"
-        settings.seed_operator_password = "operator123"
-        try:
-            auth_service.seed_users(auth_db)
-            count = auth_db.query(User).count()
-            assert count >= 3
-        finally:
-            settings.seed_admin_password = ""
-            settings.seed_coordinator_password = ""
-            settings.seed_operator_password = ""
-
-    def test_seed_users_skipped_without_passwords(self, auth_db):
-        """seed skips when passwords are not configured."""
-        from app.core.config import settings
-
-        settings.seed_admin_password = ""
-        settings.seed_coordinator_password = ""
-        settings.seed_operator_password = ""
-
-        # clear any existing users to test the skip behavior
-        auth_db.query(User).delete()
-        auth_db.commit()
-
         auth_service.seed_users(auth_db)
         count = auth_db.query(User).count()
-        assert count == 0
+        assert count >= 3
+
+    def test_seed_users_idempotent(self, auth_db):
+        """seed skips when users already exist."""
+        auth_service.seed_users(auth_db)
+        count_before = auth_db.query(User).count()
+        auth_service.seed_users(auth_db)
+        count_after = auth_db.query(User).count()
+        assert count_before == count_after
 
     def test_authenticate_valid(self, auth_db):
         """valid credentials return user."""
-        from app.core.config import settings
-
-        settings.seed_admin_password = "admin123"
-        settings.seed_coordinator_password = "coord123"
-        settings.seed_operator_password = "operator123"
-        try:
-            auth_service.seed_users(auth_db)
-        finally:
-            settings.seed_admin_password = ""
-            settings.seed_coordinator_password = ""
-            settings.seed_operator_password = ""
-
-        user = auth_service.authenticate_user(auth_db, "admin@tarmacview.com", "admin123")
+        auth_service.seed_users(auth_db)
+        user = auth_service.authenticate_user(auth_db, "admin@tmv.com", "adminadmin")
         assert user is not None
         assert user.role == UserRole.SUPER_ADMIN.value
 
     def test_authenticate_wrong_password(self, auth_db):
         """wrong password returns none."""
-        from app.core.config import settings
-
-        settings.seed_admin_password = "admin123"
-        settings.seed_coordinator_password = "coord123"
-        settings.seed_operator_password = "operator123"
-        try:
-            auth_service.seed_users(auth_db)
-        finally:
-            settings.seed_admin_password = ""
-            settings.seed_coordinator_password = ""
-            settings.seed_operator_password = ""
-
-        user = auth_service.authenticate_user(auth_db, "admin@tarmacview.com", "wrong")
+        auth_service.seed_users(auth_db)
+        user = auth_service.authenticate_user(auth_db, "admin@tmv.com", "wrong")
         assert user is None
 
     def test_authenticate_nonexistent(self, auth_db):
@@ -240,7 +188,7 @@ class TestAuthEndpoints:
         """valid login returns tokens and user."""
         resp = seeded_auth_client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@tarmacview.com", "password": "admin123"},
+            json={"email": "admin@tmv.com", "password": "adminadmin"},
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -252,7 +200,7 @@ class TestAuthEndpoints:
         """invalid credentials return 401."""
         resp = seeded_auth_client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@tarmacview.com", "password": "wrong"},
+            json={"email": "admin@tmv.com", "password": "wrong"},
         )
         assert resp.status_code == 401
 
@@ -268,7 +216,7 @@ class TestAuthEndpoints:
         """refresh endpoint returns new access token."""
         login = seeded_auth_client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@tarmacview.com", "password": "admin123"},
+            json={"email": "admin@tmv.com", "password": "adminadmin"},
         )
         refresh_token = login.json()["refresh_token"]
 
@@ -291,7 +239,7 @@ class TestAuthEndpoints:
         """authenticated user can get own profile."""
         login = seeded_auth_client.post(
             "/api/v1/auth/login",
-            json={"email": "operator@tarmacview.com", "password": "operator123"},
+            json={"email": "operator@tmv.com", "password": "operator"},
         )
         token = login.json()["access_token"]
 
@@ -301,7 +249,7 @@ class TestAuthEndpoints:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["email"] == "operator@tarmacview.com"
+        assert data["email"] == "operator@tmv.com"
         assert data["role"] == "OPERATOR"
 
     def test_get_me_no_token(self, seeded_auth_client):
@@ -313,7 +261,7 @@ class TestAuthEndpoints:
         """user can update own name."""
         login = seeded_auth_client.post(
             "/api/v1/auth/login",
-            json={"email": "operator@tarmacview.com", "password": "operator123"},
+            json={"email": "operator@tmv.com", "password": "operator"},
         )
         token = login.json()["access_token"]
 
@@ -345,14 +293,14 @@ class TestAuthEndpoints:
         """update-me rejects passwords shorter than 8 chars."""
         login = seeded_auth_client.post(
             "/api/v1/auth/login",
-            json={"email": "operator@tarmacview.com", "password": "operator123"},
+            json={"email": "operator@tmv.com", "password": "operator"},
         )
         token = login.json()["access_token"]
 
         resp = seeded_auth_client.put(
             "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {token}"},
-            json={"password": "short", "current_password": "operator123"},
+            json={"password": "short", "current_password": "operator"},
         )
         assert resp.status_code == 422
 
@@ -373,7 +321,7 @@ class TestRBAC:
 
     def test_operator_cannot_create_drone(self, seeded_auth_client):
         """operator role is blocked from coordinator endpoints."""
-        token = self._get_token(seeded_auth_client, "operator@tarmacview.com", "operator123")
+        token = self._get_token(seeded_auth_client, "operator@tmv.com", "operator")
         resp = seeded_auth_client.post(
             "/api/v1/drone-profiles",
             headers={"Authorization": f"Bearer {token}"},
@@ -383,7 +331,7 @@ class TestRBAC:
 
     def test_coordinator_can_create_drone(self, seeded_auth_client):
         """coordinator role can access coordinator endpoints."""
-        token = self._get_token(seeded_auth_client, "coordinator@tarmacview.com", "coord123")
+        token = self._get_token(seeded_auth_client, "coord@tmv.com", "coordinator")
         resp = seeded_auth_client.post(
             "/api/v1/drone-profiles",
             headers={"Authorization": f"Bearer {token}"},

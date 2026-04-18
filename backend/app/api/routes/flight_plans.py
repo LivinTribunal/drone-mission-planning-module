@@ -3,26 +3,19 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import check_airport_access, get_db, require_operator
+from app.api.dependencies import OperatorUser, check_mission_access
+from app.core.dependencies import get_db
 from app.core.exceptions import DomainError, NotFoundError, TrajectoryGenerationError
-from app.models.user import User
 from app.schemas.flight_plan import (
     FlightPlanResponse,
     GenerateTrajectoryResponse,
     TransitWaypointInsertRequest,
     WaypointBatchUpdateRequest,
 )
-from app.services import flight_plan_service, mission_service
+from app.services import flight_plan_service
 from app.services.trajectory.orchestrator import generate_trajectory
 
 router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
-
-
-def _check_mission_access(db: Session, current_user: User, mission_id: UUID):
-    """fetch mission and verify user has airport access, return mission."""
-    mission = mission_service.get_mission(db, mission_id)
-    check_airport_access(current_user, mission.airport_id)
-    return mission
 
 
 @router.post(
@@ -31,12 +24,12 @@ def _check_mission_access(db: Session, current_user: User, mission_id: UUID):
 )
 def generate(
     mission_id: UUID,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """run 5-phase trajectory generation pipeline."""
     try:
-        mission = _check_mission_access(db, current_user, mission_id)
+        mission = check_mission_access(db, current_user, mission_id)
     except NotFoundError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
@@ -74,11 +67,11 @@ def generate(
 @router.get("/{mission_id}/flight-plan", response_model=FlightPlanResponse)
 def get_plan(
     mission_id: UUID,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """get flight plan for mission"""
-    _check_mission_access(db, current_user, mission_id)
+    check_mission_access(db, current_user, mission_id)
     try:
         return flight_plan_service.get_flight_plan(db, mission_id)
     except DomainError as e:
@@ -89,11 +82,11 @@ def get_plan(
 def batch_update_waypoints(
     mission_id: UUID,
     payload: WaypointBatchUpdateRequest,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """batch update waypoint positions and camera targets."""
-    _check_mission_access(db, current_user, mission_id)
+    check_mission_access(db, current_user, mission_id)
     try:
         return flight_plan_service.batch_update_waypoints(db, mission_id, payload.updates)
     except NotFoundError as e:
@@ -109,11 +102,11 @@ def batch_update_waypoints(
 def insert_transit_waypoint(
     mission_id: UUID,
     payload: TransitWaypointInsertRequest,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """insert a new transit waypoint at a position on the transit path."""
-    _check_mission_access(db, current_user, mission_id)
+    check_mission_access(db, current_user, mission_id)
     try:
         return flight_plan_service.insert_transit_waypoint(db, mission_id, payload)
     except NotFoundError as e:
@@ -129,11 +122,11 @@ def insert_transit_waypoint(
 def delete_transit_waypoint(
     mission_id: UUID,
     waypoint_id: UUID,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """delete a transit waypoint from the flight plan."""
-    _check_mission_access(db, current_user, mission_id)
+    check_mission_access(db, current_user, mission_id)
     try:
         return flight_plan_service.delete_transit_waypoint(db, mission_id, waypoint_id)
     except NotFoundError as e:

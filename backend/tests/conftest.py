@@ -7,8 +7,8 @@ from sqlalchemy.orm import sessionmaker
 from testcontainers.postgres import PostgresContainer
 
 import app.models  # noqa: F401
+from app.api.dependencies import get_current_user
 from app.core.database import Base, get_db
-from app.core.dependencies import get_current_user
 from app.main import app
 
 # stub user for auth bypass in existing tests

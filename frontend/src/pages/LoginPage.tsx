@@ -3,6 +3,15 @@ import { useNavigate, Navigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 
+const AIRPORT_STORAGE_KEY = "tarmacview_airport";
+
+function getPostLoginPath(): string {
+  const remembered = localStorage.getItem(AIRPORT_STORAGE_KEY);
+  return remembered
+    ? "/operator-center/dashboard"
+    : "/operator-center/airport-selection";
+}
+
 export default function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -17,7 +26,7 @@ export default function LoginPage() {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/operator-center/dashboard" replace />;
+    return <Navigate to={getPostLoginPath()} replace />;
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -26,7 +35,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(email, password);
-      navigate("/operator-center/dashboard");
+      navigate(getPostLoginPath());
     } catch {
       setError(true);
     } finally {

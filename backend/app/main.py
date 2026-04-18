@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -20,7 +21,22 @@ from app.services import auth_service
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """seed default users on first run."""
+    db = SessionLocal()
+    try:
+        auth_service.seed_users(db)
+    except Exception:
+        logger.exception("failed to seed users")
+    finally:
+        db.close()
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="TarmacView API",
     version="0.1.0",
     docs_url="/api/docs",
@@ -63,7 +79,13 @@ app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 # maintenance mode middleware - env var placeholder until system settings table exists
 @app.middleware("http")
 async def maintenance_mode_middleware(request: Request, call_next):
-    """return 503 for non-admin users when maintenance mode is on."""
+    """return 503 for non-admin users when maintenance mode is on.
+
+    note: this middleware parses JWT tokens directly via auth_service.decode_token
+    rather than through the FastAPI dependency system (get_current_user), because
+    middleware runs before route-level dependency injection. keep this in sync with
+    the token format used by auth_service.create_access_token.
+    """
     if os.environ.get("MAINTENANCE_MODE", "").lower() == "true":
         # allow auth endpoints and health check through
         path = request.url.path
@@ -74,31 +96,19 @@ async def maintenance_mode_middleware(request: Request, call_next):
             or path.startswith("/api/openapi")
         ):
             auth_header = request.headers.get("authorization", "")
-            token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer") else ""
+            token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
             if token:
                 try:
                     payload = auth_service.decode_token(token)
                     if payload.get("role") == "SUPER_ADMIN":
                         return await call_next(request)
-                except Exception:
+                except DomainError:
                     pass
             return JSONResponse(
                 status_code=503,
                 content={"detail": "system is under maintenance"},
             )
     return await call_next(request)
-
-
-@app.on_event("startup")
-def on_startup():
-    """seed default users on first run."""
-    db = SessionLocal()
-    try:
-        auth_service.seed_users(db)
-    except Exception:
-        logger.exception("failed to seed users")
-    finally:
-        db.close()
 
 
 @app.get("/api/v1/health")

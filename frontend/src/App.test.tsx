@@ -65,7 +65,7 @@ describe("App", () => {
           email: "test@example.com",
           name: "Test",
           role: "OPERATOR",
-          assigned_airports: [],
+          airports: [],
         },
       },
     });

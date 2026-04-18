@@ -1,3 +1,5 @@
+export const REFRESH_TOKEN_KEY = "tarmacview_refresh_token";
+
 let globalAccessToken: string | null = null;
 let globalLogout: (() => void) | null = null;
 

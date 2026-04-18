@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+import bcrypt
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session, joinedload
 
@@ -10,16 +11,23 @@ from app.core.exceptions import DomainError, NotFoundError
 from app.models.airport import Airport
 from app.models.enums import UserRole
 from app.models.user import User
+from app.schemas.auth import ResetPasswordRequest, SetupPasswordRequest, UserUpdate
 
 logger = logging.getLogger(__name__)
 
 ALGORITHM = "HS256"
 
+# precomputed hash for timing-safe rejection of unknown emails
+_DUMMY_HASH = bcrypt.hashpw(b"timing-safe-dummy", bcrypt.gensalt()).decode("utf-8")
+
 
 def authenticate_user(db: Session, email: str, password: str) -> User | None:
     """verify email + password, return user or none."""
     user = db.query(User).options(joinedload(User.airports)).filter(User.email == email).first()
-    if not user or not user.is_active or not user.verify_password(password):
+    if not user:
+        bcrypt.checkpw(password.encode("utf-8"), _DUMMY_HASH.encode("utf-8"))
+        return None
+    if not user.is_active or not user.verify_password(password):
         return None
     return user
 
@@ -69,39 +77,41 @@ def get_user_by_id(db: Session, user_id: UUID) -> User:
     return user
 
 
-def update_user_profile(db: Session, user: User, name: str | None, password: str | None) -> User:
+def update_user_profile(db: Session, user: User, data: UserUpdate) -> User:
     """update own name and/or password."""
-    if name is not None:
-        user.name = name
-    if password is not None:
-        user.set_password(password)
+    if data.current_password and not user.verify_password(data.current_password):
+        raise DomainError("current password is incorrect", status_code=400)
+    if data.name is not None:
+        user.name = data.name
+    if data.password is not None:
+        user.set_password(data.password)
     db.commit()
     db.refresh(user)
     return user
 
 
-def setup_password(db: Session, token: str, password: str) -> None:
+def setup_password(db: Session, data: SetupPasswordRequest) -> None:
     """complete invitation flow - set password and activate user."""
-    user = db.query(User).filter(User.invitation_token == token).first()
+    user = db.query(User).filter(User.invitation_token == data.token).first()
     if not user:
         raise DomainError("invalid invitation token", status_code=400)
     if not user.is_invitation_valid():
         raise DomainError("invitation has expired", status_code=400)
-    user.set_password(password)
+    user.set_password(data.password)
     user.is_active = True
     user.invitation_token = None
     user.invitation_expires_at = None
     db.commit()
 
 
-def reset_password(db: Session, token: str, new_password: str) -> None:
+def reset_password(db: Session, data: ResetPasswordRequest) -> None:
     """reset password via invitation token mechanism."""
-    user = db.query(User).filter(User.invitation_token == token).first()
+    user = db.query(User).filter(User.invitation_token == data.token).first()
     if not user:
         raise DomainError("invalid reset token", status_code=400)
     if not user.is_invitation_valid():
         raise DomainError("reset token has expired", status_code=400)
-    user.set_password(new_password)
+    user.set_password(data.new_password)
     user.invitation_token = None
     user.invitation_expires_at = None
     db.commit()
@@ -113,17 +123,6 @@ def seed_users(db: Session) -> None:
         logger.info("skipping user seeding in production environment")
         return
 
-    # require all seed passwords to be set
-    if not all(
-        [
-            settings.seed_admin_password,
-            settings.seed_coordinator_password,
-            settings.seed_operator_password,
-        ]
-    ):
-        logger.warning("seed passwords not configured - set SEED_*_PASSWORD env vars to seed users")
-        return
-
     count = db.query(User).count()
     if count > 0:
         return
@@ -132,19 +131,9 @@ def seed_users(db: Session) -> None:
     logger.info("seeding %d default users with %d airports", 3, len(airports))
 
     seed_data = [
-        ("admin@tarmacview.com", settings.seed_admin_password, "Admin", UserRole.SUPER_ADMIN.value),
-        (
-            "coordinator@tarmacview.com",
-            settings.seed_coordinator_password,
-            "Coordinator",
-            UserRole.COORDINATOR.value,
-        ),
-        (
-            "operator@tarmacview.com",
-            settings.seed_operator_password,
-            "Operator",
-            UserRole.OPERATOR.value,
-        ),
+        ("admin@tmv.com", "adminadmin", "Admin", UserRole.SUPER_ADMIN.value),
+        ("coord@tmv.com", "coordinator", "Coordinator", UserRole.COORDINATOR.value),
+        ("operator@tmv.com", "operator", "Operator", UserRole.OPERATOR.value),
     ]
 
     for email, password, name, role in seed_data:

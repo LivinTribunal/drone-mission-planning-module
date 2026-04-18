@@ -2,6 +2,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/types/enums";
 
+// higher number = more privileges - keep in sync with backend UserRole enum
 const ROLE_LEVEL: Record<string, number> = {
   OPERATOR: 1,
   COORDINATOR: 2,

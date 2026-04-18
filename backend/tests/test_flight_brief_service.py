@@ -466,7 +466,7 @@ class TestRouteEndpoint:
 
         from fastapi.testclient import TestClient
 
-        from app.core.dependencies import get_current_user
+        from app.api.dependencies import get_current_user
         from app.main import app
 
         stub_user = SimpleNamespace(

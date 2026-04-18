@@ -9,15 +9,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.core.config import TERRAIN_DIR
-from app.core.dependencies import (
+from app.api.dependencies import (
+    CoordinatorUser,
+    OperatorUser,
     check_airport_access,
-    get_db,
-    require_coordinator,
-    require_operator,
+    get_user_airport_ids,
 )
+from app.core.config import TERRAIN_DIR
+from app.core.dependencies import get_db
 from app.core.exceptions import DomainError, NotFoundError
-from app.models.user import User
 from app.schemas.airport import (
     AirportCreate,
     AirportDetailResponse,
@@ -70,36 +70,30 @@ router = APIRouter(prefix="/api/v1/airports", tags=["airports"])
 # airports
 @router.get("", response_model=AirportListResponse)
 def list_airports(
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """list all available airports for user."""
-    airport_ids = None
-    if current_user.role != "SUPER_ADMIN":
-        airport_ids = [a.id for a in current_user.airports]
-
-    airports = airport_service.list_airports(db, airport_ids=airport_ids)
+    airports = airport_service.list_airports(db, airport_ids=get_user_airport_ids(current_user))
     return AirportListResponse(data=airports, meta=ListMeta(total=len(airports)))
 
 
 @router.get("/summary", response_model=AirportSummaryListResponse)
 def list_airports_summary(
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """list all airports with infrastructure and mission counts."""
-    airport_ids = None
-    if current_user.role != "SUPER_ADMIN":
-        airport_ids = [a.id for a in current_user.airports]
-
-    summaries = airport_service.list_airports_with_counts(db, airport_ids=airport_ids)
+    summaries = airport_service.list_airports_with_counts(
+        db, airport_ids=get_user_airport_ids(current_user)
+    )
     return AirportSummaryListResponse(data=summaries, meta=ListMeta(total=len(summaries)))
 
 
 @router.get("/{airport_id}", response_model=AirportDetailResponse)
 def get_airport(
     airport_id: UUID,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """get airport by id"""
@@ -110,7 +104,7 @@ def get_airport(
 @router.post("", status_code=201, response_model=AirportResponse)
 def create_airport(
     body: AirportCreate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """create airport"""
@@ -121,7 +115,7 @@ def create_airport(
 def update_airport(
     airport_id: UUID,
     body: AirportUpdate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """update airport"""
@@ -132,7 +126,7 @@ def update_airport(
 @router.delete("/{airport_id}", response_model=DeleteResponse)
 def delete_airport(
     airport_id: UUID,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """delete airport"""
@@ -146,7 +140,7 @@ def delete_airport(
 def set_default_drone(
     airport_id: UUID,
     body: SetDefaultDroneRequest,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """set or clear the default drone profile for an airport."""
@@ -158,7 +152,7 @@ def set_default_drone(
 def bulk_change_drone(
     airport_id: UUID,
     body: BulkChangeDroneRequest,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """change drone profile on missions at an airport."""
@@ -177,7 +171,7 @@ def bulk_change_drone(
 
 # openaip lookup
 @router.get("/lookup/{icao_code}", response_model=AirportLookupResponse)
-def lookup_airport(icao_code: str, current_user: User = Depends(require_operator)):
+def lookup_airport(icao_code: str, current_user: OperatorUser):
     """fetch airport data + nearby airspaces / obstacles from openaip."""
     try:
         return openaip_service.lookup_airport_by_icao(icao_code)
@@ -195,7 +189,7 @@ MAX_DEM_SIZE = 500 * 1024 * 1024  # 500MB
 def upload_terrain_dem(
     airport_id: UUID,
     file: UploadFile,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """upload a GeoTIFF DEM file for terrain-following altitude."""
@@ -295,7 +289,7 @@ def upload_terrain_dem(
 @router.delete("/{airport_id}/terrain-dem", response_model=DeleteResponse)
 def delete_terrain_dem(
     airport_id: UUID,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """remove DEM file and revert airport to flat terrain."""
@@ -316,7 +310,7 @@ def delete_terrain_dem(
 @router.post("/{airport_id}/terrain-download", response_model=TerrainDownloadResponse)
 async def download_terrain_data(
     airport_id: UUID,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """download elevation data from Open-Elevation API and cache as GeoTIFF."""
@@ -379,7 +373,7 @@ async def download_terrain_data(
 @router.get("/{airport_id}/surfaces", response_model=SurfaceListResponse)
 def list_surfaces(
     airport_id: UUID,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """list all surfaces for airport"""
@@ -393,7 +387,7 @@ def list_surfaces(
 def create_surface(
     airport_id: UUID,
     body: SurfaceCreate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """create surface for airport"""
@@ -406,7 +400,7 @@ def update_surface(
     airport_id: UUID,
     surface_id: UUID,
     body: SurfaceUpdate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """update surface for airport"""
@@ -418,7 +412,7 @@ def update_surface(
 def delete_surface(
     airport_id: UUID,
     surface_id: UUID,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """delete surface for airport"""
@@ -435,7 +429,7 @@ def delete_surface(
 def recalculate_surface(
     airport_id: UUID,
     surface_id: UUID,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """recompute surface length/width/heading from geometry without persisting."""
@@ -447,7 +441,7 @@ def recalculate_surface(
 @router.get("/{airport_id}/obstacles", response_model=ObstacleListResponse)
 def list_obstacles(
     airport_id: UUID,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """list all obstacles for airport"""
@@ -461,7 +455,7 @@ def list_obstacles(
 def create_obstacle(
     airport_id: UUID,
     body: ObstacleCreate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """create obstacle for airport"""
@@ -474,7 +468,7 @@ def update_obstacle(
     airport_id: UUID,
     obstacle_id: UUID,
     body: ObstacleUpdate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """update obstacle"""
@@ -486,7 +480,7 @@ def update_obstacle(
 def delete_obstacle(
     airport_id: UUID,
     obstacle_id: UUID,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """delete obstacle"""
@@ -503,7 +497,7 @@ def delete_obstacle(
 def recalculate_obstacle(
     airport_id: UUID,
     obstacle_id: UUID,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """recompute obstacle dimensions from boundary geometry without persisting."""
@@ -515,7 +509,7 @@ def recalculate_obstacle(
 @router.get("/{airport_id}/safety-zones", response_model=SafetyZoneListResponse)
 def list_safety_zones(
     airport_id: UUID,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """list all safety zones for airport"""
@@ -529,7 +523,7 @@ def list_safety_zones(
 def create_safety_zone(
     airport_id: UUID,
     body: SafetyZoneCreate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """create safety zone for airport"""
@@ -542,7 +536,7 @@ def update_safety_zone(
     airport_id: UUID,
     zone_id: UUID,
     body: SafetyZoneUpdate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """update safety zone"""
@@ -554,7 +548,7 @@ def update_safety_zone(
 def delete_safety_zone(
     airport_id: UUID,
     zone_id: UUID,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """delete safety zone"""
@@ -569,7 +563,7 @@ def delete_safety_zone(
 def list_agls(
     airport_id: UUID,
     surface_id: UUID,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """list all AGLs for surface"""
@@ -586,7 +580,7 @@ def create_agl(
     airport_id: UUID,
     surface_id: UUID,
     body: AGLCreate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """create AGL for surface"""
@@ -600,7 +594,7 @@ def update_agl(
     surface_id: UUID,
     agl_id: UUID,
     body: AGLUpdate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """update AGL"""
@@ -613,7 +607,7 @@ def delete_agl(
     airport_id: UUID,
     surface_id: UUID,
     agl_id: UUID,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """delete AGL"""
@@ -631,7 +625,7 @@ def list_lhas(
     airport_id: UUID,
     surface_id: UUID,
     agl_id: UUID,
-    current_user: User = Depends(require_operator),
+    current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """list all LHAs for AGL"""
@@ -651,7 +645,7 @@ def create_lha(
     surface_id: UUID,
     agl_id: UUID,
     body: LHACreate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """create LHA for AGL"""
@@ -669,7 +663,7 @@ def update_lha(
     agl_id: UUID,
     lha_id: UUID,
     body: LHAUpdate,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """update LHA"""
@@ -687,7 +681,7 @@ def bulk_generate_lhas(
     surface_id: UUID,
     agl_id: UUID,
     body: LHABulkGenerateRequest,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """generate evenly-spaced LHAs between two points via linear interpolation."""
@@ -706,7 +700,7 @@ def delete_lha(
     surface_id: UUID,
     agl_id: UUID,
     lha_id: UUID,
-    current_user: User = Depends(require_coordinator),
+    current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """delete LHA"""

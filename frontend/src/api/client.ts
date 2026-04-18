@@ -1,9 +1,19 @@
 import axios, { isAxiosError } from "axios";
-import { getAccessToken, setAccessToken, triggerLogout } from "@/auth/tokenStore";
+import {
+  getAccessToken,
+  setAccessToken,
+  triggerLogout,
+  REFRESH_TOKEN_KEY,
+} from "@/auth/tokenStore";
 
 export { isAxiosError };
 
-const REFRESH_TOKEN_KEY = "tarmacview_refresh_token";
+// module augmentation for _retry flag on retried requests
+declare module "axios" {
+  interface InternalAxiosRequestConfig {
+    _retry?: boolean;
+  }
+}
 
 const client = axios.create({
   baseURL: "/api/v1",
@@ -92,7 +102,7 @@ client.interceptors.response.use(
       }
     }
 
-    if (error.response) {
+    if (import.meta.env.DEV && error.response) {
       const status = error.response.status;
       const detail =
         error.response.data?.detail ??

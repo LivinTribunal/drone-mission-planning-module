@@ -65,7 +65,7 @@
     "login": "Sign in",
     "loggingIn": "Signing in...",
     "logout": "Logout",
-    "wrongCredentials": "Login failed",
+    "wrongCredentials": "Wrong login credentials. Try again.",
     "setupPasswordTitle": "Set Your Password",
     "newPassword": "New Password",
     "newPasswordPlaceholder": "Enter a new password",
@@ -83,7 +83,8 @@
     "settings": "Settings",
     "language": "Language",
     "lightMode": "Light mode",
-    "darkMode": "Dark mode"
+    "darkMode": "Dark mode",
+    "defaultName": "User"
   },
   "airportSelection": {
     "searchPlaceholder": "Search airports by ICAO code, name, or city",

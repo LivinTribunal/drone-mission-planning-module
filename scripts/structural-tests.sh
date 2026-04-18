@@ -139,11 +139,29 @@ config = json.load(open('${CONFIG_FILE}'))
 boundaries = config.get('architecturalBoundaries', {})
 violations = 0
 
+# convert path-style keys to python import prefixes
+def to_import_prefix(path_key):
+    parts = path_key.split('/')
+    if parts and parts[0] in ('backend', 'frontend'):
+        parts = parts[1:]
+    return '.'.join(parts)
+
+import_prefixes = {k: to_import_prefix(k) for k in boundaries}
+
 for module, rules in boundaries.items():
-    allowed = set(rules.get('allowedImports', []))
+    allowed_paths = set(rules.get('allowedImports', []))
+    allowed_prefixes = set()
+    for a in allowed_paths:
+        allowed_prefixes.add(a)
+        for k, v in import_prefixes.items():
+            if v == a or v.startswith(a + '.'):
+                allowed_prefixes.add(v)
+
     module_dir = os.path.join('${REPO_ROOT}', module)
     if not os.path.isdir(module_dir):
         continue
+
+    mod_prefix = import_prefixes[module]
 
     for root, _, files in os.walk(module_dir):
         for fname in files:
@@ -152,12 +170,14 @@ for module, rules in boundaries.items():
             fpath = os.path.join(root, fname)
             with open(fpath) as f:
                 for i, line in enumerate(f, 1):
-                    for other_mod in boundaries:
+                    if not (line.strip().startswith('from ') or line.strip().startswith('import ')):
+                        continue
+                    for other_mod, other_prefix in import_prefixes.items():
                         if other_mod == module:
                             continue
-                        if other_mod in line and other_mod not in allowed:
+                        if other_prefix in line and other_prefix not in allowed_prefixes:
                             rel = os.path.relpath(fpath, '${REPO_ROOT}')
-                            print(f'::error file={rel},line={i}::{module} imports {other_mod} (allowed: {allowed or \"none\"})')
+                            print(f'::error file={rel},line={i}::{mod_prefix} imports {other_prefix} (allowed: {allowed_paths or \"none\"})')
                             violations += 1
 
 if violations > 0:

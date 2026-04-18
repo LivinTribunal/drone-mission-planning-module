@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_current_user, get_db
+from app.api.dependencies import CurrentUser
+from app.core.dependencies import get_db
 from app.core.exceptions import DomainError, NotFoundError
-from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
+    MessageResponse,
     RefreshRequest,
     RefreshResponse,
     ResetPasswordRequest,
@@ -17,19 +18,6 @@ from app.schemas.auth import (
 from app.services import auth_service
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
-
-
-def _user_response(user: User) -> UserResponse:
-    """build user response dto from orm model."""
-    return UserResponse(
-        id=user.id,
-        email=user.email,
-        name=user.name,
-        role=user.role,
-        assigned_airports=[
-            {"id": a.id, "icao_code": a.icao_code, "name": a.name} for a in user.airports
-        ],
-    )
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -44,7 +32,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     return LoginResponse(
         access_token=auth_service.create_access_token(user.id, user.role),
         refresh_token=auth_service.create_refresh_token(user.id),
-        user=_user_response(user),
+        user=UserResponse.model_validate(user),
     )
 
 
@@ -72,44 +60,39 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: CurrentUser):
     """get current authenticated user profile."""
-    return _user_response(current_user)
+    return UserResponse.model_validate(current_user)
 
 
 @router.put("/me", response_model=UserResponse)
 def update_me(
     body: UserUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
 ):
     """update own profile (name, password)."""
-    if body.password and not body.current_password:
-        raise HTTPException(status_code=400, detail="current password required to set new password")
-    if body.current_password and not current_user.verify_password(body.current_password):
-        raise HTTPException(status_code=400, detail="current password is incorrect")
-
-    user = auth_service.update_user_profile(db, current_user, body.name, body.password)
-    return _user_response(user)
+    user = auth_service.update_user_profile(db, current_user, body)
+    return UserResponse.model_validate(user)
 
 
-@router.post("/setup-password", status_code=200)
+@router.post("/setup-password", status_code=200, response_model=MessageResponse)
 def setup_password(body: SetupPasswordRequest, db: Session = Depends(get_db)):
     """complete invitation - set password and activate account."""
     try:
-        auth_service.setup_password(db, body.token, body.password)
+        auth_service.setup_password(db, body)
     except DomainError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
 
-    return {"message": "password set successfully"}
+    return MessageResponse(message="password set successfully")
 
 
-@router.post("/reset-password", status_code=200)
+@router.post("/reset-password", status_code=200, response_model=MessageResponse)
 def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     """reset password using token."""
     try:
-        auth_service.reset_password(db, body.token, body.new_password)
+        auth_service.reset_password(db, body)
     except DomainError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
 
-    return {"message": "password reset successfully"}
+    return MessageResponse(message="password reset successfully")

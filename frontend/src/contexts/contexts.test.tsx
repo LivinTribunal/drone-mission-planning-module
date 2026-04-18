@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { waitFor, act } from "@testing-library/react";
 import { renderHook } from "@testing-library/react";
 import { type ReactNode } from "react";
+import axios from "axios";
 import client from "@/api/client";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { AirportProvider, useAirport } from "./AirportContext";
@@ -16,6 +17,18 @@ vi.mock("@/api/client", () => ({
     get: vi.fn(),
   },
   isAxiosError: vi.fn(),
+}));
+
+vi.mock("axios", () => ({
+  default: {
+    post: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(() => ({
+      interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
+      post: vi.fn(),
+      get: vi.fn(),
+    })),
+  },
 }));
 
 vi.mock("@/api/airports", () => ({
@@ -82,7 +95,7 @@ describe("AuthContext", () => {
       email: "test@example.com",
       name: "Test User",
       role: "OPERATOR",
-      assigned_airports: [],
+      airports: [],
     };
     vi.mocked(client.post).mockResolvedValueOnce({
       data: {
@@ -119,7 +132,7 @@ describe("AuthContext", () => {
           email: "test@example.com",
           name: "Test",
           role: "OPERATOR",
-          assigned_airports: [],
+          airports: [],
         },
       },
     });
@@ -147,16 +160,17 @@ describe("AuthContext", () => {
   it("rehydrates session from refresh token on mount", async () => {
     localStorage.setItem("tarmacview_refresh_token", "stored-refresh");
 
-    vi.mocked(client.post).mockResolvedValueOnce({
+    // mount-time refresh uses raw axios, not the intercepted client
+    vi.mocked(axios.post).mockResolvedValueOnce({
       data: { access_token: "refreshed-token" },
     });
-    vi.mocked(client.get).mockResolvedValueOnce({
+    vi.mocked(axios.get).mockResolvedValueOnce({
       data: {
         id: "u-1",
         email: "saved@example.com",
         name: "Saved User",
         role: "OPERATOR",
-        assigned_airports: [],
+        airports: [],
       },
     });
 
@@ -174,7 +188,7 @@ describe("AuthContext", () => {
   it("clears refresh token when refresh fails on mount", async () => {
     localStorage.setItem("tarmacview_refresh_token", "bad-refresh");
 
-    vi.mocked(client.post).mockRejectedValueOnce(new Error("expired"));
+    vi.mocked(axios.post).mockRejectedValueOnce(new Error("expired"));
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 

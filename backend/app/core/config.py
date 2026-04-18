@@ -32,11 +32,6 @@ class Settings(BaseSettings):
     # deployment environment
     environment: str = "development"
 
-    # seed user passwords - only used in non-production environments
-    seed_admin_password: str = ""
-    seed_coordinator_password: str = ""
-    seed_operator_password: str = ""
-
     # openaip integration
     openaip_api_url: str = "https://api.core.openaip.net/api"
     openaip_api_key: str = ""
@@ -51,3 +46,11 @@ settings = Settings()
 
 # backwards-compatible alias
 TERRAIN_DIR = settings.terrain_dir
+
+# warn about insecure default jwt secret
+if settings.jwt_secret == "change-me-in-production-minimum-256-bits":
+    import logging as _log
+
+    _log.getLogger(__name__).warning(
+        "jwt_secret is using the built-in default - set JWT_SECRET env var in production"
+    )
