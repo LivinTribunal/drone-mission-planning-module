@@ -83,6 +83,21 @@ export default function InspectionListPage() {
     [allAgls],
   );
 
+  // clear stale templates when airport changes
+  const prevAirportIdRef = useRef<string | undefined>(airportDetail?.id);
+  useEffect(() => {
+    const prevId = prevAirportIdRef.current;
+    const newId = airportDetail?.id;
+    prevAirportIdRef.current = newId;
+    if (prevId && prevId !== newId) {
+      setTemplates([]);
+      setPage(0);
+      setSearch("");
+      setMethodFilter(new Set());
+      setAglFilter("");
+    }
+  }, [airportDetail?.id]);
+
   const fetchTemplates = useCallback(async () => {
     /**fetch templates for the selected airport.*/
     setLoading(true);
