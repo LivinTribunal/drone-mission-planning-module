@@ -12,9 +12,33 @@ Bachelor's Thesis: Design and Implementation of a Drone Mission Planning Module 
 
 ## Quick Start
 
+### Option A: Docker (recommended)
+
+Runs the full stack (PostgreSQL + backend + frontend) in containers.
+
+```bash
+# create env file from template
+cp .env.docker.example .env.docker
+# edit .env.docker — set JWT_SECRET and optionally OPENAIP_API_KEY
+
+# build and start
+docker compose up --build -d
+
+# seed airport data (optional)
+docker exec tarmacview-backend python -m app.seed
+```
+
+- Frontend: http://localhost
+- Backend API: http://localhost/api/v1
+- Health check: http://localhost/api/v1/health
+
+To stop: `docker compose down`
+
+### Option B: Local development
+
 ```bash
 # Start PostGIS
-docker compose up -d
+docker compose up -d postgres
 
 # Backend
 cd backend

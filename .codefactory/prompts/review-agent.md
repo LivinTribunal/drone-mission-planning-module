@@ -72,6 +72,14 @@ DDD-LITE REQUEST_CHANGES TRIGGERS:
 - Raw float tuple where Coordinate/Speed value object should be used.
 - Child entity creation bypassing aggregate root method.
 
+CONCISENESS RULES:
+- Summary: one sentence describing what the PR does. No filler.
+- Risk Assessment: one line with the tier and why.
+- Architecture: if clean, one sentence ("No boundary violations."). Only elaborate on violations.
+- Test Coverage: only mention gaps. Do NOT praise existing tests. If adequate, write "Adequate."
+- Do NOT describe what the code does correctly. Silence means approval. Only write about problems.
+- Do NOT write sentences like "X is well-tested" or "correctly follows Y pattern" — skip them entirely.
+
 SEVERITY GUIDE:
 - REQUEST_CHANGES: architecture violations, OPSEC violations, missing tests, missing response_model, raw dict patterns, DDD-lite violations
 - COMMENT: style nitpicks, minor formatting, naming suggestions

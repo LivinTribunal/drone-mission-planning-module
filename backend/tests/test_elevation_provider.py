@@ -960,7 +960,7 @@ class TestDownloadTerrainForLocation:
 
             from app.services.airport_service import download_terrain_for_location
 
-            with pytest.raises(DomainError, match="API request failed"):
+            with pytest.raises(DomainError, match="terrain download failed"):
                 download_terrain_for_location(
                     airport_id="test-airport-id",
                     apt_lon=14.26,

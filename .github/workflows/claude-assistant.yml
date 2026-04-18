@@ -71,7 +71,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Extract instruction
+      - name: Extract instruction and mode
         id: instruction
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
@@ -81,7 +81,19 @@ jobs:
             const body = process.env.COMMENT_BODY || '';
             // extract everything after @claude
             const match = body.match(/@claude\s+([\s\S]+)/i);
-            const instruction = match ? match[1].trim() : body;
+            let instruction = match ? match[1].trim() : body;
+
+            // detect quick mode: @claude do ..., @claude fix ..., @claude just ...
+            const quickMatch = instruction.match(/^(do|fix|just)\s+([\s\S]+)/i);
+            if (quickMatch) {
+              instruction = quickMatch[2].trim();
+              core.setOutput('mode', 'quick');
+              core.info('Mode: quick (skipping planning phase)');
+            } else {
+              core.setOutput('mode', 'plan');
+              core.info('Mode: plan (planning then executing)');
+            }
+
             core.setOutput('instruction', instruction);
             core.info(`Instruction: ${instruction.slice(0, 200)}`);
 
@@ -109,6 +121,7 @@ jobs:
             core.info(`Found ${reviews.length} review(s), latest: ${latestReview.length} chars`);
 
       - name: Build planner prompt
+        if: steps.instruction.outputs.mode == 'plan'
         id: planner-prompt
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
@@ -156,6 +169,7 @@ jobs:
             core.setOutput('prompt', prompt);
 
       - name: Run planner
+        if: steps.instruction.outputs.mode == 'plan'
         id: planner
         uses: anthropics/claude-code-action@v1
         with:
@@ -165,6 +179,7 @@ jobs:
           allowed_bots: 'github-actions'
 
       - name: Extract plan
+        if: steps.instruction.outputs.mode == 'plan'
         id: plan
         env:
           EXECUTION_FILE: ${{ steps.planner.outputs.execution_file }}
@@ -188,6 +203,7 @@ jobs:
           echo "Extracted plan (${#PLAN} chars)"
 
       - name: Post plan comment
+        if: steps.instruction.outputs.mode == 'plan'
         id: plan-comment
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
@@ -215,7 +231,8 @@ jobs:
 
             core.setOutput('comment-id', comment.id);
 
-      - name: Build implementer prompt
+      - name: Build implementer prompt (plan mode)
+        if: steps.instruction.outputs.mode == 'plan'
         id: impl-prompt
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
@@ -263,12 +280,70 @@ jobs:
             const prompt = sections.join('\n');
             core.setOutput('prompt', prompt);
 
-      - name: Run implementer
+      - name: Run implementer (plan mode)
+        if: steps.instruction.outputs.mode == 'plan'
         id: implementer
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.impl-prompt.outputs.prompt }}
+          claude_args: '--model claude-opus-4-6 --max-turns 100 --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
+          allowed_bots: 'github-actions'
+
+      # ======================================================================
+      # QUICK MODE — skip planning, execute directly
+      # ======================================================================
+
+      - name: Build quick prompt
+        if: steps.instruction.outputs.mode == 'quick'
+        id: quick-prompt
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          INSTRUCTION: ${{ steps.instruction.outputs.instruction }}
+          REVIEW_CONTENT: ${{ steps.review.outputs.content }}
+        with:
+          script: |
+            const fs = require('fs');
+            const instruction = process.env.INSTRUCTION || '';
+            const review = process.env.REVIEW_CONTENT || '';
+
+            let template = '';
+            try { template = fs.readFileSync('.codefactory/prompts/issue-implementer.md', 'utf-8'); } catch {}
+
+            let conventions = '';
+            try { conventions = fs.readFileSync('CLAUDE.md', 'utf-8').slice(0, 6000); } catch {}
+
+            const sections = [
+              template,
+              '',
+              '## Mode: Quick Execute',
+              '',
+              'Execute the instruction directly. No planning needed — just do the work.',
+              'Run quality checks (lint, tests, build) after making changes.',
+              '',
+              '## Instruction',
+              '',
+              instruction,
+              '',
+              '## Latest Review Feedback',
+              '',
+              review || '*No review available.*',
+              '',
+              '## Project Conventions (from CLAUDE.md)',
+              '',
+              conventions || 'No CLAUDE.md found.',
+            ];
+
+            const prompt = sections.join('\n');
+            core.setOutput('prompt', prompt);
+
+      - name: Run quick executor
+        if: steps.instruction.outputs.mode == 'quick'
+        id: quick-executor
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.quick-prompt.outputs.prompt }}
           claude_args: '--model claude-opus-4-6 --max-turns 100 --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
           allowed_bots: 'github-actions'
 
@@ -305,7 +380,7 @@ jobs:
 
           echo "Pushed ${MODIFIED} file(s) to ${BRANCH}"
 
-      - name: Update plan comment with result
+      - name: Post result
         if: always()
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
@@ -313,13 +388,17 @@ jobs:
           HAS_CHANGES: ${{ steps.changes.outputs.has-changes || 'false' }}
           FILE_COUNT: ${{ steps.changes.outputs.count || '0' }}
           ORIGINAL_COMMENT_ID: ${{ github.event.comment.id }}
+          MODE: ${{ steps.instruction.outputs.mode }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr-number }}
         with:
           script: |
             const commentId = process.env.COMMENT_ID ? parseInt(process.env.COMMENT_ID) : null;
             const hasChanges = process.env.HAS_CHANGES === 'true';
             const fileCount = process.env.FILE_COUNT;
+            const mode = process.env.MODE;
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
 
-            // add checkmark reaction to original comment
+            // add reaction to original comment
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -327,25 +406,39 @@ jobs:
               content: hasChanges ? 'rocket' : 'confused',
             });
 
-            if (!commentId) return;
+            // update plan comment if it exists (plan mode)
+            if (commentId) {
+              const { data: existing } = await github.rest.issues.getComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: commentId,
+              });
 
-            const { data: existing } = await github.rest.issues.getComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: commentId,
-            });
+              let body = existing.body || '';
+              body = body.replace(
+                'Implementing now...',
+                hasChanges
+                  ? `Done — pushed ${fileCount} file(s).`
+                  : 'No changes were needed.',
+              );
 
-            let body = existing.body || '';
-            body = body.replace(
-              'Implementing now...',
-              hasChanges
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: commentId,
+                body,
+              });
+            }
+
+            // in quick mode, post a short result comment
+            if (mode === 'quick' && !commentId) {
+              const msg = hasChanges
                 ? `Done — pushed ${fileCount} file(s).`
-                : 'No changes were needed.',
-            );
-
-            await github.rest.issues.updateComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: commentId,
-              body,
-            });
+                : 'No changes were needed.';
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: msg,
+              });
+            }

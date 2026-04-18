@@ -35,7 +35,7 @@ vi.mock("@/api/airports", () => ({
             id: "agl-1",
             surface_id: "s-1",
             agl_type: "PAPI",
-            name: "PAPI RWY 24L",
+            name: "PAPI RWY 06/24 (Left side)",
             position: { type: "Point", coordinates: [17.21, 48.17, 133] },
             side: "LEFT",
             glide_slope_angle: 3.0,
@@ -204,7 +204,7 @@ describe("AirportPage", () => {
     renderAirportPage(mockAirport);
     const panel = await screen.findByTestId("agl-panel");
     expect(panel).toBeInTheDocument();
-    expect(screen.getByText("PAPI RWY 24L")).toBeInTheDocument();
+    expect(screen.getByText("PAPI RWY 06/24 (Left side)")).toBeInTheDocument();
   });
 
   it("renders legend panel", async () => {
@@ -251,13 +251,13 @@ describe("AirportPage", () => {
 
   it("shows lha count for agl systems", async () => {
     renderAirportPage(mockAirport);
-    await screen.findByText("PAPI RWY 24L");
+    await screen.findByText("PAPI RWY 06/24 (Left side)");
     expect(screen.getByText(/1.*airport\.units/)).toBeInTheDocument();
   });
 
   it("expands agl to show lha sub-items", async () => {
     renderAirportPage(mockAirport);
-    await screen.findByText("PAPI RWY 24L");
+    await screen.findByText("PAPI RWY 06/24 (Left side)");
 
     fireEvent.click(screen.getByTestId("agl-item-agl-1"));
     expect(screen.getByText("airport.lhaUnit")).toBeInTheDocument();
