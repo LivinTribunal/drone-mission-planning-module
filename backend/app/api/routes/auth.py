@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import CurrentUser
@@ -68,11 +68,12 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
 
 @router.post("/refresh", response_model=RefreshResponse)
 def refresh(
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
-    tarmacview_refresh: str | None = Cookie(default=None, alias=settings.refresh_cookie_name),
 ):
     """exchange refresh token cookie for new access token."""
+    tarmacview_refresh = request.cookies.get(settings.refresh_cookie_name)
     if not tarmacview_refresh:
         raise HTTPException(status_code=401, detail="missing refresh token")
 

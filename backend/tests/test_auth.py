@@ -187,14 +187,24 @@ class TestAuthService:
 
     def test_authenticate_valid(self, auth_db):
         """valid credentials return user."""
-        seed_users(auth_db)
+        original = settings.seed_users
+        settings.seed_users = True
+        try:
+            seed_users(auth_db)
+        finally:
+            settings.seed_users = original
         user = auth_service.authenticate_user(auth_db, "admin@tmv.com", "adminadmin")
         assert user is not None
         assert user.role == UserRole.SUPER_ADMIN.value
 
     def test_authenticate_wrong_password(self, auth_db):
         """wrong password returns none."""
-        seed_users(auth_db)
+        original = settings.seed_users
+        settings.seed_users = True
+        try:
+            seed_users(auth_db)
+        finally:
+            settings.seed_users = original
         user = auth_service.authenticate_user(auth_db, "admin@tmv.com", "wrong")
         assert user is None
 
