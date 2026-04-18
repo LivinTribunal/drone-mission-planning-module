@@ -107,7 +107,8 @@ def _extract_line_coords(geom) -> list[tuple[float, float]]:
 def _sanitize_filename(name: str) -> str:
     """remove special chars and replace spaces with underscores."""
     sanitized = re.sub(r"[^\w\s-]", "", name)
-    return re.sub(r"\s+", "_", sanitized).strip("_")
+    sanitized = re.sub(r"\s+", "_", sanitized).strip("_")
+    return sanitized.encode("ascii", errors="ignore").decode()
 
 
 def _format_duration(seconds: float | None) -> str:

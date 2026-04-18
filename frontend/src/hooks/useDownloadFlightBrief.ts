@@ -26,7 +26,11 @@ export default function useDownloadFlightBrief(
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
       }
-    } catch {
+    } catch (err) {
+      console.error(
+        "flight brief download failed:",
+        err instanceof Error ? err.message : String(err),
+      );
       showNotification(t("mission.flightBrief.error"));
     } finally {
       setIsDownloadingBrief(false);

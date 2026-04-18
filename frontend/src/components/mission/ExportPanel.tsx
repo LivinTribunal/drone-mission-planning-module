@@ -231,7 +231,7 @@ export default function ExportPanel({
         </p>
         <Button
           variant="secondary"
-          onClick={onDownloadBrief}
+          onClick={() => onDownloadBrief?.()}
           disabled={!hasFlightPlan || isDownloadingBrief || !onDownloadBrief}
           title={!hasFlightPlan ? t("mission.flightBrief.noFlightPlan") : undefined}
           className="w-full flex items-center justify-center gap-2"

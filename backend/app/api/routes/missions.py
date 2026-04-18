@@ -116,10 +116,11 @@ def export_mission(mission_id: UUID, body: ExportRequest, db: Session = Depends(
         for filename, (data, _) in files.items():
             zf.writestr(filename, data)
 
+    zip_name = safe_name.replace('"', "").replace("\r", "").replace("\n", "")
     return Response(
         content=buf.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{safe_name} export.zip"'},
+        headers={"Content-Disposition": f'attachment; filename="{zip_name} export.zip"'},
     )
 
 

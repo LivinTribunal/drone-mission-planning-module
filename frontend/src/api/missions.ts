@@ -86,8 +86,7 @@ function parseContentDispositionFilename(
   headers: unknown,
 ): string | null {
   const raw =
-    (headers as { "content-disposition"?: string })?.["content-disposition"] ??
-    (headers as { "Content-Disposition"?: string })?.["Content-Disposition"];
+    (headers as { "content-disposition"?: string })?.["content-disposition"];
   if (!raw) return null;
   const star = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/i.exec(raw);
   if (star?.[1]) {
