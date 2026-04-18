@@ -6,15 +6,15 @@ on:
   workflow_dispatch:
     inputs:
       issue_number:
-        description: 'Issue number to implement'
+        description: "Issue number to implement"
         required: false
         type: string
       pr_number:
-        description: 'PR number for review-fix mode'
+        description: "PR number for review-fix mode"
         required: false
         type: string
       review_fix_cycle:
-        description: 'Review-fix cycle number (1-3)'
+        description: "Review-fix cycle number (1-3)"
         required: false
         type: string
 
@@ -45,7 +45,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Setup Node.js
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
@@ -277,12 +277,13 @@ jobs:
       - name: Run Claude review-fix
         if: steps.mode.outputs.mode == 'review-fix' && steps.rf-guard.outputs.should-fix == 'true'
         id: rf-claude
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.rf-prompt.outputs.prompt }}
-          claude_args: '--model claude-opus-4-6 --max-turns 200 --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
-          allowed_bots: 'github-actions'
+          claude_args: '--model claude-opus-4-6 --max-turns 500 --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
+          allowed_bots: "github-actions"
 
       - name: Check for review-fix changes
         if: steps.mode.outputs.mode == 'review-fix' && steps.rf-guard.outputs.should-fix == 'true'
@@ -450,6 +451,30 @@ jobs:
           NEW_SHA=$(git rev-parse HEAD)
           echo "new-sha=${NEW_SHA}" >> "$GITHUB_OUTPUT"
           echo "✔ Pushed review-fix commit: ${NEW_SHA:0:12}"
+
+      - name: Add judgment label if review-fix claude errored
+        if: steps.mode.outputs.mode == 'review-fix' && steps.rf-push.outputs.new-sha && steps.rf-claude.outcome == 'failure'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+        with:
+          script: |
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'agent:needs-judgment',
+                color: 'E4E669',
+                description: 'Agent needs human judgment to proceed',
+              });
+            } catch {}
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: ['agent:needs-judgment'],
+            });
 
       - name: Dispatch CI pipelines for re-review
         if: steps.mode.outputs.mode == 'review-fix' && steps.rf-push.outputs.new-sha
@@ -764,12 +789,13 @@ jobs:
       - name: Run Claude implementation
         if: steps.mode.outputs.mode == 'issue' && steps.guard.outputs.should-implement == 'true'
         id: claude
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.build-prompt.outputs.prompt }}
           claude_args: '--model claude-opus-4-6 --max-turns 200 --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
-          allowed_bots: 'github-actions'
+          allowed_bots: "github-actions"
 
       - name: Check for file changes
         if: steps.mode.outputs.mode == 'issue' && steps.guard.outputs.should-implement == 'true'
@@ -866,6 +892,21 @@ jobs:
           echo "regressed=${REGRESSED}" >> "$GITHUB_OUTPUT"
           echo "Quality gates: lint=${LINT_OK}, typecheck=${TYPECHECK_OK}, test=${TEST_OK}, build=${BUILD_OK}, regressed=${REGRESSED}"
 
+      - name: Extract issue labels for PR
+        if: steps.mode.outputs.mode == 'issue' && steps.changes.outputs.has-changes == 'true'
+        id: issue-labels
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          ISSUE_JSON: ${{ github.event_name == 'workflow_dispatch' && steps.fetch-issue.outputs.json || toJSON(github.event.issue) }}
+        with:
+          script: |
+            const issue = JSON.parse(process.env.ISSUE_JSON || '{}');
+            const labels = (issue.labels || [])
+              .map(l => typeof l === 'string' ? l : l.name)
+              .filter(name => !name.startsWith('agent:'));
+            core.setOutput('labels', labels.join(','));
+            core.info(`Issue labels to copy: ${labels.join(', ') || '(none)'}`);
+
       - name: Commit, push, and create PR
         if: steps.mode.outputs.mode == 'issue' && steps.changes.outputs.has-changes == 'true'
         id: pr
@@ -900,12 +941,18 @@ jobs:
           # Ensure labels exist
           gh label create "agent-pr" --color "BFD4F2" --description "PR created by implementation agent" 2>/dev/null || true
 
-          # Build label list — add agent:needs-judgment if quality regressed
+          # Build label list: agent-pr + issue labels (excluding agent:*) + needs-judgment if needed
+          ISSUE_LABELS="${{ steps.issue-labels.outputs.labels }}"
           LABELS="agent-pr"
+          if [[ -n "$ISSUE_LABELS" ]]; then
+            LABELS="${LABELS},${ISSUE_LABELS}"
+          fi
+
           REGRESSED="${{ steps.quality.outputs.regressed }}"
-          if [[ "$REGRESSED" == "true" ]]; then
+          CLAUDE_FAILED="${{ steps.claude.outcome == 'failure' }}"
+          if [[ "$REGRESSED" == "true" || "$CLAUDE_FAILED" == "true" ]]; then
             gh label create "agent:needs-judgment" --color "E4E669" --description "Agent needs human judgment to proceed" 2>/dev/null || true
-            LABELS="agent-pr,agent:needs-judgment"
+            LABELS="${LABELS},agent:needs-judgment"
           fi
 
           # Create PR
@@ -917,7 +964,7 @@ jobs:
             --body "$(cat <<PR_EOF
           ## Summary
 
-          Automated implementation for #${ISSUE_NUMBER}.
+          Automated implementation for #${ISSUE_NUMBER}.${{ steps.claude.outcome == 'failure' && ' ⚠️ Agent was interrupted (usage limit or error) — work may be incomplete.' || '' }}
 
           <!-- issue-implementer: #${ISSUE_NUMBER} -->
 
@@ -981,14 +1028,79 @@ jobs:
           gh workflow run code-review-agent.yml --repo "$REPO" --field pr_number="${PR_NUM}"
           echo "✔ Dispatched CI + review agent for PR #${PR_NUM}"
 
+      - name: Salvage partial work on failure
+        if: failure() && steps.mode.outputs.mode == 'issue' && steps.guard.outputs.should-implement == 'true'
+        id: salvage
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.guard.outputs.branch }}"
+          ISSUE_NUMBER="${{ steps.guard.outputs.issue-number }}"
+          ISSUE_TITLE="${{ steps.guard.outputs.issue-title }}"
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch || 'main' }}"
+
+          CHANGED=$(git diff --name-only 2>/dev/null || echo "")
+          UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || echo "")
+          ALL_FILES=$(echo -e "${CHANGED}\n${UNTRACKED}" | sort -u | grep -v '^$' || echo "")
+
+          if [[ -z "$ALL_FILES" ]]; then
+            echo "has-changes=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No partial work to salvage."
+            exit 0
+          fi
+
+          echo "has-changes=true" >> "$GITHUB_OUTPUT"
+
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git add -A
+          MODIFIED=$(git diff --cached --name-only | wc -l | tr -d ' ')
+
+          git commit -m "$(cat <<COMMIT_EOF
+          wip: partial implementation of #${ISSUE_NUMBER}
+
+          Agent was interrupted. Files changed: ${MODIFIED}
+          COMMIT_EOF
+          )"
+
+          git push -u origin "${BRANCH}" || { echo "push-failed=true" >> "$GITHUB_OUTPUT"; exit 0; }
+
+          gh label create "agent-pr" --color "BFD4F2" --description "PR created by implementation agent" 2>/dev/null || true
+          gh label create "agent:needs-judgment" --color "E4E669" --description "Agent needs human judgment to proceed" 2>/dev/null || true
+
+          PR_URL=$(gh pr create \
+            --base "${DEFAULT_BRANCH}" \
+            --head "${BRANCH}" \
+            --title "wip: ${ISSUE_TITLE}" \
+            --label "agent-pr,agent:needs-judgment" \
+            --body "$(cat <<PR_EOF
+          ## Summary
+
+          Partial implementation for #${ISSUE_NUMBER}. Agent was interrupted (usage limit or error) — work is incomplete and needs human review.
+
+          <!-- issue-implementer: #${ISSUE_NUMBER} -->
+
+          Closes #${ISSUE_NUMBER}
+
+          ---
+          *🤖 [Issue Implementer Agent](https://github.com/codefactory) — automated implementation.*
+          PR_EOF
+          )") || { echo "pr-failed=true" >> "$GITHUB_OUTPUT"; exit 0; }
+
+          echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
+          echo "✔ Salvaged partial work: ${PR_URL}"
+
       - name: Failure handler
         if: failure() && steps.mode.outputs.mode == 'issue' && steps.guard.outputs.should-implement == 'true'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          SALVAGE_URL: ${{ steps.salvage.outputs.url || '' }}
+          SALVAGE_HAS_CHANGES: ${{ steps.salvage.outputs.has-changes || 'false' }}
         with:
           script: |
             const issueNumber = parseInt('${{ steps.guard.outputs.issue-number }}', 10);
+            const salvageUrl = process.env.SALVAGE_URL;
+            const hasChanges = process.env.SALVAGE_HAS_CHANGES === 'true';
 
-            // Add judgment label
             try {
               await github.rest.issues.createLabel({
                 owner: context.repo.owner,
@@ -1006,6 +1118,12 @@ jobs:
               labels: ['agent:needs-judgment'],
             });
 
+            const salvageNote = salvageUrl
+              ? `\nPartial work was saved: ${salvageUrl}`
+              : hasChanges
+                ? '\nPartial work was found but could not be pushed.'
+                : '\nNo partial work was produced.';
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -1014,8 +1132,7 @@ jobs:
                 `<!-- issue-implementer-failed: #${issueNumber} -->`,
                 '## ❌ Implementation Agent — Failed',
                 '',
-                'The implementation agent encountered an error while working on this issue.',
-                'A human should review the failure and decide next steps.',
+                `The implementation agent was interrupted while working on this issue.${salvageNote}`,
                 '',
                 `**Branch**: \`${{ steps.guard.outputs.branch }}\``,
                 `**Run**: [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,

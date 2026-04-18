@@ -245,7 +245,7 @@ export default function InspectionListPage() {
             <option value="">{t("coordinator.inspections.allAglSystems")}</option>
             {allAgls.map((agl) => (
               <option key={agl.id} value={agl.id}>
-                {agl.name}
+                {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
               </option>
             ))}
           </select>

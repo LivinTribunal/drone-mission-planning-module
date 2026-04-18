@@ -452,6 +452,15 @@ def create_obstacle(db: Session, airport_id: UUID, schema: ObstacleCreate) -> Ob
     _normalize_boundary_altitude(schema.boundary, airport)
 
     data = schema_to_model_data(schema)
+
+    # derive position (centroid) and radius from boundary when not provided
+    if data.get("position") is None and schema.boundary and schema.boundary.coordinates:
+        cx, cy, z = Obstacle.centroid_from_boundary_ring(schema.boundary.coordinates[0])
+        data["position"] = WKTElement(f"SRID=4326;POINTZ({cx} {cy} {z})", srid=4326)
+
+    if data.get("radius") is None:
+        data["radius"] = 3.0
+
     obstacle = Obstacle(**data)
     airport.add_obstacle(obstacle)
     db.commit()
@@ -481,6 +490,12 @@ def update_obstacle(
         _normalize_boundary_altitude(schema.boundary, airport)
 
     apply_schema_update(obstacle, schema)
+
+    # recompute position centroid when boundary changes
+    if schema.boundary and schema.boundary.coordinates:
+        cx, cy, z = Obstacle.centroid_from_boundary_ring(schema.boundary.coordinates[0])
+        obstacle.position = WKTElement(f"SRID=4326;POINTZ({cx} {cy} {z})", srid=4326)
+
     db.commit()
     db.refresh(obstacle)
 
@@ -1092,7 +1107,8 @@ def download_terrain_for_location(
     except DomainError:
         raise
     except Exception as e:
-        raise DomainError(f"Open-Elevation API request failed: {e}", status_code=502) from e
+        logger.error("open-elevation request failed: %s", e)
+        raise DomainError("terrain download failed - upstream API error", status_code=502) from e
 
     # build geotiff raster
     height = len(lats)
