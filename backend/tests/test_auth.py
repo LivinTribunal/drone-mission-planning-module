@@ -10,7 +10,8 @@ import app.models  # noqa: F401
 from app.core.database import Base, get_db
 from app.main import app
 from app.models.airport import Airport
-from app.models.enums import UserRole
+from app.models.enums import MissionStatus, UserRole
+from app.models.mission import Mission
 from app.models.user import User
 from app.services import auth_service
 
@@ -75,11 +76,24 @@ def auth_client(auth_engine, auth_session_factory):
 @pytest.fixture(scope="module")
 def seeded_auth_client(auth_client, auth_session_factory):
     """auth client with seed users created."""
+    from app.core.config import settings
+
+    original_admin = settings.seed_admin_password
+    original_coord = settings.seed_coordinator_password
+    original_op = settings.seed_operator_password
+    settings.seed_admin_password = "admin123"
+    settings.seed_coordinator_password = "coord123"
+    settings.seed_operator_password = "operator123"
+
     db = auth_session_factory()
     try:
         auth_service.seed_users(db)
     finally:
         db.close()
+        settings.seed_admin_password = original_admin
+        settings.seed_coordinator_password = original_coord
+        settings.seed_operator_password = original_op
+
     return auth_client
 
 
@@ -145,20 +159,68 @@ class TestAuthService:
 
     def test_seed_users(self, auth_db):
         """seed creates users when none exist."""
+        from app.core.config import settings
+
+        settings.seed_admin_password = "admin123"
+        settings.seed_coordinator_password = "coord123"
+        settings.seed_operator_password = "operator123"
+        try:
+            auth_service.seed_users(auth_db)
+            count = auth_db.query(User).count()
+            assert count >= 3
+        finally:
+            settings.seed_admin_password = ""
+            settings.seed_coordinator_password = ""
+            settings.seed_operator_password = ""
+
+    def test_seed_users_skipped_without_passwords(self, auth_db):
+        """seed skips when passwords are not configured."""
+        from app.core.config import settings
+
+        settings.seed_admin_password = ""
+        settings.seed_coordinator_password = ""
+        settings.seed_operator_password = ""
+
+        # clear any existing users to test the skip behavior
+        auth_db.query(User).delete()
+        auth_db.commit()
+
         auth_service.seed_users(auth_db)
         count = auth_db.query(User).count()
-        assert count >= 3
+        assert count == 0
 
     def test_authenticate_valid(self, auth_db):
         """valid credentials return user."""
-        auth_service.seed_users(auth_db)
+        from app.core.config import settings
+
+        settings.seed_admin_password = "admin123"
+        settings.seed_coordinator_password = "coord123"
+        settings.seed_operator_password = "operator123"
+        try:
+            auth_service.seed_users(auth_db)
+        finally:
+            settings.seed_admin_password = ""
+            settings.seed_coordinator_password = ""
+            settings.seed_operator_password = ""
+
         user = auth_service.authenticate_user(auth_db, "admin@tarmacview.com", "admin123")
         assert user is not None
         assert user.role == UserRole.SUPER_ADMIN.value
 
     def test_authenticate_wrong_password(self, auth_db):
         """wrong password returns none."""
-        auth_service.seed_users(auth_db)
+        from app.core.config import settings
+
+        settings.seed_admin_password = "admin123"
+        settings.seed_coordinator_password = "coord123"
+        settings.seed_operator_password = "operator123"
+        try:
+            auth_service.seed_users(auth_db)
+        finally:
+            settings.seed_admin_password = ""
+            settings.seed_coordinator_password = ""
+            settings.seed_operator_password = ""
+
         user = auth_service.authenticate_user(auth_db, "admin@tarmacview.com", "wrong")
         assert user is None
 
@@ -389,3 +451,127 @@ class TestRBAC:
             f"/api/v1/airports/{airport_b_id}/safety-zones", headers=headers
         )
         assert resp.status_code == 403
+
+    def test_operator_cannot_access_mission_at_other_airport(
+        self, seeded_auth_client, auth_session_factory
+    ):
+        """operator assigned to airport A cannot access missions at airport B."""
+        db = auth_session_factory()
+        try:
+            airport_c = Airport(
+                icao_code="CCCC",
+                name="Airport C",
+                elevation=100.0,
+                location="SRID=4326;POINTZ(17.0 48.0 100)",
+            )
+            airport_d = Airport(
+                icao_code="DDDD",
+                name="Airport D",
+                elevation=200.0,
+                location="SRID=4326;POINTZ(18.0 49.0 200)",
+            )
+            db.add_all([airport_c, airport_d])
+            db.flush()
+
+            mission_at_d = Mission(
+                name="Mission at D",
+                airport_id=airport_d.id,
+                status=MissionStatus.DRAFT,
+            )
+            db.add(mission_at_d)
+            db.flush()
+
+            user = User(
+                email="mission-scoped@tarmacview.com",
+                name="Mission Scoped",
+                role=UserRole.OPERATOR.value,
+                is_active=True,
+            )
+            user.set_password("scoped123")
+            user.airports = [airport_c]
+            db.add(user)
+            db.commit()
+
+            mission_id = str(mission_at_d.id)
+        finally:
+            db.close()
+
+        token = self._get_token(seeded_auth_client, "mission-scoped@tarmacview.com", "scoped123")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # single-resource mission endpoints should return 403
+        resp = seeded_auth_client.get(f"/api/v1/missions/{mission_id}", headers=headers)
+        assert resp.status_code == 403
+
+        resp = seeded_auth_client.put(
+            f"/api/v1/missions/{mission_id}",
+            headers=headers,
+            json={"name": "hacked"},
+        )
+        assert resp.status_code == 403
+
+        resp = seeded_auth_client.delete(f"/api/v1/missions/{mission_id}", headers=headers)
+        assert resp.status_code == 403
+
+        resp = seeded_auth_client.get(f"/api/v1/missions/{mission_id}/flight-plan", headers=headers)
+        assert resp.status_code == 403
+
+    def test_operator_list_missions_filtered_by_airport(
+        self, seeded_auth_client, auth_session_factory
+    ):
+        """operator list_missions only returns missions at assigned airports."""
+        db = auth_session_factory()
+        try:
+            airport_e = Airport(
+                icao_code="EEEE",
+                name="Airport E",
+                elevation=100.0,
+                location="SRID=4326;POINTZ(17.0 48.0 100)",
+            )
+            airport_f = Airport(
+                icao_code="FFFF",
+                name="Airport F",
+                elevation=200.0,
+                location="SRID=4326;POINTZ(18.0 49.0 200)",
+            )
+            db.add_all([airport_e, airport_f])
+            db.flush()
+
+            mission_e = Mission(
+                name="Mission E",
+                airport_id=airport_e.id,
+                status=MissionStatus.DRAFT,
+            )
+            mission_f = Mission(
+                name="Mission F",
+                airport_id=airport_f.id,
+                status=MissionStatus.DRAFT,
+            )
+            db.add_all([mission_e, mission_f])
+            db.flush()
+
+            user = User(
+                email="list-filter@tarmacview.com",
+                name="List Filter",
+                role=UserRole.OPERATOR.value,
+                is_active=True,
+            )
+            user.set_password("filter123")
+            user.airports = [airport_e]
+            db.add(user)
+            db.commit()
+
+            mission_e_id = str(mission_e.id)
+            mission_f_id = str(mission_f.id)
+        finally:
+            db.close()
+
+        token = self._get_token(seeded_auth_client, "list-filter@tarmacview.com", "filter123")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        resp = seeded_auth_client.get("/api/v1/missions", headers=headers)
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        ids = [m["id"] for m in data]
+        assert mission_e_id in ids
+        assert mission_f_id not in ids

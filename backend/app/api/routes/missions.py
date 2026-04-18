@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db, require_operator
+from app.core.dependencies import check_airport_access, get_db, require_operator
 from app.models.user import User
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.export import ExportRequest
@@ -27,6 +27,13 @@ from app.services import export_service, flight_brief_service, inspection_servic
 router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
 
 
+def _check_mission_access(db: Session, current_user: User, mission_id: UUID):
+    """fetch mission and verify user has airport access, return mission."""
+    mission = mission_service.get_mission(db, mission_id)
+    check_airport_access(current_user, mission.airport_id)
+    return mission
+
+
 # missions
 @router.get("", response_model=MissionListResponse)
 def list_missions(
@@ -39,6 +46,10 @@ def list_missions(
     db: Session = Depends(get_db),
 ):
     """list missions with filters and pagination."""
+    airport_ids = None
+    if current_user.role != "SUPER_ADMIN":
+        airport_ids = [a.id for a in current_user.airports]
+
     missions, total = mission_service.list_missions(
         db,
         airport_id=airport_id,
@@ -46,6 +57,7 @@ def list_missions(
         drone_profile_id=drone_profile_id,
         limit=limit,
         offset=offset,
+        airport_ids=airport_ids,
     )
 
     data = []
@@ -65,7 +77,8 @@ def get_mission(
     db: Session = Depends(get_db),
 ):
     """get mission with inspections"""
-    return mission_service.get_mission(db, mission_id)
+    mission = _check_mission_access(db, current_user, mission_id)
+    return mission
 
 
 @router.post("", status_code=201, response_model=MissionResponse)
@@ -75,6 +88,7 @@ def create_mission(
     db: Session = Depends(get_db),
 ):
     """create mission in DRAFT status"""
+    check_airport_access(current_user, body.airport_id)
     return mission_service.create_mission(db, body)
 
 
@@ -86,6 +100,7 @@ def update_mission(
     db: Session = Depends(get_db),
 ):
     """update mission"""
+    _check_mission_access(db, current_user, mission_id)
     return mission_service.update_mission(db, mission_id, body)
 
 
@@ -96,6 +111,7 @@ def delete_mission(
     db: Session = Depends(get_db),
 ):
     """delete mission"""
+    _check_mission_access(db, current_user, mission_id)
     mission_service.delete_mission(db, mission_id)
 
     return DeleteResponse(deleted=True)
@@ -108,6 +124,7 @@ def duplicate_mission(
     db: Session = Depends(get_db),
 ):
     """duplicate mission as new DRAFT"""
+    _check_mission_access(db, current_user, mission_id)
     return mission_service.duplicate_mission(db, mission_id)
 
 
@@ -119,6 +136,7 @@ def validate_mission(
     db: Session = Depends(get_db),
 ):
     """PLANNED -> VALIDATED"""
+    _check_mission_access(db, current_user, mission_id)
     return mission_service.transition_mission(db, mission_id, "VALIDATED")
 
 
@@ -130,6 +148,7 @@ def export_mission(
     db: Session = Depends(get_db),
 ):
     """generate export files and transition VALIDATED -> EXPORTED."""
+    _check_mission_access(db, current_user, mission_id)
     files, safe_name = export_service.export_mission(db, mission_id, body.formats)
 
     # single file - return directly
@@ -163,6 +182,7 @@ def get_flight_brief(
     db: Session = Depends(get_db),
 ):
     """generate and download flight brief pdf for atc coordination."""
+    _check_mission_access(db, current_user, mission_id)
     pdf_bytes, filename = flight_brief_service.generate_flight_brief(db, mission_id)
     sanitized = filename.replace('"', "").replace("\r", "").replace("\n", "")
     return Response(
@@ -179,6 +199,7 @@ def complete_mission(
     db: Session = Depends(get_db),
 ):
     """EXPORTED -> COMPLETED"""
+    _check_mission_access(db, current_user, mission_id)
     return mission_service.transition_mission(db, mission_id, "COMPLETED")
 
 
@@ -189,6 +210,7 @@ def cancel_mission(
     db: Session = Depends(get_db),
 ):
     """EXPORTED -> CANCELLED"""
+    _check_mission_access(db, current_user, mission_id)
     return mission_service.transition_mission(db, mission_id, "CANCELLED")
 
 
@@ -201,6 +223,7 @@ def add_inspection(
     db: Session = Depends(get_db),
 ):
     """add inspection to mission"""
+    _check_mission_access(db, current_user, mission_id)
     return inspection_service.add_inspection(db, mission_id, body)
 
 
@@ -213,6 +236,7 @@ def reorder_inspections(
     db: Session = Depends(get_db),
 ):
     """reorder inspections by sequence"""
+    _check_mission_access(db, current_user, mission_id)
     inspection_service.reorder_inspections(db, mission_id, body.inspection_ids)
 
     return ReorderResponse(reordered=True)
@@ -227,6 +251,7 @@ def update_inspection(
     db: Session = Depends(get_db),
 ):
     """update inspection"""
+    _check_mission_access(db, current_user, mission_id)
     return inspection_service.update_inspection(db, mission_id, inspection_id, body)
 
 
@@ -238,6 +263,7 @@ def delete_inspection(
     db: Session = Depends(get_db),
 ):
     """delete inspection"""
+    _check_mission_access(db, current_user, mission_id)
     inspection_service.delete_inspection(db, mission_id, inspection_id)
 
     return DeleteResponse(deleted=True)

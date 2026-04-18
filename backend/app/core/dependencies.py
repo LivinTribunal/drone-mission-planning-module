@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import DomainError, NotFoundError
 from app.models.enums import UserRole
 from app.models.user import User
 from app.services import auth_service
@@ -20,7 +20,10 @@ def get_current_user(
     """extract and validate jwt, return user."""
     if not token:
         raise HTTPException(status_code=401, detail="not authenticated")
-    payload = auth_service.decode_token(token)
+    try:
+        payload = auth_service.decode_token(token)
+    except DomainError:
+        raise HTTPException(status_code=401, detail="invalid or expired token")
     user_id = payload.get("sub")
     if not user_id or payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="invalid token")

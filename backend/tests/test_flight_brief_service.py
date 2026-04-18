@@ -458,17 +458,42 @@ class TestBuildActivities:
 class TestRouteEndpoint:
     """tests for the flight brief route."""
 
+    @patch("app.api.routes.missions.mission_service.get_mission")
     @patch.object(flight_brief_service, "generate_flight_brief")
-    def test_get_flight_brief_returns_pdf(self, mock_gen):
+    def test_get_flight_brief_returns_pdf(self, mock_gen, mock_get_mission):
         """endpoint returns pdf with correct content type."""
+        from types import SimpleNamespace
+
         from fastapi.testclient import TestClient
 
+        from app.core.dependencies import get_current_user
         from app.main import app
 
-        mock_gen.return_value = (b"%PDF-1.4 fake", "FlightBrief_LZTT_Test_2026-04-17.pdf")
-        client = TestClient(app)
+        stub_user = SimpleNamespace(
+            id="00000000-0000-0000-0000-000000000099",
+            email="test@tarmacview.com",
+            name="Test User",
+            role="SUPER_ADMIN",
+            is_active=True,
+            airports=[],
+        )
+        stub_user.has_airport_access = lambda airport_id: True
+
         fake_id = str(uuid4())
-        resp = client.get(f"/api/v1/missions/{fake_id}/flight-brief")
+        stub_mission = SimpleNamespace(airport_id=uuid4())
+        mock_get_mission.return_value = stub_mission
+        mock_gen.return_value = (b"%PDF-1.4 fake", "FlightBrief_LZTT_Test_2026-04-17.pdf")
+
+        saved = app.dependency_overrides.get(get_current_user)
+        app.dependency_overrides[get_current_user] = lambda: stub_user
+        try:
+            client = TestClient(app)
+            resp = client.get(f"/api/v1/missions/{fake_id}/flight-brief")
+        finally:
+            if saved is not None:
+                app.dependency_overrides[get_current_user] = saved
+            else:
+                app.dependency_overrides.pop(get_current_user, None)
 
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "application/pdf"

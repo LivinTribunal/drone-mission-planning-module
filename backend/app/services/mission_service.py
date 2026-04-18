@@ -44,6 +44,7 @@ def list_missions(
     drone_profile_id: UUID | None = None,
     limit: int = 20,
     offset: int = 0,
+    airport_ids: list[UUID] | None = None,
 ) -> tuple[list[Mission], int]:
     """list missions with optional filters and pagination."""
     if status is not None:
@@ -56,6 +57,8 @@ def list_missions(
         joinedload(Mission.flight_plan),
     )
 
+    if airport_ids is not None:
+        query = query.filter(Mission.airport_id.in_(airport_ids))
     if airport_id:
         query = query.filter(Mission.airport_id == airport_id)
     if status:
@@ -65,6 +68,8 @@ def list_missions(
 
     # count on a clean query to avoid joinedload duplicates
     count_query = db.query(Mission)
+    if airport_ids is not None:
+        count_query = count_query.filter(Mission.airport_id.in_(airport_ids))
     if airport_id:
         count_query = count_query.filter(Mission.airport_id == airport_id)
     if status:

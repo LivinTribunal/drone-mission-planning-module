@@ -3,7 +3,6 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from jose import JWTError, jwt
-from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
@@ -58,7 +57,7 @@ def decode_token(token: str) -> dict:
 
 def update_last_login(db: Session, user: User) -> None:
     """set last_login timestamp."""
-    user.last_login = func.now()
+    user.last_login = datetime.now(timezone.utc)
     db.commit()
 
 
@@ -114,15 +113,16 @@ def seed_users(db: Session) -> None:
         logger.info("skipping user seeding in production environment")
         return
 
-    # warn when using default seed passwords
-    defaults = {"admin123", "coord123", "operator123"}
-    active = {
-        settings.seed_admin_password,
-        settings.seed_coordinator_password,
-        settings.seed_operator_password,
-    }
-    if active & defaults:
-        logger.warning("seed users using default passwords - set SEED_*_PASSWORD env vars")
+    # require all seed passwords to be set
+    if not all(
+        [
+            settings.seed_admin_password,
+            settings.seed_coordinator_password,
+            settings.seed_operator_password,
+        ]
+    ):
+        logger.warning("seed passwords not configured - set SEED_*_PASSWORD env vars to seed users")
+        return
 
     count = db.query(User).count()
     if count > 0:

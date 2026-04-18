@@ -33,9 +33,9 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     # seed user passwords - only used in non-production environments
-    seed_admin_password: str = "admin123"
-    seed_coordinator_password: str = "coord123"
-    seed_operator_password: str = "operator123"
+    seed_admin_password: str = ""
+    seed_coordinator_password: str = ""
+    seed_operator_password: str = ""
 
     # openaip integration
     openaip_api_url: str = "https://api.core.openaip.net/api"
