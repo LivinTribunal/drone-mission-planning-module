@@ -78,6 +78,10 @@ GIMBAL_SETTLE_TIME: Seconds = 2.0  # gimbal repositioning between segments
 # surface edge node spacing for visibility graph
 SURFACE_NODE_SPACING: Meters = 200.0
 
+# grid fill for hybrid visibility graph
+GRID_NODE_SPACING: Meters = 50.0
+GRID_EDGE_RADIUS: Meters = 100.0
+
 # runway crossing penalty for transit A*
 # penalty per meter of crossing - makes A* prefer routes around runways
 # perpendicular crossing (~45m for standard runway) costs 45*10=450m equivalent
