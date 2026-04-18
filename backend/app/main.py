@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.api.routes.admin import router as admin_router
 from app.api.routes.airports import router as airports_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.drone_profiles import router as drone_profiles_router
@@ -65,6 +66,7 @@ async def domain_error_handler(request, exc: DomainError):
 
 
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(airports_router)
 app.include_router(drone_profiles_router)
 app.include_router(flight_plans_router)
@@ -87,11 +89,24 @@ async def maintenance_mode_middleware(request: Request, call_next):
     middleware runs before route-level dependency injection. keep this in sync with
     the token format used by auth_service.create_access_token.
     """
-    if os.environ.get("MAINTENANCE_MODE", "").lower() == "true":
+    # check env var first, then fall back to system_settings table
+    maintenance_on = os.environ.get("MAINTENANCE_MODE", "").lower() == "true"
+    if not maintenance_on:
+        try:
+            db = SessionLocal()
+            from app.services.admin_service import is_maintenance_mode
+
+            maintenance_on = is_maintenance_mode(db)
+            db.close()
+        except Exception:
+            pass
+
+    if maintenance_on:
         # allow auth endpoints and health check through
         path = request.url.path
         if not (
             path.startswith("/api/v1/auth")
+            or path.startswith("/api/v1/admin")
             or path == "/api/v1/health"
             or path.startswith("/api/docs")
             or path.startswith("/api/openapi")

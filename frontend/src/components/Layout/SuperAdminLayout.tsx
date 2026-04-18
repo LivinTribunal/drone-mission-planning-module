@@ -7,9 +7,12 @@ export default function SuperAdminLayout() {
   const { t } = useTranslation();
 
   const adminItems: NavItem[] = [
+    { label: t("nav.missionCenter"), to: "/operator-center/dashboard" },
+    { label: t("nav.configuratorCenter"), to: "/coordinator-center/airports" },
     { label: t("nav.users"), to: "/super-admin/users" },
     { label: t("nav.airports"), to: "/super-admin/airports" },
     { label: t("nav.system"), to: "/super-admin/system" },
+    { label: t("nav.auditLog"), to: "/super-admin/audit-log" },
   ];
 
   return (

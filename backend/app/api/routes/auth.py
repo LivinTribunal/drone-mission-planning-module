@@ -18,6 +18,7 @@ from app.schemas.auth import (
     UserUpdate,
 )
 from app.services import auth_service
+from app.utils.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -49,13 +50,23 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(body: LoginRequest, response: Response, db: Session = Depends(get_db)):
+def login(body: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     """authenticate with email and password."""
     user = auth_service.authenticate_user(db, body.email, body.password)
     if not user:
         raise HTTPException(status_code=401, detail="invalid email or password")
 
     auth_service.update_last_login(db, user)
+    log_audit(
+        db,
+        user,
+        "LOGIN",
+        entity_type="User",
+        entity_id=user.id,
+        entity_name=user.email,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
 
     refresh_token = auth_service.create_refresh_token(user.id)
     _set_refresh_cookie(response, refresh_token)
