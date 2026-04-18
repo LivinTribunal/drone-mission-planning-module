@@ -256,6 +256,41 @@ def test_no_takeoff_landing_scope_omits_takeoff_landing_waypoints(client):
     assert types[0] == "TRANSIT"
 
 
+def test_no_takeoff_landing_scope_transit_path_at_transit_altitude(client):
+    """NO_TAKEOFF_LANDING scope starts and ends at transit altitude without takeoff/landing."""
+    mission_id = _setup_trajectory_mission(client, "ZFTA", "NO_TAKEOFF_LANDING")
+    gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert gen.status_code == 200
+
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    fp = client.get(f"/api/v1/missions/{mission_id}/flight-plan").json()
+    wps = fp["waypoints"]
+    types = [wp["waypoint_type"] for wp in wps]
+
+    # no takeoff or landing waypoint types
+    assert "TAKEOFF" not in types
+    assert "LANDING" not in types
+
+    # first and last waypoints are transit type
+    assert wps[0]["waypoint_type"] == "TRANSIT"
+    assert wps[-1]["waypoint_type"] == "TRANSIT"
+
+    # first and last waypoint altitudes match transit altitude (AGL + airport elevation)
+    airport = client.get(f"/api/v1/airports/{mission['airport_id']}").json()
+    airport_elev = airport.get("elevation", 0) or 0
+    transit_agl = mission.get("transit_agl", 0) or 0
+    expected_transit_msl = airport_elev + transit_agl
+
+    first_alt = wps[0]["position"]["coordinates"][2]
+    last_alt = wps[-1]["position"]["coordinates"][2]
+    assert abs(first_alt - expected_transit_msl) < 1.0, (
+        f"first waypoint alt {first_alt} != expected transit {expected_transit_msl}"
+    )
+    assert abs(last_alt - expected_transit_msl) < 1.0, (
+        f"last waypoint alt {last_alt} != expected transit {expected_transit_msl}"
+    )
+
+
 def test_measurements_only_scope_contains_only_measurement_waypoints(client):
     """MEASUREMENTS_ONLY scope produces only MEASUREMENT and HOVER waypoints."""
     mission_id = _setup_trajectory_mission(client, "ZFMS", "MEASUREMENTS_ONLY")

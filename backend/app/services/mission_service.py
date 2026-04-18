@@ -218,6 +218,7 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
         default_capture_mode=original.default_capture_mode,
         default_buffer_distance=original.default_buffer_distance,
         transit_agl=original.transit_agl,
+        flight_plan_scope=original.flight_plan_scope,
     )
     db.add(copy)
     db.flush()

@@ -435,8 +435,12 @@ def _check_constraint(
 
     elif ctype == ConstraintType.GEOFENCE and constraint.boundary:
         if db is None:
-            logger.debug("skipping GEOFENCE constraint check - no db session")
-            return None
+            logger.warning("skipping GEOFENCE constraint check - no db session available")
+            return Violation(
+                is_warning=True,
+                violation_kind="constraint",
+                message="GEOFENCE constraint not checked - spatial query unavailable",
+            )
         wp_ewkt = _wp_to_ewkt(wp)
         contained = db.execute(
             text(
@@ -452,8 +456,12 @@ def _check_constraint(
 
     elif ctype == ConstraintType.RUNWAY_BUFFER:
         if db is None:
-            logger.debug("skipping RUNWAY_BUFFER constraint check - no db session")
-            return None
+            logger.warning("skipping RUNWAY_BUFFER constraint check - no db session available")
+            return Violation(
+                is_warning=True,
+                violation_kind="constraint",
+                message="RUNWAY_BUFFER constraint not checked - spatial query unavailable",
+            )
         v = _check_runway_buffer(db, wp, constraint, surfaces)
         if v:
             return v

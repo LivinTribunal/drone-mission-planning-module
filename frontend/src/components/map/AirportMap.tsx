@@ -1451,8 +1451,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         map.setLayoutProperty(WAYPOINT_TAKEOFF_LAYER, "visibility", visibility);
       if (map.getLayer(WAYPOINT_LANDING_LAYER))
         map.setLayoutProperty(WAYPOINT_LANDING_LAYER, "visibility", visibility);
-    } catch {
-      // layers may not exist yet
+    } catch (err) {
+      console.warn("failed to update takeoff/landing layer visibility:", err);
     }
   }, [flightPlanScope, waypoints]);
 

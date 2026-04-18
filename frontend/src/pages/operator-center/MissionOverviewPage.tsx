@@ -238,6 +238,7 @@ export default function MissionOverviewPage() {
               onTerrainChange={setTerrainMode}
               showTerrainToggle={false}
               showWaypointList={false}
+              showPoiInfo={false}
               simplifiedTrajectory
               is3D={is3D}
               onToggle3D={setIs3D}

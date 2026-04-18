@@ -62,7 +62,7 @@ def test_short_segment_triangular_profile():
 
 
 def test_symmetric_accel_decel():
-    """same start/end speed with accel+decel should be symmetric."""
+    """swapped start/end speeds produce equal duration (symmetry)."""
     d = 100.0
     dur_a = _segment_duration_with_accel(d, 3.0, 8.0)
     dur_b = _segment_duration_with_accel(d, 8.0, 3.0)

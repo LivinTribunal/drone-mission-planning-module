@@ -379,14 +379,17 @@ def resolve_density(
     setting_angles: list[Degrees],
     config: ResolvedConfig,
 ) -> tuple[int, str | None]:
-    """resolve measurement density, auto-increasing if optimal exceeds configured value.
+    """suggest optimal density without overriding user's configured value.
 
-    returns the final density and an optional warning string if auto-increased.
+    returns the user's density and an optional suggestion if optimal exceeds it.
     """
     optimal = compute_optimal_density(method, setting_angles, config)
     if optimal is not None and config.measurement_density < optimal:
-        warning = f"density auto-set to {optimal} to capture all transition angles"
-        return optimal, warning
+        suggestion = (
+            f"density {config.measurement_density} may miss transition angles, "
+            f"recommended: {optimal}"
+        )
+        return config.measurement_density, suggestion
 
     return config.measurement_density, None
 
@@ -451,7 +454,7 @@ def determine_start_position(
             lon, lat = point_at_distance(center.lon, center.lat, approach, distance)
             alt = center.alt + distance * math.tan(math.radians(MIN_ELEVATION_ANGLE))
 
-            return Point3D(lon=lon, lat=lat, alt=alt)
+            return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
     raise ValueError(f"unsupported inspection method: {method}")
 
@@ -498,7 +501,7 @@ def determine_end_position(
             max_elev = _vertical_profile_max_elevation(distance, config)
             alt = center.alt + distance * math.tan(math.radians(max_elev))
 
-            return Point3D(lon=lon, lat=lat, alt=alt)
+            return Point3D(lon=lon, lat=lat, alt=alt + config.altitude_offset)
 
     raise ValueError(f"unsupported inspection method: {method}")
 
@@ -606,7 +609,7 @@ def calculate_vertical_path(
             # single measurement at midpoint elevation
             elevation = (MIN_ELEVATION_ANGLE + max_elev) / 2
 
-        alt = center.alt + distance * math.tan(math.radians(elevation))
+        alt = center.alt + distance * math.tan(math.radians(elevation)) + config.altitude_offset
         pitch = elevation_angle(lon, lat, alt, center.lon, center.lat, center.alt)
 
         waypoints.append(
@@ -749,7 +752,7 @@ def calculate_fly_over_path(
             WaypointData(
                 lon=lha.lon,
                 lat=lha.lat,
-                alt=lha.alt + height,
+                alt=lha.alt + height + config.altitude_offset,
                 heading=heading,
                 speed=measurement_speed,
                 waypoint_type=WaypointType.MEASUREMENT,
@@ -840,7 +843,7 @@ def calculate_parallel_side_sweep_path(
             WaypointData(
                 lon=lon,
                 lat=lat,
-                alt=lha.alt + height + delta,
+                alt=lha.alt + height + delta + config.altitude_offset,
                 heading=row_heading,
                 speed=measurement_speed,
                 waypoint_type=WaypointType.MEASUREMENT,
@@ -897,7 +900,7 @@ def calculate_hover_point_lock_path(
         bearing_from_lha = _opposite_bearing(runway_heading)
 
     lon, lat = point_at_distance(target_lha.lon, target_lha.lat, bearing_from_lha, distance)
-    alt = target_lha.alt + height
+    alt = target_lha.alt + height + config.altitude_offset
     heading_to_lha = bearing_between(lon, lat, target_lha.lon, target_lha.lat)
 
     # default gimbal: look downward at LHA

@@ -1,7 +1,6 @@
 """flight brief pdf generator for atc coordination."""
 
 import io
-import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -30,6 +29,7 @@ from app.models.flight_plan import (
 from app.models.inspection import Inspection, InspectionTemplate
 from app.models.mission import DroneProfile, Mission
 from app.schemas.geometry import parse_ewkb
+from app.utils.geo import distance_between
 
 matplotlib.use("Agg")
 
@@ -129,16 +129,6 @@ def _format_distance(meters: float | None) -> str:
     if meters >= 1000:
         return f"{meters / 1000:.2f} km"
     return f"{meters:.1f} m"
-
-
-def _haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
-    """calculate distance in meters between two wgs84 points."""
-    r = 6371000
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlam = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
-    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def generate_flight_brief(db: Session, mission_id: UUID) -> tuple[bytes, str]:
@@ -887,7 +877,7 @@ def _build_altitude_profile_page(c: canvas.Canvas, data: BriefData, page_num: in
 
         for wp in data.waypoints[1:]:
             lon, lat, alt = _extract_coords(wp.position)
-            dist = _haversine(prev_lon, prev_lat, lon, lat)
+            dist = distance_between(prev_lon, prev_lat, lon, lat)
             distances.append(distances[-1] + dist)
             alts_msl.append(alt)
             alts_agl.append(alt - airport_elev)
@@ -1045,7 +1035,7 @@ def _build_timeline_page(c: canvas.Canvas, data: BriefData, page_num: int) -> in
 
         # estimate time advance
         if prev_coords and wp.speed and wp.speed > 0:
-            dist = _haversine(prev_coords[0], prev_coords[1], lon, lat)
+            dist = distance_between(prev_coords[0], prev_coords[1], lon, lat)
             elapsed += dist / wp.speed
         if wp.hover_duration:
             elapsed += wp.hover_duration
@@ -1071,7 +1061,7 @@ def _build_activities(data: BriefData) -> list[dict]:
         # estimate segment duration
         seg_duration = 0.0
         if prev_coords and wp.speed and wp.speed > 0:
-            dist = _haversine(prev_coords[0], prev_coords[1], lon, lat)
+            dist = distance_between(prev_coords[0], prev_coords[1], lon, lat)
             seg_duration = dist / wp.speed
         if wp.hover_duration:
             seg_duration += wp.hover_duration
@@ -1370,7 +1360,7 @@ def _build_crossing_analysis_page(c: canvas.Canvas, data: BriefData, page_num: i
             for runway in runways:
                 if runway.threshold_position:
                     t_lon, t_lat, _ = _extract_coords(runway.threshold_position)
-                    dist = _haversine(wp_lon, wp_lat, t_lon, t_lat)
+                    dist = distance_between(wp_lon, wp_lat, t_lon, t_lat)
                     if dist < 200:
                         threshold_warnings.append(
                             {
@@ -1576,7 +1566,7 @@ def _point_near_polygon(
             t = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / len_sq))
             nearest_x = x1 + t * dx
             nearest_y = y1 + t * dy
-        dist = _haversine(px, py, nearest_x, nearest_y)
+        dist = distance_between(px, py, nearest_x, nearest_y)
         if dist < threshold_m:
             return True
     return _point_in_polygon(px, py, polygon)

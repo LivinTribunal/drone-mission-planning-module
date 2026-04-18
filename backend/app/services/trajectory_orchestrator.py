@@ -488,13 +488,12 @@ def _generate_trajectory_inner(
                     rwy_heading = surface.heading
                     break
 
-        # compute optimal density if not overridden
-        density, density_warning = resolve_density(inspection.method, setting_angles, config)
-        if density_warning:
-            config.measurement_density = density
+        # suggest optimal density without overriding user's choice
+        _, density_suggestion = resolve_density(inspection.method, setting_angles, config)
+        if density_suggestion:
             suggestions.append(
                 (
-                    f"{template.name} #{inspection.sequence_order}: {density_warning}",
+                    f"{template.name} #{inspection.sequence_order}: {density_suggestion}",
                     [],
                 )
             )
@@ -715,8 +714,10 @@ def _generate_trajectory_inner(
             cur_wp = pass_wps[j]
             h = distance_between(prev_wp.lon, prev_wp.lat, cur_wp.lon, cur_wp.lat)
             d = math.sqrt(h**2 + (cur_wp.alt - prev_wp.alt) ** 2)
-            v_prev = max(prev_wp.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
-            v_cur = max(cur_wp.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+            s_prev = prev_wp.speed if prev_wp.speed is not None else MIN_SPEED_FLOOR
+            s_cur = cur_wp.speed if cur_wp.speed is not None else MIN_SPEED_FLOOR
+            v_prev = max(s_prev, MIN_SPEED_FLOOR)
+            v_cur = max(s_cur, MIN_SPEED_FLOOR)
             seg_dur += _segment_duration_with_accel(d, v_prev, v_cur)
 
         for wp in pass_wps:

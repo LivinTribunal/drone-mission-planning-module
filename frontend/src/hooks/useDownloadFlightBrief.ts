@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { downloadFlightBrief } from "@/api/missions";
 
+/** download flight brief pdf and trigger browser save dialog. */
 export default function useDownloadFlightBrief(
   missionId: string | undefined,
   missionName: string | undefined,

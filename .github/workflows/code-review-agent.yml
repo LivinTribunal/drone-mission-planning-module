@@ -199,12 +199,16 @@ jobs:
           REVIEW_TEMPLATE: ${{ steps.prompt-file.outputs.content }}
           TIER: ${{ steps.tier.outputs.tier }}
           CHANGED_FILES: ${{ steps.tier.outputs.changed-files }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr-number }}
+          HEAD_SHA: ${{ steps.pr.outputs.head-sha }}
         with:
           script: |
             const fs = require('fs');
             const template = process.env.REVIEW_TEMPLATE || '';
             const tier = process.env.TIER || '2';
             const changedFiles = process.env.CHANGED_FILES || '';
+            const prNumber = process.env.PR_NUMBER || '';
+            const headSha = process.env.HEAD_SHA || '';
 
             let conventions = '';
             try { conventions = fs.readFileSync('CLAUDE.md', 'utf-8').slice(0, 6000); } catch {}
@@ -217,7 +221,12 @@ jobs:
               '',
               '## PR Context',
               '',
+              `**PR Number**: #${prNumber}`,
+              `**Head SHA**: ${headSha}`,
               `**Risk Tier**: Tier ${tier}`,
+              '',
+              'You are reviewing PR #' + prNumber + '. Use `git diff origin/main...HEAD` to see the changes. Do NOT use `gh pr list` or try to find the PR — you are already checked out at the correct commit.',
+              '',
               `**Changed Files**:`,
               changedFiles ? changedFiles.split('\n').map(f => `- ${f}`).join('\n') : '*(none detected)*',
               '',

@@ -4,6 +4,7 @@ import { ChevronUp, ChevronDown, Copy, Trash2 } from "lucide-react";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { AGLResponse } from "@/types/airport";
 import { methodBadgeStyle } from "@/utils/inspectionMethodBadge";
+import { formatAglDisplayName } from "@/utils/agl";
 
 type SortField = "name" | "agl" | "method" | "usedIn" | "created" | "lastUpdated";
 type SortDir = "asc" | "desc";
@@ -143,7 +144,7 @@ export default function InspectionTemplateTable({
                     {tpl.name}
                   </td>
                   <td className="py-3 px-3 text-tv-text-secondary">
-                    {agl ? `${agl.name}${agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}` : "-"}
+                    {agl ? formatAglDisplayName(agl) : "-"}
                   </td>
                   <td className="py-3 px-3">
                     <span

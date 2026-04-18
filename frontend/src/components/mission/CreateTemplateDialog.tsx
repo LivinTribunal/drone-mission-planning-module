@@ -6,6 +6,7 @@ import Button from "@/components/common/Button";
 import type { AGLResponse } from "@/types/airport";
 import type { InspectionMethod } from "@/types/enums";
 import { aglTypesForMethod } from "@/utils/methodAglCompatibility";
+import { formatAglDisplayName } from "@/utils/agl";
 
 interface CreateTemplateDialogProps {
   isOpen: boolean;
@@ -169,7 +170,7 @@ export default function CreateTemplateDialog({
                 <option value="">{t("coordinator.inspections.selectAgl")}</option>
                 {availableAgls.map((agl) => (
                   <option key={agl.id} value={agl.id}>
-                    {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
+                    {formatAglDisplayName(agl)}
                   </option>
                 ))}
               </select>

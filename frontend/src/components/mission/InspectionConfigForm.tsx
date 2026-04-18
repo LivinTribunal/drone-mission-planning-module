@@ -7,6 +7,7 @@ import type { DroneProfileResponse } from "@/types/droneProfile";
 import type { AGLResponse } from "@/types/airport";
 import type { CaptureMode } from "@/types/enums";
 import { solveTriangle } from "@/utils/angleLock";
+import { formatAglDisplayName } from "@/utils/agl";
 
 interface InspectionConfigFormProps {
   inspection: InspectionResponse;
@@ -189,7 +190,7 @@ export default function InspectionConfigForm({
               <option value="">{t("mission.config.targetAglSelect")}</option>
               {agls.map((agl) => (
                 <option key={agl.id} value={agl.id}>
-                  {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
+                  {formatAglDisplayName(agl)}
                 </option>
               ))}
             </select>
@@ -230,7 +231,7 @@ export default function InspectionConfigForm({
             {targetAgls.map((agl) => (
               <div key={agl.id}>
                 <p className="text-xs font-medium text-tv-text-secondary mb-1">
-                  {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
+                  {formatAglDisplayName(agl)}
                 </p>
                 <div className="space-y-1 pl-2">
                   {agl.lhas.map((lha) => (

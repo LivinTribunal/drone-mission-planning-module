@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { X, Loader2, RotateCcw, MapPin, AlertTriangle } from "lucide-react";
 import Input from "@/components/common/Input";
 import type { SurfaceResponse, AGLResponse, ObstacleResponse } from "@/types/airport";
+import { formatAglDisplayName } from "@/utils/agl";
 
 export type PendingGeometryType = "polygon" | "circle" | "point";
 
@@ -775,7 +776,7 @@ export default function CreationForm({
                     <option value="">{t("coordinator.creation.selectAgl")}</option>
                     {allAgls.map((a) => (
                       <option key={a.id} value={a.id}>
-                        {a.name}{a.side ? ` (${a.side.charAt(0)}${a.side.slice(1).toLowerCase()} side)` : ""}
+                        {formatAglDisplayName(a)}
                       </option>
                     ))}
                   </select>
