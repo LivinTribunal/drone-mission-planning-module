@@ -2,9 +2,11 @@ import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Search } from "lucide-react";
 import type { MissionDetailResponse, MissionUpdate } from "@/types/mission";
-import type { CaptureMode } from "@/types/enums";
+import type { CaptureMode, FlightPlanScope } from "@/types/enums";
+import FlightPlanScopeSelector from "./FlightPlanScopeSelector";
 import type { DroneProfileResponse } from "@/types/droneProfile";
 import type { PointZ } from "@/types/common";
+import Toggle from "@/components/common/Toggle";
 import CoordinateInput from "./CoordinateInput";
 
 type PickTarget = "takeoff" | "landing" | null;
@@ -206,6 +208,10 @@ export default function MissionConfigForm({
     values.require_perpendicular_runway_crossing !== undefined
       ? values.require_perpendicular_runway_crossing
       : mission.require_perpendicular_runway_crossing ?? true;
+  const flightPlanScope: FlightPlanScope =
+    values.flight_plan_scope !== undefined
+      ? (values.flight_plan_scope as FlightPlanScope)
+      : mission.flight_plan_scope ?? "FULL";
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -344,82 +350,95 @@ export default function MissionConfigForm({
         </div>
       </div>
 
-      {/* perpendicular runway crossing toggle */}
-      <div>
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={requirePerpendicularCrossing}
-            onChange={(e) =>
-              onChange({ require_perpendicular_runway_crossing: e.target.checked })
-            }
-            className="mt-0.5 h-4 w-4 rounded border-tv-border bg-tv-bg accent-tv-accent"
-            data-testid="require-perpendicular-crossing-toggle"
-          />
-          <span className="text-xs text-tv-text-secondary">
-            <span className="block font-medium text-tv-text-primary">
-              {t("mission.config.requirePerpendicularCrossing")}
-            </span>
-            <span className="block text-tv-text-muted">
-              {t("mission.config.requirePerpendicularCrossingHint")}
-            </span>
+      {/* mission toggles */}
+      <div
+        className="rounded-2xl border border-tv-border bg-tv-bg px-3 py-2.5 flex items-center gap-3"
+        data-testid="use-takeoff-as-landing"
+      >
+        <span className="flex flex-col flex-1 min-w-0">
+          <span className="text-xs font-medium text-tv-text-primary">
+            {t("map.useTakeoffAsLanding")}
           </span>
-        </label>
-      </div>
-
-      {/* takeoff + landing */}
-      {!disabled && (!takeoff || !landing) && (
-        <label
-          className="flex items-start gap-2 text-xs text-tv-text-primary cursor-pointer"
-          data-testid="use-takeoff-as-landing"
-        >
-          <input
-            type="checkbox"
-            className="mt-0.5 accent-tv-accent"
-            checked={useTakeoffAsLanding}
-            onChange={() => {
-              const next = !useTakeoffAsLanding;
-              setUseTakeoffAsLanding(next);
-              if (next && takeoff) {
-                onChange({ landing_coordinate: takeoff });
-              }
-            }}
-            data-testid="use-takeoff-as-landing-checkbox"
-          />
-          <span className="flex flex-col">
-            <span className="font-semibold">{t("map.useTakeoffAsLanding")}</span>
-            <span className="text-tv-text-secondary">{t("map.useTakeoffAsLandingHint")}</span>
+          <span className="text-[11px] text-tv-text-muted leading-tight">
+            {t("map.useTakeoffAsLandingHint")}
           </span>
-        </label>
-      )}
-      <div className="grid grid-cols-2 gap-2">
-        <CoordinateInput
-          label={t("mission.config.takeoffCoordinate")}
-          value={takeoff ?? null}
-          onChange={(val: PointZ | null) => {
-            if (useTakeoffAsLanding) {
-              onChange({ takeoff_coordinate: val, landing_coordinate: val });
-            } else {
-              onChange({ takeoff_coordinate: val });
+        </span>
+        <Toggle
+          checked={useTakeoffAsLanding}
+          onChange={() => {
+            const next = !useTakeoffAsLanding;
+            setUseTakeoffAsLanding(next);
+            if (next && takeoff) {
+              onChange({ landing_coordinate: takeoff });
             }
           }}
-          picking={pickingCoord === "takeoff"}
-          onPickOnMap={onPickCoord ? () => onPickCoord(pickingCoord === "takeoff" ? null : "takeoff") : undefined}
-          defaultAltitude={defaultAltitude}
-        />
-        <CoordinateInput
-          label={t("mission.config.landingCoordinate")}
-          value={landing ?? null}
-          onChange={(val: PointZ | null) => onChange({ landing_coordinate: val })}
-          picking={pickingCoord === "landing"}
-          onPickOnMap={
-            useTakeoffAsLanding || !onPickCoord
-              ? undefined
-              : () => onPickCoord(pickingCoord === "landing" ? null : "landing")
-          }
-          defaultAltitude={defaultAltitude}
+          disabled={disabled}
+          data-testid="use-takeoff-as-landing-checkbox"
         />
       </div>
+      <div
+        className="rounded-2xl border border-tv-border bg-tv-bg px-3 py-2.5 flex items-center gap-3"
+        data-testid="require-perpendicular-crossing"
+      >
+        <span className="flex flex-col flex-1 min-w-0">
+          <span className="text-xs font-medium text-tv-text-primary">
+            {t("mission.config.requirePerpendicularCrossing")}
+          </span>
+          <span className="text-[11px] text-tv-text-muted leading-tight">
+            {t("mission.config.requirePerpendicularCrossingHint")}
+          </span>
+        </span>
+        <Toggle
+          checked={requirePerpendicularCrossing}
+          onChange={() =>
+            onChange({
+              require_perpendicular_runway_crossing: !requirePerpendicularCrossing,
+            })
+          }
+          disabled={disabled}
+          data-testid="require-perpendicular-crossing-toggle"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-2xl border border-tv-border px-3 py-2.5">
+          <CoordinateInput
+            label={t("mission.config.takeoffCoordinate")}
+            value={takeoff ?? null}
+            onChange={(val: PointZ | null) => {
+              if (useTakeoffAsLanding) {
+                onChange({ takeoff_coordinate: val, landing_coordinate: val });
+              } else {
+                onChange({ takeoff_coordinate: val });
+              }
+            }}
+            picking={pickingCoord === "takeoff"}
+            onPickOnMap={onPickCoord ? () => onPickCoord(pickingCoord === "takeoff" ? null : "takeoff") : undefined}
+            defaultAltitude={defaultAltitude}
+          />
+        </div>
+        <div className="rounded-2xl border border-tv-border px-3 py-2.5">
+          <CoordinateInput
+            label={t("mission.config.landingCoordinate")}
+            value={landing ?? null}
+            onChange={(val: PointZ | null) => onChange({ landing_coordinate: val })}
+            picking={pickingCoord === "landing"}
+            onPickOnMap={
+              useTakeoffAsLanding || !onPickCoord
+                ? undefined
+                : () => onPickCoord(pickingCoord === "landing" ? null : "landing")
+            }
+            defaultAltitude={defaultAltitude}
+          />
+        </div>
+      </div>
+
+      {/* flight plan scope */}
+      <FlightPlanScopeSelector
+        value={flightPlanScope}
+        onChange={(scope) => onChange({ flight_plan_scope: scope })}
+        disabled={disabled}
+      />
 
       {/* operator notes */}
       <div>

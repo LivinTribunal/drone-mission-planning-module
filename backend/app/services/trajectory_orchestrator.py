@@ -30,6 +30,7 @@ from app.services.trajectory_computation import (
     find_lha_in_surfaces,
     get_glide_slope_angle,
     get_lha_positions,
+    get_lha_positions_from_surfaces,
     get_lha_setting_angles,
     get_ordered_lha_positions,
     get_runway_centerline_midpoint,
@@ -44,17 +45,23 @@ from app.services.trajectory_pathfinding import (
     resolve_inspection_collisions,
 )
 from app.services.trajectory_types import (
+    DEFAULT_ACCELERATION,
+    DEFAULT_DECELERATION,
     DEFAULT_FLY_OVER_SPEED,
     DEFAULT_PARALLEL_SPEED,
     DEFAULT_RESERVE_MARGIN,
     DEFAULT_SPEED,
+    GIMBAL_SETTLE_TIME,
+    LANDING_DURATION,
     MIN_ARC_RADIUS,
     MIN_SPEED_FLOOR,
+    TAKEOFF_DURATION,
     TRANSIT_AGL,
     VERTICAL_POSITION_TOLERANCE_DEG,
     InspectionPass,
     MissionData,
     Point3D,
+    Violation,
     WaypointData,
 )
 from app.utils.geo import bearing_between, distance_between, total_path_distance
@@ -79,6 +86,53 @@ def _parse_coordinate(ewkb_data, label: str) -> list[float]:
         raise TrajectoryGenerationError(f"invalid {label} coordinate: {e}")
 
     return coords
+
+
+def _segment_duration_with_accel(
+    distance: float,
+    v_start: float,
+    v_end: float,
+    accel: float = DEFAULT_ACCELERATION,
+    decel: float = DEFAULT_DECELERATION,
+) -> float:
+    """compute segment travel time using a trapezoidal speed profile.
+
+    models acceleration from v_start to cruise speed, constant cruise, then
+    deceleration to v_end. falls back to triangular profile when the segment
+    is too short for full accel/decel phases.
+    """
+    if distance <= 0:
+        return 0.0
+    v_start = max(v_start, MIN_SPEED_FLOOR)
+    v_end = max(v_end, MIN_SPEED_FLOOR)
+    v_cruise = max(v_start, v_end)
+
+    # distance needed for accel and decel phases
+    d_accel = (v_cruise**2 - v_start**2) / (2 * accel) if v_cruise > v_start else 0.0
+    d_decel = (v_cruise**2 - v_end**2) / (2 * decel) if v_cruise > v_end else 0.0
+
+    if d_accel + d_decel <= distance:
+        # full trapezoidal profile
+        d_cruise = distance - d_accel - d_decel
+        t_accel = (v_cruise - v_start) / accel if v_cruise > v_start else 0.0
+        t_decel = (v_cruise - v_end) / decel if v_cruise > v_end else 0.0
+        t_cruise = d_cruise / v_cruise if v_cruise > 0 else 0.0
+        return t_accel + t_cruise + t_decel
+
+    # triangular profile - can't reach cruise speed
+    # solve for peak velocity: d_accel + d_decel = distance
+    # v_peak^2 = (2*accel*decel*distance + decel*v_start^2 + accel*v_end^2) / (accel + decel)
+    numerator = 2 * accel * decel * distance + decel * v_start**2 + accel * v_end**2
+    denominator = accel + decel
+    if denominator == 0:
+        return distance / max(v_start, MIN_SPEED_FLOOR)
+    v_peak_sq = numerator / denominator
+    if v_peak_sq < 0:
+        return distance / max(v_start, MIN_SPEED_FLOOR)
+    v_peak = math.sqrt(v_peak_sq)
+    t_accel = (v_peak - v_start) / accel if v_peak > v_start else 0.0
+    t_decel = (v_peak - v_end) / decel if v_peak > v_end else 0.0
+    return t_accel + t_decel
 
 
 def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
@@ -235,15 +289,18 @@ def _generate_trajectory_inner(
     drone = data.drone
     default_speed = data.default_speed
 
-    # pre-check: takeoff and landing coordinates are required
-    if not mission.takeoff_coordinate:
-        raise TrajectoryGenerationError(
-            "takeoff coordinates must be set before generating a trajectory"
-        )
-    if not mission.landing_coordinate:
-        raise TrajectoryGenerationError(
-            "landing coordinates must be set before generating a trajectory"
-        )
+    scope = mission.flight_plan_scope or "FULL"
+
+    # pre-check: takeoff/landing coordinates required unless scope is MEASUREMENTS_ONLY
+    if scope != "MEASUREMENTS_ONLY":
+        if not mission.takeoff_coordinate:
+            raise TrajectoryGenerationError(
+                "takeoff coordinates must be set before generating a trajectory"
+            )
+        if not mission.landing_coordinate:
+            raise TrajectoryGenerationError(
+                "landing coordinates must be set before generating a trajectory"
+            )
 
     # delete existing flight plan before invalidation - db concern stays in service.
     # must happen before invalidate_trajectory() per its contract.
@@ -355,6 +412,11 @@ def _generate_trajectory_inner(
 
         lha_ids = inspection.lha_ids
         lha_positions = get_lha_positions(template, lha_ids)
+
+        # AGL-agnostic methods (hover-point-lock) may have LHAs outside template targets
+        if not lha_positions and lha_ids:
+            lha_positions = get_lha_positions_from_surfaces(data.surfaces, lha_ids)
+
         if not lha_positions:
             warnings.append(
                 (
@@ -648,8 +710,17 @@ def _generate_trajectory_inner(
 
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
         seg_dist = total_path_distance(points)
-        # note: uses per-pass speed for battery estimate; final duration uses per-waypoint speed
-        seg_dur = seg_dist / max(speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+
+        # use trapezoidal profile to match final flight-plan duration calculation
+        seg_dur = 0.0
+        for j in range(1, len(pass_wps)):
+            prev_wp = pass_wps[j - 1]
+            cur_wp = pass_wps[j]
+            h = distance_between(prev_wp.lon, prev_wp.lat, cur_wp.lon, cur_wp.lat)
+            d = math.sqrt(h**2 + (cur_wp.alt - prev_wp.alt) ** 2)
+            v_prev = max(prev_wp.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+            v_cur = max(cur_wp.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+            seg_dur += _segment_duration_with_accel(d, v_prev, v_cur)
 
         for wp in pass_wps:
             if wp.hover_duration is not None:
@@ -665,19 +736,52 @@ def _generate_trajectory_inner(
         raise TrajectoryGenerationError("no waypoints generated")
 
     # battery check after all inspections are computed
+    # only include T/L overhead for scopes that generate those waypoints
     if drone:
-        bw = check_battery(cumulative_duration, drone, DEFAULT_RESERVE_MARGIN)
+        tl_overhead = TAKEOFF_DURATION + LANDING_DURATION if scope == "FULL" else 0.0
+        bw = check_battery(
+            cumulative_duration + tl_overhead,
+            drone,
+            DEFAULT_RESERVE_MARGIN,
+        )
         if bw:
             warnings.append((bw.message, []))
 
     # phase 5 - final assembly with A* transit
     all_waypoints: list[WaypointData] = []
+    measurement_index_maps: list[dict[int, int]] = []
 
     # terrain helper
     provider = data.elevation_provider
 
-    # takeoff at ground level - transit handles climb via transit_agl
-    if mission.takeoff_coordinate:
+    if scope == "MEASUREMENTS_ONLY":
+        # measurements-only: concatenate measurement/hover waypoints from each pass
+        # no takeoff, landing, or transit between passes
+        pass_start_indices: list[int] = []
+        for ipass in inspection_passes:
+            idx_map: dict[int, int] = {}
+            filtered_idx = 0
+            for orig_idx, wp in enumerate(ipass.waypoints):
+                if wp.waypoint_type in (WaypointType.MEASUREMENT, WaypointType.HOVER):
+                    idx_map[orig_idx] = filtered_idx
+                    filtered_idx += 1
+            measurement_index_maps.append(idx_map)
+
+            measurement_wps = [
+                wp
+                for wp in ipass.waypoints
+                if wp.waypoint_type in (WaypointType.MEASUREMENT, WaypointType.HOVER)
+            ]
+            pass_start_indices.append(len(all_waypoints))
+            all_waypoints.extend(measurement_wps)
+
+        if not all_waypoints:
+            raise TrajectoryGenerationError("no measurement waypoints generated")
+
+    elif scope == "NO_TAKEOFF_LANDING":
+        # no-takeoff-landing: start at transit altitude above takeoff point,
+        # A* transit between passes, end at transit altitude above landing point
+
         tc = _parse_coordinate(mission.takeoff_coordinate.data, "takeoff")
         if not inspection_passes[0].waypoints:
             raise TrajectoryGenerationError("first inspection produced no waypoints")
@@ -687,26 +791,12 @@ def _generate_trajectory_inner(
         if provider:
             takeoff_alt = provider.get_elevation(tc[1], tc[0])
 
+        # start at transit altitude directly above takeoff position (no ground-level TAKEOFF)
         all_waypoints.append(
             WaypointData(
                 lon=tc[0],
                 lat=tc[1],
-                alt=takeoff_alt,
-                heading=bearing_between(tc[0], tc[1], first_wp.lon, first_wp.lat),
-                speed=default_speed,
-                waypoint_type=WaypointType.TAKEOFF,
-                camera_action=CameraAction.NONE,
-            )
-        )
-
-        # ascend to transit altitude at takeoff position before horizontal flight
-        ground_at_takeoff = provider.get_elevation(tc[1], tc[0]) if provider else takeoff_alt
-        climb_alt = ground_at_takeoff + transit_agl
-        all_waypoints.append(
-            WaypointData(
-                lon=tc[0],
-                lat=tc[1],
-                alt=climb_alt,
+                alt=takeoff_alt + transit_agl,
                 heading=bearing_between(tc[0], tc[1], first_wp.lon, first_wp.lat),
                 speed=default_speed,
                 waypoint_type=WaypointType.TRANSIT,
@@ -714,13 +804,8 @@ def _generate_trajectory_inner(
             )
         )
 
-    # record each pass's starting index in all_waypoints so we don't rely on
-    # object identity to recover it in phase 5 postprocessing
-    pass_start_indices: list[int] = []
-
-    for i, ipass in enumerate(inspection_passes):
-        # A* transit from previous endpoint to this pass start
-        if all_waypoints:
+        pass_start_indices = []
+        for i, ipass in enumerate(inspection_passes):
             prev = all_waypoints[-1]
             start = ipass.waypoints[0]
             from_pt = Point3D(lon=prev.lon, lat=prev.lat, alt=prev.alt)
@@ -741,20 +826,18 @@ def _generate_trajectory_inner(
             )
             all_waypoints.extend(transit_wps)
 
-        pass_start_indices.append(len(all_waypoints))
-        all_waypoints.extend(ipass.waypoints)
+            pass_start_indices.append(len(all_waypoints))
+            all_waypoints.extend(ipass.waypoints)
 
-    # landing at ground level - transit handles descent via transit_agl
-    if mission.landing_coordinate:
         lc = _parse_coordinate(mission.landing_coordinate.data, "landing")
-
         landing_alt = lc[2]
         if provider:
             landing_alt = provider.get_elevation(lc[1], lc[0])
 
         last = all_waypoints[-1]
         from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)
-        to_pt = Point3D(lon=lc[0], lat=lc[1], alt=landing_alt)
+        # transit to above landing position at transit altitude (no ground-level LANDING)
+        to_pt = Point3D(lon=lc[0], lat=lc[1], alt=landing_alt + transit_agl)
 
         landing_transit = compute_transit_path(
             db,
@@ -775,25 +858,154 @@ def _generate_trajectory_inner(
             WaypointData(
                 lon=lc[0],
                 lat=lc[1],
-                alt=landing_alt,
+                alt=landing_alt + transit_agl,
                 heading=all_waypoints[-1].heading,
                 speed=default_speed,
-                waypoint_type=WaypointType.LANDING,
+                waypoint_type=WaypointType.TRANSIT,
                 camera_action=CameraAction.NONE,
             )
         )
 
+    else:
+        # FULL scope (default): takeoff at ground level -> climb -> transit -> landing
+        if mission.takeoff_coordinate:
+            tc = _parse_coordinate(mission.takeoff_coordinate.data, "takeoff")
+            if not inspection_passes[0].waypoints:
+                raise TrajectoryGenerationError("first inspection produced no waypoints")
+            first_wp = inspection_passes[0].waypoints[0]
+
+            takeoff_alt = tc[2]
+            if provider:
+                takeoff_alt = provider.get_elevation(tc[1], tc[0])
+
+            all_waypoints.append(
+                WaypointData(
+                    lon=tc[0],
+                    lat=tc[1],
+                    alt=takeoff_alt,
+                    heading=bearing_between(tc[0], tc[1], first_wp.lon, first_wp.lat),
+                    speed=default_speed,
+                    waypoint_type=WaypointType.TAKEOFF,
+                    camera_action=CameraAction.NONE,
+                )
+            )
+
+            # ascend to transit altitude at takeoff position before horizontal flight
+            climb_alt = takeoff_alt + transit_agl
+            all_waypoints.append(
+                WaypointData(
+                    lon=tc[0],
+                    lat=tc[1],
+                    alt=climb_alt,
+                    heading=bearing_between(tc[0], tc[1], first_wp.lon, first_wp.lat),
+                    speed=default_speed,
+                    waypoint_type=WaypointType.TRANSIT,
+                    camera_action=CameraAction.NONE,
+                )
+            )
+
+        pass_start_indices = []
+        for i, ipass in enumerate(inspection_passes):
+            # A* transit from previous endpoint to this pass start
+            if all_waypoints:
+                prev = all_waypoints[-1]
+                start = ipass.waypoints[0]
+                from_pt = Point3D(lon=prev.lon, lat=prev.lat, alt=prev.alt)
+                to_pt = Point3D(lon=start.lon, lat=start.lat, alt=start.alt)
+
+                transit_wps = compute_transit_path(
+                    db,
+                    from_pt,
+                    to_pt,
+                    data.obstacles,
+                    data.safety_zones,
+                    default_speed,
+                    data.surfaces,
+                    elevation_provider=provider,
+                    transit_agl=transit_agl,
+                    buffer_distance_override=mission_buffer_override,
+                    require_perpendicular_runway_crossing=require_perpendicular,
+                )
+                all_waypoints.extend(transit_wps)
+
+            pass_start_indices.append(len(all_waypoints))
+            all_waypoints.extend(ipass.waypoints)
+
+        # landing at ground level - transit handles descent via transit_agl
+        if mission.landing_coordinate:
+            lc = _parse_coordinate(mission.landing_coordinate.data, "landing")
+
+            landing_alt = lc[2]
+            if provider:
+                landing_alt = provider.get_elevation(lc[1], lc[0])
+
+            last = all_waypoints[-1]
+            from_pt = Point3D(lon=last.lon, lat=last.lat, alt=last.alt)
+            to_pt = Point3D(lon=lc[0], lat=lc[1], alt=landing_alt)
+
+            landing_transit = compute_transit_path(
+                db,
+                from_pt,
+                to_pt,
+                data.obstacles,
+                data.safety_zones,
+                default_speed,
+                data.surfaces,
+                elevation_provider=provider,
+                transit_agl=transit_agl,
+                buffer_distance_override=mission_buffer_override,
+                require_perpendicular_runway_crossing=require_perpendicular,
+            )
+            all_waypoints.extend(landing_transit)
+
+            all_waypoints.append(
+                WaypointData(
+                    lon=lc[0],
+                    lat=lc[1],
+                    alt=landing_alt,
+                    heading=all_waypoints[-1].heading,
+                    speed=default_speed,
+                    waypoint_type=WaypointType.LANDING,
+                    camera_action=CameraAction.NONE,
+                )
+            )
+
     # build waypoint index -> inspection sequence mapping from explicit start indices
     wp_inspection_seq: dict[int, int] = {}
+    is_measurements_only = scope == "MEASUREMENTS_ONLY"
     for i, (pass_start, ipass) in enumerate(zip(pass_start_indices, inspection_passes)):
-        for k in range(pass_start, pass_start + len(ipass.waypoints)):
+        pass_wp_count = (
+            len(measurement_index_maps[i]) if is_measurements_only else len(ipass.waypoints)
+        )
+        for k in range(pass_start, pass_start + pass_wp_count):
             if k < len(all_waypoints):
                 wp_inspection_seq[k] = i + 1
 
         # format deferred per-pass warnings now that global offsets are known
         if i < len(deferred_pass_data):
             d_label, d_violations, d_obstructed = deferred_pass_data[i]
-            _format_soft_warnings(d_violations, d_label, warnings, wp_offset=pass_start)
+
+            if is_measurements_only:
+                # remap violation waypoint indices from full-pass to filtered-pass
+                idx_map = measurement_index_maps[i]
+                remapped_violations = []
+                for v in d_violations:
+                    if v.waypoint_index is not None and v.waypoint_index not in idx_map:
+                        continue
+                    if v.waypoint_index is not None:
+                        v = Violation(
+                            is_warning=v.is_warning,
+                            message=v.message,
+                            violation_kind=v.violation_kind,
+                            constraint_id=v.constraint_id,
+                            waypoint_index=idx_map[v.waypoint_index],
+                        )
+                    remapped_violations.append(v)
+                _format_soft_warnings(remapped_violations, d_label, warnings, wp_offset=pass_start)
+
+                d_obstructed = [idx_map[wi] for wi in d_obstructed if wi in idx_map]
+            else:
+                _format_soft_warnings(d_violations, d_label, warnings, wp_offset=pass_start)
 
             if d_obstructed:
                 display_wps = [wi + 1 for wi in d_obstructed]
@@ -891,9 +1103,10 @@ def _generate_trajectory_inner(
 
     _format_soft_warnings(final_violations, "final validation", warnings)
 
-    # compute final totals per-segment
+    # compute final totals with trapezoidal speed profile
     total_dist = 0.0
-    total_dur = 0.0
+    tl_fixed = TAKEOFF_DURATION + LANDING_DURATION if scope == "FULL" else 0.0
+    total_dur = tl_fixed
     for j in range(len(all_waypoints)):
         if j > 0:
             prev = all_waypoints[j - 1]
@@ -902,7 +1115,23 @@ def _generate_trajectory_inner(
             altitude_diff = cur.alt - prev.alt
             d = math.sqrt(seg**2 + altitude_diff**2)
             total_dist += d
-            total_dur += d / max(cur.speed or MIN_SPEED_FLOOR, MIN_SPEED_FLOOR)
+
+            v_prev = max(
+                prev.speed if prev.speed is not None else MIN_SPEED_FLOOR,
+                MIN_SPEED_FLOOR,
+            )
+            v_cur = max(
+                cur.speed if cur.speed is not None else MIN_SPEED_FLOOR,
+                MIN_SPEED_FLOOR,
+            )
+            total_dur += _segment_duration_with_accel(d, v_prev, v_cur)
+
+            # gimbal settle when transitioning between segment types
+            if prev.waypoint_type != cur.waypoint_type and cur.waypoint_type in (
+                WaypointType.MEASUREMENT,
+                WaypointType.HOVER,
+            ):
+                total_dur += GIMBAL_SETTLE_TIME
 
         if all_waypoints[j].hover_duration is not None:
             total_dur += all_waypoints[j].hover_duration

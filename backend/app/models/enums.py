@@ -103,3 +103,11 @@ class ConstraintType(str, enum.Enum):
 class SurfaceType(str, enum.Enum):
     RUNWAY = "RUNWAY"
     TAXIWAY = "TAXIWAY"
+
+
+class FlightPlanScope(str, enum.Enum):
+    """controls which waypoint types are included in the generated flight plan."""
+
+    FULL = "FULL"
+    NO_TAKEOFF_LANDING = "NO_TAKEOFF_LANDING"
+    MEASUREMENTS_ONLY = "MEASUREMENTS_ONLY"

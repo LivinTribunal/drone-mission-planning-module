@@ -389,6 +389,139 @@ describe("CreationForm", () => {
     });
   });
 
+  describe("touchpoint pick-on-map", () => {
+    it("renders pick button when runway subtype + handler provided", () => {
+      const onPickTouchpointToggle = vi.fn();
+      render(
+        <CreationForm
+          {...defaultProps}
+          geometryType="polygon"
+          onPickTouchpointToggle={onPickTouchpointToggle}
+        />,
+      );
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "surface" },
+      });
+      fireEvent.change(screen.getByTestId("creation-type-select"), {
+        target: { value: "runway" },
+      });
+      expect(screen.getByTestId("creation-touchpoint-pick-map")).toBeInTheDocument();
+    });
+
+    it("fires toggle handler when pick button is clicked", () => {
+      const onPickTouchpointToggle = vi.fn();
+      render(
+        <CreationForm
+          {...defaultProps}
+          geometryType="polygon"
+          onPickTouchpointToggle={onPickTouchpointToggle}
+        />,
+      );
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "surface" },
+      });
+      fireEvent.change(screen.getByTestId("creation-type-select"), {
+        target: { value: "runway" },
+      });
+      fireEvent.click(screen.getByTestId("creation-touchpoint-pick-map"));
+      expect(onPickTouchpointToggle).toHaveBeenCalled();
+    });
+
+    it("populates touchpoint fields and consumes when coord arrives", () => {
+      const onPickedTouchpointConsumed = vi.fn();
+      const { rerender } = render(
+        <CreationForm
+          {...defaultProps}
+          geometryType="polygon"
+          onPickTouchpointToggle={vi.fn()}
+          onPickedTouchpointConsumed={onPickedTouchpointConsumed}
+        />,
+      );
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "surface" },
+      });
+      fireEvent.change(screen.getByTestId("creation-type-select"), {
+        target: { value: "runway" },
+      });
+      rerender(
+        <CreationForm
+          {...defaultProps}
+          geometryType="polygon"
+          onPickTouchpointToggle={vi.fn()}
+          onPickedTouchpointConsumed={onPickedTouchpointConsumed}
+          pickedTouchpointCoord={{ lat: 48.123456, lon: 17.654321, alt: 200.5 }}
+        />,
+      );
+      expect((document.getElementById("create-tp-lat") as HTMLInputElement).value).toBe("48.123456");
+      expect((document.getElementById("create-tp-lon") as HTMLInputElement).value).toBe("17.654321");
+      expect(onPickedTouchpointConsumed).toHaveBeenCalled();
+    });
+  });
+
+  describe("no-runway AGL warning", () => {
+    it("shows warning when creating AGL with no surfaces", () => {
+      render(<CreationForm {...defaultProps} surfaces={[]} />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "agl" },
+      });
+      expect(screen.getByTestId("creation-no-runway-warning")).toBeInTheDocument();
+    });
+
+    it("hides warning when surfaces exist", () => {
+      render(<CreationForm {...defaultProps} />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "agl" },
+      });
+      expect(screen.queryByTestId("creation-no-runway-warning")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("PAPI-only glide slope gate", () => {
+    it("shows glide slope input for PAPI type", () => {
+      render(<CreationForm {...defaultProps} />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "agl" },
+      });
+      expect(document.getElementById("create-glide")).toBeInTheDocument();
+    });
+
+    it("hides glide slope input for RUNWAY_EDGE_LIGHTS type", () => {
+      render(<CreationForm {...defaultProps} />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "agl" },
+      });
+      fireEvent.change(screen.getByTestId("creation-agl-type-select"), {
+        target: { value: "RUNWAY_EDGE_LIGHTS" },
+      });
+      expect(document.getElementById("create-glide")).not.toBeInTheDocument();
+    });
+
+    it("omits glide_slope_angle from payload for RUNWAY_EDGE_LIGHTS", async () => {
+      const onCreate = vi.fn().mockResolvedValue(undefined);
+      render(
+        <CreationForm
+          {...defaultProps}
+          onCreate={onCreate}
+          pointPosition={[17.0, 48.0]}
+        />,
+      );
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "agl" },
+      });
+      fireEvent.change(screen.getByTestId("creation-agl-type-select"), {
+        target: { value: "RUNWAY_EDGE_LIGHTS" },
+      });
+      const nameInput = screen.getByPlaceholderText("coordinator.creation.namePlaceholderAgl");
+      fireEvent.change(nameInput, { target: { value: "EDGE 09L" } });
+      fireEvent.click(screen.getByTestId("creation-submit"));
+      await waitFor(() => {
+        expect(onCreate).toHaveBeenCalled();
+      });
+      const payload = onCreate.mock.calls[0][1];
+      expect(payload.glide_slope_angle).toBeUndefined();
+    });
+  });
+
   it("calls onCancel when cancel button is clicked", () => {
     const onCancel = vi.fn();
     render(<CreationForm {...defaultProps} onCancel={onCancel} />);

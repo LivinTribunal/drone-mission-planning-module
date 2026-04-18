@@ -1,33 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import type { MapLayerConfig } from "@/types/map";
+import Toggle from "@/components/common/Toggle";
 
 interface LayerPanelProps {
   layers: MapLayerConfig;
   onToggle: (key: string) => void;
   hasFlightPlan?: boolean;
   hasTakeoffLanding?: boolean;
-}
-
-function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
-  /** custom toggle switch. */
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onChange(); }}
-      className="ml-auto flex-shrink-0 relative inline-block w-[36px] h-[18px] rounded-full transition-colors duration-200"
-      style={{
-        backgroundColor: checked ? "var(--tv-accent)" : "var(--tv-border)",
-      }}
-    >
-      <span
-        className="absolute top-[3px] left-[3px] h-[12px] w-[12px] rounded-full bg-white transition-transform duration-200"
-        style={{
-          transform: checked ? "translateX(18px)" : "translateX(0px)",
-        }}
-      />
-    </button>
-  );
 }
 
 const baseLayerKeys: { key: keyof MapLayerConfig; i18nKey: string }[] = [
@@ -50,6 +31,10 @@ export default function LayerPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [trajectoryExpanded, setTrajectoryExpanded] = useState(layers.trajectory);
   const [waypointsExpanded, setWaypointsExpanded] = useState(true);
+
+  useEffect(() => {
+    setTrajectoryExpanded(layers.trajectory);
+  }, [layers.trajectory]);
 
   const waypointsOn = layers.transitWaypoints && layers.measurementWaypoints;
 
@@ -126,6 +111,7 @@ export default function LayerPanel({
                       <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${waypointsExpanded ? "rotate-180" : ""}`} />
                     </button>
                     <span>{t("dashboard.waypoints")}</span>
+                    {/* synthetic key - parent toggles both transit + measurement */}
                     <Toggle checked={waypointsOn} onChange={() => onToggle("waypoints")} />
                   </div>
 

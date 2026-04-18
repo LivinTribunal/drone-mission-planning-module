@@ -122,6 +122,7 @@ export interface AirportMapHandle {
 }
 
 const GLYPHS_URL =
+  import.meta.env.VITE_GLYPHS_URL ??
   "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
 
 /** polls map.isStyleLoaded() until true, then calls callback. returns cancel fn. */
@@ -308,6 +309,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   visibleInspectionIds,
   onLayerChange,
   leftPanelChildren,
+  useTakeoffAsLanding,
   activeTool,
   onPlaceTakeoff,
   onPlaceLanding,
@@ -340,6 +342,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   onWarningClose,
   pendingGeometry,
   pendingPointPosition,
+  flightPlanScope,
 }, ref) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -352,6 +355,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   takeoffRef.current = takeoffCoordinate;
   const landingRef = useRef(landingCoordinate);
   landingRef.current = landingCoordinate;
+  const useTakeoffAsLandingRef = useRef(useTakeoffAsLanding);
+  useTakeoffAsLandingRef.current = useTakeoffAsLanding;
   const indexMapRef = useRef(inspectionIndexMap);
   indexMapRef.current = inspectionIndexMap;
   const highlightedIdsRef = useRef(highlightedWaypointIds);
@@ -712,6 +717,19 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         if (!map) return;
         const wps = waypointsRef.current ?? [];
         const newCoords: [number, number, number] = [e.lngLat.lng, e.lngLat.lat, dragState.originalAlt];
+
+        // live preview for standalone T/L markers
+        let dragTakeoff = takeoffRef.current;
+        let dragLanding = landingRef.current;
+        if (dragState.waypointId === "takeoff" && dragTakeoff) {
+          dragTakeoff = { ...dragTakeoff, coordinates: newCoords };
+          if (useTakeoffAsLandingRef.current) {
+            dragLanding = { ...dragTakeoff };
+          }
+        } else if (dragState.waypointId === "landing" && dragLanding) {
+          dragLanding = { ...dragLanding, coordinates: newCoords };
+        }
+
         const updated: WaypointResponse[] = wps.map((wp) => {
           if (wp.id !== dragState.waypointId) return wp;
           return {
@@ -727,7 +745,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         const pointSrc = map.getSource(WAYPOINT_SOURCE) as maplibregl.GeoJSONSource | undefined;
         if (pointSrc) {
           pointSrc.setData(
-            waypointsToGeoJSON(updated, takeoffRef.current, landingRef.current, indexMapRef.current),
+            waypointsToGeoJSON(updated, dragTakeoff, dragLanding, indexMapRef.current),
           );
         }
 
@@ -1421,6 +1439,22 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       return () => { cancelled = true; };
     }
   }, [waypoints, takeoffCoordinate, landingCoordinate, inspectionIndexMap, addWaypointLayers]);
+
+  // hide takeoff/landing waypoint symbols when scope omits them
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const show = !flightPlanScope || flightPlanScope === "FULL";
+    const visibility = show ? "visible" : "none";
+    try {
+      if (map.getLayer(WAYPOINT_TAKEOFF_LAYER))
+        map.setLayoutProperty(WAYPOINT_TAKEOFF_LAYER, "visibility", visibility);
+      if (map.getLayer(WAYPOINT_LANDING_LAYER))
+        map.setLayoutProperty(WAYPOINT_LANDING_LAYER, "visibility", visibility);
+    } catch {
+      // layers may not exist yet
+    }
+  }, [flightPlanScope, waypoints]);
 
   // update selected waypoint highlight and feature info
   useEffect(() => {

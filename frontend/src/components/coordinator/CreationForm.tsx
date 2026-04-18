@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Loader2, RotateCcw } from "lucide-react";
+import { X, Loader2, RotateCcw, MapPin, AlertTriangle } from "lucide-react";
 import Input from "@/components/common/Input";
 import type { SurfaceResponse, AGLResponse, ObstacleResponse } from "@/types/airport";
 
@@ -37,6 +37,10 @@ interface CreationFormProps {
   obstacles?: ObstacleResponse[];
   airportElevation?: number;
   prefilledEntityType?: EntityType;
+  pickingTouchpoint?: boolean;
+  onPickTouchpointToggle?: () => void;
+  pickedTouchpointCoord?: { lat: number; lon: number; alt: number } | null;
+  onPickedTouchpointConsumed?: () => void;
 }
 
 const POLYGON_CATEGORIES: { value: CategoryPolygon; labelKey: string }[] = [
@@ -93,6 +97,10 @@ export default function CreationForm({
   obstacles = [],
   airportElevation = 0,
   prefilledEntityType,
+  pickingTouchpoint = false,
+  onPickTouchpointToggle,
+  pickedTouchpointCoord,
+  onPickedTouchpointConsumed,
 }: CreationFormProps) {
   /** creation form shown after drawing a geometry - two-tier type selection, fill fields, create entity. */
   const { t } = useTranslation();
@@ -156,13 +164,12 @@ export default function CreationForm({
     if (!lhaAglId) return 1;
     const agl = allAgls.find((a) => a.id === lhaAglId);
     if (!agl) return 1;
-    return agl.lhas.length + 1;
+    return Math.max(0, ...agl.lhas.map((l) => l.unit_number)) + 1;
   }, [lhaAglId, allAgls]);
 
-  // manual coordinate entry for AGL/LHA
+  // manual coordinate entry for AGL/LHA - altitude is always airport elevation (set by handleCreate on page)
   const [manualLat, setManualLat] = useState(pointPosition ? String(pointPosition[1]) : "");
   const [manualLon, setManualLon] = useState(pointPosition ? String(pointPosition[0]) : "");
-  const [manualAlt, setManualAlt] = useState(String(airportElevation));
 
   // sync map clicks into manual fields
   useEffect(() => {
@@ -171,6 +178,16 @@ export default function CreationForm({
       setManualLon(String(pointPosition[0]));
     }
   }, [pointPosition]);
+
+  // consume picked touchpoint coordinate from map click
+  useEffect(() => {
+    if (pickedTouchpointCoord) {
+      setTouchpointLat(String(Math.round(pickedTouchpointCoord.lat * 1e6) / 1e6));
+      setTouchpointLon(String(Math.round(pickedTouchpointCoord.lon * 1e6) / 1e6));
+      setTouchpointAlt(String(Math.round(pickedTouchpointCoord.alt * 100) / 100));
+      onPickedTouchpointConsumed?.();
+    }
+  }, [pickedTouchpointCoord, onPickedTouchpointConsumed]);
 
   // auto-prefill obstacle name based on type + count
   useEffect(() => {
@@ -515,9 +532,26 @@ export default function CreationForm({
                     className="mt-1 rounded-lg border border-tv-border bg-tv-bg p-2 space-y-1.5"
                     data-testid="creation-touchpoint-section"
                   >
-                    <p className="text-[10px] font-semibold text-tv-text-secondary uppercase tracking-wide">
-                      {t("coordinator.creation.touchpoint")}
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-semibold text-tv-text-secondary uppercase tracking-wide">
+                        {t("coordinator.creation.touchpoint")}
+                      </p>
+                      {onPickTouchpointToggle && (
+                        <button
+                          type="button"
+                          onClick={onPickTouchpointToggle}
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors border ${
+                            pickingTouchpoint
+                              ? "border-tv-accent bg-tv-accent text-tv-accent-text"
+                              : "border-tv-accent text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
+                          }`}
+                          data-testid="creation-touchpoint-pick-map"
+                        >
+                          <MapPin className="h-3 w-3" />
+                          {t("mission.config.pickOnMap")}
+                        </button>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-1.5">
                       <Input
                         id="create-tp-lat"
@@ -640,7 +674,7 @@ export default function CreationForm({
             {/* agl fields */}
             {effectiveEntityType === "agl" && (
               <>
-                {surfaces.length > 0 && (
+                {surfaces.length > 0 ? (
                   <div>
                     <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
                       {t("coordinator.creation.surface")}
@@ -657,6 +691,16 @@ export default function CreationForm({
                         </option>
                       ))}
                     </select>
+                  </div>
+                ) : (
+                  <div
+                    className="flex items-center gap-2 p-3 rounded-2xl border border-tv-warning bg-tv-warning/10"
+                    data-testid="creation-no-runway-warning"
+                  >
+                    <AlertTriangle className="h-4 w-4 text-tv-warning flex-shrink-0" />
+                    <p className="text-xs text-tv-warning">
+                      {t("coordinator.creation.noRunwayWarning")}
+                    </p>
                   </div>
                 )}
                 <div>
@@ -709,8 +753,9 @@ export default function CreationForm({
                     value={manualLat} onChange={(e) => setManualLat(e.target.value)} />
                   <Input id="create-lon" label={t("map.coordinates.lon")} type="number" step="0.000001"
                     value={manualLon} onChange={(e) => setManualLon(e.target.value)} />
-                  <Input id="create-alt" label={t("map.coordinates.alt")} type="number" step="0.01"
-                    value={manualAlt} onChange={(e) => setManualAlt(e.target.value)} />
+                  <p className="text-[10px] text-tv-text-muted">
+                    {t("map.coordinates.alt")}: {airportElevation.toFixed(2)} m ({t("coordinator.creation.altFromAirport")})
+                  </p>
                 </div>
               </>
             )}
@@ -774,8 +819,9 @@ export default function CreationForm({
                     value={manualLat} onChange={(e) => setManualLat(e.target.value)} />
                   <Input id="create-lha-lon" label={t("map.coordinates.lon")} type="number" step="0.000001"
                     value={manualLon} onChange={(e) => setManualLon(e.target.value)} />
-                  <Input id="create-lha-alt" label={t("map.coordinates.alt")} type="number" step="0.01"
-                    value={manualAlt} onChange={(e) => setManualAlt(e.target.value)} />
+                  <p className="text-[10px] text-tv-text-muted">
+                    {t("map.coordinates.alt")}: {airportElevation.toFixed(2)} m ({t("coordinator.creation.altFromAirport")})
+                  </p>
                 </div>
               </>
             )}

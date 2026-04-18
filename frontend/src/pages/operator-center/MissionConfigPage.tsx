@@ -329,6 +329,8 @@ export default function MissionConfigPage() {
 
   // compute coordinate availability from dirty state or mission data
   const hasCoordinates = useMemo(() => {
+    const scope = missionDirty.flight_plan_scope ?? mission?.flight_plan_scope ?? "FULL";
+    if (scope === "MEASUREMENTS_ONLY") return true;
     const takeoff = missionDirty.takeoff_coordinate !== undefined
       ? missionDirty.takeoff_coordinate
       : mission?.takeoff_coordinate;
@@ -772,6 +774,7 @@ export default function MissionConfigPage() {
               selectedWaypointId={selectedWaypointId}
               onWaypointClick={setSelectedWaypointId}
               missionStatus={mission?.status}
+              flightPlanScope={missionDirty.flight_plan_scope ?? mission?.flight_plan_scope}
               onMapClick={pickingCoord ? handleMapClick : undefined}
               takeoffCoordinate={currentTakeoff}
               landingCoordinate={currentLanding}

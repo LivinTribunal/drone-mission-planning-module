@@ -207,13 +207,15 @@ class TestResolveSpeed:
         speed, _, _ = resolve_speed(100.0, 11, None, 5.0)
         assert speed == 5.0
 
-    def test_clamped_to_optimal_no_warning(self):
-        """speed is clamped to min(optimal, default) so no warning when optimal < default."""
+    def test_clamped_to_optimal_warns_when_default_exceeds_ceiling(self):
+        """warns when configured speed exceeds camera ceiling, even though chosen is clamped."""
         drone = FakeDrone(camera_frame_rate=1, max_speed=20.0)
-        # spacing=10m, frame_rate=1 => optimal=10; default=15 => min(10,15)=10
+        # spacing=10m, frame_rate=1 => optimal=10; default=15 => chosen=min(10,15)=10
+        # default_speed(15) > optimal(10) so a warning is emitted
         speed, warning, _ = resolve_speed(100.0, 11, drone, 15.0)
         assert speed == 10.0
-        assert warning is None
+        assert warning is not None
+        assert "15.0" in warning or "10.0" in warning
 
 
 # check_speed_framerate
