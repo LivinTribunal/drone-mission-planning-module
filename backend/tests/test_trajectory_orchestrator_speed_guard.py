@@ -6,7 +6,7 @@ used to raise TypeError when speed was None. the guard coerces None to the floor
 
 import pytest
 
-from app.services.trajectory_types import MIN_SPEED_FLOOR
+from app.services.trajectory.types import MIN_SPEED_FLOOR
 
 
 @pytest.mark.parametrize("speed", [None, 0, 0.0])

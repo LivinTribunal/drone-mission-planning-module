@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from app.services.trajectory_computation import compute_optimal_speed
+from app.services.trajectory.config_resolver import compute_optimal_speed
 
 
 @dataclass

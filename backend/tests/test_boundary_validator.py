@@ -7,8 +7,8 @@ from geoalchemy2.elements import WKBElement
 from sqlalchemy import text
 
 from app.models.enums import SafetyZoneType
-from app.services.safety_validator import _batch_check_boundary_zones, check_safety_zone
-from app.services.trajectory_types import LocalBoundary, LocalGeometries, WaypointData
+from app.services.trajectory.safety_validator import _batch_check_boundary_zones, check_safety_zone
+from app.services.trajectory.types import LocalBoundary, LocalGeometries, WaypointData
 from app.utils.local_projection import LocalProjection
 
 # boundary square around prague area

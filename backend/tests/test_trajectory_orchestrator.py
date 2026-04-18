@@ -20,7 +20,7 @@ def test_generate_trajectory_mission_not_found(db_engine):
     """orchestrator raises NotFoundError for missing mission"""
     from sqlalchemy.orm import Session
 
-    from app.services.trajectory_orchestrator import generate_trajectory
+    from app.services.trajectory.orchestrator import generate_trajectory
 
     with Session(db_engine) as db:
         with pytest.raises(NotFoundError, match="mission not found"):
@@ -31,7 +31,7 @@ def test_generate_trajectory_no_inspections(client, db_engine):
     """orchestrator raises TrajectoryGenerationError when mission has no inspections"""
     from sqlalchemy.orm import Session
 
-    from app.services.trajectory_orchestrator import generate_trajectory
+    from app.services.trajectory.orchestrator import generate_trajectory
 
     airport = client.post(
         "/api/v1/airports",
@@ -1060,7 +1060,7 @@ def test_hover_point_lock_missing_selected_lha_raises(client, db_engine):
     """orchestrator raises TrajectoryGenerationError when HOVER_POINT_LOCK has no selected LHA."""
     from sqlalchemy.orm import Session
 
-    from app.services.trajectory_orchestrator import generate_trajectory
+    from app.services.trajectory.orchestrator import generate_trajectory
 
     airport = client.post(
         "/api/v1/airports",

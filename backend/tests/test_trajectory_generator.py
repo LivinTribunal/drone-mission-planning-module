@@ -1,7 +1,7 @@
 import math
 
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
-from app.services.trajectory_types import Point3D, ResolvedConfig, WaypointData
+from app.services.trajectory.types import Point3D, ResolvedConfig, WaypointData
 from app.utils.geo import (
     bearing_between,
     center_of_points,
@@ -74,7 +74,7 @@ def test_elevation_angle_above():
 # arc path tests
 def test_arc_path_count():
     """arc path should generate measurement_density waypoints"""
-    from app.services.trajectory_computation import calculate_arc_path
+    from app.services.trajectory.methods.angular_sweep import calculate_arc_path
 
     config = ResolvedConfig(measurement_density=10)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -87,8 +87,8 @@ def test_arc_path_count():
 
 def test_arc_path_radius():
     """all arc waypoints should be >= 350m from center"""
-    from app.services.trajectory_computation import calculate_arc_path
-    from app.services.trajectory_types import MIN_ARC_RADIUS
+    from app.services.trajectory.methods.angular_sweep import calculate_arc_path
+    from app.services.trajectory.types import MIN_ARC_RADIUS
 
     config = ResolvedConfig(measurement_density=8)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -102,7 +102,7 @@ def test_arc_path_radius():
 
 def test_arc_path_heading_towards_center():
     """measurement waypoints should point at LHA center"""
-    from app.services.trajectory_computation import calculate_arc_path
+    from app.services.trajectory.methods.angular_sweep import calculate_arc_path
 
     config = ResolvedConfig(measurement_density=5)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -120,8 +120,8 @@ def test_arc_path_heading_towards_center():
 
 def test_arc_path_altitude_uses_glide_slope():
     """arc altitude = center_alt + r * tan(glide_slope) + offset"""
-    from app.services.trajectory_computation import calculate_arc_path
-    from app.services.trajectory_types import MIN_ARC_RADIUS
+    from app.services.trajectory.methods.angular_sweep import calculate_arc_path
+    from app.services.trajectory.types import MIN_ARC_RADIUS
 
     config = ResolvedConfig(measurement_density=3, altitude_offset=5.0)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -139,7 +139,7 @@ def test_arc_path_altitude_uses_glide_slope():
 # vertical path tests
 def test_vertical_path_count():
     """vertical path should generate measurement_density waypoints"""
-    from app.services.trajectory_computation import calculate_vertical_path
+    from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
 
     config = ResolvedConfig(measurement_density=8)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -151,7 +151,7 @@ def test_vertical_path_count():
 
 def test_vertical_path_altitude_increases():
     """altitude should increase from min to max elevation angle"""
-    from app.services.trajectory_computation import calculate_vertical_path
+    from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
 
     config = ResolvedConfig(measurement_density=6)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -165,7 +165,7 @@ def test_vertical_path_altitude_increases():
 
 def test_vertical_path_same_horizontal():
     """all vertical profile waypoints at same lon/lat"""
-    from app.services.trajectory_computation import calculate_vertical_path
+    from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
 
     config = ResolvedConfig(measurement_density=5)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -180,7 +180,7 @@ def test_vertical_path_same_horizontal():
 def test_vertical_path_is_continuous_measurement_pass():
     """vertical profile emits a continuous measurement pass - no HOVER stops at
     LHA setting angle boundaries (operators want one uninterrupted climb)."""
-    from app.services.trajectory_computation import calculate_vertical_path
+    from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
 
     config = ResolvedConfig(measurement_density=50, hover_duration=5.0)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -196,7 +196,9 @@ def test_vertical_path_is_continuous_measurement_pass():
 def test_resolve_with_defaults_merge():
     """field-by-field merge: override > template > hardcoded"""
     from app.models.inspection import InspectionConfiguration
-    from app.services.trajectory_computation import resolve_with_defaults as _resolve_with_defaults
+    from app.services.trajectory.config_resolver import (
+        resolve_with_defaults as _resolve_with_defaults,
+    )
 
     template_config = InspectionConfiguration(
         measurement_density=10,
@@ -217,7 +219,9 @@ def test_resolve_with_defaults_merge():
 
 def test_resolve_with_defaults_no_configs():
     """hardcoded defaults when no config provided"""
-    from app.services.trajectory_computation import resolve_with_defaults as _resolve_with_defaults
+    from app.services.trajectory.config_resolver import (
+        resolve_with_defaults as _resolve_with_defaults,
+    )
 
     template = type("T", (), {"default_config": None})()
     inspection = type("I", (), {"config": None})()
@@ -231,7 +235,7 @@ def test_resolve_with_defaults_no_configs():
 # camera action tests
 def test_lead_in_lead_out_none():
     """first and last waypoints should have NONE camera action"""
-    from app.services.trajectory_orchestrator import _apply_camera_actions
+    from app.services.trajectory.helpers import _apply_camera_actions
 
     wps = [
         WaypointData(lon=0, lat=0, alt=0),
@@ -249,7 +253,7 @@ def test_lead_in_lead_out_none():
 # gimbal pitch tests
 def test_arc_path_has_gimbal_pitch():
     """arc waypoints should have gimbal pitch computed"""
-    from app.services.trajectory_computation import calculate_arc_path
+    from app.services.trajectory.methods.angular_sweep import calculate_arc_path
 
     config = ResolvedConfig(measurement_density=5)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -263,7 +267,7 @@ def test_arc_path_has_gimbal_pitch():
 
 def test_vertical_path_has_gimbal_pitch():
     """vertical profile waypoints should have gimbal pitch"""
-    from app.services.trajectory_computation import calculate_vertical_path
+    from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
 
     config = ResolvedConfig(measurement_density=5)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -318,7 +322,7 @@ def test_astar_no_path():
 # interface methods
 def test_determine_start_end_positions():
     """start and end positions should differ for angular sweep"""
-    from app.services.trajectory_computation import determine_end_position, determine_start_position
+    from app.services.trajectory.helpers import determine_end_position, determine_start_position
 
     config = ResolvedConfig(measurement_density=8)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -333,7 +337,7 @@ def test_determine_start_end_positions():
 # config override tests
 def test_config_override_sweep_angle():
     """arc path uses overridden sweep angle"""
-    from app.services.trajectory_computation import calculate_arc_path
+    from app.services.trajectory.methods.angular_sweep import calculate_arc_path
 
     default_config = ResolvedConfig(measurement_density=5)
     wide_config = ResolvedConfig(measurement_density=5, sweep_angle=20.0)
@@ -355,7 +359,7 @@ def test_config_override_sweep_angle():
 
 def test_config_override_horizontal_distance():
     """vertical path uses overridden horizontal distance"""
-    from app.services.trajectory_computation import calculate_vertical_path
+    from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
 
     default_config = ResolvedConfig(measurement_density=5)
     far_config = ResolvedConfig(measurement_density=5, horizontal_distance=600.0)
@@ -380,7 +384,7 @@ def test_point3d_roundtrip():
 # optimal density tests
 def test_compute_optimal_density_vertical():
     """optimal density for vertical profile covers all transition angles"""
-    from app.services.trajectory_computation import compute_optimal_density
+    from app.services.trajectory.config_resolver import compute_optimal_density
 
     config = ResolvedConfig()
     setting_angles = [3.0, 3.5, 4.0, 4.5]
@@ -394,7 +398,7 @@ def test_compute_optimal_density_vertical():
 
 def test_compute_optimal_density_arc():
     """optimal density for arc provides at least one point per degree"""
-    from app.services.trajectory_computation import compute_optimal_density
+    from app.services.trajectory.config_resolver import compute_optimal_density
 
     config = ResolvedConfig()
 
@@ -411,7 +415,7 @@ def test_line_of_sight_clear(client, db_engine):
     from sqlalchemy.orm import Session
 
     from app.models.airport import Obstacle
-    from app.services.trajectory_pathfinding import has_line_of_sight
+    from app.services.trajectory.pathfinding import has_line_of_sight
     from app.utils.local_projection import LocalProjection, build_local_geometries
 
     airport = client.post(
@@ -457,7 +461,7 @@ def test_line_of_sight_blocked(client, db_engine):
     from sqlalchemy.orm import Session
 
     from app.models.airport import Obstacle
-    from app.services.trajectory_pathfinding import has_line_of_sight
+    from app.services.trajectory.pathfinding import has_line_of_sight
     from app.utils.local_projection import LocalProjection, build_local_geometries
 
     airport = client.post(
@@ -505,7 +509,7 @@ def test_extract_polygon_vertices_buffer_offset(client, db_engine):
     from sqlalchemy.orm import Session
 
     from app.models.airport import Obstacle
-    from app.services.trajectory_pathfinding import _extract_local_polygon_vertices
+    from app.services.trajectory.pathfinding import _extract_local_polygon_vertices
     from app.utils.local_projection import LocalProjection, ewkb_to_local_polygon
 
     airport = client.post(
@@ -707,7 +711,7 @@ def test_get_lha_positions_no_filter(client, db_engine):
     from sqlalchemy.orm import Session, joinedload
 
     from app.models.agl import AGL
-    from app.services.trajectory_computation import get_lha_positions
+    from app.services.trajectory.helpers import get_lha_positions
 
     airport_id, agl_id, lha_ids = _setup_lha_fixtures(client)
 
@@ -725,7 +729,7 @@ def test_get_lha_positions_filtered(client, db_engine):
     from sqlalchemy.orm import Session, joinedload
 
     from app.models.agl import AGL
-    from app.services.trajectory_computation import get_lha_positions
+    from app.services.trajectory.helpers import get_lha_positions
 
     # use different icao code to avoid conflict
     airport = client.post(
@@ -766,7 +770,7 @@ def test_get_lha_positions_skips_no_position():
     """LHAs without position are skipped gracefully."""
     from uuid import uuid4
 
-    from app.services.trajectory_computation import get_lha_positions
+    from app.services.trajectory.helpers import get_lha_positions
 
     lha_with = type("L", (), {"id": uuid4(), "position": None, "setting_angle": 3.0})()
     agl = type("A", (), {"lhas": [lha_with]})()
@@ -782,8 +786,8 @@ def test_buffer_distance_zero_uses_zero_not_default(client, db_engine):
     from sqlalchemy.orm import Session
 
     from app.models.airport import Obstacle
-    from app.services.trajectory_pathfinding import _extract_local_polygon_vertices
-    from app.services.trajectory_types import DEFAULT_OBSTACLE_RADIUS
+    from app.services.trajectory.pathfinding import _extract_local_polygon_vertices
+    from app.services.trajectory.types import DEFAULT_OBSTACLE_RADIUS
     from app.utils.local_projection import LocalProjection, ewkb_to_local_polygon
 
     airport = client.post(
@@ -837,7 +841,7 @@ def test_buffer_distance_zero_uses_zero_not_default(client, db_engine):
 def test_overlay_config_includes_buffer_distance():
     """overlay_config copies buffer_distance from config to resolved config."""
     from app.models.inspection import InspectionConfiguration
-    from app.services.trajectory_computation import overlay_config
+    from app.services.trajectory.config_resolver import overlay_config
 
     result = ResolvedConfig()
     config = InspectionConfiguration(buffer_distance=30.0)
@@ -850,7 +854,9 @@ def test_overlay_config_includes_buffer_distance():
 def test_resolve_with_defaults_template_buffer_distance():
     """template default_config buffer_distance picked up when no inspection config."""
     from app.models.inspection import InspectionConfiguration
-    from app.services.trajectory_computation import resolve_with_defaults as _resolve_with_defaults
+    from app.services.trajectory.config_resolver import (
+        resolve_with_defaults as _resolve_with_defaults,
+    )
 
     template_config = InspectionConfiguration(buffer_distance=20.0)
     template = type("T", (), {"default_config": template_config})()
@@ -863,7 +869,7 @@ def test_resolve_with_defaults_template_buffer_distance():
 
 def test_resolve_inspection_collisions_max_buffer_uses_override():
     """buffer_distance_override should be used in max_buffer calc instead of obs value."""
-    from app.services.trajectory_pathfinding import DEFAULT_OBSTACLE_RADIUS
+    from app.services.trajectory.pathfinding import DEFAULT_OBSTACLE_RADIUS
 
     # directly test the max_buffer expression used in resolve_inspection_collisions
     obstacles = [
@@ -894,7 +900,7 @@ def test_resolve_inspection_collisions_max_buffer_uses_override():
 
 def test_resolve_inspection_collisions_zero_override_not_defaulted():
     """buffer_distance_override=0.0 should produce max_buffer=0, not DEFAULT_OBSTACLE_RADIUS."""
-    from app.services.trajectory_pathfinding import DEFAULT_OBSTACLE_RADIUS
+    from app.services.trajectory.pathfinding import DEFAULT_OBSTACLE_RADIUS
 
     obstacles = [
         type("O", (), {"buffer_distance": 5.0, "boundary": True})(),
@@ -923,7 +929,9 @@ def test_resolve_inspection_collisions_zero_override_not_defaulted():
 
 def test_mission_default_buffer_distance_fallback():
     """mission default_buffer_distance used when neither inspection nor template sets it."""
-    from app.services.trajectory_computation import resolve_with_defaults as _resolve_with_defaults
+    from app.services.trajectory.config_resolver import (
+        resolve_with_defaults as _resolve_with_defaults,
+    )
 
     template = type("T", (), {"default_config": None})()
     inspection = type("I", (), {"config": None})()
@@ -943,7 +951,7 @@ def test_extract_polygon_vertices_skips_closing_duplicate(client, db_engine):
     from sqlalchemy.orm import Session
 
     from app.models.airport import Obstacle
-    from app.services.trajectory_pathfinding import _extract_local_polygon_vertices
+    from app.services.trajectory.pathfinding import _extract_local_polygon_vertices
     from app.utils.local_projection import LocalProjection, ewkb_to_local_polygon
 
     airport = client.post(

@@ -4,12 +4,12 @@ import math
 
 from shapely.geometry import LineString, box
 
-from app.services.safety_validator import (
+from app.services.trajectory.safety_validator import (
     segment_runway_crossing_length,
     segments_intersect_obstacle,
     segments_intersect_zone,
 )
-from app.services.trajectory_types import LocalObstacle, LocalZone
+from app.services.trajectory.types import LocalObstacle, LocalZone
 from app.utils.local_projection import LocalProjection
 
 # round-trip projection accuracy
@@ -207,7 +207,7 @@ class TestProjectionEdgeCases:
 
     def test_empty_obstacle_list(self):
         """intersection check with empty obstacle list returns False."""
-        from app.services.trajectory_pathfinding import _is_segment_blocked
+        from app.services.trajectory.pathfinding import _is_segment_blocked
 
         assert not _is_segment_blocked(0, 0, 100, 100, [], [])
 
