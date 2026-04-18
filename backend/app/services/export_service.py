@@ -169,7 +169,7 @@ def generate_json(
 # ugcs data model version - matches the version ugcs expects for route import.
 # update these values if your ugcs installation uses a different schema version.
 _UGCS_VERSION = {
-    "major": 5,
+    "major": 4,
     "minor": 16,
     "build": 9205,
     "component": "DATABASE",
