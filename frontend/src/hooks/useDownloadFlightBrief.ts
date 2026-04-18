@@ -1,6 +1,5 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { isAxiosError } from "@/api/client";
 import { downloadFlightBrief } from "@/api/missions";
 
 export default function useDownloadFlightBrief(
@@ -27,12 +26,8 @@ export default function useDownloadFlightBrief(
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
       }
-    } catch (err) {
-      showNotification(
-        isAxiosError(err) && err.response?.data?.detail
-          ? String(err.response.data.detail)
-          : t("mission.flightBrief.error"),
-      );
+    } catch {
+      showNotification(t("mission.flightBrief.error"));
     } finally {
       setIsDownloadingBrief(false);
     }
