@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # deployment environment
     environment: str = "development"
 
+    # jwt algorithm
+    jwt_algorithm: str = "HS256"
+
     # openaip integration
     openaip_api_url: str = "https://api.core.openaip.net/api"
     openaip_api_key: str = ""

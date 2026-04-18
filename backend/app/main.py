@@ -17,7 +17,7 @@ from app.api.routes.missions import router as missions_router
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.exceptions import DomainError
-from app.services import auth_service
+from app.core.seeder import seed_users
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
     """seed default users on first run."""
     db = SessionLocal()
     try:
-        auth_service.seed_users(db)
+        seed_users(db)
     except Exception:
         logger.exception("failed to seed users")
     finally:

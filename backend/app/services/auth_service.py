@@ -8,14 +8,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
 from app.core.exceptions import DomainError, NotFoundError
-from app.models.airport import Airport
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.auth import ResetPasswordRequest, SetupPasswordRequest, UserUpdate
 
 logger = logging.getLogger(__name__)
-
-ALGORITHM = "HS256"
 
 # precomputed hash for timing-safe rejection of unknown emails
 _DUMMY_HASH = bcrypt.hashpw(b"timing-safe-dummy", bcrypt.gensalt()).decode("utf-8")
@@ -27,7 +24,7 @@ def authenticate_user(db: Session, email: str, password: str) -> User | None:
     if not user:
         bcrypt.checkpw(password.encode("utf-8"), _DUMMY_HASH.encode("utf-8"))
         return None
-    if not user.is_active or not user.verify_password(password):
+    if not user.verify_password(password) or not user.is_active:
         return None
     return user
 
@@ -41,7 +38,7 @@ def create_access_token(user_id: UUID, role: str) -> str:
         "type": "access",
         "exp": expire,
     }
-    return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
 def create_refresh_token(user_id: UUID) -> str:
@@ -52,13 +49,13 @@ def create_refresh_token(user_id: UUID) -> str:
         "type": "refresh",
         "exp": expire,
     }
-    return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
 def decode_token(token: str) -> dict:
     """decode and validate a jwt token."""
     try:
-        return jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except JWTError as e:
         raise DomainError("invalid or expired token", status_code=401) from e
 
@@ -115,32 +112,3 @@ def reset_password(db: Session, data: ResetPasswordRequest) -> None:
     user.invitation_token = None
     user.invitation_expires_at = None
     db.commit()
-
-
-def seed_users(db: Session) -> None:
-    """create default users if none exist. skipped in production."""
-    if settings.environment == "production":
-        logger.info("skipping user seeding in production environment")
-        return
-
-    count = db.query(User).count()
-    if count > 0:
-        return
-
-    airports = db.query(Airport).all()
-    logger.info("seeding %d default users with %d airports", 3, len(airports))
-
-    seed_data = [
-        ("admin@tmv.com", "adminadmin", "Admin", UserRole.SUPER_ADMIN.value),
-        ("coord@tmv.com", "coordinator", "Coordinator", UserRole.COORDINATOR.value),
-        ("operator@tmv.com", "operator", "Operator", UserRole.OPERATOR.value),
-    ]
-
-    for email, password, name, role in seed_data:
-        user = User(email=email, name=name, role=role, is_active=True)
-        user.set_password(password)
-        user.airports = list(airports)
-        db.add(user)
-
-    db.commit()
-    logger.info("seeded default users")

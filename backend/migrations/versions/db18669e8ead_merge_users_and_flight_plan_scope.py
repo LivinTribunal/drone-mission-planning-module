@@ -11,7 +11,7 @@ from alembic import op  # noqa: F401
 
 
 revision: str = 'db18669e8ead'
-down_revision: Union[str, None] = ('a1b2c3d4e5f8', 'db6988ce768c')
+down_revision: Union[str, None] = ('d68f9d953ce1', 'db6988ce768c')
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

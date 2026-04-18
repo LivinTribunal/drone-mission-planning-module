@@ -1,6 +1,6 @@
 """add users and user_airports tables
 
-Revision ID: a1b2c3d4e5f8
+Revision ID: d68f9d953ce1
 Revises: 16fee43
 Create Date: 2026-04-18 10:00:00.000000
 
@@ -10,8 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
-# revision identifiers
-revision = "a1b2c3d4e5f8"
+revision = "d68f9d953ce1"
 down_revision = "b435c08f47f1"
 branch_labels = None
 depends_on = None

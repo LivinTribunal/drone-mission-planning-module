@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -48,7 +50,7 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="invalid token type")
 
     try:
-        user = auth_service.get_user_by_id(db, payload["sub"])
+        user = auth_service.get_user_by_id(db, UUID(payload["sub"]))
     except NotFoundError:
         raise HTTPException(status_code=401, detail="invalid or expired refresh token")
     if not user.is_active:

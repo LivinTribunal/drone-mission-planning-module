@@ -55,6 +55,12 @@ client.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    if (error.response?.status === 503) {
+      triggerLogout();
+      window.location.href = "/maintenance";
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       const url = originalRequest.url ?? "";
       if (PUBLIC_PATHS.some((p) => url.startsWith(p))) {
