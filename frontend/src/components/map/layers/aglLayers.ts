@@ -161,6 +161,7 @@ export function addAglLayers(
   // connecting line across edge-light rows for at-a-glance orientation
   const edgeLightLines = agls
     .filter((a) => a.agl_type === "RUNWAY_EDGE_LIGHTS" && a.lhas.length >= 2)
+    .filter((a) => a.lhas.every((l) => l.position?.coordinates?.length >= 2))
     .map((a) => {
       const ordered = [...a.lhas].sort((x, y) => x.unit_number - y.unit_number);
       const first = ordered[0].position.coordinates;

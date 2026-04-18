@@ -10,7 +10,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from geoalchemy2 import Geometry
 
 
 revision: str = "b5c6d7e8f9a0"
@@ -59,33 +58,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """restore obstacle position+radius columns and remove buffer_distance fields."""
+    """drop buffer_distance columns added by upgrade."""
     op.drop_column("inspection_configuration", "buffer_distance")
     op.drop_column("mission", "default_buffer_distance")
     op.drop_column("airfield_surface", "buffer_distance")
-
-    # restore obstacle columns - position is nullable because centroid
-    # extraction from boundary is lossy (original point data is lost)
-    op.add_column(
-        "obstacle",
-        sa.Column("radius", sa.Float(), nullable=False, server_default="15.0"),
-    )
-    op.add_column(
-        "obstacle",
-        sa.Column(
-            "position",
-            Geometry("POINTZ", srid=4326),
-            nullable=True,
-        ),
-    )
-
-    # rename boundary -> geometry and cast back to generic geometry
-    op.alter_column(
-        "obstacle",
-        "boundary",
-        new_column_name="geometry",
-        type_=Geometry("GEOMETRY", srid=4326),
-        postgresql_using="boundary::geometry(Geometry,4326)",
-    )
-
     op.drop_column("obstacle", "buffer_distance")

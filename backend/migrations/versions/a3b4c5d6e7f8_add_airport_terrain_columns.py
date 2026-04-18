@@ -34,7 +34,8 @@ def upgrade() -> None:
     has_constraint = conn.execute(
         sa.text(
             "SELECT 1 FROM information_schema.check_constraints "
-            "WHERE constraint_name = 'ck_airport_terrain_source'"
+            "WHERE constraint_name = 'ck_airport_terrain_source' "
+            "AND constraint_schema = current_schema()"
         )
     ).scalar()
     if not has_constraint:

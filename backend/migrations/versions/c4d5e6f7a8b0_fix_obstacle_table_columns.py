@@ -63,12 +63,12 @@ def upgrade() -> None:
         )
 
     op.execute(
-        """
+        sa.text("""
         UPDATE obstacle
         SET position = ST_Force3D(ST_Centroid(geometry)),
             radius = SQRT(ST_Area(geometry::geography) / PI())
         WHERE position IS NULL
-        """
+        """)
     )
 
     op.alter_column('obstacle', 'geometry', nullable=False)

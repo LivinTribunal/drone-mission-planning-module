@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { AGLResponse } from "@/types/airport";
+import { formatAglDisplayName } from "@/utils/agl";
 
 interface TemplateAglSectionProps {
   agl: AGLResponse | null;
@@ -46,7 +47,7 @@ export default function TemplateAglSection({
         )}
         <div className="flex-1 min-w-0">
           <span className="text-sm font-semibold text-tv-text-primary">
-            {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
+            {formatAglDisplayName(agl)}
           </span>
           <span className="ml-2 text-xs text-tv-text-secondary">
             {agl.agl_type}

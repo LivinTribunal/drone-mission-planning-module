@@ -165,9 +165,11 @@ export default function AGLPanel({
                             <span className="text-xs text-tv-text-secondary ml-2">
                               {lha.setting_angle != null ? `${lha.setting_angle}°` : "—"}
                             </span>
-                            <p className="text-[10px] text-tv-text-muted mt-0.5">
-                              {lha.position.coordinates[1].toFixed(4)}, {lha.position.coordinates[0].toFixed(4)}
-                            </p>
+                            {lha.position?.coordinates?.length >= 2 && (
+                              <p className="text-[10px] text-tv-text-muted mt-0.5">
+                                {lha.position.coordinates[1].toFixed(4)}, {lha.position.coordinates[0].toFixed(4)}
+                              </p>
+                            )}
                           </div>
                         </button>
                       ))}

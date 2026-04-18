@@ -1115,7 +1115,8 @@ def download_terrain_for_location(
     except DomainError:
         raise
     except Exception as e:
-        raise DomainError(f"Open-Elevation API request failed: {e}", status_code=502) from e
+        logger.error("open-elevation request failed: %s", e)
+        raise DomainError("terrain download failed - upstream API error", status_code=502) from e
 
     # build geotiff raster
     height = len(lats)
