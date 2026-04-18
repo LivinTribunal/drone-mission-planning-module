@@ -552,9 +552,9 @@ def test_extract_polygon_vertices_buffer_offset(client, db_engine):
 
         for v in verts_buffered:
             dist = poly.exterior.distance(ShapelyPoint(v[0], v[1]))
-            assert dist >= buffer_m - 1.0, (
-                f"buffered vertex too close to original: {dist:.1f}m < {buffer_m}m"
-            )
+            assert (
+                dist >= buffer_m - 1.0
+            ), f"buffered vertex too close to original: {dist:.1f}m < {buffer_m}m"
 
 
 # full pipeline e2e test

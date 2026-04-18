@@ -190,21 +190,25 @@ def _build_ugcs_actions(wp) -> list[dict]:
     actions = []
 
     if wp.heading is not None:
-        actions.append({
-            "type": "Heading",
-            "heading": _deg_to_rad(wp.heading),
-            "relativeToNextWaypoint": False,
-            "relativeToNorth": True,
-        })
+        actions.append(
+            {
+                "type": "Heading",
+                "heading": _deg_to_rad(wp.heading),
+                "relativeToNextWaypoint": False,
+                "relativeToNorth": True,
+            }
+        )
 
     if wp.gimbal_pitch is not None:
-        actions.append({
-            "type": "CameraControl",
-            "tilt": _deg_to_rad(wp.gimbal_pitch),
-            "roll": 0.0,
-            "yaw": 0.0,
-            "zoomLevel": None,
-        })
+        actions.append(
+            {
+                "type": "CameraControl",
+                "tilt": _deg_to_rad(wp.gimbal_pitch),
+                "roll": 0.0,
+                "yaw": 0.0,
+                "zoomLevel": None,
+            }
+        )
 
     if wp.camera_action == "PHOTO_CAPTURE":
         actions.append({"type": "CameraTrigger", "state": "SINGLE_SHOT"})
@@ -214,12 +218,14 @@ def _build_ugcs_actions(wp) -> list[dict]:
         actions.append({"type": "CameraTrigger", "state": "STOP_RECORDING"})
 
     if wp.hover_duration and wp.hover_duration > 0:
-        actions.append({
-            "type": "Wait",
-            "interval": wp.hover_duration,
-            "waitForOperator": False,
-            "waitForInstant": False,
-        })
+        actions.append(
+            {
+                "type": "Wait",
+                "interval": wp.hover_duration,
+                "waitForOperator": False,
+                "waitForInstant": False,
+            }
+        )
 
     return actions
 
