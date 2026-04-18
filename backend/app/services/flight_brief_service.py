@@ -203,9 +203,7 @@ def _load_brief_data(db: Session, mission_id: UUID) -> BriefData:
     airport = (
         db.query(Airport)
         .options(
-            joinedload(Airport.surfaces)
-            .joinedload(AirfieldSurface.agls)
-            .joinedload(AGL.lhas),
+            joinedload(Airport.surfaces).joinedload(AirfieldSurface.agls).joinedload(AGL.lhas),
             joinedload(Airport.safety_zones),
         )
         .filter(Airport.id == mission.airport_id)
@@ -364,7 +362,6 @@ def _build_cover_page(c: canvas.Canvas, data: BriefData):
         _build_inspection_summary_page(c, data)
 
 
-
 def _build_inspection_summary_page(c: canvas.Canvas, data: BriefData):
     """inspection summary page - list of all inspections with method and template."""
     y = PAGE_H - 40 * mm
@@ -475,8 +472,7 @@ def _build_inspection_detail_pages(c: canvas.Canvas, data: BriefData, page_num: 
         y -= 4.5 * mm
 
         meas_speed = (
-            resolved.get("measurement_speed_override")
-            or data.mission.measurement_speed_override
+            resolved.get("measurement_speed_override") or data.mission.measurement_speed_override
         )
         if meas_speed:
             c.drawString(MARGIN + 10 * mm, y, f"Measurement Speed: {meas_speed} m/s")
@@ -641,23 +637,36 @@ def _build_2d_map_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
             for agl in getattr(surface, "agls", []):
                 agl_lon, agl_lat, _ = _extract_coords(agl.position)
                 ax.plot(
-                    agl_lon, agl_lat, "s",
-                    color="#FF6F00", markersize=6, zorder=5,
-                    markeredgecolor="#333333", markeredgewidth=0.5,
+                    agl_lon,
+                    agl_lat,
+                    "s",
+                    color="#FF6F00",
+                    markersize=6,
+                    zorder=5,
+                    markeredgecolor="#333333",
+                    markeredgewidth=0.5,
                 )
                 ax.annotate(
                     agl.name or agl.agl_type,
                     (agl_lon, agl_lat),
-                    fontsize=5, color="#FF6F00", fontweight="bold",
-                    textcoords="offset points", xytext=(4, 4),
+                    fontsize=5,
+                    color="#FF6F00",
+                    fontweight="bold",
+                    textcoords="offset points",
+                    xytext=(4, 4),
                     zorder=7,
                 )
                 for lha in getattr(agl, "lhas", []):
                     lha_lon, lha_lat, _ = _extract_coords(lha.position)
                     ax.plot(
-                        lha_lon, lha_lat, "d",
-                        color="#FFB300", markersize=3, zorder=5,
-                        markeredgecolor="#333333", markeredgewidth=0.3,
+                        lha_lon,
+                        lha_lat,
+                        "d",
+                        color="#FFB300",
+                        markersize=3,
+                        zorder=5,
+                        markeredgecolor="#333333",
+                        markeredgewidth=0.3,
                     )
 
     # build inspection method lookup
@@ -708,16 +717,24 @@ def _build_2d_map_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
         for i in range(len(wp_lons)):
             if not wp_is_vp[i]:
                 ax.plot(
-                    wp_lons[i], wp_lats[i], "o",
-                    color=wp_colors[i], markersize=2, zorder=4,
+                    wp_lons[i],
+                    wp_lats[i],
+                    "o",
+                    color=wp_colors[i],
+                    markersize=2,
+                    zorder=4,
                 )
 
         # vertical profile waypoints on top
         for i in range(len(wp_lons)):
             if wp_is_vp[i]:
                 ax.plot(
-                    wp_lons[i], wp_lats[i], "o",
-                    color=wp_colors[i], markersize=3, zorder=6,
+                    wp_lons[i],
+                    wp_lats[i],
+                    "o",
+                    color=wp_colors[i],
+                    markersize=3,
+                    zorder=6,
                 )
 
         # takeoff/landing markers
@@ -784,8 +801,11 @@ def _build_2d_map_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
     legend_items.append(mpatches.Patch(color="#FF6F00", label="AGL"))
     legend_items.append(mpatches.Patch(color="#FFB300", label="LHA"))
     ax.legend(
-        handles=legend_items, loc="upper left",
-        bbox_to_anchor=(1.02, 1), fontsize=5.5, framealpha=0.8,
+        handles=legend_items,
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1),
+        fontsize=5.5,
+        framealpha=0.8,
     )
 
     # north arrow
@@ -883,8 +903,12 @@ def _build_altitude_profile_page(c: canvas.Canvas, data: BriefData, page_num: in
 
         # ground level
         ax.axhline(
-            y=0, color="#8B4513", linewidth=1.5,
-            linestyle="--", alpha=0.6, label="Ground",
+            y=0,
+            color="#8B4513",
+            linewidth=1.5,
+            linestyle="--",
+            alpha=0.6,
+            label="Ground",
         )
 
         # max altitude constraint

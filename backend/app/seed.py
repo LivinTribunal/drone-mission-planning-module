@@ -619,6 +619,20 @@ DRONE_PROFILES = [
         "weight": 6.47,
     },
     {
+        "name": "DJI Mavic 2 Pro",
+        "manufacturer": "DJI",
+        "model": "Mavic 2 Pro",
+        "max_speed": 20.0,
+        "max_climb_rate": 5.0,
+        "max_altitude": 500.0,
+        "battery_capacity": 3850.0,
+        "endurance_minutes": 31.0,
+        "camera_resolution": "20MP",
+        "camera_frame_rate": 30,
+        "sensor_fov": 77.0,
+        "weight": 0.907,
+    },
+    {
         "name": "DJI Mavic 3 Enterprise",
         "manufacturer": "DJI",
         "model": "Mavic 3 Enterprise",
@@ -774,14 +788,41 @@ def seed_inspection_templates():
         db.close()
 
 
+def seed_single_drone(name: str):
+    """seed a single drone profile by name if it doesn't exist."""
+    profile = next((p for p in DRONE_PROFILES if p["name"] == name), None)
+    if not profile:
+        print(f"no profile named '{name}' in DRONE_PROFILES")
+        return
+
+    db = SessionLocal()
+    try:
+        existing = db.query(DroneProfile).filter_by(name=name).first()
+        if existing:
+            print(f"'{name}' already exists, skipping")
+            return
+
+        db.add(DroneProfile(**profile))
+        db.commit()
+        print(f"'{name}' seeded")
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
-    seed_lkpr()
-    seed_lzib()
-    seed_loww()
-    seed_lzkz()
-    seed_eddb()
-    seed_epwa()
-    seed_lhbp()
-    seed_lztt()
-    seed_drone_profiles()
-    seed_inspection_templates()
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--drone":
+        drone_name = " ".join(sys.argv[2:])
+        seed_single_drone(drone_name)
+    else:
+        seed_lkpr()
+        seed_lzib()
+        seed_loww()
+        seed_lzkz()
+        seed_eddb()
+        seed_epwa()
+        seed_lhbp()
+        seed_lztt()
+        seed_drone_profiles()
+        seed_inspection_templates()
