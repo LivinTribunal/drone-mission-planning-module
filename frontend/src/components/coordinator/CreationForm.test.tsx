@@ -530,4 +530,99 @@ describe("CreationForm", () => {
     fireEvent.click(closeButtons[0]);
     expect(onCancel).toHaveBeenCalled();
   });
+
+  describe("surface identifier label", () => {
+    it("shows 'Identifier' label for runway entity type", () => {
+      render(<CreationForm {...defaultProps} geometryType="polygon" />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "surface" },
+      });
+      fireEvent.change(screen.getByTestId("creation-type-select"), {
+        target: { value: "runway" },
+      });
+      const label = screen.getByText("coordinator.detail.surfaceIdentifier");
+      expect(label).toBeInTheDocument();
+    });
+
+    it("shows 'Identifier' label for taxiway entity type", () => {
+      render(<CreationForm {...defaultProps} geometryType="polygon" />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "surface" },
+      });
+      fireEvent.change(screen.getByTestId("creation-type-select"), {
+        target: { value: "taxiway" },
+      });
+      const label = screen.getByText("coordinator.detail.surfaceIdentifier");
+      expect(label).toBeInTheDocument();
+    });
+
+    it("shows 'Name' label for obstacle entity type", () => {
+      render(<CreationForm {...defaultProps} geometryType="circle" />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "obstacle" },
+      });
+      const label = screen.getByText("coordinator.detail.obstacleName");
+      expect(label).toBeInTheDocument();
+    });
+
+    it("uses short identifier placeholder for runway", () => {
+      render(<CreationForm {...defaultProps} geometryType="polygon" />);
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "surface" },
+      });
+      fireEvent.change(screen.getByTestId("creation-type-select"), {
+        target: { value: "runway" },
+      });
+      expect(screen.getByPlaceholderText("coordinator.creation.namePlaceholderRunway")).toBeInTheDocument();
+    });
+  });
+
+  describe("safety zone name prefill", () => {
+    it("auto-generates name based on zone type and count", () => {
+      render(
+        <CreationForm
+          {...defaultProps}
+          geometryType="polygon"
+          safetyZones={[
+            {
+              id: "sz1",
+              airport_id: "a1",
+              name: "CTR 1",
+              type: "CTR",
+              geometry: { type: "Polygon", coordinates: [[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 0, 0]]] },
+              altitude_floor: 0,
+              altitude_ceiling: 1000,
+              is_active: true,
+            },
+          ]}
+        />,
+      );
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "safety_zone" },
+      });
+      fireEvent.change(screen.getByTestId("creation-type-select"), {
+        target: { value: "safety_zone_ctr" },
+      });
+      const nameInput = document.getElementById("create-name") as HTMLInputElement;
+      expect(nameInput.value).toBe("coordinator.creation.typeSafetyZoneCtr 2");
+    });
+
+    it("prefills name with count 1 when no existing zones", () => {
+      render(
+        <CreationForm
+          {...defaultProps}
+          geometryType="polygon"
+          safetyZones={[]}
+        />,
+      );
+      fireEvent.change(screen.getByTestId("creation-category-select"), {
+        target: { value: "safety_zone" },
+      });
+      fireEvent.change(screen.getByTestId("creation-type-select"), {
+        target: { value: "safety_zone_restricted" },
+      });
+      const nameInput = document.getElementById("create-name") as HTMLInputElement;
+      expect(nameInput.value).toBe("coordinator.creation.typeSafetyZoneRestricted 1");
+    });
+  });
 });

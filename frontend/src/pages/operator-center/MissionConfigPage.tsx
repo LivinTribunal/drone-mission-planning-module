@@ -42,6 +42,7 @@ import StatsPanel from "@/components/mission/StatsPanel";
 import AirportMap from "@/components/map/AirportMap";
 import TerrainToggle from "@/components/map/overlays/TerrainToggle";
 import Modal from "@/components/common/Modal";
+import type { AglType } from "@/types/airport";
 import type { MapFeature } from "@/types/map";
 import { MapTool } from "@/hooks/useMapTools";
 import { computePlacementUpdates } from "@/utils/takeoffLandingPlacement";
@@ -105,6 +106,7 @@ export default function MissionConfigPage() {
   const [useTakeoffAsLanding, setUseTakeoffAsLanding] = useState(false);
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [lastAglType, setLastAglType] = useState<AglType | null>(null);
 
   // dirty tracking for mission-level changes
   const [missionDirty, setMissionDirty] = useState<Partial<MissionUpdate>>({});
@@ -865,6 +867,8 @@ export default function MissionConfigPage() {
         usedTemplateIds={new Set(mission.inspections.map((i) => i.template_id))}
         agls={allAgls}
         surfaces={airportDetail?.surfaces}
+        initialAglType={lastAglType}
+        onAglTypeSelected={setLastAglType}
       />
 
       {/* unsaved changes dialog */}

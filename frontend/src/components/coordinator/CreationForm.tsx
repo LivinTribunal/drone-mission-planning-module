@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Loader2, RotateCcw, MapPin, AlertTriangle } from "lucide-react";
 import Input from "@/components/common/Input";
-import type { SurfaceResponse, AGLResponse, ObstacleResponse } from "@/types/airport";
+import type { SurfaceResponse, AGLResponse, ObstacleResponse, SafetyZoneResponse } from "@/types/airport";
 import { formatAglDisplayName } from "@/utils/agl";
 
 export type PendingGeometryType = "polygon" | "circle" | "point";
@@ -36,6 +36,7 @@ interface CreationFormProps {
   prefilledHeading?: number;
   prefilledArea?: number;
   obstacles?: ObstacleResponse[];
+  safetyZones?: SafetyZoneResponse[];
   airportElevation?: number;
   prefilledEntityType?: EntityType;
   pickingTouchpoint?: boolean;
@@ -96,6 +97,7 @@ export default function CreationForm({
   prefilledHeading,
   prefilledArea,
   obstacles = [],
+  safetyZones = [],
   airportElevation = 0,
   prefilledEntityType,
   pickingTouchpoint = false,
@@ -348,6 +350,16 @@ export default function CreationForm({
   const isAirportBoundary = effectiveEntityType === "safety_zone_airport_boundary";
   const prefilledBoundary = prefilledEntityType === "safety_zone_airport_boundary";
 
+  // auto-prefill safety zone name based on zone subtype + count
+  useEffect(() => {
+    if (category !== "safety_zone" || !effectiveEntityType || isAirportBoundary) return;
+    const zoneSubtype = effectiveEntityType.replace("safety_zone_", "").toUpperCase().replace("NO_FLY", "TEMPORARY_NO_FLY");
+    const count = safetyZones.filter((z) => z.type === zoneSubtype).length;
+    const sub = SAFETY_ZONE_SUBTYPES.find((s) => s.value === effectiveEntityType);
+    const label = sub ? t(sub.labelKey) : zoneSubtype;
+    setName(`${label} ${count + 1}`);
+  }, [effectiveEntityType, category, isAirportBoundary, safetyZones, t]);
+
   // auto-prefill default name when switching into airport boundary
   useEffect(() => {
     if (isAirportBoundary && !name.trim()) {
@@ -464,7 +476,11 @@ export default function CreationForm({
             {!isAirportBoundary && (
               <Input
                 id="create-name"
-                label={t("coordinator.detail.obstacleName")}
+                label={
+                  effectiveEntityType === "runway" || effectiveEntityType === "taxiway"
+                    ? t("coordinator.detail.surfaceIdentifier")
+                    : t("coordinator.detail.obstacleName")
+                }
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={namePlaceholder()}

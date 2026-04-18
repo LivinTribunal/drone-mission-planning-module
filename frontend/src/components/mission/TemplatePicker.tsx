@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Modal from "@/components/common/Modal";
 import type { AGLResponse, AglType, SurfaceResponse } from "@/types/airport";
@@ -13,10 +13,10 @@ interface TemplatePickerProps {
   templates: InspectionTemplateResponse[];
   onSelect: (templateId: string, method: InspectionMethod) => void;
   usedTemplateIds?: Set<string>;
-  // optional - enables 2-step grouping by AGL type
   agls?: AGLResponse[];
-  // optional - enables sorting templates by runway/surface identifier
   surfaces?: SurfaceResponse[];
+  initialAglType?: AglType | null;
+  onAglTypeSelected?: (type: AglType) => void;
 }
 
 function templateAglTypes(
@@ -36,22 +36,24 @@ function compareRunway(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 }
 
-// per-template sort key: earliest runway identifier among its target AGLs.
+// per-template sort key: earliest runway identifier among its target AGLs,
+// optionally filtered to only AGLs of a given type.
 // templates whose AGLs don't resolve to any surface return "" and sink to the end.
 function buildSortKey(
   agls: AGLResponse[],
   surfaces: SurfaceResponse[],
+  filterType?: AglType,
 ): (tpl: InspectionTemplateResponse) => string {
-  const aglToSurfaceId = new Map<string, string>();
-  for (const agl of agls) aglToSurfaceId.set(agl.id, agl.surface_id);
+  const aglMap = new Map(agls.map((a) => [a.id, a]));
   const surfaceIdToIdentifier = new Map<string, string>();
   for (const s of surfaces) surfaceIdToIdentifier.set(s.id, s.identifier);
   return (tpl) => {
     const idents: string[] = [];
     for (const aglId of tpl.target_agl_ids ?? []) {
-      const surfaceId = aglToSurfaceId.get(aglId);
-      if (!surfaceId) continue;
-      const ident = surfaceIdToIdentifier.get(surfaceId);
+      const agl = aglMap.get(aglId);
+      if (!agl) continue;
+      if (filterType && agl.agl_type !== filterType) continue;
+      const ident = surfaceIdToIdentifier.get(agl.surface_id);
       if (ident) idents.push(ident);
     }
     if (idents.length === 0) return "";
@@ -70,7 +72,9 @@ function sortByRunway(
     const kb = sortKey(b);
     if (ka === "" && kb !== "") return 1;
     if (ka !== "" && kb === "") return -1;
-    return compareRunway(ka, kb);
+    const cmp = compareRunway(ka, kb);
+    if (cmp !== 0) return cmp;
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
   });
   return copy;
 }
@@ -83,17 +87,28 @@ export default function TemplatePicker({
   usedTemplateIds,
   agls,
   surfaces,
+  initialAglType,
+  onAglTypeSelected,
 }: TemplatePickerProps) {
   const { t } = useTranslation();
   const [selectedMethod, setSelectedMethod] = useState<
     Record<string, InspectionMethod>
   >({});
-  const [selectedAgl, setSelectedAgl] = useState<AglType | null>(null);
+  const [selectedAgl, setSelectedAgl] = useState<AglType | null>(
+    initialAglType ?? null,
+  );
+
+  // sync selectedAgl from initialAglType when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedAgl(initialAglType ?? null);
+    }
+  }, [isOpen, initialAglType]);
 
   // group templates by AGL type if we have airport AGLs to resolve against.
   // hover-point-lock templates are AGL-agnostic and always land in the "special" bucket.
   // when surfaces are available, templates inside each bucket are sorted by runway
-  // identifier with natural order (04R < 09 < 22L).
+  // identifier with natural order (04R < 09 < 22L), then by template name.
   const grouped = useMemo(() => {
     if (!agls || agls.length === 0) return null;
     const byType: Record<AglType, InspectionTemplateResponse[]> = {
@@ -112,10 +127,18 @@ export default function TemplatePicker({
       for (const type of types) byType[type].push(tpl);
     }
     if (surfaces && surfaces.length > 0) {
-      const sortKey = buildSortKey(agls, surfaces);
-      byType.PAPI = sortByRunway(byType.PAPI, sortKey);
-      byType.RUNWAY_EDGE_LIGHTS = sortByRunway(byType.RUNWAY_EDGE_LIGHTS, sortKey);
+      byType.PAPI = sortByRunway(byType.PAPI, buildSortKey(agls, surfaces, "PAPI"));
+      byType.RUNWAY_EDGE_LIGHTS = sortByRunway(
+        byType.RUNWAY_EDGE_LIGHTS,
+        buildSortKey(agls, surfaces, "RUNWAY_EDGE_LIGHTS"),
+      );
     }
+
+    // sort special bucket by name
+    special.sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+    );
+
     return { byType, special };
   }, [templates, agls, surfaces]);
 
@@ -135,7 +158,6 @@ export default function TemplatePicker({
   }
 
   function handleClose() {
-    setSelectedAgl(null);
     onClose();
   }
 
@@ -143,8 +165,16 @@ export default function TemplatePicker({
     const methods = compatMethods(tpl);
     const method =
       selectedMethod[tpl.id] ?? methods[0] ?? tpl.methods[0] ?? "ANGULAR_SWEEP";
+    if (selectedAgl) {
+      onAglTypeSelected?.(selectedAgl);
+    }
     onSelect(tpl.id, method);
     handleClose();
+  }
+
+  function handleAglTypeClick(type: AglType) {
+    setSelectedAgl(type);
+    onAglTypeSelected?.(type);
   }
 
   function renderTemplateRow(tpl: InspectionTemplateResponse) {
@@ -243,7 +273,7 @@ export default function TemplatePicker({
               return (
                 <button
                   key={type}
-                  onClick={() => setSelectedAgl(type)}
+                  onClick={() => handleAglTypeClick(type)}
                   className="w-full flex items-center justify-between p-3 rounded-2xl border border-tv-border bg-tv-bg transition-colors hover:bg-tv-surface-hover cursor-pointer"
                   data-testid={`agl-type-option-${type}`}
                 >
