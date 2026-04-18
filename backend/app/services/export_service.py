@@ -208,7 +208,7 @@ def _build_ugcs_actions(wp) -> list[dict]:
 
     if wp.camera_action == "PHOTO_CAPTURE":
         actions.append({"type": "CameraTrigger", "state": "SINGLE_SHOT"})
-    elif wp.camera_action in ("RECORDING_START", "RECORDING"):
+    elif wp.camera_action == "RECORDING_START":
         actions.append({"type": "CameraTrigger", "state": "START_RECORDING"})
     elif wp.camera_action == "RECORDING_STOP":
         actions.append({"type": "CameraTrigger", "state": "STOP_RECORDING"})
