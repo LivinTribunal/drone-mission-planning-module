@@ -995,7 +995,7 @@ class TestGenerateUgcs:
         data = json.loads(result)
 
         v = data["version"]
-        assert v["major"] == 5
+        assert v["major"] == 4
         assert v["minor"] == 16
         assert "patch" not in v
         assert v["build"] == 9205

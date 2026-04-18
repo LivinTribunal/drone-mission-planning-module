@@ -185,14 +185,21 @@ def _deg_to_rad(degrees: float) -> float:
 
 
 def _build_ugcs_actions(wp) -> list[dict]:
-    """build ugcs action list from waypoint fields.
-
-    camera actions (PHOTO_CAPTURE, RECORDING_START, RECORDING, RECORDING_STOP)
-    are intentionally excluded - ugcs requires camera mode configuration that
-    depends on the vehicle profile. users should configure camera settings
-    within ugcs after route import.
-    """
+    """build ugcs action list from waypoint fields."""
     actions = []
+
+    if wp.heading is not None:
+        actions.append({"type": "Yaw", "angle": _deg_to_rad(wp.heading)})
+
+    if wp.gimbal_pitch is not None:
+        actions.append({"type": "Tilt", "angle": _deg_to_rad(wp.gimbal_pitch)})
+
+    if wp.camera_action == "PHOTO_CAPTURE":
+        actions.append({"type": "TakePhoto"})
+    elif wp.camera_action == "RECORDING_START":
+        actions.append({"type": "StartVideo"})
+    elif wp.camera_action == "RECORDING_STOP":
+        actions.append({"type": "StopVideo"})
 
     if wp.hover_duration and wp.hover_duration > 0:
         actions.append({"type": "Wait", "interval": wp.hover_duration})
