@@ -116,7 +116,7 @@
       "allowedImports": []
     },
     "backend/app/services": {
-      "allowedImports": ["app.models", "app.schemas", "app.core"]
+      "allowedImports": ["app.models", "app.schemas", "app.core", "app.utils"]
     },
     "backend/app/models": {
       "allowedImports": ["app.core"]

@@ -49,31 +49,23 @@ def test_settings_override_vertex_buffer(monkeypatch):
 # NULL containment edge cases
 
 
-def test_obstacle_null_containment_treated_as_safe(monkeypatch):
-    """ST_Contains returning NULL (degenerate geometry) must not pass as safe."""
-    from app.services import safety_validator
+def test_obstacle_null_containment_treated_as_safe():
+    """waypoint outside obstacle boundary is not flagged."""
+    from shapely.geometry import box
+
     from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import LocalObstacle
 
-    monkeypatch.setattr(safety_validator, "_geom_to_ewkt", lambda g: "SRID=4326;POINT(0 0 0)")
+    obs = LocalObstacle(
+        polygon=box(0, 0, 10, 10),
+        name="Degenerate",
+        height=50.0,
+        base_alt=0.0,
+        buffer_distance=5.0,
+    )
 
-    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
-    obs = type(
-        "O",
-        (),
-        {
-            "boundary": MagicMock(),
-            "height": 50.0,
-            "name": "Degenerate",
-            "id": "obs-1",
-            "buffer_distance": 5.0,
-        },
-    )()
-
-    db_mock = MagicMock()
-    db_mock.execute.return_value.scalar.return_value = None
-
-    result = check_obstacle(db_mock, wp, obs)
-    assert result is None
+    result = check_obstacle(100.0, 100.0, 5.0, obs)
+    assert result is False
 
 
 def test_zone_null_containment_treated_as_not_inside(monkeypatch):
@@ -162,31 +154,51 @@ def test_mission_invalidate_trajectory_noop_for_draft():
 # batch query functions
 
 
+def _empty_local_geoms():
+    """build LocalGeometries with no obstacles, zones, or surfaces."""
+    from app.services.trajectory_types import LocalGeometries
+    from app.utils.local_projection import LocalProjection
+
+    proj = LocalProjection(ref_lon=14.26, ref_lat=50.10)
+    return LocalGeometries(proj=proj, obstacles=[], zones=[], boundary_zones=[], surfaces=[])
+
+
 def test_batch_check_obstacles_empty_obstacles():
     """no obstacles returns empty list"""
     from app.services.safety_validator import _batch_check_obstacles
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
-    result = _batch_check_obstacles(None, [wp], [])
+    local_geoms = _empty_local_geoms()
+    result = _batch_check_obstacles([wp], local_geoms)
     assert result == []
 
 
 def test_batch_check_obstacles_empty_waypoints():
     """no waypoints returns empty list"""
-    from app.services.safety_validator import _batch_check_obstacles
+    from shapely.geometry import box
 
-    obs = type("O", (), {"boundary": MagicMock()})()
-    result = _batch_check_obstacles(None, [], [obs])
+    from app.services.safety_validator import _batch_check_obstacles
+    from app.services.trajectory_types import LocalGeometries, LocalObstacle
+    from app.utils.local_projection import LocalProjection
+
+    proj = LocalProjection(ref_lon=14.26, ref_lat=50.10)
+    obs = LocalObstacle(
+        polygon=box(0, 0, 10, 10), name="test", height=10.0, base_alt=0.0, buffer_distance=0.0
+    )
+    local_geoms = LocalGeometries(
+        proj=proj, obstacles=[obs], zones=[], boundary_zones=[], surfaces=[]
+    )
+    result = _batch_check_obstacles([], local_geoms)
     assert result == []
 
 
 def test_batch_check_obstacles_no_boundary():
-    """obstacles with no boundary are skipped."""
+    """empty obstacle list returns empty violations."""
     from app.services.safety_validator import _batch_check_obstacles
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
-    obs = type("O", (), {"boundary": None})()
-    result = _batch_check_obstacles(None, [wp], [obs])
+    local_geoms = _empty_local_geoms()
+    result = _batch_check_obstacles([wp], local_geoms)
     assert result == []
 
 
@@ -195,7 +207,8 @@ def test_batch_check_zones_empty_zones():
     from app.services.safety_validator import _batch_check_zones
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
-    result = _batch_check_zones(None, [wp], [])
+    local_geoms = _empty_local_geoms()
+    result = _batch_check_zones([wp], local_geoms)
     assert result == []
 
 
@@ -203,18 +216,18 @@ def test_batch_check_zones_empty_waypoints():
     """no waypoints returns empty list"""
     from app.services.safety_validator import _batch_check_zones
 
-    zone = type("Z", (), {"geometry": MagicMock(), "type": "CTR"})()
-    result = _batch_check_zones(None, [], [zone])
+    local_geoms = _empty_local_geoms()
+    result = _batch_check_zones([], local_geoms)
     assert result == []
 
 
 def test_batch_check_zones_no_geometry():
-    """zones with no geometry are skipped"""
+    """no zones in local_geoms returns empty list"""
     from app.services.safety_validator import _batch_check_zones
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
-    zone = type("Z", (), {"geometry": None, "type": "CTR"})()
-    result = _batch_check_zones(None, [wp], [zone])
+    local_geoms = _empty_local_geoms()
+    result = _batch_check_zones([wp], local_geoms)
     assert result == []
 
 

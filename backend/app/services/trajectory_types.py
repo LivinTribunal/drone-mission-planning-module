@@ -8,6 +8,13 @@ from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.enums import CameraAction, SafetyZoneType, WaypointType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile, Mission
+from app.utils.local_projection import (  # noqa: F401
+    LocalBoundary,
+    LocalGeometries,
+    LocalObstacle,
+    LocalSurface,
+    LocalZone,
+)
 
 if TYPE_CHECKING:
     from app.services.elevation_provider import ElevationProvider
