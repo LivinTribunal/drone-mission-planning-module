@@ -267,6 +267,7 @@ class TestAuthEndpoints:
 
     def test_refresh_no_cookie(self, seeded_auth_client):
         """missing refresh cookie returns 401."""
+        seeded_auth_client.cookies.clear()
         resp = seeded_auth_client.post("/api/v1/auth/refresh")
         assert resp.status_code == 401
 

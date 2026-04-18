@@ -107,6 +107,8 @@ def reset_password(db: Session, data: ResetPasswordRequest) -> None:
         raise DomainError("invalid reset token", status_code=400)
     if not user.is_invitation_valid():
         raise DomainError("reset token has expired", status_code=400)
+    if not user.is_active:
+        raise DomainError("account is deactivated", status_code=403)
     user.set_password(data.new_password)
     user.invitation_token = None
     user.invitation_expires_at = None

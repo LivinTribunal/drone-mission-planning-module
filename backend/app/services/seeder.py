@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def seed_users(db: Session) -> None:
     """create default users if none exist. requires SEED_USERS=true."""
-    if settings.environment == "production":
+    if settings.environment.lower() == "production":
         logger.info("skipping user seeding in production environment")
         return
 
