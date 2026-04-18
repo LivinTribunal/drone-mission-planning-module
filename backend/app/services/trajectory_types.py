@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -83,10 +84,10 @@ GRID_NODE_SPACING: Meters = 50.0
 GRID_EDGE_RADIUS: Meters = 100.0
 
 # radius must cover diagonal neighbors to keep grid 8-connected
-if GRID_EDGE_RADIUS < GRID_NODE_SPACING * 1.415:
+if GRID_EDGE_RADIUS < GRID_NODE_SPACING * math.sqrt(2):
     raise ValueError(
         f"GRID_EDGE_RADIUS ({GRID_EDGE_RADIUS}) must be >= "
-        f"GRID_NODE_SPACING * sqrt(2) ({GRID_NODE_SPACING * 1.415:.1f})"
+        f"GRID_NODE_SPACING * sqrt(2) ({GRID_NODE_SPACING * math.sqrt(2):.1f})"
     )
 
 # runway crossing penalty for transit A*

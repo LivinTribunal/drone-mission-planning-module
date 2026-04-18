@@ -320,9 +320,9 @@ def test_obstacle_boundary_normalized_to_ground(client):
     # with FlatElevationProvider, boundary z should be normalized to airport elevation
     ring = obs["boundary"]["coordinates"][0]
     for coord in ring:
-        assert (
-            abs(coord[2] - 300.0) < 0.1
-        ), f"obstacle boundary z should be ground elevation (300), got {coord[2]}"
+        assert abs(coord[2] - 300.0) < 0.1, (
+            f"obstacle boundary z should be ground elevation (300), got {coord[2]}"
+        )
 
 
 def test_obstacle_update_normalizes_boundary(client):
@@ -383,9 +383,9 @@ def test_obstacle_update_normalizes_boundary(client):
 
     ring = updated["boundary"]["coordinates"][0]
     for coord in ring:
-        assert (
-            abs(coord[2] - 280.0) < 0.1
-        ), f"updated obstacle boundary z should be ground elevation (280), got {coord[2]}"
+        assert abs(coord[2] - 280.0) < 0.1, (
+            f"updated obstacle boundary z should be ground elevation (280), got {coord[2]}"
+        )
 
 
 # LHA altitude normalization
@@ -476,9 +476,9 @@ def test_lha_position_normalized_on_update(client):
     updated = update_resp.json()
 
     pos_z = updated["position"]["coordinates"][2]
-    assert (
-        abs(pos_z - 300.0) < 0.1
-    ), f"updated LHA position.z should be ground elevation (300), got {pos_z}"
+    assert abs(pos_z - 300.0) < 0.1, (
+        f"updated LHA position.z should be ground elevation (300), got {pos_z}"
+    )
 
 
 # AGL altitude normalization
@@ -574,9 +574,9 @@ def test_agl_position_normalized_on_update(client):
     updated = update_resp.json()
 
     pos_z = updated["position"]["coordinates"][2]
-    assert (
-        abs(pos_z - 280.0) < 0.1
-    ), f"updated AGL position.z should be ground elevation (280), got {pos_z}"
+    assert abs(pos_z - 280.0) < 0.1, (
+        f"updated AGL position.z should be ground elevation (280), got {pos_z}"
+    )
 
 
 # bulk re-normalization
@@ -660,9 +660,9 @@ def test_renormalize_airport_altitudes(client):
     obs_resp = client.get(f"/api/v1/airports/{aid}/obstacles").json()
     obs_ring = obs_resp["data"][0]["boundary"]["coordinates"][0]
     for coord in obs_ring:
-        assert (
-            abs(coord[2] - 350.0) < 0.1
-        ), f"obstacle boundary z should be re-normalized to 350, got {coord[2]}"
+        assert abs(coord[2] - 350.0) < 0.1, (
+            f"obstacle boundary z should be re-normalized to 350, got {coord[2]}"
+        )
 
     agls_resp = client.get(f"/api/v1/airports/{aid}/surfaces/{sid}/agls").json()
     agl_z = agls_resp["data"][0]["position"]["coordinates"][2]

@@ -460,9 +460,9 @@ class TestRequirePerpendicularRunwayCrossing:
         def perp_delta(b):
             return min(abs(b - 0.0), abs(b - 180.0), abs(b - 360.0))
 
-        assert any(
-            perp_delta(b) <= 5.0 for b in bearings
-        ), f"no perpendicular segment found in bearings {bearings}"
+        assert any(perp_delta(b) <= 5.0 for b in bearings), (
+            f"no perpendicular segment found in bearings {bearings}"
+        )
 
     def test_flag_false_is_strictly_shorter_and_clears_runway(self, db_session):
         """flag off lets A* (or the fast-path) pick the shortest geodesic crossing."""
@@ -489,9 +489,9 @@ class TestRequirePerpendicularRunwayCrossing:
 
         perp_dist = _path_distance(perp_wps, from_pt)
         short_dist = _path_distance(short_wps, from_pt)
-        assert (
-            short_dist < perp_dist
-        ), f"shortest-geodesic distance {short_dist:.1f} not < perpendicular {perp_dist:.1f}"
+        assert short_dist < perp_dist, (
+            f"shortest-geodesic distance {short_dist:.1f} not < perpendicular {perp_dist:.1f}"
+        )
 
     def test_flag_false_still_avoids_obstacle(self, db_session):
         """flag off must still detour around an obstacle on the straight line."""
@@ -535,9 +535,9 @@ class TestRequirePerpendicularRunwayCrossing:
             [(from_pt.lon, from_pt.lat, from_pt.alt), (to_pt.lon, to_pt.lat, to_pt.alt)]
         )
         rerouted = _path_distance(wps, from_pt)
-        assert (
-            rerouted > straight
-        ), f"rerouted distance {rerouted:.1f} not greater than straight {straight:.1f}"
+        assert rerouted > straight, (
+            f"rerouted distance {rerouted:.1f} not greater than straight {straight:.1f}"
+        )
 
     def test_flag_false_no_runways_matches_default(self, db_session):
         """without any runways, both flag values produce the same straight-line path."""
@@ -630,9 +630,9 @@ class TestRequirePerpendicularRunwayCrossing:
         perp_dist = total_path_distance(perp_pts)
         short_dist = total_path_distance(short_pts)
 
-        assert (
-            short_dist < perp_dist
-        ), f"flag=False reroute {short_dist:.1f} not shorter than flag=True {perp_dist:.1f}"
+        assert short_dist < perp_dist, (
+            f"flag=False reroute {short_dist:.1f} not shorter than flag=True {perp_dist:.1f}"
+        )
 
 
 # hybrid grid generation
@@ -678,9 +678,9 @@ class TestGridGeneration:
         buffered_obs = obs.polygon.buffer(obs.buffer_distance)
         grid_nodes = nodes[grid_start_index:]
         for x, y, z in grid_nodes:
-            assert not buffered_obs.contains(
-                Point(x, y)
-            ), f"grid node ({x}, {y}) inside buffered obstacle"
+            assert not buffered_obs.contains(Point(x, y)), (
+                f"grid node ({x}, {y}) inside buffered obstacle"
+            )
 
     def test_grid_excludes_hard_zone_interior(self):
         """no grid nodes inside prohibited safety zone polygon."""
@@ -761,9 +761,9 @@ class TestGridAStarPath:
             euclidean_distance(path[i][0], path[i][1], path[i + 1][0], path[i + 1][1])
             for i in range(len(path) - 1)
         )
-        assert (
-            path_len < straight * 1.15
-        ), f"path {path_len:.1f}m is >15% longer than straight {straight:.1f}m"
+        assert path_len < straight * 1.15, (
+            f"path {path_len:.1f}m is >15% longer than straight {straight:.1f}m"
+        )
 
     def test_grid_path_avoids_obstacle(self):
         """path routes around an obstacle between endpoints."""
@@ -783,9 +783,9 @@ class TestGridAStarPath:
 
         buffered = obs.polygon.buffer(obs.buffer_distance)
         for node in path[1:-1]:
-            assert not buffered.contains(
-                Point(node[0], node[1])
-            ), f"path node ({node[0]:.1f}, {node[1]:.1f}) inside obstacle"
+            assert not buffered.contains(Point(node[0], node[1])), (
+                f"path node ({node[0]:.1f}, {node[1]:.1f}) inside obstacle"
+            )
 
         straight = euclidean_distance(from_local[0], from_local[1], to_local[0], to_local[1])
         path_len = sum(
@@ -832,18 +832,18 @@ class TestGridAStarPath:
 
         buffered = circle.buffer(obs.buffer_distance)
         for node in path[1:-1]:
-            assert not buffered.contains(
-                Point(node[0], node[1])
-            ), f"path node ({node[0]:.1f}, {node[1]:.1f}) inside buffered obstacle"
+            assert not buffered.contains(Point(node[0], node[1])), (
+                f"path node ({node[0]:.1f}, {node[1]:.1f}) inside buffered obstacle"
+            )
 
         straight = euclidean_distance(from_local[0], from_local[1], to_local[0], to_local[1])
         path_len = sum(
             euclidean_distance(path[i][0], path[i][1], path[i + 1][0], path[i + 1][1])
             for i in range(len(path) - 1)
         )
-        assert (
-            path_len < straight * 1.25
-        ), f"detour {path_len:.1f}m is >25% longer than straight {straight:.1f}m"
+        assert path_len < straight * 1.25, (
+            f"detour {path_len:.1f}m is >25% longer than straight {straight:.1f}m"
+        )
 
     def test_grid_nodes_strictly_required_for_circular_obstacle(self):
         """vertex-only graph fails for circular obstacle - grid nodes are strictly necessary.
@@ -875,9 +875,9 @@ class TestGridAStarPath:
         vertex_nodes = nodes[:grid_start_index]
         vertex_graph = _build_visibility_graph(vertex_nodes, obstacles, [])
         vertex_path = astar(vertex_graph, 0, 1, vertex_nodes, use_euclidean=True)
-        assert (
-            vertex_path is None
-        ), "vertex-only graph should not find path - all edges touch the obstacle boundary"
+        assert vertex_path is None, (
+            "vertex-only graph should not find path - all edges touch the obstacle boundary"
+        )
 
         # full graph with grid nodes routes around the obstacle
         full_graph = _build_visibility_graph(
@@ -890,15 +890,15 @@ class TestGridAStarPath:
         buffered = circle.buffer(obs.buffer_distance)
         grid_path = [nodes[idx] for idx in grid_path_indices]
         for node in grid_path[1:-1]:
-            assert not buffered.contains(
-                Point(node[0], node[1])
-            ), f"path node ({node[0]:.1f}, {node[1]:.1f}) inside buffered obstacle"
+            assert not buffered.contains(Point(node[0], node[1])), (
+                f"path node ({node[0]:.1f}, {node[1]:.1f}) inside buffered obstacle"
+            )
 
         # grid nodes are strictly necessary
         grid_in_path = [idx for idx in grid_path_indices[1:-1] if idx >= grid_start_index]
-        assert (
-            len(grid_in_path) > 0
-        ), "path must use grid nodes - obstacle vertices can't form edges"
+        assert len(grid_in_path) > 0, (
+            "path must use grid nodes - obstacle vertices can't form edges"
+        )
 
 
 class TestGridPerformance:
