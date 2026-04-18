@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from testcontainers.postgres import PostgresContainer
 
 import app.models  # noqa: F401
+from app.core.config import settings
 from app.core.database import Base, get_db
 from app.main import app
 from app.models.airport import Airport
@@ -77,11 +78,14 @@ def auth_client(auth_engine, auth_session_factory):
 @pytest.fixture(scope="module")
 def seeded_auth_client(auth_client, auth_session_factory):
     """auth client with seed users created."""
+    original = settings.seed_users
+    settings.seed_users = True
     db = auth_session_factory()
     try:
         seed_users(db)
     finally:
         db.close()
+        settings.seed_users = original
 
     return auth_client
 
@@ -147,18 +151,40 @@ class TestAuthService:
             auth_service.decode_token("not-a-real-token")
 
     def test_seed_users(self, auth_db):
-        """seed creates users when none exist."""
-        seed_users(auth_db)
-        count = auth_db.query(User).count()
-        assert count >= 3
+        """seed creates users when enabled and none exist."""
+        original = settings.seed_users
+        settings.seed_users = True
+        try:
+            seed_users(auth_db)
+            count = auth_db.query(User).count()
+            assert count >= 3
+        finally:
+            settings.seed_users = original
 
     def test_seed_users_idempotent(self, auth_db):
         """seed skips when users already exist."""
-        seed_users(auth_db)
-        count_before = auth_db.query(User).count()
-        seed_users(auth_db)
-        count_after = auth_db.query(User).count()
-        assert count_before == count_after
+        original = settings.seed_users
+        settings.seed_users = True
+        try:
+            seed_users(auth_db)
+            count_before = auth_db.query(User).count()
+            seed_users(auth_db)
+            count_after = auth_db.query(User).count()
+            assert count_before == count_after
+        finally:
+            settings.seed_users = original
+
+    def test_seed_users_disabled_by_default(self, auth_db):
+        """seed does nothing when seed_users is false."""
+        original = settings.seed_users
+        settings.seed_users = False
+        try:
+            auth_db.query(User).delete()
+            auth_db.commit()
+            seed_users(auth_db)
+            assert auth_db.query(User).count() == 0
+        finally:
+            settings.seed_users = original
 
     def test_authenticate_valid(self, auth_db):
         """valid credentials return user."""
@@ -186,7 +212,7 @@ class TestAuthEndpoints:
     """test auth api endpoints."""
 
     def test_login_success(self, seeded_auth_client):
-        """valid login returns tokens and user."""
+        """valid login returns access token and sets refresh cookie."""
         resp = seeded_auth_client.post(
             "/api/v1/auth/login",
             json={"email": "admin@tmv.com", "password": "adminadmin"},
@@ -194,8 +220,9 @@ class TestAuthEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert "access_token" in data
-        assert "refresh_token" in data
+        assert "refresh_token" not in data
         assert data["user"]["role"] == "SUPER_ADMIN"
+        assert settings.refresh_cookie_name in resp.cookies
 
     def test_login_wrong_password(self, seeded_auth_client):
         """invalid credentials return 401."""
@@ -214,25 +241,31 @@ class TestAuthEndpoints:
         assert resp.status_code == 401
 
     def test_refresh_token(self, seeded_auth_client):
-        """refresh endpoint returns new access token."""
+        """refresh endpoint reads cookie and returns new access token."""
         login = seeded_auth_client.post(
             "/api/v1/auth/login",
             json={"email": "admin@tmv.com", "password": "adminadmin"},
         )
-        refresh_token = login.json()["refresh_token"]
+        refresh_cookie = login.cookies.get(settings.refresh_cookie_name)
+        assert refresh_cookie is not None
 
         resp = seeded_auth_client.post(
             "/api/v1/auth/refresh",
-            json={"refresh_token": refresh_token},
+            cookies={settings.refresh_cookie_name: refresh_cookie},
         )
         assert resp.status_code == 200
         assert "access_token" in resp.json()
 
-    def test_refresh_invalid_token(self, seeded_auth_client):
-        """invalid refresh token returns 401."""
+    def test_refresh_no_cookie(self, seeded_auth_client):
+        """missing refresh cookie returns 401."""
+        resp = seeded_auth_client.post("/api/v1/auth/refresh")
+        assert resp.status_code == 401
+
+    def test_refresh_invalid_cookie(self, seeded_auth_client):
+        """invalid refresh cookie returns 401."""
         resp = seeded_auth_client.post(
             "/api/v1/auth/refresh",
-            json={"refresh_token": "invalid"},
+            cookies={settings.refresh_cookie_name: "invalid"},
         )
         assert resp.status_code == 401
 

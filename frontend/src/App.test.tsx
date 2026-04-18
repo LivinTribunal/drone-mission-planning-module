@@ -33,16 +33,19 @@ function renderWithProviders(ui: React.ReactElement, { route = "/" } = {}) {
 describe("App", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.mocked(client.post).mockRejectedValueOnce(new Error("no cookie"));
   });
 
-  it("renders login page at /login", () => {
+  it("renders login page at /login", async () => {
     renderWithProviders(<LoginPage />);
-    expect(screen.getByTestId("email-input")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("email-input")).toBeInTheDocument();
+    });
     expect(screen.getByTestId("password-input")).toBeInTheDocument();
     expect(screen.getByTestId("login-button")).toBeInTheDocument();
   });
 
-  it("redirects unauthenticated users to login", () => {
+  it("redirects unauthenticated users to login", async () => {
     renderWithProviders(
       <Routes>
         <Route element={<ProtectedRoute />}>
@@ -52,14 +55,15 @@ describe("App", () => {
       </Routes>,
       { route: "/dashboard" },
     );
-    expect(screen.getByText("Login Page")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Login Page")).toBeInTheDocument();
+    });
   });
 
-  it("login stores refresh token in localStorage", async () => {
+  it("login sets access token in memory without localStorage", async () => {
     vi.mocked(client.post).mockResolvedValueOnce({
       data: {
         access_token: "test-access",
-        refresh_token: "test-refresh",
         user: {
           id: "u-1",
           email: "test@example.com",
@@ -72,6 +76,10 @@ describe("App", () => {
 
     renderWithProviders(<LoginPage />, { route: "/login" });
 
+    await waitFor(() => {
+      expect(screen.getByTestId("email-input")).toBeInTheDocument();
+    });
+
     fireEvent.change(screen.getByTestId("email-input"), {
       target: { value: "test@example.com" },
     });
@@ -81,9 +89,7 @@ describe("App", () => {
     fireEvent.click(screen.getByTestId("login-button"));
 
     await waitFor(() => {
-      expect(localStorage.getItem("tarmacview_refresh_token")).toBe(
-        "test-refresh",
-      );
+      expect(localStorage.getItem("tarmacview_refresh_token")).toBeNull();
     });
   });
 });
@@ -91,6 +97,7 @@ describe("App", () => {
 describe("full app routing", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.mocked(client.post).mockRejectedValueOnce(new Error("no cookie"));
   });
 
   it("smoke test - app renders without crashing", () => {

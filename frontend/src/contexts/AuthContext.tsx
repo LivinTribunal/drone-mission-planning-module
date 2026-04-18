@@ -9,7 +9,6 @@ import {
 } from "react";
 import client from "@/api/client";
 import {
-  REFRESH_TOKEN_KEY,
   setAccessToken as setGlobalAccessToken,
   setLogoutHandler,
 } from "@/auth/tokenStore";
@@ -35,10 +34,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initializedRef = useRef(false);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
     setAccessToken(null);
     setUser(null);
     setGlobalAccessToken(null);
+    client.post("/auth/logout").catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -52,14 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-    if (!refreshToken) {
-      setIsLoading(false);
-      return;
-    }
-
     client
-      .post("/auth/refresh", { refresh_token: refreshToken })
+      .post("/auth/refresh")
       .then((res) => {
         const token = res.data.access_token;
         setAccessToken(token);
@@ -72,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(res.data);
       })
       .catch(() => {
-        localStorage.removeItem(REFRESH_TOKEN_KEY);
+        // no valid refresh cookie - stay logged out
       })
       .finally(() => {
         setIsLoading(false);
@@ -81,9 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await client.post("/auth/login", { email, password });
-    const { access_token, refresh_token, user: userData } = res.data;
+    const { access_token, user: userData } = res.data;
 
-    localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
     setAccessToken(access_token);
     setGlobalAccessToken(access_token);
     setUser(userData);

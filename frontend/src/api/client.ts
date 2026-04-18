@@ -3,7 +3,6 @@ import {
   getAccessToken,
   setAccessToken,
   triggerLogout,
-  REFRESH_TOKEN_KEY,
 } from "@/auth/tokenStore";
 
 export { isAxiosError };
@@ -18,11 +17,13 @@ declare module "axios" {
 const client = axios.create({
   baseURL: "/api/v1",
   headers: { "Content-Type": "application/json" },
+  withCredentials: true,
 });
 
 const PUBLIC_PATHS = [
   "/auth/login",
   "/auth/refresh",
+  "/auth/logout",
   "/auth/setup-password",
   "/auth/reset-password",
 ];
@@ -82,16 +83,9 @@ client.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-      if (!refreshToken) {
-        isRefreshing = false;
-        triggerLogout();
-        return Promise.reject(error);
-      }
-
       try {
-        const res = await axios.post("/api/v1/auth/refresh", {
-          refresh_token: refreshToken,
+        const res = await axios.post("/api/v1/auth/refresh", undefined, {
+          withCredentials: true,
         });
         const newToken = res.data.access_token;
         setAccessToken(newToken);

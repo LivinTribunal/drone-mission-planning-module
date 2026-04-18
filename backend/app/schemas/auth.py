@@ -33,17 +33,10 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    """tokens + user returned after login."""
+    """access token + user returned after login."""
 
     access_token: str
-    refresh_token: str
     user: UserResponse
-
-
-class RefreshRequest(BaseModel):
-    """refresh token payload."""
-
-    refresh_token: str
 
 
 class RefreshResponse(BaseModel):

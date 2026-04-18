@@ -11,9 +11,13 @@ logger = logging.getLogger(__name__)
 
 
 def seed_users(db: Session) -> None:
-    """create default users if none exist. skipped in production."""
+    """create default users if none exist. requires SEED_USERS=true."""
     if settings.environment == "production":
         logger.info("skipping user seeding in production environment")
+        return
+
+    if not settings.seed_users:
+        logger.info("user seeding disabled (set SEED_USERS=true to enable)")
         return
 
     count = db.query(User).count()
@@ -24,9 +28,12 @@ def seed_users(db: Session) -> None:
     logger.info("seeding %d default users with %d airports", 3, len(airports))
 
     seed_data = [
-        ("admin@tmv.com", "adminadmin", "Admin", UserRole.SUPER_ADMIN.value),
-        ("coord@tmv.com", "coordinator", "Coordinator", UserRole.COORDINATOR.value),
-        ("operator@tmv.com", "operator", "Operator", UserRole.OPERATOR.value),
+        (settings.seed_admin_email, settings.seed_admin_password,
+         "Admin", UserRole.SUPER_ADMIN.value),
+        (settings.seed_coordinator_email, settings.seed_coordinator_password,
+         "Coordinator", UserRole.COORDINATOR.value),
+        (settings.seed_operator_email, settings.seed_operator_password,
+         "Operator", UserRole.OPERATOR.value),
     ]
 
     for email, password, name, role in seed_data:

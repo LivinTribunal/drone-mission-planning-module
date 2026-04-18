@@ -101,7 +101,7 @@ async def maintenance_mode_middleware(request: Request, call_next):
             if token:
                 try:
                     payload = auth_service.decode_token(token)
-                    if payload.get("role") == "SUPER_ADMIN":
+                    if payload.get("type") == "access" and payload.get("role") == "SUPER_ADMIN":
                         return await call_next(request)
                 except DomainError:
                     pass

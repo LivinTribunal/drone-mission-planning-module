@@ -52,31 +52,25 @@ def list_missions(
         if status not in valid:
             raise DomainError(f"invalid status, must be one of {valid}")
 
-    query = db.query(Mission).options(
-        joinedload(Mission.inspections),
-        joinedload(Mission.flight_plan),
+    # shared predicates for data and count queries
+    filters = []
+    if airport_ids is not None:
+        filters.append(Mission.airport_id.in_(airport_ids))
+    if airport_id:
+        filters.append(Mission.airport_id == airport_id)
+    if status:
+        filters.append(Mission.status == status)
+    if drone_profile_id:
+        filters.append(Mission.drone_profile_id == drone_profile_id)
+
+    query = (
+        db.query(Mission)
+        .options(joinedload(Mission.inspections), joinedload(Mission.flight_plan))
+        .filter(*filters)
     )
 
-    if airport_ids is not None:
-        query = query.filter(Mission.airport_id.in_(airport_ids))
-    if airport_id:
-        query = query.filter(Mission.airport_id == airport_id)
-    if status:
-        query = query.filter(Mission.status == status)
-    if drone_profile_id:
-        query = query.filter(Mission.drone_profile_id == drone_profile_id)
-
     # count on a clean query to avoid joinedload duplicates
-    count_query = db.query(Mission)
-    if airport_ids is not None:
-        count_query = count_query.filter(Mission.airport_id.in_(airport_ids))
-    if airport_id:
-        count_query = count_query.filter(Mission.airport_id == airport_id)
-    if status:
-        count_query = count_query.filter(Mission.status == status)
-    if drone_profile_id:
-        count_query = count_query.filter(Mission.drone_profile_id == drone_profile_id)
-    total = count_query.count()
+    total = db.query(Mission).filter(*filters).count()
 
     missions = query.order_by(Mission.created_at.desc()).offset(offset).limit(limit).all()
 
