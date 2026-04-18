@@ -14,6 +14,7 @@ from app.models.enums import MissionStatus, UserRole
 from app.models.mission import Mission
 from app.models.user import User
 from app.services import auth_service
+from app.services.seeder import seed_users
 
 
 @pytest.fixture(scope="module")
@@ -78,7 +79,7 @@ def seeded_auth_client(auth_client, auth_session_factory):
     """auth client with seed users created."""
     db = auth_session_factory()
     try:
-        auth_service.seed_users(db)
+        seed_users(db)
     finally:
         db.close()
 
@@ -147,28 +148,28 @@ class TestAuthService:
 
     def test_seed_users(self, auth_db):
         """seed creates users when none exist."""
-        auth_service.seed_users(auth_db)
+        seed_users(auth_db)
         count = auth_db.query(User).count()
         assert count >= 3
 
     def test_seed_users_idempotent(self, auth_db):
         """seed skips when users already exist."""
-        auth_service.seed_users(auth_db)
+        seed_users(auth_db)
         count_before = auth_db.query(User).count()
-        auth_service.seed_users(auth_db)
+        seed_users(auth_db)
         count_after = auth_db.query(User).count()
         assert count_before == count_after
 
     def test_authenticate_valid(self, auth_db):
         """valid credentials return user."""
-        auth_service.seed_users(auth_db)
+        seed_users(auth_db)
         user = auth_service.authenticate_user(auth_db, "admin@tmv.com", "adminadmin")
         assert user is not None
         assert user.role == UserRole.SUPER_ADMIN.value
 
     def test_authenticate_wrong_password(self, auth_db):
         """wrong password returns none."""
-        auth_service.seed_users(auth_db)
+        seed_users(auth_db)
         user = auth_service.authenticate_user(auth_db, "admin@tmv.com", "wrong")
         assert user is None
 
@@ -272,6 +273,75 @@ class TestAuthEndpoints:
         )
         assert resp.status_code == 200
         assert resp.json()["name"] == "Updated Name"
+
+    def test_setup_password_success(self, seeded_auth_client, auth_session_factory):
+        """setup-password sets password and activates user, then login works."""
+        from datetime import datetime, timedelta, timezone
+        from uuid import uuid4
+
+        invite_token = str(uuid4())
+        db = auth_session_factory()
+        try:
+            user = User(
+                email="invite-test@tarmacview.com",
+                name="Invite Test",
+                role=UserRole.OPERATOR.value,
+                is_active=False,
+                invitation_token=invite_token,
+                invitation_expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            )
+            db.add(user)
+            db.commit()
+        finally:
+            db.close()
+
+        resp = seeded_auth_client.post(
+            "/api/v1/auth/setup-password",
+            json={"token": invite_token, "password": "newpass123"},
+        )
+        assert resp.status_code == 200
+
+        login_resp = seeded_auth_client.post(
+            "/api/v1/auth/login",
+            json={"email": "invite-test@tarmacview.com", "password": "newpass123"},
+        )
+        assert login_resp.status_code == 200
+        assert "access_token" in login_resp.json()
+
+    def test_setup_password_invalid_token(self, seeded_auth_client):
+        """setup-password with invalid token returns 400."""
+        resp = seeded_auth_client.post(
+            "/api/v1/auth/setup-password",
+            json={"token": "nonexistent-token", "password": "validpass123"},
+        )
+        assert resp.status_code == 400
+
+    def test_setup_password_expired_token(self, seeded_auth_client, auth_session_factory):
+        """setup-password with expired token returns 400."""
+        from datetime import datetime, timedelta, timezone
+        from uuid import uuid4
+
+        expired_token = str(uuid4())
+        db = auth_session_factory()
+        try:
+            user = User(
+                email="expired-invite@tarmacview.com",
+                name="Expired Invite",
+                role=UserRole.OPERATOR.value,
+                is_active=False,
+                invitation_token=expired_token,
+                invitation_expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            )
+            db.add(user)
+            db.commit()
+        finally:
+            db.close()
+
+        resp = seeded_auth_client.post(
+            "/api/v1/auth/setup-password",
+            json={"token": expired_token, "password": "validpass123"},
+        )
+        assert resp.status_code == 400
 
     def test_setup_password_too_short(self, seeded_auth_client):
         """setup-password rejects passwords shorter than 8 chars."""

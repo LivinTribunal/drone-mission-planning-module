@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
 from app.core.exceptions import DomainError, NotFoundError
-from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.auth import ResetPasswordRequest, SetupPasswordRequest, UserUpdate
 

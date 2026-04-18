@@ -17,7 +17,8 @@ from app.api.routes.missions import router as missions_router
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.exceptions import DomainError
-from app.core.seeder import seed_users
+from app.services import auth_service
+from app.services.seeder import seed_users
 
 logger = logging.getLogger(__name__)
 

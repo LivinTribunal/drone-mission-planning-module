@@ -7,7 +7,6 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import axios from "axios";
 import client from "@/api/client";
 import {
   REFRESH_TOKEN_KEY,
@@ -49,8 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [logout]);
 
-  // mount-time refresh uses raw axios to avoid going through the interceptor
-  // which also triggers refresh on 401, preventing a double-refresh race
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
@@ -61,13 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    axios
-      .post("/api/v1/auth/refresh", { refresh_token: refreshToken })
+    client
+      .post("/auth/refresh", { refresh_token: refreshToken })
       .then((res) => {
         const token = res.data.access_token;
         setAccessToken(token);
         setGlobalAccessToken(token);
-        return axios.get("/api/v1/auth/me", {
+        return client.get("/auth/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
       })

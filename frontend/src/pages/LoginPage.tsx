@@ -50,11 +50,6 @@ export default function LoginPage() {
           {t("auth.loginTitle")}
         </h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {error && (
-            <div className="text-tv-error text-sm text-center">
-              {t("auth.wrongCredentials")}
-            </div>
-          )}
           <div>
             <label
               htmlFor="email"
@@ -95,6 +90,20 @@ export default function LoginPage() {
               data-testid="password-input"
             />
           </div>
+          {error && (
+            <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-tv-error/10 border border-tv-error/20">
+              <svg className="h-4 w-4 flex-shrink-0 text-tv-error" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <span className="text-sm text-tv-error">
+                {t("auth.wrongCredentials")}
+              </span>
+            </div>
+          )}
           <button
             type="submit"
             disabled={submitting}

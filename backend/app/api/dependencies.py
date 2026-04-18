@@ -1,5 +1,10 @@
-from typing import Annotated
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from app.models.mission import Mission
 
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
@@ -62,7 +67,7 @@ def check_airport_access(current_user: User, airport_id: UUID) -> None:
         raise HTTPException(status_code=403, detail="no access to this airport")
 
 
-def check_mission_access(db: Session, current_user: User, mission_id: UUID):
+def check_mission_access(db: Session, current_user: User, mission_id: UUID) -> Mission:
     """fetch mission and verify user has airport access, return mission."""
     mission = mission_service.get_mission(db, mission_id)
     check_airport_access(current_user, mission.airport_id)
