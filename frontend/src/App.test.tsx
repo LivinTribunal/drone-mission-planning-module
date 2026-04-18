@@ -1,13 +1,22 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AirportProvider } from "@/contexts/AirportContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import client from "@/api/client";
 import App from "./App";
 import LoginPage from "@/pages/LoginPage";
 import ProtectedRoute from "@/components/Auth/ProtectedRoute";
 import { Routes, Route } from "react-router-dom";
+
+vi.mock("@/api/client", () => ({
+  default: {
+    post: vi.fn(),
+    get: vi.fn(),
+  },
+  isAxiosError: vi.fn(),
+}));
 
 function renderWithProviders(ui: React.ReactElement, { route = "/" } = {}) {
   return render(
@@ -46,7 +55,21 @@ describe("App", () => {
     expect(screen.getByText("Login Page")).toBeInTheDocument();
   });
 
-  it("login stores token and shows authenticated content", async () => {
+  it("login stores refresh token in localStorage", async () => {
+    vi.mocked(client.post).mockResolvedValueOnce({
+      data: {
+        access_token: "test-access",
+        refresh_token: "test-refresh",
+        user: {
+          id: "u-1",
+          email: "test@example.com",
+          name: "Test",
+          role: "OPERATOR",
+          assigned_airports: [],
+        },
+      },
+    });
+
     renderWithProviders(<LoginPage />, { route: "/login" });
 
     fireEvent.change(screen.getByTestId("email-input"), {
@@ -58,8 +81,9 @@ describe("App", () => {
     fireEvent.click(screen.getByTestId("login-button"));
 
     await waitFor(() => {
-      expect(localStorage.getItem("tarmacview_token")).toBeTruthy();
-      expect(localStorage.getItem("tarmacview_user")).toBeTruthy();
+      expect(localStorage.getItem("tarmacview_refresh_token")).toBe(
+        "test-refresh",
+      );
     });
   });
 });

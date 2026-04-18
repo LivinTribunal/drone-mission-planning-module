@@ -1,34 +1,42 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useSearchParams, Navigate, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useAuth } from "@/contexts/AuthContext";
+import client from "@/api/client";
 
-export default function LoginPage() {
-  const { login, isAuthenticated, isLoading } = useAuth();
+export default function SetupPasswordPage() {
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const [email, setEmail] = useState("");
+  const token = searchParams.get("token");
+
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  if (isLoading) {
-    return null;
-  }
-
-  if (isAuthenticated) {
-    return <Navigate to="/operator-center/dashboard" replace />;
+  if (!token) {
+    return <Navigate to="/login" replace />;
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(false);
+    setError("");
+
+    if (password.length < 8) {
+      setError(t("auth.passwordTooShort"));
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError(t("auth.passwordMismatch"));
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await login(email, password);
-      navigate("/operator-center/dashboard");
+      await client.post("/auth/setup-password", { token, password });
+      navigate("/login");
     } catch {
-      setError(true);
+      setError(t("auth.setupPasswordError"));
     } finally {
       setSubmitting(false);
     }
@@ -38,40 +46,18 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-tv-bg">
       <div className="w-full max-w-sm p-6 rounded-2xl border border-tv-border bg-tv-surface">
         <h1 className="text-2xl font-semibold text-center mb-6 text-tv-text-primary">
-          {t("auth.loginTitle")}
+          {t("auth.setupPasswordTitle")}
         </h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {error && (
-            <div className="text-tv-error text-sm text-center">
-              {t("auth.wrongCredentials")}
-            </div>
+            <div className="text-tv-error text-sm text-center">{error}</div>
           )}
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-xs font-medium mb-1 text-tv-text-secondary"
-            >
-              {t("auth.email")}
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder={t("auth.emailPlaceholder")}
-              className="w-full px-4 py-2.5 rounded-full border border-tv-border
-                bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted
-                focus:outline-none focus:border-tv-accent transition-colors"
-              data-testid="email-input"
-            />
-          </div>
           <div>
             <label
               htmlFor="password"
               className="block text-xs font-medium mb-1 text-tv-text-secondary"
             >
-              {t("auth.password")}
+              {t("auth.newPassword")}
             </label>
             <input
               id="password"
@@ -79,11 +65,29 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder={t("auth.passwordPlaceholder")}
+              placeholder={t("auth.newPasswordPlaceholder")}
               className="w-full px-4 py-2.5 rounded-full border border-tv-border
                 bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted
                 focus:outline-none focus:border-tv-accent transition-colors"
-              data-testid="password-input"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="confirmPassword"
+              className="block text-xs font-medium mb-1 text-tv-text-secondary"
+            >
+              {t("auth.confirmPassword")}
+            </label>
+            <input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              placeholder={t("auth.confirmPasswordPlaceholder")}
+              className="w-full px-4 py-2.5 rounded-full border border-tv-border
+                bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted
+                focus:outline-none focus:border-tv-accent transition-colors"
             />
           </div>
           <button
@@ -91,9 +95,8 @@ export default function LoginPage() {
             disabled={submitting}
             className="w-full py-2.5 rounded-full bg-tv-accent text-tv-accent-text font-semibold text-sm
               hover:bg-tv-accent-hover transition-colors disabled:opacity-50"
-            data-testid="login-button"
           >
-            {submitting ? t("auth.loggingIn") : t("auth.login")}
+            {submitting ? t("auth.settingUp") : t("auth.setPassword")}
           </button>
         </form>
       </div>

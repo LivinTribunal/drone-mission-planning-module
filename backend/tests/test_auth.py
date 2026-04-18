@@ -1,0 +1,308 @@
+"""tests for jwt authentication and role-based access control."""
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+from testcontainers.postgres import PostgresContainer
+
+import app.models  # noqa: F401
+from app.core.database import Base, get_db
+from app.main import app
+from app.models.enums import UserRole
+from app.models.user import User
+from app.services import auth_service
+
+
+@pytest.fixture(scope="module")
+def auth_engine():
+    """dedicated postgis database for auth tests."""
+    with PostgresContainer(
+        image="postgis/postgis:16-3.4",
+        username="test",
+        password="test",
+        dbname="test_auth",
+    ) as pg:
+        engine = create_engine(pg.get_connection_url())
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+            conn.commit()
+
+        Base.metadata.create_all(engine)
+        yield engine
+        Base.metadata.drop_all(engine)
+
+
+@pytest.fixture(scope="module")
+def auth_session_factory(auth_engine):
+    """session factory for auth tests."""
+    return sessionmaker(bind=auth_engine)
+
+
+@pytest.fixture
+def auth_db(auth_session_factory):
+    """per-test session with rollback."""
+    session = auth_session_factory()
+    try:
+        yield session
+    finally:
+        session.rollback()
+        session.close()
+
+
+@pytest.fixture(scope="module")
+def auth_client(auth_engine, auth_session_factory):
+    """test client without auth override - real auth flow."""
+
+    def override_get_db():
+        """test db override."""
+        db = auth_session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    # save existing overrides so other test modules aren't affected
+    saved_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.clear()
+    app.dependency_overrides[get_db] = override_get_db
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+    app.dependency_overrides.update(saved_overrides)
+
+
+@pytest.fixture(scope="module")
+def seeded_auth_client(auth_client, auth_session_factory):
+    """auth client with seed users created."""
+    db = auth_session_factory()
+    try:
+        auth_service.seed_users(db)
+    finally:
+        db.close()
+    return auth_client
+
+
+# user model tests
+
+
+class TestUserModel:
+    """test user model domain methods."""
+
+    def test_set_and_verify_password(self):
+        """password hashing and verification."""
+        user = User(email="t@t.com", name="t", role=UserRole.OPERATOR.value)
+        user.set_password("secret123")
+        assert user.hashed_password is not None
+        assert user.verify_password("secret123")
+        assert not user.verify_password("wrong")
+
+    def test_verify_password_no_hash(self):
+        """verify returns false when no hash set."""
+        user = User(email="t@t.com", name="t", role=UserRole.OPERATOR.value)
+        assert not user.verify_password("anything")
+
+    def test_has_airport_access_super_admin(self):
+        """super admin bypasses airport check."""
+        user = User(email="a@a.com", name="a", role=UserRole.SUPER_ADMIN.value)
+        user.airports = []
+        assert user.has_airport_access("any-id")
+
+    def test_has_airport_access_operator(self):
+        """operator needs explicit assignment."""
+        user = User(email="o@o.com", name="o", role=UserRole.OPERATOR.value)
+        user.airports = []
+        assert not user.has_airport_access("some-id")
+
+
+# auth service tests
+
+
+class TestAuthService:
+    """test auth service token creation and validation."""
+
+    def test_create_and_decode_access_token(self):
+        """access token roundtrip."""
+        token = auth_service.create_access_token("user-123", "OPERATOR")
+        payload = auth_service.decode_token(token)
+        assert payload["sub"] == "user-123"
+        assert payload["role"] == "OPERATOR"
+        assert payload["type"] == "access"
+
+    def test_create_and_decode_refresh_token(self):
+        """refresh token roundtrip."""
+        token = auth_service.create_refresh_token("user-456")
+        payload = auth_service.decode_token(token)
+        assert payload["sub"] == "user-456"
+        assert payload["type"] == "refresh"
+
+    def test_decode_invalid_token(self):
+        """invalid token raises domain error."""
+        from app.core.exceptions import DomainError
+
+        with pytest.raises(DomainError, match="invalid or expired token"):
+            auth_service.decode_token("not-a-real-token")
+
+    def test_seed_users(self, auth_db):
+        """seed creates users when none exist."""
+        auth_service.seed_users(auth_db)
+        count = auth_db.query(User).count()
+        assert count >= 3
+
+    def test_authenticate_valid(self, auth_db):
+        """valid credentials return user."""
+        auth_service.seed_users(auth_db)
+        user = auth_service.authenticate_user(auth_db, "admin@tarmacview.com", "admin123")
+        assert user is not None
+        assert user.role == UserRole.SUPER_ADMIN.value
+
+    def test_authenticate_wrong_password(self, auth_db):
+        """wrong password returns none."""
+        auth_service.seed_users(auth_db)
+        user = auth_service.authenticate_user(auth_db, "admin@tarmacview.com", "wrong")
+        assert user is None
+
+    def test_authenticate_nonexistent(self, auth_db):
+        """nonexistent email returns none."""
+        user = auth_service.authenticate_user(auth_db, "nobody@tarmacview.com", "pass")
+        assert user is None
+
+
+# auth endpoint tests
+
+
+class TestAuthEndpoints:
+    """test auth api endpoints."""
+
+    def test_login_success(self, seeded_auth_client):
+        """valid login returns tokens and user."""
+        resp = seeded_auth_client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@tarmacview.com", "password": "admin123"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert data["user"]["role"] == "SUPER_ADMIN"
+
+    def test_login_wrong_password(self, seeded_auth_client):
+        """invalid credentials return 401."""
+        resp = seeded_auth_client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@tarmacview.com", "password": "wrong"},
+        )
+        assert resp.status_code == 401
+
+    def test_login_nonexistent_user(self, seeded_auth_client):
+        """nonexistent user returns 401."""
+        resp = seeded_auth_client.post(
+            "/api/v1/auth/login",
+            json={"email": "nobody@test.com", "password": "test"},
+        )
+        assert resp.status_code == 401
+
+    def test_refresh_token(self, seeded_auth_client):
+        """refresh endpoint returns new access token."""
+        login = seeded_auth_client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@tarmacview.com", "password": "admin123"},
+        )
+        refresh_token = login.json()["refresh_token"]
+
+        resp = seeded_auth_client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+        assert resp.status_code == 200
+        assert "access_token" in resp.json()
+
+    def test_refresh_invalid_token(self, seeded_auth_client):
+        """invalid refresh token returns 401."""
+        resp = seeded_auth_client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": "invalid"},
+        )
+        assert resp.status_code == 401
+
+    def test_get_me(self, seeded_auth_client):
+        """authenticated user can get own profile."""
+        login = seeded_auth_client.post(
+            "/api/v1/auth/login",
+            json={"email": "operator@tarmacview.com", "password": "operator123"},
+        )
+        token = login.json()["access_token"]
+
+        resp = seeded_auth_client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["email"] == "operator@tarmacview.com"
+        assert data["role"] == "OPERATOR"
+
+    def test_get_me_no_token(self, seeded_auth_client):
+        """unauthenticated request returns 401."""
+        resp = seeded_auth_client.get("/api/v1/auth/me")
+        assert resp.status_code == 401
+
+    def test_update_me(self, seeded_auth_client):
+        """user can update own name."""
+        login = seeded_auth_client.post(
+            "/api/v1/auth/login",
+            json={"email": "operator@tarmacview.com", "password": "operator123"},
+        )
+        token = login.json()["access_token"]
+
+        resp = seeded_auth_client.put(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"name": "Updated Name"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "Updated Name"
+
+
+# role-based access control tests
+
+
+class TestRBAC:
+    """test role-based access enforcement."""
+
+    def _get_token(self, client, email, password):
+        """helper to get access token."""
+        resp = client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": password},
+        )
+        return resp.json()["access_token"]
+
+    def test_operator_cannot_create_drone(self, seeded_auth_client):
+        """operator role is blocked from coordinator endpoints."""
+        token = self._get_token(seeded_auth_client, "operator@tarmacview.com", "operator123")
+        resp = seeded_auth_client.post(
+            "/api/v1/drone-profiles",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"name": "Test Drone"},
+        )
+        assert resp.status_code == 403
+
+    def test_coordinator_can_create_drone(self, seeded_auth_client):
+        """coordinator role can access coordinator endpoints."""
+        token = self._get_token(seeded_auth_client, "coordinator@tarmacview.com", "coord123")
+        resp = seeded_auth_client.post(
+            "/api/v1/drone-profiles",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"name": "Test Drone RBAC"},
+        )
+        assert resp.status_code == 201
+
+    def test_unauthenticated_blocked(self, seeded_auth_client):
+        """unauthenticated requests are blocked on protected routes."""
+        resp = seeded_auth_client.get("/api/v1/airports")
+        assert resp.status_code == 401
+
+    def test_health_is_public(self, seeded_auth_client):
+        """health endpoint needs no auth."""
+        resp = seeded_auth_client.get("/api/v1/health")
+        assert resp.status_code == 200

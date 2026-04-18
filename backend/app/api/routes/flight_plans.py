@@ -3,8 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.core.dependencies import get_db, require_operator
 from app.core.exceptions import DomainError, NotFoundError, TrajectoryGenerationError
+from app.models.user import User
 from app.schemas.flight_plan import (
     FlightPlanResponse,
     GenerateTrajectoryResponse,
@@ -21,7 +22,11 @@ router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
     "/{mission_id}/generate-trajectory",
     response_model=GenerateTrajectoryResponse,
 )
-def generate(mission_id: UUID, db: Session = Depends(get_db)):
+def generate(
+    mission_id: UUID,
+    current_user: User = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
     """run 5-phase trajectory generation pipeline."""
     try:
         mission = mission_service.get_mission(db, mission_id)
@@ -60,7 +65,11 @@ def generate(mission_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{mission_id}/flight-plan", response_model=FlightPlanResponse)
-def get_plan(mission_id: UUID, db: Session = Depends(get_db)):
+def get_plan(
+    mission_id: UUID,
+    current_user: User = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
     """get flight plan for mission"""
     try:
         return flight_plan_service.get_flight_plan(db, mission_id)
@@ -72,6 +81,7 @@ def get_plan(mission_id: UUID, db: Session = Depends(get_db)):
 def batch_update_waypoints(
     mission_id: UUID,
     payload: WaypointBatchUpdateRequest,
+    current_user: User = Depends(require_operator),
     db: Session = Depends(get_db),
 ):
     """batch update waypoint positions and camera targets."""
@@ -90,6 +100,7 @@ def batch_update_waypoints(
 def insert_transit_waypoint(
     mission_id: UUID,
     payload: TransitWaypointInsertRequest,
+    current_user: User = Depends(require_operator),
     db: Session = Depends(get_db),
 ):
     """insert a new transit waypoint at a position on the transit path."""
@@ -108,6 +119,7 @@ def insert_transit_waypoint(
 def delete_transit_waypoint(
     mission_id: UUID,
     waypoint_id: UUID,
+    current_user: User = Depends(require_operator),
     db: Session = Depends(get_db),
 ):
     """delete a transit waypoint from the flight plan."""

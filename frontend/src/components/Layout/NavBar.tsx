@@ -26,7 +26,8 @@ export default function NavBar({ items, role }: NavBarProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const hasCoordinatorRole = user?.roles.includes("COORDINATOR");
+  const hasCoordinatorRole =
+    user?.role === "COORDINATOR" || user?.role === "SUPER_ADMIN";
 
   const availableLanguages = Object.keys(i18n.options.resources ?? {});
 

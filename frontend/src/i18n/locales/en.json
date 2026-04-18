@@ -63,8 +63,21 @@
     "password": "Password",
     "passwordPlaceholder": "Enter your password",
     "login": "Sign in",
+    "loggingIn": "Signing in...",
     "logout": "Logout",
-    "wrongCredentials": "Login failed"
+    "wrongCredentials": "Login failed",
+    "setupPasswordTitle": "Set Your Password",
+    "newPassword": "New Password",
+    "newPasswordPlaceholder": "Enter a new password",
+    "confirmPassword": "Confirm Password",
+    "confirmPasswordPlaceholder": "Re-enter your password",
+    "setPassword": "Set Password",
+    "settingUp": "Setting up...",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "passwordMismatch": "Passwords do not match",
+    "setupPasswordError": "Failed to set password",
+    "maintenanceTitle": "System Under Maintenance",
+    "maintenanceMessage": "We are performing scheduled maintenance. Please check back later."
   },
   "user": {
     "settings": "Settings",
