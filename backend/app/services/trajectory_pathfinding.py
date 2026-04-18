@@ -1,12 +1,11 @@
 import logging
+import math
 
-from sqlalchemy.orm import Session
+from shapely.geometry import LineString
 
 from app.core.config import settings
 from app.core.exceptions import TrajectoryGenerationError
-from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
 from app.models.enums import CameraAction, WaypointType
-from app.schemas.geometry import parse_ewkb
 from app.services.safety_validator import (
     check_obstacle,
     segment_runway_crossing_length,
@@ -23,6 +22,10 @@ from app.services.trajectory_types import (
     SURFACE_NODE_SPACING,
     TRANSIT_AGL,
     Degrees,
+    LocalGeometries,
+    LocalObstacle,
+    LocalSurface,
+    LocalZone,
     Meters,
     MetersPerSecond,
     Point3D,
@@ -31,10 +34,8 @@ from app.services.trajectory_types import (
 from app.utils.geo import (
     astar,
     bearing_between,
-    center_of_points,
-    distance_between,
     elevation_angle,
-    point_at_distance,
+    euclidean_distance,
     total_path_distance,
 )
 
@@ -47,131 +48,84 @@ SEARCH_RADIUS_EXPANSION = 1.5
 MAX_ASTAR_RETRIES = 3
 
 
-def _extract_polygon_vertices(geom_data: bytes, buffer_m: float | None = None) -> list[Point3D]:
-    """extract vertices from polygon geometry, offset outward from centroid by buffer distance."""
-    try:
-        geojson = parse_ewkb(geom_data)
-        if geojson["type"] != "Polygon":
-            return []
+def _extract_local_polygon_vertices(
+    polygon, buffer_m: float | None = None
+) -> list[tuple[float, float]]:
+    """extract vertices from Shapely polygon in local coords, offset outward by buffer distance."""
+    offset = buffer_m if buffer_m is not None else settings.vertex_buffer_m
 
-        if not geojson.get("coordinates"):
-            return []
-        coords = geojson["coordinates"][0]
+    buffered = polygon.buffer(offset)
+    if buffered.is_empty:
+        return []
 
-        # skip closing duplicate of a closed ring
-        if len(coords) > 1 and coords[0][:2] == coords[-1][:2]:
-            coords = coords[:-1]
+    coords = list(buffered.exterior.coords)
 
-        if len(coords) < 3:
-            return []
+    # skip closing duplicate of a closed ring
+    if len(coords) > 1 and coords[0] == coords[-1]:
+        coords = coords[:-1]
 
-        offset = buffer_m if buffer_m is not None else settings.vertex_buffer_m
-
-        # compute centroid for offset direction
-        cx = sum(c[0] for c in coords) / len(coords)
-        cy = sum(c[1] for c in coords) / len(coords)
-
-        vertices = []
-        for c in coords:
-            alt = c[2] if len(c) > 2 else 0.0
-            # push vertex away from centroid by buffer distance
-            brng = bearing_between(cx, cy, c[0], c[1])
-            lon, lat = point_at_distance(c[0], c[1], brng, offset)
-            vertices.append(Point3D(lon=lon, lat=lat, alt=alt))
-
-        return vertices
-
-    except (ValueError, KeyError, TypeError, IndexError) as e:
-        raise TrajectoryGenerationError(
-            f"failed to extract vertices from obstacle geometry: {e}"
-        ) from e
+    return [(c[0], c[1]) for c in coords]
 
 
-def _collect_nearby_objects(
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
-    center_lon: float,
-    center_lat: float,
+def _collect_nearby_objects_local(
+    local_geoms: LocalGeometries,
+    center_x: float,
+    center_y: float,
     search_radius: Meters,
     buffer_distance_override: float | None = None,
-) -> tuple[list[Obstacle], list[SafetyZone]]:
+) -> tuple[list[LocalObstacle], list[LocalZone]]:
     """collect obstacles and hard safety zones within search_radius of center."""
     nearby_obs = []
-    for obs in obstacles:
-        if not obs.boundary:
-            continue
-        try:
-            buf = (
-                buffer_distance_override
-                if buffer_distance_override is not None
-                else obs.buffer_distance
-            )
-            verts = _extract_polygon_vertices(obs.boundary.data, buf)
-            if not verts:
-                continue
-            obs_center = center_of_points([v.to_tuple() for v in verts])
-        except TrajectoryGenerationError:
-            raise
-        except (ValueError, KeyError, TypeError, IndexError) as e:
-            raise TrajectoryGenerationError(
-                f"failed to parse obstacle boundary for obstacle {obs.id}: {e}"
-            ) from e
-        if distance_between(center_lon, center_lat, obs_center[0], obs_center[1]) <= search_radius:
+    for obs in local_geoms.obstacles:
+        buf = (
+            buffer_distance_override
+            if buffer_distance_override is not None
+            else obs.buffer_distance
+        )
+        buffered = obs.polygon.buffer(buf) if buf and buf > 0 else obs.polygon
+        c = buffered.centroid
+        if euclidean_distance(center_x, center_y, c.x, c.y) <= search_radius:
             nearby_obs.append(obs)
 
     nearby_zones = []
-    for zone in zones:
-        if not zone.geometry or zone.type not in HARD_ZONE_TYPES:
+    for zone in local_geoms.zones:
+        if zone.zone_type not in HARD_ZONE_TYPES:
             continue
-
-        # approximate zone distance by checking if zone center is within range
-        try:
-            verts = _extract_polygon_vertices(zone.geometry.data)
-            if not verts:
-                continue
-            zone_center = center_of_points([v.to_tuple() for v in verts])
-        except TrajectoryGenerationError:
-            raise
-        except (ValueError, KeyError, TypeError, IndexError) as e:
-            raise TrajectoryGenerationError(
-                f"failed to parse zone geometry for zone {zone.id}: {e}"
-            ) from e
-        zone_dist = distance_between(center_lon, center_lat, zone_center[0], zone_center[1])
-        if zone_dist <= search_radius:
+        c = zone.polygon.centroid
+        if euclidean_distance(center_x, center_y, c.x, c.y) <= search_radius:
             nearby_zones.append(zone)
 
     return nearby_obs, nearby_zones
 
 
 def _is_segment_blocked(
-    db: Session,
-    from_pt: Point3D,
-    to_pt: Point3D,
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
+    from_x: float,
+    from_y: float,
+    to_x: float,
+    to_y: float,
+    obstacles: list[LocalObstacle],
+    zones: list[LocalZone],
     buffer_distance: Meters = 0.0,
 ) -> bool:
     """check if a straight-line segment is blocked by obstacles or hard zones."""
     for obs in obstacles:
-        buf = buffer_distance if buffer_distance > 0 else (obs.buffer_distance or 0.0)
-        if segments_intersect_obstacle(
-            db, from_pt.lon, from_pt.lat, to_pt.lon, to_pt.lat, obs, buffer_distance=buf
-        ):
+        if segments_intersect_obstacle(from_x, from_y, to_x, to_y, obs, buffer_distance):
             return True
 
     for zone in zones:
-        if segments_intersect_zone(db, from_pt.lon, from_pt.lat, to_pt.lon, to_pt.lat, zone):
+        if zone.zone_type not in HARD_ZONE_TYPES:
+            continue
+        if segments_intersect_zone(from_x, from_y, to_x, to_y, zone.polygon):
             return True
 
     return False
 
 
 def _build_visibility_graph(
-    db: Session,
-    nodes: list[Point3D],
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
-    surfaces: list[AirfieldSurface] | None = None,
+    nodes: list[tuple[float, float, float]],
+    obstacles: list[LocalObstacle],
+    zones: list[LocalZone],
+    surfaces: list[LocalSurface] | None = None,
     buffer_distance: Meters = 0.0,
     require_perpendicular_runway_crossing: bool = True,
 ) -> dict[int, list[tuple[int, float]]]:
@@ -181,30 +135,48 @@ def _build_visibility_graph(
     get a distance penalty proportional to crossing length, making A* prefer
     routes that go around runways or cross perpendicularly. when False, no
     crossing penalty is applied so the planner picks the shortest geodesic.
+
+    all coordinates are in local meters. edge weights use euclidean distance.
     """
     graph: dict[int, list[tuple[int, float]]] = {i: [] for i in range(len(nodes))}
 
+    # pre-buffer obstacles for the inner loop
+    buffered_polys = []
+    for obs in obstacles:
+        buf = buffer_distance if buffer_distance > 0 else obs.buffer_distance
+        poly = obs.polygon.buffer(buf) if buf > 0 else obs.polygon
+        buffered_polys.append(poly)
+
     for i in range(len(nodes)):
         for j in range(i + 1, len(nodes)):
-            if _is_segment_blocked(
-                db, nodes[i], nodes[j], obstacles, zones, buffer_distance=buffer_distance
-            ):
+            xi, yi = nodes[i][0], nodes[i][1]
+            xj, yj = nodes[j][0], nodes[j][1]
+
+            # check obstacles with pre-buffered polygons
+            blocked = False
+            line = LineString([(xi, yi), (xj, yj)])
+            for poly in buffered_polys:
+                if line.intersects(poly):
+                    blocked = True
+                    break
+
+            if not blocked:
+                for zone in zones:
+                    if zone.zone_type not in HARD_ZONE_TYPES:
+                        continue
+                    if line.intersects(zone.polygon):
+                        blocked = True
+                        break
+
+            if blocked:
                 continue
 
-            dist = distance_between(nodes[i].lon, nodes[i].lat, nodes[j].lon, nodes[j].lat)
+            dist = euclidean_distance(xi, yi, xj, yj)
 
-            # add penalty for runway crossing - skipped when operator opts into
-            # shortest-geodesic crossing to minimise runway closure window
+            # add penalty for runway crossing
             if surfaces and require_perpendicular_runway_crossing:
                 for surface in surfaces:
-                    crossing = segment_runway_crossing_length(
-                        db,
-                        nodes[i].lon,
-                        nodes[i].lat,
-                        nodes[j].lon,
-                        nodes[j].lat,
-                        surface,
-                    )
+                    crossing = segment_runway_crossing_length(xi, yi, xj, yj, surface.polygon)
                     if crossing > 0:
                         dist += crossing * RUNWAY_CROSSING_PENALTY_PER_METER
 
@@ -215,159 +187,141 @@ def _build_visibility_graph(
 
 
 def _collect_graph_nodes_in_circle(
-    endpoints: list[Point3D],
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
-    surfaces: list[AirfieldSurface] | None,
-    center: Point3D,
+    endpoints: list[tuple[float, float, float]],
+    obstacles: list[LocalObstacle],
+    zones: list[LocalZone],
+    surfaces: list[LocalSurface] | None,
+    center: tuple[float, float],
     radius: Meters,
     buffer_distance_override: float | None = None,
     require_perpendicular_runway_crossing: bool = True,
-) -> list[Point3D]:
+) -> list[tuple[float, float, float]]:
     """collect nodes within search circle for visibility graph construction.
 
     includes endpoints plus nearby vertices from obstacles, hard zones,
-    and runway/taxiway surfaces.
+    and runway/taxiway surfaces. all coordinates in local meters.
     """
     nodes = list(endpoints)
 
-    def in_circle(pt: Point3D) -> bool:
+    def in_circle(x: float, y: float) -> bool:
         """check if point is within search radius of center."""
-        return distance_between(center.lon, center.lat, pt.lon, pt.lat) <= radius
+        return euclidean_distance(center[0], center[1], x, y) <= radius
 
     for obs in obstacles:
-        if obs.boundary:
-            buf = (
-                buffer_distance_override
-                if buffer_distance_override is not None
-                else obs.buffer_distance
-            )
-            for v in _extract_polygon_vertices(obs.boundary.data, buf):
-                if in_circle(v):
-                    nodes.append(v)
+        buf = (
+            buffer_distance_override
+            if buffer_distance_override is not None
+            else obs.buffer_distance
+        )
+        for v in _extract_local_polygon_vertices(obs.polygon, buf):
+            if in_circle(v[0], v[1]):
+                nodes.append((v[0], v[1], 0.0))
 
     for zone in zones:
-        if zone.geometry and zone.type in HARD_ZONE_TYPES:
-            for v in _extract_polygon_vertices(zone.geometry.data):
-                if in_circle(v):
-                    nodes.append(v)
+        if zone.zone_type in HARD_ZONE_TYPES:
+            for v in _extract_local_polygon_vertices(zone.polygon):
+                if in_circle(v[0], v[1]):
+                    nodes.append((v[0], v[1], 0.0))
 
     # surface edge nodes - spaced along centerline at SURFACE_NODE_SPACING
     if surfaces:
         for surface in surfaces:
-            if not surface.geometry:
-                continue
-            try:
-                geojson = parse_ewkb(surface.geometry.data)
-            except (ValueError, KeyError, TypeError, IndexError) as e:
-                raise TrajectoryGenerationError(
-                    f"corrupted geometry for surface {surface.id}: {e}"
-                ) from e
-            if geojson.get("type") != "LineString":
+            cl_coords = list(surface.centerline.coords)
+            if len(cl_coords) < 2:
                 continue
 
-            coords = geojson.get("coordinates")
-            if not coords:
+            start = cl_coords[0]
+            end = cl_coords[-1]
+            length = surface.length or surface.centerline.length
+            half_w = (surface.width / 2.0) + settings.vertex_buffer_m
+
+            # direction unit vector along centerline
+            dx = end[0] - start[0]
+            dy = end[1] - start[1]
+            cl_len = math.sqrt(dx * dx + dy * dy)
+            if cl_len == 0:
                 continue
-            start = coords[0]
-            end = coords[-1]
-            length = surface.length or distance_between(start[0], start[1], end[0], end[1])
-            half_w = ((surface.width or 45.0) / 2.0) + settings.vertex_buffer_m
-            rwy_brng = bearing_between(start[0], start[1], end[0], end[1])
-            perp_l = (rwy_brng + 90) % 360
-            perp_r = (rwy_brng - 90) % 360
+            ux, uy = dx / cl_len, dy / cl_len
+            # perpendicular directions (left and right)
+            perp_lx, perp_ly = -uy, ux
+            perp_rx, perp_ry = uy, -ux
 
             # walk along centerline at spacing intervals
             num_points = max(2, int(length / SURFACE_NODE_SPACING) + 1)
-            for i in range(num_points):
-                frac = i / (num_points - 1)
-                lon = start[0] + (end[0] - start[0]) * frac
-                lat = start[1] + (end[1] - start[1]) * frac
-                alt_s = start[2] if len(start) > 2 else 0.0
-                alt_e = end[2] if len(end) > 2 else 0.0
-                alt = alt_s + (alt_e - alt_s) * frac
+            for k in range(num_points):
+                frac = k / (num_points - 1)
+                x = start[0] + (end[0] - start[0]) * frac
+                y = start[1] + (end[1] - start[1]) * frac
 
-                lon_l, lat_l = point_at_distance(lon, lat, perp_l, half_w)
-                lon_r, lat_r = point_at_distance(lon, lat, perp_r, half_w)
+                xl = x + perp_lx * half_w
+                yl = y + perp_ly * half_w
+                xr = x + perp_rx * half_w
+                yr = y + perp_ry * half_w
 
-                pt_l = Point3D(lon=lon_l, lat=lat_l, alt=alt)
-                pt_r = Point3D(lon=lon_r, lat=lat_r, alt=alt)
+                if in_circle(xl, yl):
+                    nodes.append((xl, yl, 0.0))
+                if in_circle(xr, yr):
+                    nodes.append((xr, yr, 0.0))
 
-                if in_circle(pt_l):
-                    nodes.append(pt_l)
-                if in_circle(pt_r):
-                    nodes.append(pt_r)
-
-            # perpendicular crossing nodes - intersect the from->to line with
-            # the runway centerline so A* always has the shortest-crossing option.
-            # skipped when shortest-geodesic crossing is enabled because the
-            # extra anchor nodes would bias A* back toward perpendicular paths.
+            # perpendicular crossing nodes
             if len(endpoints) >= 2 and require_perpendicular_runway_crossing:
                 p0, p1 = endpoints[0], endpoints[1]
                 rdx = end[0] - start[0]
                 rdy = end[1] - start[1]
-                edx = p1.lon - p0.lon
-                edy = p1.lat - p0.lat
+                edx = p1[0] - p0[0]
+                edy = p1[1] - p0[1]
                 denom = edx * rdy - edy * rdx
                 if abs(denom) > 1e-15:
-                    u = ((p0.lat - start[1]) * edx - (p0.lon - start[0]) * edy) / denom
+                    u = ((p0[1] - start[1]) * edx - (p0[0] - start[0]) * edy) / denom
                     u = max(0.0, min(1.0, u))
-                    proj_lon = start[0] + u * rdx
-                    proj_lat = start[1] + u * rdy
-                    alt_s = start[2] if len(start) > 2 else 0.0
-                    alt_e = end[2] if len(end) > 2 else 0.0
-                    proj_alt = alt_s + (alt_e - alt_s) * u
+                    proj_x = start[0] + u * rdx
+                    proj_y = start[1] + u * rdy
 
-                    pl_lon, pl_lat = point_at_distance(proj_lon, proj_lat, perp_l, half_w)
-                    pr_lon, pr_lat = point_at_distance(proj_lon, proj_lat, perp_r, half_w)
-                    perp_pt_l = Point3D(lon=pl_lon, lat=pl_lat, alt=proj_alt)
-                    perp_pt_r = Point3D(lon=pr_lon, lat=pr_lat, alt=proj_alt)
+                    pl_x = proj_x + perp_lx * half_w
+                    pl_y = proj_y + perp_ly * half_w
+                    pr_x = proj_x + perp_rx * half_w
+                    pr_y = proj_y + perp_ry * half_w
 
-                    if in_circle(perp_pt_l):
-                        nodes.append(perp_pt_l)
-                    if in_circle(perp_pt_r):
-                        nodes.append(perp_pt_r)
+                    if in_circle(pl_x, pl_y):
+                        nodes.append((pl_x, pl_y, 0.0))
+                    if in_circle(pr_x, pr_y):
+                        nodes.append((pr_x, pr_y, 0.0))
 
     return nodes
 
 
 def _run_astar(
-    db: Session,
-    from_point: Point3D,
-    to_point: Point3D,
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
-    surfaces: list[AirfieldSurface] | None = None,
+    from_local: tuple[float, float, float],
+    to_local: tuple[float, float, float],
+    obstacles: list[LocalObstacle],
+    zones: list[LocalZone],
+    surfaces: list[LocalSurface] | None = None,
     buffer_distance_override: float | None = None,
     require_perpendicular_runway_crossing: bool = True,
-) -> list[Point3D] | None:
+) -> list[tuple[float, float, float]] | None:
     """circle-based A* pathfinding with expanding search radius on failure.
 
     builds a visibility graph within a circle centered on the midpoint
-    of from_point to to_point. expands the radius and retries if no
-    path is found.
+    of from_local to to_local. expands the radius and retries if no
+    path is found. all coordinates in local meters.
     """
-    mid = Point3D(
-        lon=(from_point.lon + to_point.lon) / 2,
-        lat=(from_point.lat + to_point.lat) / 2,
-        alt=(from_point.alt + to_point.alt) / 2,
-    )
-    base_dist = distance_between(from_point.lon, from_point.lat, to_point.lon, to_point.lat)
+    mid_x = (from_local[0] + to_local[0]) / 2
+    mid_y = (from_local[1] + to_local[1]) / 2
+    base_dist = euclidean_distance(from_local[0], from_local[1], to_local[0], to_local[1])
     radius = max(base_dist * SEARCH_RADIUS_MARGIN / 2, MIN_SEARCH_RADIUS)
 
     for attempt in range(MAX_ASTAR_RETRIES):
         nodes = _collect_graph_nodes_in_circle(
-            [from_point, to_point],
+            [from_local, to_local],
             obstacles,
             zones,
             surfaces,
-            mid,
+            (mid_x, mid_y),
             radius,
             buffer_distance_override=buffer_distance_override,
             require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
         )
         graph = _build_visibility_graph(
-            db,
             nodes,
             obstacles,
             zones,
@@ -377,9 +331,8 @@ def _run_astar(
             ),
             require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
         )
-        node_tuples = [n.to_tuple() for n in nodes]
 
-        path_indices = astar(graph, 0, 1, node_tuples)
+        path_indices = astar(graph, 0, 1, nodes, use_euclidean=True)
         if path_indices is not None:
             return [nodes[idx] for idx in path_indices]
 
@@ -390,16 +343,23 @@ def _run_astar(
 
 
 def has_line_of_sight(
-    db: Session,
     point: Point3D,
     target: Point3D,
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
+    local_geoms: LocalGeometries,
     buffer_distance: Meters = 0.0,
 ) -> bool:
     """check if the line from point to target is clear of obstacles and hard zones."""
+    proj = local_geoms.proj
+    from_x, from_y = proj.to_local(point.lon, point.lat)
+    to_x, to_y = proj.to_local(target.lon, target.lat)
     return not _is_segment_blocked(
-        db, point, target, obstacles, zones, buffer_distance=buffer_distance
+        from_x,
+        from_y,
+        to_x,
+        to_y,
+        local_geoms.obstacles,
+        local_geoms.zones,
+        buffer_distance=buffer_distance,
     )
 
 
@@ -416,7 +376,7 @@ def _max_turn_angle(waypoints: list[WaypointData]) -> Degrees:
 
 
 def _max_effective_buffer(
-    obstacles: list[Obstacle],
+    obstacles: list[LocalObstacle],
     buffer_distance_override: float | None,
 ) -> float:
     """largest effective buffer distance across all obstacles.
@@ -437,12 +397,9 @@ def _max_effective_buffer(
 
 
 def resolve_inspection_collisions(
-    db: Session,
     waypoints: list[WaypointData],
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
+    local_geoms: LocalGeometries,
     center: Point3D,
-    surfaces: list[AirfieldSurface] | None = None,
     buffer_distance_override: float | None = None,
     require_perpendicular_runway_crossing: bool = True,
 ) -> list[WaypointData]:
@@ -451,16 +408,19 @@ def resolve_inspection_collisions(
     finds alternative positions that preserve measurement geometry (distance
     to center, line-of-sight to PAPI, max turn angle).
     """
+    proj = local_geoms.proj
+
     # find colliding waypoints
     collisions = [False] * len(waypoints)
     for i, wp in enumerate(waypoints):
-        for obs in obstacles:
+        wx, wy = proj.to_local(wp.lon, wp.lat)
+        for obs in local_geoms.obstacles:
             buf = (
                 buffer_distance_override
                 if buffer_distance_override is not None
-                else (obs.buffer_distance or 0.0)
+                else obs.buffer_distance
             )
-            if check_obstacle(db, wp, obs, buffer_distance=buf):
+            if check_obstacle(wx, wy, wp.alt, obs, buffer_distance=buf):
                 collisions[i] = True
                 break
 
@@ -495,39 +455,42 @@ def resolve_inspection_collisions(
         # collect nearby obstacles AND safety zones
         mid_lon = (from_pt.lon + to_pt.lon) / 2
         mid_lat = (from_pt.lat + to_pt.lat) / 2
-        max_buffer = _max_effective_buffer(obstacles, buffer_distance_override)
+        mid_x, mid_y = proj.to_local(mid_lon, mid_lat)
+        max_buffer = _max_effective_buffer(local_geoms.obstacles, buffer_distance_override)
         search_radius = max_buffer * REROUTE_SEARCH_RADIUS_MULTIPLIER
-        nearby_obs, nearby_zones = _collect_nearby_objects(
-            obstacles,
-            zones,
-            mid_lon,
-            mid_lat,
+        nearby_obs, nearby_zones = _collect_nearby_objects_local(
+            local_geoms,
+            mid_x,
+            mid_y,
             search_radius,
             buffer_distance_override=buffer_distance_override,
         )
 
-        # A* through local visibility graph (includes runway crossing penalties)
+        from_local = (*proj.to_local(from_pt.lon, from_pt.lat), from_pt.alt)
+        to_local = (*proj.to_local(to_pt.lon, to_pt.lat), to_pt.alt)
+
+        # A* through local visibility graph
         path = _run_astar(
-            db,
-            from_pt,
-            to_pt,
+            from_local,
+            to_local,
             nearby_obs,
             nearby_zones,
-            surfaces,
+            local_geoms.surfaces,
             buffer_distance_override=buffer_distance_override,
             require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
         )
         if path is None:
             raise TrajectoryGenerationError("no obstacle-free reroute path found")
 
-        # build rerouted waypoints (skip anchors at index 0 and -1)
+        # convert path back to WGS84 and build rerouted waypoints (skip anchors)
         rerouted_wps = []
         for node in path[1:-1]:
-            heading = bearing_between(node.lon, node.lat, center.lon, center.lat)
+            lon, lat = proj.to_wgs84(node[0], node[1])
+            heading = bearing_between(lon, lat, center.lon, center.lat)
             pitch = elevation_angle(
-                node.lon,
-                node.lat,
-                node.alt,
+                lon,
+                lat,
+                anchor_before.alt,
                 center.lon,
                 center.lat,
                 center.alt,
@@ -535,9 +498,9 @@ def resolve_inspection_collisions(
 
             rerouted_wps.append(
                 WaypointData(
-                    lon=node.lon,
-                    lat=node.lat,
-                    alt=node.alt,
+                    lon=lon,
+                    lat=lat,
+                    alt=anchor_before.alt,
                     heading=heading,
                     speed=anchor_before.speed,
                     waypoint_type=WaypointType.MEASUREMENT,
@@ -570,7 +533,7 @@ def resolve_inspection_collisions(
         # validate: line-of-sight to PAPI center
         for wp in rerouted_wps:
             wp_pt = Point3D(lon=wp.lon, lat=wp.lat, alt=wp.alt)
-            if not has_line_of_sight(db, wp_pt, center, nearby_obs, nearby_zones):
+            if not has_line_of_sight(wp_pt, center, local_geoms):
                 raise TrajectoryGenerationError("rerouted path blocks camera line-of-sight to PAPI")
 
         # validate: turn angle
@@ -603,10 +566,8 @@ def _adjust_transit_altitude_for_terrain(
 
 
 def _check_cruise_clearance(
-    db: Session,
     waypoints: list[WaypointData],
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
+    local_geoms: LocalGeometries,
 ) -> None:
     """re-validate transit segments after altitude rewrite.
 
@@ -618,22 +579,22 @@ def _check_cruise_clearance(
     if not waypoints:
         return
 
+    proj = local_geoms.proj
     for k in range(1, len(waypoints)):
         prev, cur = waypoints[k - 1], waypoints[k]
-        from_pt = Point3D(lon=prev.lon, lat=prev.lat, alt=prev.alt)
-        to_pt = Point3D(lon=cur.lon, lat=cur.lat, alt=cur.alt)
-        if _is_segment_blocked(db, from_pt, to_pt, obstacles, zones):
+        from_x, from_y = proj.to_local(prev.lon, prev.lat)
+        to_x, to_y = proj.to_local(cur.lon, cur.lat)
+        if _is_segment_blocked(
+            from_x, from_y, to_x, to_y, local_geoms.obstacles, local_geoms.zones
+        ):
             raise TrajectoryGenerationError("cruise altitude conflicts with obstacle clearance")
 
 
 def compute_transit_path(
-    db: Session,
     from_point: Point3D,
     to_point: Point3D,
-    obstacles: list[Obstacle],
-    zones: list[SafetyZone],
+    local_geoms: LocalGeometries,
     speed: MetersPerSecond,
-    surfaces: list[AirfieldSurface] | None = None,
     elevation_provider=None,
     transit_agl: Meters = TRANSIT_AGL,
     buffer_distance_override: float | None = None,
@@ -648,21 +609,26 @@ def compute_transit_path(
     treated like any other clear segment so the planner picks the shortest
     geodesic, minimising the runway-closure window the operator must request.
     """
+    proj = local_geoms.proj
+    from_x, from_y = proj.to_local(from_point.lon, from_point.lat)
+    to_x, to_y = proj.to_local(to_point.lon, to_point.lat)
+
     # straight-line if path is clear and doesn't cross runway
     fast_path_buffer = buffer_distance_override if buffer_distance_override is not None else 0.0
     if not _is_segment_blocked(
-        db, from_point, to_point, obstacles, zones, buffer_distance=fast_path_buffer
+        from_x,
+        from_y,
+        to_x,
+        to_y,
+        local_geoms.obstacles,
+        local_geoms.zones,
+        buffer_distance=fast_path_buffer,
     ):
         crosses_runway = False
-        if surfaces and require_perpendicular_runway_crossing:
-            for surface in surfaces:
+        if local_geoms.surfaces and require_perpendicular_runway_crossing:
+            for surface in local_geoms.surfaces:
                 crossing = segment_runway_crossing_length(
-                    db,
-                    from_point.lon,
-                    from_point.lat,
-                    to_point.lon,
-                    to_point.lat,
-                    surface,
+                    from_x, from_y, to_x, to_y, surface.polygon
                 )
                 if crossing > 0:
                     crosses_runway = True
@@ -684,45 +650,46 @@ def compute_transit_path(
                 )
             ]
             _adjust_transit_altitude_for_terrain(wps, elevation_provider, transit_agl)
-            _check_cruise_clearance(db, wps, obstacles, zones)
+            _check_cruise_clearance(wps, local_geoms)
             return wps
 
-    # A* through visibility graph with runway penalties
+    # A* through visibility graph with runway penalties in local coords
+    from_local = (from_x, from_y, from_point.alt)
+    to_local = (to_x, to_y, to_point.alt)
+
     path = _run_astar(
-        db,
-        from_point,
-        to_point,
-        obstacles,
-        zones,
-        surfaces,
+        from_local,
+        to_local,
+        local_geoms.obstacles,
+        local_geoms.zones,
+        local_geoms.surfaces,
         buffer_distance_override=buffer_distance_override,
         require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
     )
     if path is None:
         raise TrajectoryGenerationError("no obstacle-free transit path found")
 
-    # initial altitude = max of endpoints so drone never goes underground
-    # when no elevation provider is available; overwritten below when it is.
+    # initial altitude = max of endpoints
     fallback_alt = max(from_point.alt, to_point.alt)
 
-    # convert to TRANSIT waypoints (skip from_point at index 0)
+    # convert back to WGS84 and build TRANSIT waypoints (skip from_point at index 0)
     transit_wps = []
     for k in range(1, len(path)):
-        prev, cur = path[k - 1], path[k]
+        prev_lon, prev_lat = proj.to_wgs84(path[k - 1][0], path[k - 1][1])
+        cur_lon, cur_lat = proj.to_wgs84(path[k][0], path[k][1])
         transit_wps.append(
             WaypointData(
-                lon=cur.lon,
-                lat=cur.lat,
+                lon=cur_lon,
+                lat=cur_lat,
                 alt=fallback_alt,
-                heading=bearing_between(prev.lon, prev.lat, cur.lon, cur.lat),
+                heading=bearing_between(prev_lon, prev_lat, cur_lon, cur_lat),
                 speed=speed,
                 waypoint_type=WaypointType.TRANSIT,
                 camera_action=CameraAction.NONE,
             )
         )
 
-    # if provider is available this replaces fallback_alt with ground+transit_agl
     _adjust_transit_altitude_for_terrain(transit_wps, elevation_provider, transit_agl)
-    _check_cruise_clearance(db, transit_wps, obstacles, zones)
+    _check_cruise_clearance(transit_wps, local_geoms)
 
     return transit_wps

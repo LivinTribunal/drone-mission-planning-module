@@ -1,6 +1,5 @@
 """unit tests for trajectory pathfinding - visibility graph, A*, collision resolution."""
 
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -17,6 +16,7 @@ from app.services.trajectory_pathfinding import (
 )
 from app.services.trajectory_types import DEFAULT_OBSTACLE_RADIUS, Point3D, WaypointData
 from app.utils.geo import bearing_between, total_path_distance
+from app.utils.local_projection import LocalProjection, build_local_geometries
 
 # _max_turn_angle
 
@@ -128,8 +128,7 @@ class TestWaypointDataDefaults:
         assert wp.gimbal_pitch is None
 
 
-# transit path computation - tested via integration tests in test_trajectory_orchestrator
-# but we add geometry-level unit tests here
+# transit path computation
 
 
 class TestTransitPathGeometry:
@@ -205,29 +204,68 @@ class TestMaxEffectiveBuffer:
     """tests for _max_effective_buffer with zero/None/positive overrides."""
 
     def test_zero_override_falls_back_to_per_obstacle(self):
-        """a 0.0 override should not zero out the search radius.
+        """a 0.0 override should not zero out the search radius."""
+        from shapely.geometry import box
 
-        regression: `0.0 or fallback` evaluated to fallback but the None-check
-        rewrite kept returning 0.0 for obstacles. the reroute search radius
-        must stay non-zero or A* produces an empty graph.
-        """
+        from app.services.trajectory_types import LocalObstacle
+
         obstacles = [
-            SimpleNamespace(buffer_distance=5.0),
-            SimpleNamespace(buffer_distance=10.0),
+            LocalObstacle(
+                polygon=box(0, 0, 1, 1),
+                name="a",
+                height=10.0,
+                base_alt=0.0,
+                buffer_distance=5.0,
+            ),
+            LocalObstacle(
+                polygon=box(0, 0, 1, 1),
+                name="b",
+                height=10.0,
+                base_alt=0.0,
+                buffer_distance=10.0,
+            ),
         ]
         assert _max_effective_buffer(obstacles, 0.0) == 10.0
 
     def test_none_override_uses_per_obstacle_max(self):
         """None override uses max per-obstacle buffer."""
+        from shapely.geometry import box
+
+        from app.services.trajectory_types import LocalObstacle
+
         obstacles = [
-            SimpleNamespace(buffer_distance=3.0),
-            SimpleNamespace(buffer_distance=7.0),
+            LocalObstacle(
+                polygon=box(0, 0, 1, 1),
+                name="a",
+                height=10.0,
+                base_alt=0.0,
+                buffer_distance=3.0,
+            ),
+            LocalObstacle(
+                polygon=box(0, 0, 1, 1),
+                name="b",
+                height=10.0,
+                base_alt=0.0,
+                buffer_distance=7.0,
+            ),
         ]
         assert _max_effective_buffer(obstacles, None) == 7.0
 
     def test_positive_override_used_when_obstacles_present(self):
         """positive override replaces per-obstacle values."""
-        obstacles = [SimpleNamespace(buffer_distance=5.0)]
+        from shapely.geometry import box
+
+        from app.services.trajectory_types import LocalObstacle
+
+        obstacles = [
+            LocalObstacle(
+                polygon=box(0, 0, 1, 1),
+                name="a",
+                height=10.0,
+                base_alt=0.0,
+                buffer_distance=5.0,
+            ),
+        ]
         assert _max_effective_buffer(obstacles, 20.0) == 20.0
 
     def test_positive_override_no_obstacles_uses_default(self):
@@ -242,26 +280,29 @@ class TestMaxEffectiveBuffer:
 # regression - buffer_distance_override must reach fast-path segment check
 
 
+def _build_local_geoms(db_session, airport, surfaces, obstacles=None, zones=None):
+    """build LocalGeometries from db objects for test use."""
+    if obstacles:
+        for obs in obstacles:
+            db_session.refresh(obs)
+    for surf in surfaces:
+        db_session.refresh(surf)
+    proj = LocalProjection(ref_lon=14.26, ref_lat=50.10)
+    return build_local_geometries(proj, obstacles or [], zones or [], surfaces)
+
+
 class TestFastPathBufferOverride:
     """regression: compute_transit_path must pass buffer_distance_override to the
     fast-path _is_segment_blocked call, not just the A* branch."""
 
     def test_override_triggers_fast_path_detour(self, db_session):
-        """buffer override must reach the fast-path check, not just the A* branch.
-
-        regression for a bug where compute_transit_path's fast-path segment check
-        ignored buffer_distance_override and fell through to the straight-line
-        path even when the override should have flagged the segment as blocked.
-        """
+        """buffer override must reach the fast-path check, not just the A* branch."""
         airport, runway = _make_perpendicular_runway_airport(db_session)
 
         # straight line endpoints well north of the runway to avoid runway crossing
         from_pt = Point3D(lon=14.262, lat=50.1100, alt=350.0)
         to_pt = Point3D(lon=14.258, lat=50.1100, alt=350.0)
 
-        # small obstacle sitting ~30m north of the line with a 2m intrinsic buffer.
-        # with no override: line clear, fast-path returns 1 waypoint.
-        # with 50m override: inflated footprint crosses the line, forcing A* detour.
         obstacle = Obstacle(
             id=uuid4(),
             airport_id=airport.id,
@@ -282,17 +323,15 @@ class TestFastPathBufferOverride:
         )
         db_session.add(obstacle)
         db_session.commit()
-        db_session.refresh(obstacle)
+
+        local_geoms = _build_local_geoms(db_session, airport, [runway], [obstacle])
 
         # baseline: no override - fast-path returns single waypoint (straight line)
         wps_no_override = compute_transit_path(
-            db_session,
             from_pt,
             to_pt,
-            obstacles=[obstacle],
-            zones=[],
+            local_geoms,
             speed=8.0,
-            surfaces=[runway],
             buffer_distance_override=None,
             require_perpendicular_runway_crossing=False,
         )
@@ -301,26 +340,16 @@ class TestFastPathBufferOverride:
             f"got {len(wps_no_override)}"
         )
 
-        # with 50m override - fast-path must detect the inflated obstacle.
-        # before the fix, fast-path ignored override and returned a single-waypoint
-        # straight line regardless. after the fix, either A* reroutes with >1
-        # intermediate waypoints OR raises when no detour is found - both prove
-        # the override reached the fast-path segment check.
         try:
             wps_with_override = compute_transit_path(
-                db_session,
                 from_pt,
                 to_pt,
-                obstacles=[obstacle],
-                zones=[],
+                local_geoms,
                 speed=8.0,
-                surfaces=[runway],
                 buffer_distance_override=50.0,
                 require_perpendicular_runway_crossing=False,
             )
         except TrajectoryGenerationError as exc:
-            # A* couldn't route around the aggressively inflated obstacle - that's
-            # still evidence the fast-path rejected the straight line as expected
             assert "no obstacle-free transit path found" in str(exc)
         else:
             assert len(wps_with_override) > 1, (
@@ -401,25 +430,21 @@ class TestRequirePerpendicularRunwayCrossing:
     def test_flag_true_keeps_perpendicular_segment(self, db_session):
         """with the flag on, A* must include a segment near runway-perpendicular."""
         _, runway = _make_perpendicular_runway_airport(db_session)
+        local_geoms = _build_local_geoms(db_session, None, [runway])
 
-        # endpoints north and south of east-west runway, offset east of midpoint
         from_pt = Point3D(lon=14.262, lat=50.0975, alt=350.0)
         to_pt = Point3D(lon=14.258, lat=50.1025, alt=350.0)
 
         wps = compute_transit_path(
-            db_session,
             from_pt,
             to_pt,
-            obstacles=[],
-            zones=[],
+            local_geoms,
             speed=8.0,
-            surfaces=[runway],
             require_perpendicular_runway_crossing=True,
         )
 
         bearings = _bearings(wps, from_pt)
 
-        # runway heading 90 -> perpendicular bearings are 0 or 180
         def perp_delta(b):
             return min(abs(b - 0.0), abs(b - 180.0), abs(b - 360.0))
 
@@ -430,28 +455,23 @@ class TestRequirePerpendicularRunwayCrossing:
     def test_flag_false_is_strictly_shorter_and_clears_runway(self, db_session):
         """flag off lets A* (or the fast-path) pick the shortest geodesic crossing."""
         _, runway = _make_perpendicular_runway_airport(db_session)
+        local_geoms = _build_local_geoms(db_session, None, [runway])
 
         from_pt = Point3D(lon=14.262, lat=50.0975, alt=350.0)
         to_pt = Point3D(lon=14.258, lat=50.1025, alt=350.0)
 
         perp_wps = compute_transit_path(
-            db_session,
             from_pt,
             to_pt,
-            obstacles=[],
-            zones=[],
+            local_geoms,
             speed=8.0,
-            surfaces=[runway],
             require_perpendicular_runway_crossing=True,
         )
         short_wps = compute_transit_path(
-            db_session,
             from_pt,
             to_pt,
-            obstacles=[],
-            zones=[],
+            local_geoms,
             speed=8.0,
-            surfaces=[runway],
             require_perpendicular_runway_crossing=False,
         )
 
@@ -468,7 +488,6 @@ class TestRequirePerpendicularRunwayCrossing:
         from_pt = Point3D(lon=14.262, lat=50.0975, alt=350.0)
         to_pt = Point3D(lon=14.258, lat=50.1025, alt=350.0)
 
-        # obstacle straddling the straight line near the midpoint
         obstacle = Obstacle(
             id=uuid4(),
             airport_id=airport.id,
@@ -489,20 +508,17 @@ class TestRequirePerpendicularRunwayCrossing:
         )
         db_session.add(obstacle)
         db_session.commit()
-        db_session.refresh(obstacle)
+
+        local_geoms = _build_local_geoms(db_session, airport, [runway], [obstacle])
 
         wps = compute_transit_path(
-            db_session,
             from_pt,
             to_pt,
-            obstacles=[obstacle],
-            zones=[],
+            local_geoms,
             speed=8.0,
-            surfaces=[runway],
             require_perpendicular_runway_crossing=False,
         )
 
-        # path must be longer than the naive straight line because of the detour
         straight = total_path_distance(
             [(from_pt.lon, from_pt.lat, from_pt.alt), (to_pt.lon, to_pt.lat, to_pt.alt)]
         )
@@ -523,27 +539,23 @@ class TestRequirePerpendicularRunwayCrossing:
         db_session.add(airport)
         db_session.flush()
 
+        local_geoms = _build_local_geoms(db_session, airport, [])
+
         from_pt = Point3D(lon=14.262, lat=50.0975, alt=350.0)
         to_pt = Point3D(lon=14.258, lat=50.1025, alt=350.0)
 
         wps_true = compute_transit_path(
-            db_session,
             from_pt,
             to_pt,
-            obstacles=[],
-            zones=[],
+            local_geoms,
             speed=8.0,
-            surfaces=[],
             require_perpendicular_runway_crossing=True,
         )
         wps_false = compute_transit_path(
-            db_session,
             from_pt,
             to_pt,
-            obstacles=[],
-            zones=[],
+            local_geoms,
             speed=8.0,
-            surfaces=[],
             require_perpendicular_runway_crossing=False,
         )
         # both fast-path single-segment, same endpoint
@@ -557,7 +569,6 @@ class TestRequirePerpendicularRunwayCrossing:
 
         center = Point3D(lon=14.26, lat=50.10, alt=300.0)
 
-        # obstacle on the south side of the runway, straddling a measurement waypoint
         obstacle = Obstacle(
             id=uuid4(),
             airport_id=airport.id,
@@ -578,11 +589,9 @@ class TestRequirePerpendicularRunwayCrossing:
         )
         db_session.add(obstacle)
         db_session.commit()
-        db_session.refresh(obstacle)
 
-        # waypoints: anchor south -> colliding wp inside obstacle -> anchor north of runway
-        # buffer_distance_override=50 ensures the search radius is large enough
-        # for _collect_nearby_objects to find the obstacle
+        local_geoms = _build_local_geoms(db_session, airport, [runway], [obstacle])
+
         wps = [
             WaypointData(lon=14.260, lat=50.096, alt=350.0, heading=0.0),
             WaypointData(lon=14.260, lat=50.099, alt=350.0, heading=0.0),
@@ -590,22 +599,16 @@ class TestRequirePerpendicularRunwayCrossing:
         ]
 
         result_perp = resolve_inspection_collisions(
-            db_session,
             wps,
-            [obstacle],
-            [],
+            local_geoms,
             center,
-            [runway],
             buffer_distance_override=50.0,
             require_perpendicular_runway_crossing=True,
         )
         result_short = resolve_inspection_collisions(
-            db_session,
             wps,
-            [obstacle],
-            [],
+            local_geoms,
             center,
-            [runway],
             buffer_distance_override=50.0,
             require_perpendicular_runway_crossing=False,
         )

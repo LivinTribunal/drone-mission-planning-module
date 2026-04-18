@@ -32,7 +32,12 @@ from app.schemas.infrastructure import (
     SurfaceUpdate,
 )
 from app.services.elevation_provider import create_elevation_provider
-from app.services.geometry_converter import apply_schema_update, schema_to_model_data
+from app.services.geometry_converter import (
+    apply_schema_update,
+    geojson_to_ewkt,
+    schema_to_model_data,
+)
+from app.utils.geo import polygon_oriented_dimensions
 
 logger = logging.getLogger(__name__)
 
@@ -442,6 +447,23 @@ def _normalize_boundary_altitude(boundary: PolygonZ | None, airport: Airport) ->
             provider.close()
 
 
+def _derive_position_and_radius(boundary: PolygonZ) -> tuple[WKTElement, float]:
+    """compute centroid position and radius from a polygon boundary."""
+    ring = boundary.coordinates[0]
+    pts = ring[:-1] if len(ring) >= 2 and ring[0] == ring[-1] else list(ring)
+    n = len(pts)
+    lon = sum(p[0] for p in pts) / n
+    lat = sum(p[1] for p in pts) / n
+    alt = sum((p[2] if len(p) >= 3 else 0) for p in pts) / n
+    centroid_geojson = {"type": "Point", "coordinates": [lon, lat, alt]}
+    position = WKTElement(geojson_to_ewkt(centroid_geojson), srid=4326)
+
+    _, width, _ = polygon_oriented_dimensions(ring)
+    radius = width / 2.0 if width > 0 else 0.0
+
+    return position, radius
+
+
 def create_obstacle(db: Session, airport_id: UUID, schema: ObstacleCreate) -> Obstacle:
     """create obstacle via airport aggregate root."""
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
@@ -452,15 +474,9 @@ def create_obstacle(db: Session, airport_id: UUID, schema: ObstacleCreate) -> Ob
     _normalize_boundary_altitude(schema.boundary, airport)
 
     data = schema_to_model_data(schema)
-
-    # derive position (centroid) and radius from boundary when not provided
-    if data.get("position") is None and schema.boundary and schema.boundary.coordinates:
-        cx, cy, z = Obstacle.centroid_from_boundary_ring(schema.boundary.coordinates[0])
-        data["position"] = WKTElement(f"SRID=4326;POINTZ({cx} {cy} {z})", srid=4326)
-
-    if data.get("radius") is None:
-        data["radius"] = 3.0
-
+    position, radius = _derive_position_and_radius(schema.boundary)
+    data["position"] = position
+    data["radius"] = radius
     obstacle = Obstacle(**data)
     airport.add_obstacle(obstacle)
     db.commit()
@@ -491,10 +507,11 @@ def update_obstacle(
 
     apply_schema_update(obstacle, schema)
 
-    # recompute position centroid when boundary changes
+    # recompute position/radius when boundary changes
     if schema.boundary and schema.boundary.coordinates:
-        cx, cy, z = Obstacle.centroid_from_boundary_ring(schema.boundary.coordinates[0])
-        obstacle.position = WKTElement(f"SRID=4326;POINTZ({cx} {cy} {z})", srid=4326)
+        position, radius = _derive_position_and_radius(schema.boundary)
+        obstacle.position = position
+        obstacle.radius = radius
 
     db.commit()
     db.refresh(obstacle)

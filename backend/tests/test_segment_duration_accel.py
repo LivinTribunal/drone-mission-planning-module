@@ -111,3 +111,24 @@ def test_triangular_profile_peak_velocity():
     dur = _segment_duration_with_accel(d, 1.0, 1.0, accel=2.0, decel=2.0)
     # cruise=1, d_accel=0, d_decel=0 -> constant speed, t = 2/1 = 2.0
     assert dur == pytest.approx(2.0, rel=1e-9)
+
+
+def test_triangular_profile_computed_duration():
+    """verify triangular fallback computes expected v_peak and duration.
+
+    v_start=1, v_end=5, accel=2, decel=2, distance=3m.
+    d_accel to reach cruise(5) = (25-1)/4 = 6m > 3m -> triangular.
+    v_peak^2 = (2*2*2*3 + 2*1 + 2*25) / 4 = 19, v_peak = sqrt(19) ≈ 4.36.
+    since v_peak < v_end, only accel phase is active: t = (sqrt(19)-1)/2.
+    """
+    import math
+
+    d = 3.0
+    dur = _segment_duration_with_accel(d, 1.0, 5.0, accel=2.0, decel=2.0)
+    v_peak = math.sqrt(19)
+    expected = (v_peak - 1.0) / 2.0
+    assert dur == pytest.approx(expected, rel=1e-9)
+
+    # triangular must be slower than trapezoidal at cruise speed
+    dur_trap = _segment_duration_with_accel(d, 5.0, 5.0)
+    assert dur > dur_trap

@@ -238,14 +238,24 @@ def angular_span_at_distance(
     return span
 
 
+def euclidean_distance(x1: float, y1: float, x2: float, y2: float) -> float:
+    """euclidean distance between two points in local meter coordinates."""
+    return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+
 # A* pathfinding on visibility graph
 def astar(
     graph: dict[int, list[tuple[int, float]]],
     start: int,
     goal: int,
     positions: list[tuple[float, float, float]],
+    use_euclidean: bool = False,
 ) -> list[int] | None:
-    """A* shortest path - returns node index list or None if unreachable"""
+    """A* shortest path - returns node index list or None if unreachable.
+
+    when use_euclidean is True, the heuristic uses euclidean distance
+    in local meter coordinates instead of haversine.
+    """
     open_set = [(0.0, start)]
     came_from: dict[int, int] = {}
     g_score: dict[int, float] = {start: 0.0}
@@ -269,13 +279,20 @@ def astar(
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g
 
-                # heuristic = geodesic distance to goal
-                heuristic = distance_between(
-                    positions[neighbor][0],
-                    positions[neighbor][1],
-                    positions[goal][0],
-                    positions[goal][1],
-                )
+                if use_euclidean:
+                    heuristic = euclidean_distance(
+                        positions[neighbor][0],
+                        positions[neighbor][1],
+                        positions[goal][0],
+                        positions[goal][1],
+                    )
+                else:
+                    heuristic = distance_between(
+                        positions[neighbor][0],
+                        positions[neighbor][1],
+                        positions[goal][0],
+                        positions[goal][1],
+                    )
                 heapq.heappush(open_set, (tentative_g + heuristic, neighbor))
 
     return None

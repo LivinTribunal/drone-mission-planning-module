@@ -65,6 +65,7 @@ from app.services.trajectory_types import (
     WaypointData,
 )
 from app.utils.geo import bearing_between, distance_between, total_path_distance
+from app.utils.local_projection import LocalProjection, build_local_geometries
 
 
 def _parse_coordinate(ewkb_data, label: str) -> list[float]:
@@ -350,6 +351,11 @@ def _generate_trajectory_inner(
     # operator opt-in: allow shortest-geodesic crossing instead of perpendicular,
     # reducing the runway closure window. defaults True for legacy behavior.
     require_perpendicular = data.mission.require_perpendicular_runway_crossing
+
+    # set up local projection centered on airport for Shapely-based pathfinding
+    airport_coords = _parse_coordinate(data.airport.location.data, "airport")
+    proj = LocalProjection(ref_lon=airport_coords[0], ref_lat=airport_coords[1])
+    local_geoms = build_local_geometries(proj, data.obstacles, data.safety_zones, data.surfaces)
 
     sorted_inspections = sorted(mission.inspections, key=lambda i: i.sequence_order)
 
@@ -637,13 +643,10 @@ def _generate_trajectory_inner(
 
         # phase 3 - validate and reroute
         violations = validate_inspection_pass(
-            db,
             pass_wps,
             drone,
             data.constraints,
-            data.obstacles,
-            data.safety_zones,
-            data.surfaces,
+            local_geoms,
             elevation_provider=data.elevation_provider,
             buffer_distance=config.buffer_distance,
         )
@@ -654,25 +657,19 @@ def _generate_trajectory_inner(
 
         if obstacle_violations:
             pass_wps = resolve_inspection_collisions(
-                db,
                 pass_wps,
-                data.obstacles,
-                data.safety_zones,
+                local_geoms,
                 center,
-                data.surfaces,
                 buffer_distance_override=config.buffer_distance,
                 require_perpendicular_runway_crossing=require_perpendicular,
             )
 
             # re-validate after rerouting
             violations = validate_inspection_pass(
-                db,
                 pass_wps,
                 drone,
                 data.constraints,
-                data.obstacles,
-                data.safety_zones,
-                data.surfaces,
+                local_geoms,
                 elevation_provider=data.elevation_provider,
                 buffer_distance=config.buffer_distance,
             )
@@ -705,7 +702,7 @@ def _generate_trajectory_inner(
             if wp.waypoint_type not in (WaypointType.MEASUREMENT, WaypointType.HOVER):
                 continue
             wp_pt = Point3D(lon=wp.lon, lat=wp.lat, alt=wp.alt)
-            if not has_line_of_sight(db, wp_pt, center, data.obstacles, data.safety_zones):
+            if not has_line_of_sight(wp_pt, center, local_geoms):
                 obstructed_wps.append(wp_idx)
 
         points = [(wp.lon, wp.lat, wp.alt) for wp in pass_wps]
@@ -734,18 +731,6 @@ def _generate_trajectory_inner(
 
     if not inspection_passes:
         raise TrajectoryGenerationError("no waypoints generated")
-
-    # battery check after all inspections are computed
-    # only include T/L overhead for scopes that generate those waypoints
-    if drone:
-        tl_overhead = TAKEOFF_DURATION + LANDING_DURATION if scope == "FULL" else 0.0
-        bw = check_battery(
-            cumulative_duration + tl_overhead,
-            drone,
-            DEFAULT_RESERVE_MARGIN,
-        )
-        if bw:
-            warnings.append((bw.message, []))
 
     # phase 5 - final assembly with A* transit
     all_waypoints: list[WaypointData] = []
@@ -812,13 +797,10 @@ def _generate_trajectory_inner(
             to_pt = Point3D(lon=start.lon, lat=start.lat, alt=start.alt)
 
             transit_wps = compute_transit_path(
-                db,
                 from_pt,
                 to_pt,
-                data.obstacles,
-                data.safety_zones,
+                local_geoms,
                 default_speed,
-                data.surfaces,
                 elevation_provider=provider,
                 transit_agl=transit_agl,
                 buffer_distance_override=mission_buffer_override,
@@ -840,31 +822,16 @@ def _generate_trajectory_inner(
         to_pt = Point3D(lon=lc[0], lat=lc[1], alt=landing_alt + transit_agl)
 
         landing_transit = compute_transit_path(
-            db,
             from_pt,
             to_pt,
-            data.obstacles,
-            data.safety_zones,
+            local_geoms,
             default_speed,
-            data.surfaces,
             elevation_provider=provider,
             transit_agl=transit_agl,
             buffer_distance_override=mission_buffer_override,
             require_perpendicular_runway_crossing=require_perpendicular,
         )
         all_waypoints.extend(landing_transit)
-
-        all_waypoints.append(
-            WaypointData(
-                lon=lc[0],
-                lat=lc[1],
-                alt=landing_alt + transit_agl,
-                heading=all_waypoints[-1].heading,
-                speed=default_speed,
-                waypoint_type=WaypointType.TRANSIT,
-                camera_action=CameraAction.NONE,
-            )
-        )
 
     else:
         # FULL scope (default): takeoff at ground level -> climb -> transit -> landing
@@ -914,13 +881,10 @@ def _generate_trajectory_inner(
                 to_pt = Point3D(lon=start.lon, lat=start.lat, alt=start.alt)
 
                 transit_wps = compute_transit_path(
-                    db,
                     from_pt,
                     to_pt,
-                    data.obstacles,
-                    data.safety_zones,
+                    local_geoms,
                     default_speed,
-                    data.surfaces,
                     elevation_provider=provider,
                     transit_agl=transit_agl,
                     buffer_distance_override=mission_buffer_override,
@@ -944,13 +908,10 @@ def _generate_trajectory_inner(
             to_pt = Point3D(lon=lc[0], lat=lc[1], alt=landing_alt)
 
             landing_transit = compute_transit_path(
-                db,
                 from_pt,
                 to_pt,
-                data.obstacles,
-                data.safety_zones,
+                local_geoms,
                 default_speed,
-                data.surfaces,
                 elevation_provider=provider,
                 transit_agl=transit_agl,
                 buffer_distance_override=mission_buffer_override,
@@ -1028,25 +989,29 @@ def _generate_trajectory_inner(
     for j in range(1, len(all_waypoints)):
         prev_wp = all_waypoints[j - 1]
         cur_wp = all_waypoints[j]
-        for surface in data.surfaces:
+        prev_x, prev_y = proj.to_local(prev_wp.lon, prev_wp.lat)
+        cur_x, cur_y = proj.to_local(cur_wp.lon, cur_wp.lat)
+        for local_surface in local_geoms.surfaces:
             crossing = segment_runway_crossing_length(
-                db,
-                prev_wp.lon,
-                prev_wp.lat,
-                cur_wp.lon,
-                cur_wp.lat,
-                surface,
+                prev_x,
+                prev_y,
+                cur_x,
+                cur_y,
+                local_surface.polygon,
             )
             if crossing > 0:
                 wp_type = cur_wp.waypoint_type
                 if wp_type == WaypointType.MEASUREMENT:
                     seq = wp_inspection_seq.get(j, 0)
-                    key = (seq, f"{surface.surface_type} {surface.identifier}")
+                    key = (
+                        seq,
+                        f"{local_surface.surface_type} {local_surface.identifier}",
+                    )
                     measurement_crossings.setdefault(key, []).append(j)
                 else:
                     msg = (
                         f"wp {j}-{j + 1} ({wp_type}): crosses "
-                        f"{surface.surface_type} {surface.identifier} "
+                        f"{local_surface.surface_type} {local_surface.identifier} "
                         f"({crossing:.0f}m)"
                     )
                     seen_msgs = {m for m, _ in non_aborting_violations}
@@ -1076,13 +1041,10 @@ def _generate_trajectory_inner(
         else settings.vertex_buffer_m
     )
     final_violations = validate_inspection_pass(
-        db,
         all_waypoints,
         drone,
         data.constraints,
-        data.obstacles,
-        data.safety_zones,
-        data.surfaces,
+        local_geoms,
         elevation_provider=provider,
         buffer_distance=final_buffer,
     )
@@ -1135,6 +1097,12 @@ def _generate_trajectory_inner(
 
         if all_waypoints[j].hover_duration is not None:
             total_dur += all_waypoints[j].hover_duration
+
+    # battery check after all phases including transit durations
+    if drone:
+        bw = check_battery(total_dur, drone, DEFAULT_RESERVE_MARGIN)
+        if bw:
+            warnings.append((bw.message, []))
 
     flight_plan = persist_flight_plan(
         db,
