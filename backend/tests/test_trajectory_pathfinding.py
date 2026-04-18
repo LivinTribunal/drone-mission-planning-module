@@ -423,9 +423,9 @@ class TestRequirePerpendicularRunwayCrossing:
         def perp_delta(b):
             return min(abs(b - 0.0), abs(b - 180.0), abs(b - 360.0))
 
-        assert any(
-            perp_delta(b) <= 5.0 for b in bearings
-        ), f"no perpendicular segment found in bearings {bearings}"
+        assert any(perp_delta(b) <= 5.0 for b in bearings), (
+            f"no perpendicular segment found in bearings {bearings}"
+        )
 
     def test_flag_false_is_strictly_shorter_and_clears_runway(self, db_session):
         """flag off lets A* (or the fast-path) pick the shortest geodesic crossing."""
@@ -457,9 +457,9 @@ class TestRequirePerpendicularRunwayCrossing:
 
         perp_dist = _path_distance(perp_wps, from_pt)
         short_dist = _path_distance(short_wps, from_pt)
-        assert (
-            short_dist < perp_dist
-        ), f"shortest-geodesic distance {short_dist:.1f} not < perpendicular {perp_dist:.1f}"
+        assert short_dist < perp_dist, (
+            f"shortest-geodesic distance {short_dist:.1f} not < perpendicular {perp_dist:.1f}"
+        )
 
     def test_flag_false_still_avoids_obstacle(self, db_session):
         """flag off must still detour around an obstacle on the straight line."""
@@ -507,9 +507,9 @@ class TestRequirePerpendicularRunwayCrossing:
             [(from_pt.lon, from_pt.lat, from_pt.alt), (to_pt.lon, to_pt.lat, to_pt.alt)]
         )
         rerouted = _path_distance(wps, from_pt)
-        assert (
-            rerouted > straight
-        ), f"rerouted distance {rerouted:.1f} not greater than straight {straight:.1f}"
+        assert rerouted > straight, (
+            f"rerouted distance {rerouted:.1f} not greater than straight {straight:.1f}"
+        )
 
     def test_flag_false_no_runways_matches_default(self, db_session):
         """without any runways, both flag values produce the same straight-line path."""
@@ -615,6 +615,6 @@ class TestRequirePerpendicularRunwayCrossing:
         perp_dist = total_path_distance(perp_pts)
         short_dist = total_path_distance(short_pts)
 
-        assert (
-            short_dist < perp_dist
-        ), f"flag=False reroute {short_dist:.1f} not shorter than flag=True {perp_dist:.1f}"
+        assert short_dist < perp_dist, (
+            f"flag=False reroute {short_dist:.1f} not shorter than flag=True {perp_dist:.1f}"
+        )

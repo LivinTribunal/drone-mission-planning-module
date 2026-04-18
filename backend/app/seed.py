@@ -167,11 +167,9 @@ def seed_airport(icao: str) -> None:
         for obs in data.obstacles:
             bnd = obs.boundary.model_dump()
             ring = bnd["coordinates"][0]
-            lons = [c[0] for c in ring]
-            lats = [c[1] for c in ring]
-            centroid_lon = sum(lons) / len(lons)
-            centroid_lat = sum(lats) / len(lats)
-            centroid_z = ring[0][2] if len(ring[0]) >= 3 else data.elevation
+            centroid_lon, centroid_lat, centroid_z = Obstacle.centroid_from_boundary_ring(ring)
+            if centroid_z == 0.0:
+                centroid_z = data.elevation
 
             obstacle = Obstacle(
                 airport_id=airport.id,

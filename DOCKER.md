@@ -33,8 +33,8 @@ The stack starts in dependency order:
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost |
-| Backend API | http://localhost:8000 |
-| API docs | http://localhost:8000/docs |
+| Backend API | http://localhost/api/v1 |
+| API docs | http://localhost/api/docs |
 | Database | localhost:5432 |
 
 ---
@@ -164,7 +164,7 @@ Usually means the DB wasn't ready yet. The `depends_on` healthcheck should preve
 
 **Port already in use**
 
-Another service is binding port 80, 8000, or 5432. Either stop the conflicting service or change the host-side port in `docker-compose.yml` (e.g. `"8080:80"`).
+Another service is binding port 80 or 5432. Either stop the conflicting service or change the host-side port in `docker-compose.yml` (e.g. `"8080:80"`).
 
 **3D globe tiles not loading**
 

@@ -455,11 +455,7 @@ def create_obstacle(db: Session, airport_id: UUID, schema: ObstacleCreate) -> Ob
 
     # derive position (centroid) and radius from boundary when not provided
     if data.get("position") is None and schema.boundary and schema.boundary.coordinates:
-        ring = schema.boundary.coordinates[0]
-        lons = [c[0] for c in ring]
-        lats = [c[1] for c in ring]
-        z = ring[0][2] if len(ring[0]) >= 3 else 0.0
-        cx, cy = sum(lons) / len(lons), sum(lats) / len(lats)
+        cx, cy, z = Obstacle.centroid_from_boundary_ring(schema.boundary.coordinates[0])
         data["position"] = WKTElement(f"SRID=4326;POINTZ({cx} {cy} {z})", srid=4326)
 
     if data.get("radius") is None:
@@ -497,11 +493,7 @@ def update_obstacle(
 
     # recompute position centroid when boundary changes
     if schema.boundary and schema.boundary.coordinates:
-        ring = schema.boundary.coordinates[0]
-        lons = [c[0] for c in ring]
-        lats = [c[1] for c in ring]
-        z = ring[0][2] if len(ring[0]) >= 3 else 0.0
-        cx, cy = sum(lons) / len(lons), sum(lats) / len(lats)
+        cx, cy, z = Obstacle.centroid_from_boundary_ring(schema.boundary.coordinates[0])
         obstacle.position = WKTElement(f"SRID=4326;POINTZ({cx} {cy} {z})", srid=4326)
 
     db.commit()
