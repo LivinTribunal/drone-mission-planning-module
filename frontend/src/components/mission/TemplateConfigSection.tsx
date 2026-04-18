@@ -4,6 +4,7 @@ import type { InspectionConfigResponse } from "@/types/inspectionTemplate";
 import type { InspectionMethod } from "@/types/enums";
 import type { AGLResponse } from "@/types/airport";
 import { methodsForAgl } from "@/utils/methodAglCompatibility";
+import { formatAglDisplayName } from "@/utils/agl";
 
 interface TemplateConfigSectionProps {
   config: Omit<InspectionConfigResponse, "id"> | null;
@@ -71,7 +72,7 @@ export default function TemplateConfigSection({
           <option value="">{t("coordinator.inspections.selectAgl")}</option>
           {allAgls.map((agl) => (
             <option key={agl.id} value={agl.id}>
-              {agl.name}{agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()} side)` : ""}
+              {formatAglDisplayName(agl)}
             </option>
           ))}
         </select>

@@ -8,7 +8,7 @@ import type {
   LHAResponse,
 } from "./airport";
 import type { WaypointResponse } from "./flightPlan";
-import type { MissionStatus } from "./enums";
+import type { FlightPlanScope, MissionStatus } from "./enums";
 import type { PointZ } from "./common";
 
 export interface MapLayerConfig {
@@ -108,7 +108,7 @@ export interface AirportMapProps {
   terrainMode?: "map" | "satellite";
   onTerrainChange?: (mode: "map" | "satellite") => void;
   missionStatus?: MissionStatus;
-  flightPlanScope?: string;
+  flightPlanScope?: FlightPlanScope;
   onMapClick?: (lngLat: { lng: number; lat: number }) => void;
   visibleInspectionIds?: Set<string>;
   takeoffCoordinate?: PointZ | null;
