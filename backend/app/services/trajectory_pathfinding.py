@@ -1,7 +1,8 @@
 import logging
 import math
 
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
+from shapely.prepared import prep
 
 from app.core.config import settings
 from app.core.exceptions import TrajectoryGenerationError
@@ -14,6 +15,8 @@ from app.services.safety_validator import (
 )
 from app.services.trajectory_types import (
     DEFAULT_OBSTACLE_RADIUS,
+    GRID_EDGE_RADIUS,
+    GRID_NODE_SPACING,
     HARD_ZONE_TYPES,
     MAX_REROUTE_DEVIATION,
     MAX_TURN_ANGLE,
@@ -128,6 +131,7 @@ def _build_visibility_graph(
     surfaces: list[LocalSurface] | None = None,
     buffer_distance: Meters = 0.0,
     require_perpendicular_runway_crossing: bool = True,
+    grid_start_index: int = -1,
 ) -> dict[int, list[tuple[int, float]]]:
     """build adjacency list where edges connect unobstructed node pairs.
 
@@ -135,6 +139,9 @@ def _build_visibility_graph(
     get a distance penalty proportional to crossing length, making A* prefer
     routes that go around runways or cross perpendicularly. when False, no
     crossing penalty is applied so the planner picks the shortest geodesic.
+
+    when grid_start_index >= 0, grid-to-grid edges beyond GRID_EDGE_RADIUS
+    are skipped to keep the O(N^2) check manageable.
 
     all coordinates are in local meters. edge weights use euclidean distance.
     """
@@ -151,6 +158,11 @@ def _build_visibility_graph(
         for j in range(i + 1, len(nodes)):
             xi, yi = nodes[i][0], nodes[i][1]
             xj, yj = nodes[j][0], nodes[j][1]
+
+            # grid-to-grid neighbor-radius optimization
+            if grid_start_index >= 0 and i >= grid_start_index and j >= grid_start_index:
+                if euclidean_distance(xi, yi, xj, yj) > GRID_EDGE_RADIUS:
+                    continue
 
             # check obstacles with pre-buffered polygons
             blocked = False
@@ -195,11 +207,13 @@ def _collect_graph_nodes_in_circle(
     radius: Meters,
     buffer_distance_override: float | None = None,
     require_perpendicular_runway_crossing: bool = True,
-) -> list[tuple[float, float, float]]:
+) -> tuple[list[tuple[float, float, float]], int]:
     """collect nodes within search circle for visibility graph construction.
 
-    includes endpoints plus nearby vertices from obstacles, hard zones,
-    and runway/taxiway surfaces. all coordinates in local meters.
+    includes endpoints, obstacle/zone vertices, surface edge nodes,
+    and a regular grid fill in open space. returns (nodes, grid_start_index)
+    where grid_start_index marks where grid nodes begin.
+    all coordinates in local meters.
     """
     nodes = list(endpoints)
 
@@ -287,7 +301,43 @@ def _collect_graph_nodes_in_circle(
                     if in_circle(pr_x, pr_y):
                         nodes.append((pr_x, pr_y, 0.0))
 
-    return nodes
+    # grid fill - regular 2D grid in navigable open space
+    grid_start_index = len(nodes)
+
+    cruise_z = sum(ep[2] for ep in endpoints) / len(endpoints) if endpoints else 0.0
+
+    # pre-build exclusion polygons
+    exclusion_polys = []
+    for obs in obstacles:
+        buf = (
+            buffer_distance_override
+            if buffer_distance_override is not None
+            else obs.buffer_distance
+        )
+        buffered = obs.polygon.buffer(buf) if buf and buf > 0 else obs.polygon
+        exclusion_polys.append(prep(buffered))
+
+    for zone in zones:
+        if zone.zone_type in HARD_ZONE_TYPES:
+            exclusion_polys.append(prep(zone.polygon))
+
+    x_min = center[0] - radius
+    x_max = center[0] + radius
+    y_min = center[1] - radius
+    y_max = center[1] + radius
+
+    x = x_min
+    while x <= x_max:
+        y = y_min
+        while y <= y_max:
+            if in_circle(x, y):
+                pt = Point(x, y)
+                if not any(ep.contains(pt) for ep in exclusion_polys):
+                    nodes.append((x, y, cruise_z))
+            y += GRID_NODE_SPACING
+        x += GRID_NODE_SPACING
+
+    return nodes, grid_start_index
 
 
 def _run_astar(
@@ -311,7 +361,7 @@ def _run_astar(
     radius = max(base_dist * SEARCH_RADIUS_MARGIN / 2, MIN_SEARCH_RADIUS)
 
     for attempt in range(MAX_ASTAR_RETRIES):
-        nodes = _collect_graph_nodes_in_circle(
+        nodes, grid_start_index = _collect_graph_nodes_in_circle(
             [from_local, to_local],
             obstacles,
             zones,
@@ -330,6 +380,7 @@ def _run_astar(
                 buffer_distance_override if buffer_distance_override is not None else 0.0
             ),
             require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
+            grid_start_index=grid_start_index,
         )
 
         path_indices = astar(graph, 0, 1, nodes, use_euclidean=True)

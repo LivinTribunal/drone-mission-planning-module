@@ -1,21 +1,33 @@
 """unit tests for trajectory pathfinding - visibility graph, A*, collision resolution."""
 
+import time
 from uuid import uuid4
 
 import pytest
 from geoalchemy2.elements import WKTElement
+from shapely.geometry import Point, box
 
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.airport import Airport, Obstacle, Runway
-from app.models.enums import CameraAction, WaypointType
+from app.models.enums import CameraAction, SafetyZoneType, WaypointType
 from app.services.trajectory_pathfinding import (
+    _build_visibility_graph,
+    _collect_graph_nodes_in_circle,
     _max_effective_buffer,
     _max_turn_angle,
+    _run_astar,
     compute_transit_path,
     resolve_inspection_collisions,
 )
-from app.services.trajectory_types import DEFAULT_OBSTACLE_RADIUS, Point3D, WaypointData
-from app.utils.geo import bearing_between, total_path_distance
+from app.services.trajectory_types import (
+    DEFAULT_OBSTACLE_RADIUS,
+    GRID_EDGE_RADIUS,
+    LocalObstacle,
+    LocalZone,
+    Point3D,
+    WaypointData,
+)
+from app.utils.geo import astar, bearing_between, euclidean_distance, total_path_distance
 from app.utils.local_projection import LocalProjection, build_local_geometries
 
 # _max_turn_angle
@@ -621,3 +633,298 @@ class TestRequirePerpendicularRunwayCrossing:
         assert short_dist < perp_dist, (
             f"flag=False reroute {short_dist:.1f} not shorter than flag=True {perp_dist:.1f}"
         )
+
+
+# hybrid grid generation
+
+
+class TestGridGeneration:
+    """tests for grid fill in _collect_graph_nodes_in_circle."""
+
+    def test_grid_covers_open_space(self):
+        """grid nodes fill the circle area when no obstacles or zones."""
+        center = (0.0, 0.0)
+        radius = 500.0
+        endpoints = [(200.0, 0.0, 350.0), (-200.0, 0.0, 350.0)]
+
+        nodes, grid_start_index = _collect_graph_nodes_in_circle(
+            endpoints, [], [], None, center, radius
+        )
+
+        grid_nodes = nodes[grid_start_index:]
+        assert len(grid_nodes) > 100, f"expected >100 grid nodes, got {len(grid_nodes)}"
+
+        # all grid nodes within circle
+        for x, y, z in grid_nodes:
+            assert euclidean_distance(center[0], center[1], x, y) <= radius + 1.0
+
+    def test_grid_excludes_obstacle_interior(self):
+        """no grid nodes inside buffered obstacle polygon."""
+        obs = LocalObstacle(
+            polygon=box(40, 40, 60, 60),
+            name="block",
+            height=10.0,
+            base_alt=0.0,
+            buffer_distance=5.0,
+        )
+        center = (50.0, 50.0)
+        radius = 200.0
+        endpoints = [(0.0, 50.0, 350.0), (100.0, 50.0, 350.0)]
+
+        nodes, grid_start_index = _collect_graph_nodes_in_circle(
+            endpoints, [obs], [], None, center, radius
+        )
+
+        buffered_obs = obs.polygon.buffer(obs.buffer_distance)
+        grid_nodes = nodes[grid_start_index:]
+        for x, y, z in grid_nodes:
+            assert not buffered_obs.contains(Point(x, y)), (
+                f"grid node ({x}, {y}) inside buffered obstacle"
+            )
+
+    def test_grid_excludes_hard_zone_interior(self):
+        """no grid nodes inside prohibited safety zone polygon."""
+        zone = LocalZone(
+            polygon=box(-30, -30, 30, 30),
+            zone_type=SafetyZoneType.PROHIBITED,
+            name="no-fly",
+            altitude_floor=None,
+            altitude_ceiling=None,
+        )
+        center = (0.0, 0.0)
+        radius = 200.0
+        endpoints = [(-100.0, 0.0, 350.0), (100.0, 0.0, 350.0)]
+
+        nodes, grid_start_index = _collect_graph_nodes_in_circle(
+            endpoints, [], [zone], None, center, radius
+        )
+
+        grid_nodes = nodes[grid_start_index:]
+        for x, y, z in grid_nodes:
+            assert not zone.polygon.contains(Point(x, y)), f"grid node ({x}, {y}) inside hard zone"
+
+    def test_grid_nodes_use_cruise_altitude(self):
+        """grid nodes z-coordinate equals average of endpoint altitudes."""
+        endpoints = [(0.0, 0.0, 300.0), (100.0, 0.0, 400.0)]
+        center = (50.0, 0.0)
+        radius = 200.0
+
+        nodes, grid_start_index = _collect_graph_nodes_in_circle(
+            endpoints, [], [], None, center, radius
+        )
+
+        expected_z = 350.0
+        grid_nodes = nodes[grid_start_index:]
+        assert len(grid_nodes) > 0
+        for x, y, z in grid_nodes:
+            assert z == expected_z, f"grid node z={z}, expected {expected_z}"
+
+    def test_grid_start_index_separates_feature_and_grid_nodes(self):
+        """grid_start_index equals count of non-grid nodes."""
+        obs = LocalObstacle(
+            polygon=box(80, 80, 90, 90),
+            name="tiny",
+            height=10.0,
+            base_alt=0.0,
+            buffer_distance=2.0,
+        )
+        center = (50.0, 50.0)
+        radius = 200.0
+        endpoints = [(0.0, 50.0, 350.0), (100.0, 50.0, 350.0)]
+
+        nodes, grid_start_index = _collect_graph_nodes_in_circle(
+            endpoints, [obs], [], None, center, radius
+        )
+
+        # grid_start_index should be at least len(endpoints)
+        assert grid_start_index >= len(endpoints)
+
+        # nodes before grid_start_index are endpoints + obstacle vertices
+        # nodes after are grid nodes on a regular spacing
+        grid_nodes = nodes[grid_start_index:]
+        assert len(grid_nodes) > 0
+
+
+class TestGridAStarPath:
+    """tests for A* pathfinding with hybrid grid."""
+
+    def test_open_space_path_is_near_straight(self):
+        """path through grid in open space is close to straight-line distance."""
+        from_local = (-200.0, 0.0, 350.0)
+        to_local = (200.0, 0.0, 350.0)
+
+        path = _run_astar(from_local, to_local, [], [])
+        assert path is not None, "A* should find path in open space"
+
+        straight = euclidean_distance(from_local[0], from_local[1], to_local[0], to_local[1])
+        path_len = sum(
+            euclidean_distance(path[i][0], path[i][1], path[i + 1][0], path[i + 1][1])
+            for i in range(len(path) - 1)
+        )
+        assert path_len < straight * 1.15, (
+            f"path {path_len:.1f}m is >15% longer than straight {straight:.1f}m"
+        )
+
+    def test_grid_path_avoids_obstacle(self):
+        """path routes around an obstacle between endpoints."""
+        obs = LocalObstacle(
+            polygon=box(-20, -20, 20, 20),
+            name="center-block",
+            height=50.0,
+            base_alt=0.0,
+            buffer_distance=5.0,
+        )
+
+        from_local = (-150.0, 0.0, 350.0)
+        to_local = (150.0, 0.0, 350.0)
+
+        path = _run_astar(from_local, to_local, [obs], [])
+        assert path is not None, "A* should find path around obstacle"
+
+        buffered = obs.polygon.buffer(obs.buffer_distance)
+        for node in path[1:-1]:
+            assert not buffered.contains(Point(node[0], node[1])), (
+                f"path node ({node[0]:.1f}, {node[1]:.1f}) inside obstacle"
+            )
+
+        straight = euclidean_distance(from_local[0], from_local[1], to_local[0], to_local[1])
+        path_len = sum(
+            euclidean_distance(path[i][0], path[i][1], path[i + 1][0], path[i + 1][1])
+            for i in range(len(path) - 1)
+        )
+        assert path_len > straight, "path around obstacle must be longer than straight line"
+
+    def test_grid_to_grid_edges_respect_radius(self):
+        """grid-to-grid edges in visibility graph do not exceed GRID_EDGE_RADIUS."""
+        center = (0.0, 0.0)
+        radius = 300.0
+        endpoints = [(-100.0, 0.0, 350.0), (100.0, 0.0, 350.0)]
+
+        nodes, grid_start_index = _collect_graph_nodes_in_circle(
+            endpoints, [], [], None, center, radius
+        )
+        graph = _build_visibility_graph(nodes, [], [], grid_start_index=grid_start_index)
+
+        for i in range(grid_start_index, len(nodes)):
+            for j, dist in graph[i]:
+                if j >= grid_start_index:
+                    assert dist <= GRID_EDGE_RADIUS + 0.1, (
+                        f"grid-to-grid edge {i}->{j} dist={dist:.1f} "
+                        f"exceeds GRID_EDGE_RADIUS={GRID_EDGE_RADIUS}"
+                    )
+
+    def test_circular_obstacle_detour_is_efficient(self):
+        """path around circular obstacle (no axis-aligned corners) finds efficient detour."""
+        circle = Point(0, 0).buffer(50)
+        obs = LocalObstacle(
+            polygon=circle,
+            name="round-tower",
+            height=50.0,
+            base_alt=0.0,
+            buffer_distance=5.0,
+        )
+
+        from_local = (-200.0, 0.0, 350.0)
+        to_local = (200.0, 0.0, 350.0)
+
+        path = _run_astar(from_local, to_local, [obs], [])
+        assert path is not None, "should find path around circular obstacle"
+
+        buffered = circle.buffer(obs.buffer_distance)
+        for node in path[1:-1]:
+            assert not buffered.contains(Point(node[0], node[1])), (
+                f"path node ({node[0]:.1f}, {node[1]:.1f}) inside buffered obstacle"
+            )
+
+        straight = euclidean_distance(from_local[0], from_local[1], to_local[0], to_local[1])
+        path_len = sum(
+            euclidean_distance(path[i][0], path[i][1], path[i + 1][0], path[i + 1][1])
+            for i in range(len(path) - 1)
+        )
+        assert path_len < straight * 1.25, (
+            f"detour {path_len:.1f}m is >25% longer than straight {straight:.1f}m"
+        )
+
+    def test_grid_nodes_strictly_required_for_circular_obstacle(self):
+        """vertex-only graph fails for circular obstacle - grid nodes are strictly necessary.
+
+        buffer vertices lie on the obstacle boundary so every edge to/from
+        them triggers intersects() and is blocked. only grid nodes in the
+        surrounding open space can form unobstructed edges.
+        """
+        circle = Point(0, 0).buffer(50)
+        obs = LocalObstacle(
+            polygon=circle,
+            name="round-tower",
+            height=50.0,
+            base_alt=0.0,
+            buffer_distance=5.0,
+        )
+
+        from_local = (-200.0, 0.0, 350.0)
+        to_local = (200.0, 0.0, 350.0)
+        center = (0.0, 0.0)
+        radius = 300.0
+        obstacles = [obs]
+
+        nodes, grid_start_index = _collect_graph_nodes_in_circle(
+            [from_local, to_local], obstacles, [], None, center, radius
+        )
+
+        # vertex-only graph: all edges touch obstacle boundary, A* fails
+        vertex_nodes = nodes[:grid_start_index]
+        vertex_graph = _build_visibility_graph(vertex_nodes, obstacles, [])
+        vertex_path = astar(vertex_graph, 0, 1, vertex_nodes, use_euclidean=True)
+        assert vertex_path is None, (
+            "vertex-only graph should not find path - all edges touch the obstacle boundary"
+        )
+
+        # full graph with grid nodes routes around the obstacle
+        full_graph = _build_visibility_graph(
+            nodes, obstacles, [], grid_start_index=grid_start_index
+        )
+        grid_path_indices = astar(full_graph, 0, 1, nodes, use_euclidean=True)
+        assert grid_path_indices is not None, "grid-enhanced A* must find path"
+
+        # path avoids the buffered obstacle
+        buffered = circle.buffer(obs.buffer_distance)
+        grid_path = [nodes[idx] for idx in grid_path_indices]
+        for node in grid_path[1:-1]:
+            assert not buffered.contains(Point(node[0], node[1])), (
+                f"path node ({node[0]:.1f}, {node[1]:.1f}) inside buffered obstacle"
+            )
+
+        # grid nodes are strictly necessary
+        grid_in_path = [idx for idx in grid_path_indices[1:-1] if idx >= grid_start_index]
+        assert len(grid_in_path) > 0, (
+            "path must use grid nodes - obstacle vertices can't form edges"
+        )
+
+
+class TestGridPerformance:
+    """performance envelope tests for hybrid grid."""
+
+    def test_node_count_at_default_spacing(self):
+        """500m radius circle at 50m spacing produces roughly pi*10^2 ~ 314 grid nodes."""
+        center = (0.0, 0.0)
+        radius = 500.0
+        endpoints = [(-200.0, 0.0, 350.0), (200.0, 0.0, 350.0)]
+
+        nodes, grid_start_index = _collect_graph_nodes_in_circle(
+            endpoints, [], [], None, center, radius
+        )
+        grid_count = len(nodes) - grid_start_index
+        assert 200 <= grid_count <= 400, f"expected 200-400 grid nodes, got {grid_count}"
+
+    @pytest.mark.slow
+    def test_solve_time_within_budget(self):
+        """full A* solve with 500m radius grid completes in < 2 seconds."""
+        from_local = (-250.0, 0.0, 350.0)
+        to_local = (250.0, 0.0, 350.0)
+
+        start = time.monotonic()
+        path = _run_astar(from_local, to_local, [], [])
+        elapsed = time.monotonic() - start
+
+        assert path is not None
+        assert elapsed < 2.0, f"A* solve took {elapsed:.2f}s, expected < 2s"
