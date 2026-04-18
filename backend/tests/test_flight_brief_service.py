@@ -370,8 +370,10 @@ class TestHelpers:
         assert flight_brief_service._format_distance(1500) == "1.50 km"
 
     def test_haversine(self):
-        """haversine returns reasonable distances."""
-        dist = flight_brief_service._haversine(18.11, 49.69, 18.12, 49.69)
+        """distance_between (replaced _haversine) returns reasonable distances."""
+        from app.utils.geo import distance_between
+
+        dist = distance_between(18.11, 49.69, 18.12, 49.69)
         assert 500 < dist < 1000
 
     def test_point_in_polygon(self):

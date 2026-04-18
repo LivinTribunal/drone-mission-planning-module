@@ -79,7 +79,7 @@ def test_speed_exceeds_max():
 
 
 def test_geofence_constraint_with_no_db():
-    """geofence constraint with db=None returns None instead of crashing."""
+    """geofence constraint with db=None returns soft warning violation."""
     from app.services.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
@@ -95,11 +95,14 @@ def test_geofence_constraint_with_no_db():
     )()
 
     result = _check_constraint(None, wp, constraint, [])
-    assert result is None
+    assert result is not None
+    assert result.is_warning is True
+    assert "GEOFENCE" in result.message
+    assert result.violation_kind == "constraint"
 
 
 def test_runway_buffer_constraint_with_no_db():
-    """runway buffer constraint with db=None returns None instead of crashing."""
+    """runway buffer constraint with db=None returns soft warning violation."""
     from app.services.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
@@ -115,7 +118,10 @@ def test_runway_buffer_constraint_with_no_db():
     )()
 
     result = _check_constraint(None, wp, constraint, [])
-    assert result is None
+    assert result is not None
+    assert result.is_warning is True
+    assert "RUNWAY_BUFFER" in result.message
+    assert result.violation_kind == "constraint"
 
 
 # drone constraints
@@ -421,3 +427,42 @@ def test_speed_framerate_fallback_skipped_with_optimal():
     warning = check_speed_framerate(speed=4.0, drone=drone, optimal_speed=5.0)
 
     assert warning is None
+
+
+# obstacle altitude band tests
+
+
+def test_obstacle_below_base_alt_no_violation():
+    """waypoint below obstacle base_alt should not trigger violation."""
+    from shapely.geometry import box
+
+    from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import LocalObstacle
+
+    obs = LocalObstacle(
+        polygon=box(0, 0, 10, 10),
+        name="Elevated",
+        height=20.0,
+        base_alt=10.0,
+        buffer_distance=0.0,
+    )
+    # waypoint inside 2d footprint but below base_alt
+    assert check_obstacle(5.0, 5.0, 5.0, obs) is False
+
+
+def test_obstacle_ground_level_inside_violation():
+    """waypoint at ground level inside a ground-level obstacle triggers violation."""
+    from shapely.geometry import box
+
+    from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import LocalObstacle
+
+    obs = LocalObstacle(
+        polygon=box(0, 0, 10, 10),
+        name="Ground",
+        height=20.0,
+        base_alt=0.0,
+        buffer_distance=0.0,
+    )
+    # waypoint at alt=0 inside ground-level obstacle
+    assert check_obstacle(5.0, 5.0, 0.0, obs) is True

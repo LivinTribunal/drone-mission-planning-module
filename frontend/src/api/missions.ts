@@ -100,6 +100,7 @@ function parseContentDispositionFilename(
   return plain?.[1] ?? null;
 }
 
+/** fetch flight brief pdf blob from the backend. */
 export async function downloadFlightBrief(
   id: string,
 ): Promise<{ blob: Blob; filename: string | null }> {

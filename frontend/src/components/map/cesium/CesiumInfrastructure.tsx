@@ -16,6 +16,7 @@ import {
 import type { AirportDetailResponse } from "@/types/airport";
 import type { MapLayerConfig } from "@/types/map";
 import { polygonToCartesian3, lineStringToCartesian3, bufferPolygon } from "./cesiumUtils";
+import { formatAglDisplayName } from "@/utils/agl";
 import {
   RUNWAY_FILL,
   RUNWAY_OUTLINE,
@@ -428,7 +429,7 @@ export default function CesiumInfrastructure({
               heightReference: HeightReference.CLAMP_TO_GROUND,
             }}
             label={{
-              text: (agl.name ? `${agl.name}${agl.side ? ` (${agl.side.charAt(0)}${agl.side.slice(1).toLowerCase()})` : ""}` : t("map.aglLabel")),
+              text: (agl.name ? formatAglDisplayName(agl, surface) : t("map.aglLabel")),
               font: "10px sans-serif",
               fillColor: AGL_COLOR,
               outlineColor: Color.BLACK,

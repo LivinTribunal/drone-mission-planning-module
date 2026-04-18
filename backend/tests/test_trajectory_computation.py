@@ -173,14 +173,13 @@ class TestComputeOptimalSpeed:
 class TestResolveDensity:
     """tests for density resolution with auto-increase."""
 
-    def test_auto_increase(self):
-        """density auto-increases when config value is below optimal."""
+    def test_suggests_when_below_optimal(self):
+        """suggests higher density without overriding user's value."""
         config = ResolvedConfig(measurement_density=3, sweep_angle=15.0)
-        density, warning = resolve_density(InspectionMethod.ANGULAR_SWEEP, [], config)
-        optimal = math.ceil(2 * 15.0) + 1
-        assert density == optimal
-        assert warning is not None
-        assert "auto-set" in warning
+        density, suggestion = resolve_density(InspectionMethod.ANGULAR_SWEEP, [], config)
+        assert density == 3
+        assert suggestion is not None
+        assert "recommended" in suggestion
 
     def test_no_increase_when_sufficient(self):
         """density stays as configured when >= optimal."""

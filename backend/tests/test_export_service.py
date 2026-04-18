@@ -780,7 +780,7 @@ class TestExportMissionFormats:
         data = json.loads(content)
         assert "version" in data
         assert "route" in data
-        assert isinstance(data["version"]["build"], int)
+        assert isinstance(data["version"]["build"], str)
 
         mission.transition_to.assert_called_once_with("EXPORTED")
         db.commit.assert_called_once()
@@ -997,9 +997,9 @@ class TestGenerateUgcs:
         v = data["version"]
         assert v["major"] == 5
         assert v["minor"] == 16
-        assert "patch" not in v
-        assert v["build"] == 9205
-        assert isinstance(v["build"], int)
+        assert v["patch"] == 1
+        assert v["build"] == "9205"
+        assert isinstance(v["build"], str)
         assert v["component"] == "DATABASE"
 
     def test_coordinates_in_radians(self):
@@ -1068,8 +1068,8 @@ class TestGenerateUgcs:
         assert fs["lowBattery"] is None
         assert fs["datalinkLost"] is None
 
-    def test_camera_actions_excluded(self):
-        """camera actions are excluded - ugcs requires vehicle-specific config."""
+    def test_camera_trigger_photo(self):
+        """photo capture generates CameraTrigger with SINGLE_SHOT state."""
         fp = _make_flight_plan(1)
         fp.waypoints[0].camera_action = "PHOTO_CAPTURE"
 
@@ -1078,10 +1078,50 @@ class TestGenerateUgcs:
 
         actions = data["route"]["segments"][0]["actions"]
         camera_actions = [a for a in actions if a["type"] == "CameraTrigger"]
-        assert len(camera_actions) == 0
+        assert len(camera_actions) == 1
+        assert camera_actions[0]["state"] == "SINGLE_SHOT"
+
+    def test_camera_trigger_recording(self):
+        """recording start generates CameraTrigger with START_RECORDING state."""
+        fp = _make_flight_plan(1)
+        fp.waypoints[0].camera_action = "RECORDING_START"
+
+        result = export_service.generate_ugcs(fp, "", 0)
+        data = json.loads(result)
+
+        actions = data["route"]["segments"][0]["actions"]
+        camera_actions = [a for a in actions if a["type"] == "CameraTrigger"]
+        assert len(camera_actions) == 1
+        assert camera_actions[0]["state"] == "START_RECORDING"
+
+    def test_heading_generates_heading_action(self):
+        """waypoint heading generates Heading action in radians."""
+        fp = _make_flight_plan(1)
+        fp.waypoints[0].heading = 90.0
+
+        result = export_service.generate_ugcs(fp, "", 0)
+        data = json.loads(result)
+
+        actions = data["route"]["segments"][0]["actions"]
+        heading_actions = [a for a in actions if a["type"] == "Heading"]
+        assert len(heading_actions) == 1
+        assert heading_actions[0]["relativeToNorth"] is True
+
+    def test_gimbal_generates_camera_control(self):
+        """waypoint gimbal pitch generates CameraControl action."""
+        fp = _make_flight_plan(1)
+        fp.waypoints[0].gimbal_pitch = -45.0
+
+        result = export_service.generate_ugcs(fp, "", 0)
+        data = json.loads(result)
+
+        actions = data["route"]["segments"][0]["actions"]
+        cam_actions = [a for a in actions if a["type"] == "CameraControl"]
+        assert len(cam_actions) == 1
+        assert cam_actions[0]["roll"] == 0.0
 
     def test_hover_generates_wait_action(self):
-        """waypoint with hover_duration generates Wait action."""
+        """waypoint with hover_duration generates Wait action with extra fields."""
         fp = _make_flight_plan(1)
         fp.waypoints[0].hover_duration = 3.5
 
@@ -1092,6 +1132,7 @@ class TestGenerateUgcs:
         wait_actions = [a for a in actions if a["type"] == "Wait"]
         assert len(wait_actions) == 1
         assert wait_actions[0]["interval"] == 3.5
+        assert wait_actions[0]["waitForOperator"] is False
 
     def test_empty_waypoints(self):
         """ugcs format works with zero waypoints."""

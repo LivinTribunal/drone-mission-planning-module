@@ -6,6 +6,7 @@ interface ToggleProps {
   "data-testid"?: string;
 }
 
+/** custom toggle switch. */
 export default function Toggle({
   checked,
   onChange,
@@ -13,7 +14,6 @@ export default function Toggle({
   "aria-label": ariaLabel,
   "data-testid": testId,
 }: ToggleProps) {
-  /** custom toggle switch. */
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onChange(); }}

@@ -210,7 +210,7 @@ export default function MissionConfigForm({
       : mission.require_perpendicular_runway_crossing ?? true;
   const flightPlanScope: FlightPlanScope =
     values.flight_plan_scope !== undefined
-      ? (values.flight_plan_scope as FlightPlanScope)
+      ? values.flight_plan_scope
       : mission.flight_plan_scope ?? "FULL";
 
   const [collapsed, setCollapsed] = useState(false);
