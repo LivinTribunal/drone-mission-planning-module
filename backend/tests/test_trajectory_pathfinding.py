@@ -875,9 +875,9 @@ class TestGridAStarPath:
         vertex_nodes = nodes[:grid_start_index]
         vertex_graph = _build_visibility_graph(vertex_nodes, obstacles, [])
         vertex_path = astar(vertex_graph, 0, 1, vertex_nodes, use_euclidean=True)
-        assert vertex_path is None, (
-            "vertex-only graph should not find path - " "all edges touch the obstacle boundary"
-        )
+        assert (
+            vertex_path is None
+        ), "vertex-only graph should not find path - all edges touch the obstacle boundary"
 
         # full graph with grid nodes routes around the obstacle
         full_graph = _build_visibility_graph(
@@ -916,6 +916,7 @@ class TestGridPerformance:
         grid_count = len(nodes) - grid_start_index
         assert 200 <= grid_count <= 400, f"expected 200-400 grid nodes, got {grid_count}"
 
+    @pytest.mark.slow
     def test_solve_time_within_budget(self):
         """full A* solve with 500m radius grid completes in < 2 seconds."""
         from_local = (-250.0, 0.0, 350.0)

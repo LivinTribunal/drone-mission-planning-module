@@ -1208,9 +1208,9 @@ def test_measurement_speed_override_governs_only_measurement_waypoints(client):
 
     # transit waypoints use the mission default_speed
     transit_speeds = [wp["speed"] for wp in fp["waypoints"] if wp["waypoint_type"] == "TRANSIT"]
-    assert any(s == pytest.approx(7.0) for s in transit_speeds), (
-        f"expected at least one transit at default_speed=7.0, got speeds: {transit_speeds}"
-    )
+    assert any(
+        s == pytest.approx(7.0) for s in transit_speeds
+    ), f"expected at least one transit at default_speed=7.0, got speeds: {transit_speeds}"
 
 
 def test_mission_measurement_speed_override_fallback(client):
@@ -1279,9 +1279,9 @@ def test_mission_measurement_speed_override_fallback(client):
     ]
     assert a_measurements, "expected measurement waypoints for inspection A"
     for wp in a_measurements:
-        assert wp["speed"] == pytest.approx(10.0), (
-            f"inspection A should use per-inspection override 10.0, got {wp['speed']}"
-        )
+        assert wp["speed"] == pytest.approx(
+            10.0
+        ), f"inspection A should use per-inspection override 10.0, got {wp['speed']}"
 
     # inspection B measurements should use mission fallback 1.0
     b_measurements = [
@@ -1291,6 +1291,6 @@ def test_mission_measurement_speed_override_fallback(client):
     ]
     assert b_measurements, "expected measurement waypoints for inspection B"
     for wp in b_measurements:
-        assert wp["speed"] == pytest.approx(1.0), (
-            f"inspection B should use mission fallback 1.0, got {wp['speed']}"
-        )
+        assert wp["speed"] == pytest.approx(
+            1.0
+        ), f"inspection B should use mission fallback 1.0, got {wp['speed']}"

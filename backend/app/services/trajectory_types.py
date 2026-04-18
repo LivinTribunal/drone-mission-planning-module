@@ -83,11 +83,11 @@ GRID_NODE_SPACING: Meters = 50.0
 GRID_EDGE_RADIUS: Meters = 100.0
 
 # radius must cover diagonal neighbors to keep grid 8-connected
-assert GRID_EDGE_RADIUS >= GRID_NODE_SPACING * 1.415, (
-    f"GRID_EDGE_RADIUS ({GRID_EDGE_RADIUS}) must be >= "
-    f"GRID_NODE_SPACING * sqrt(2) ({GRID_NODE_SPACING * 1.415:.1f}) "
-    f"to guarantee 8-connected grid neighbors"
-)
+if GRID_EDGE_RADIUS < GRID_NODE_SPACING * 1.415:
+    raise ValueError(
+        f"GRID_EDGE_RADIUS ({GRID_EDGE_RADIUS}) must be >= "
+        f"GRID_NODE_SPACING * sqrt(2) ({GRID_NODE_SPACING * 1.415:.1f})"
+    )
 
 # runway crossing penalty for transit A*
 # penalty per meter of crossing - makes A* prefer routes around runways

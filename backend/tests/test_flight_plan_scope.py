@@ -283,12 +283,12 @@ def test_no_takeoff_landing_scope_transit_path_at_transit_altitude(client):
 
     first_alt = wps[0]["position"]["coordinates"][2]
     last_alt = wps[-1]["position"]["coordinates"][2]
-    assert abs(first_alt - expected_transit_msl) < 1.0, (
-        f"first waypoint alt {first_alt} != expected transit {expected_transit_msl}"
-    )
-    assert abs(last_alt - expected_transit_msl) < 1.0, (
-        f"last waypoint alt {last_alt} != expected transit {expected_transit_msl}"
-    )
+    assert (
+        abs(first_alt - expected_transit_msl) < 1.0
+    ), f"first waypoint alt {first_alt} != expected transit {expected_transit_msl}"
+    assert (
+        abs(last_alt - expected_transit_msl) < 1.0
+    ), f"last waypoint alt {last_alt} != expected transit {expected_transit_msl}"
 
 
 def test_measurements_only_scope_contains_only_measurement_waypoints(client):
