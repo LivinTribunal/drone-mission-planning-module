@@ -732,18 +732,6 @@ def _generate_trajectory_inner(
     if not inspection_passes:
         raise TrajectoryGenerationError("no waypoints generated")
 
-    # battery check after all inspections are computed
-    # only include T/L overhead for scopes that generate those waypoints
-    if drone:
-        tl_overhead = TAKEOFF_DURATION + LANDING_DURATION if scope == "FULL" else 0.0
-        bw = check_battery(
-            cumulative_duration + tl_overhead,
-            drone,
-            DEFAULT_RESERVE_MARGIN,
-        )
-        if bw:
-            warnings.append((bw.message, []))
-
     # phase 5 - final assembly with A* transit
     all_waypoints: list[WaypointData] = []
     measurement_index_maps: list[dict[int, int]] = []
@@ -1109,6 +1097,12 @@ def _generate_trajectory_inner(
 
         if all_waypoints[j].hover_duration is not None:
             total_dur += all_waypoints[j].hover_duration
+
+    # battery check after all phases including transit durations
+    if drone:
+        bw = check_battery(total_dur, drone, DEFAULT_RESERVE_MARGIN)
+        if bw:
+            warnings.append((bw.message, []))
 
     flight_plan = persist_flight_plan(
         db,

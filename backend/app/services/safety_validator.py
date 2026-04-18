@@ -98,7 +98,7 @@ def _batch_check_obstacles(
             poly = obs.polygon.buffer(buf) if buf > 0 else obs.polygon
             if poly.contains(pt):
                 obs_top = obs.base_alt + obs.height
-                if wp.alt <= obs_top:
+                if wp.alt >= obs.base_alt and wp.alt <= obs_top:
                     violations.append(
                         Violation(
                             is_warning=False,
@@ -279,7 +279,7 @@ def check_obstacle(
     if not poly.contains(Point(wp_x, wp_y)):
         return False
     obs_top = obstacle.base_alt + obstacle.height
-    return wp_alt <= obs_top
+    return wp_alt >= obstacle.base_alt and wp_alt <= obs_top
 
 
 def check_battery(
