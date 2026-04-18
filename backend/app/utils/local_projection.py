@@ -1,10 +1,14 @@
 """equirectangular projection + WGS84-to-Shapely conversion utilities."""
 
+import logging
 import math
+from dataclasses import dataclass
 
 from shapely.geometry import LineString, Point, Polygon
 
 from app.schemas.geometry import parse_ewkb
+
+logger = logging.getLogger(__name__)
 
 EARTH_RADIUS_M = 6_371_000.0
 
@@ -40,6 +44,63 @@ class LocalProjection:
         return LineString([self.to_local(lon1, lat1), self.to_local(lon2, lat2)])
 
 
+# local-coordinate geometry containers for Shapely-based pathfinding
+
+
+@dataclass
+class LocalObstacle:
+    """obstacle polygon in local meter coordinates."""
+
+    polygon: Polygon
+    name: str
+    height: float
+    base_alt: float
+    buffer_distance: float
+
+
+@dataclass
+class LocalZone:
+    """safety zone polygon in local meter coordinates."""
+
+    polygon: Polygon
+    zone_type: str
+    name: str
+    altitude_floor: float | None
+    altitude_ceiling: float | None
+
+
+@dataclass
+class LocalBoundary:
+    """airport boundary polygon in local meter coordinates."""
+
+    polygon: Polygon
+    name: str
+
+
+@dataclass
+class LocalSurface:
+    """runway/taxiway buffered centerline in local meter coordinates."""
+
+    polygon: Polygon
+    centerline: LineString
+    identifier: str
+    surface_type: str
+    width: float
+    length: float
+    heading: float | None
+
+
+@dataclass
+class LocalGeometries:
+    """all spatial geometry in local meter coordinates for pathfinding."""
+
+    proj: LocalProjection
+    obstacles: list[LocalObstacle]
+    zones: list[LocalZone]
+    boundary_zones: list[LocalBoundary]
+    surfaces: list[LocalSurface]
+
+
 def ewkb_to_local_polygon(proj: LocalProjection, ewkb_data: bytes) -> Polygon | None:
     """convert EWKB polygon to Shapely Polygon in local coordinates."""
     try:
@@ -65,7 +126,8 @@ def ewkb_to_local_polygon(proj: LocalProjection, ewkb_data: bytes) -> Polygon | 
         if poly.is_empty or not poly.is_valid:
             return None
         return poly
-    except Exception:
+    except Exception as exc:
+        logger.warning("failed to build local polygon: %s", exc)
         return None
 
 
@@ -109,13 +171,6 @@ def obstacle_base_altitude_from_ewkb(ewkb_data: bytes) -> float:
 def build_local_geometries(proj, obstacles, zones, surfaces):
     """build LocalGeometries from ORM objects and a projection."""
     from app.models.enums import SafetyZoneType
-    from app.services.trajectory_types import (
-        LocalBoundary,
-        LocalGeometries,
-        LocalObstacle,
-        LocalSurface,
-        LocalZone,
-    )
 
     local_obstacles = []
     for obs in obstacles:

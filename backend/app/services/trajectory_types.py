@@ -8,13 +8,16 @@ from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.enums import CameraAction, SafetyZoneType, WaypointType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile, Mission
+from app.utils.local_projection import (  # noqa: F401
+    LocalBoundary,
+    LocalGeometries,
+    LocalObstacle,
+    LocalSurface,
+    LocalZone,
+)
 
 if TYPE_CHECKING:
-    from shapely.geometry import LineString as ShapelyLineString
-    from shapely.geometry import Polygon as ShapelyPolygon
-
     from app.services.elevation_provider import ElevationProvider
-    from app.utils.local_projection import LocalProjection
 
 # type aliases for domain-specific floats
 Degrees = float
@@ -200,60 +203,3 @@ class MissionData:
     constraints: list[ConstraintRule]
     default_speed: MetersPerSecond
     elevation_provider: ElevationProvider | None = None
-
-
-# local-coordinate geometry containers for Shapely-based pathfinding
-
-
-@dataclass
-class LocalObstacle:
-    """obstacle polygon in local meter coordinates."""
-
-    polygon: ShapelyPolygon
-    name: str
-    height: float
-    base_alt: float
-    buffer_distance: float
-
-
-@dataclass
-class LocalZone:
-    """safety zone polygon in local meter coordinates."""
-
-    polygon: ShapelyPolygon
-    zone_type: str
-    name: str
-    altitude_floor: float | None
-    altitude_ceiling: float | None
-
-
-@dataclass
-class LocalBoundary:
-    """airport boundary polygon in local meter coordinates."""
-
-    polygon: ShapelyPolygon
-    name: str
-
-
-@dataclass
-class LocalSurface:
-    """runway/taxiway buffered centerline in local meter coordinates."""
-
-    polygon: ShapelyPolygon
-    centerline: ShapelyLineString
-    identifier: str
-    surface_type: str
-    width: float
-    length: float
-    heading: float | None
-
-
-@dataclass
-class LocalGeometries:
-    """all spatial geometry in local meter coordinates for pathfinding."""
-
-    proj: LocalProjection
-    obstacles: list[LocalObstacle]
-    zones: list[LocalZone]
-    boundary_zones: list[LocalBoundary]
-    surfaces: list[LocalSurface]

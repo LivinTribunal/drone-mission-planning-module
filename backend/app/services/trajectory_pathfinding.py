@@ -1,6 +1,8 @@
 import logging
 import math
 
+from shapely.geometry import LineString
+
 from app.core.config import settings
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.enums import CameraAction, WaypointType
@@ -165,8 +167,6 @@ def _build_visibility_graph(
         buf = buffer_distance if buffer_distance > 0 else obs.buffer_distance
         poly = obs.polygon.buffer(buf) if buf > 0 else obs.polygon
         buffered_polys.append(poly)
-
-    from shapely.geometry import LineString
 
     for i in range(len(nodes)):
         for j in range(i + 1, len(nodes)):

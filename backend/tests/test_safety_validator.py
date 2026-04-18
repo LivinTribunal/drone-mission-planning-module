@@ -75,6 +75,49 @@ def test_speed_exceeds_max():
     assert result.is_warning
 
 
+# db=None guard for spatial constraint types
+
+
+def test_geofence_constraint_with_no_db():
+    """geofence constraint with db=None returns None instead of crashing."""
+    from app.services.safety_validator import _check_constraint
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
+    constraint = type(
+        "C",
+        (),
+        {
+            "constraint_type": "GEOFENCE",
+            "boundary": b"fake-ewkb",
+            "is_hard_constraint": True,
+            "id": "test-id",
+        },
+    )()
+
+    result = _check_constraint(None, wp, constraint, [])
+    assert result is None
+
+
+def test_runway_buffer_constraint_with_no_db():
+    """runway buffer constraint with db=None returns None instead of crashing."""
+    from app.services.safety_validator import _check_constraint
+
+    wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
+    constraint = type(
+        "C",
+        (),
+        {
+            "constraint_type": "RUNWAY_BUFFER",
+            "lateral_buffer": 100.0,
+            "is_hard_constraint": True,
+            "id": "test-id",
+        },
+    )()
+
+    result = _check_constraint(None, wp, constraint, [])
+    assert result is None
+
+
 # drone constraints
 
 

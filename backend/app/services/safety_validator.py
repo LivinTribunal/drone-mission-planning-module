@@ -201,16 +201,22 @@ def _batch_check_minimum_agl(
     if not waypoints:
         return []
 
-    points = [(wp.lat, wp.lon) for wp in waypoints]
+    # pre-filter ground-level waypoints to skip unnecessary elevation lookups
+    indexed_wps = [
+        (i, wp)
+        for i, wp in enumerate(waypoints)
+        if wp.waypoint_type not in _GROUND_LEVEL_WAYPOINT_TYPES
+    ]
+    if not indexed_wps:
+        return []
+
+    points = [(wp.lat, wp.lon) for _, wp in indexed_wps]
     elevations = elevation_provider.get_elevations_batch(points)
     if len(elevations) != len(points):
         raise TrajectoryGenerationError(f"expected {len(points)} elevations, got {len(elevations)}")
 
     violations = []
-    for i, (wp, ground) in enumerate(zip(waypoints, elevations)):
-        if wp.waypoint_type in _GROUND_LEVEL_WAYPOINT_TYPES:
-            continue
-
+    for (i, wp), ground in zip(indexed_wps, elevations):
         agl = wp.alt - ground
         if agl < min_agl:
             violations.append(
@@ -428,6 +434,8 @@ def _check_constraint(
             )
 
     elif ctype == ConstraintType.GEOFENCE and constraint.boundary:
+        if db is None:
+            return None
         wp_ewkt = _wp_to_ewkt(wp)
         contained = db.execute(
             text(
@@ -442,6 +450,8 @@ def _check_constraint(
             return _violation(constraint, "waypoint outside geofence boundary")
 
     elif ctype == ConstraintType.RUNWAY_BUFFER:
+        if db is None:
+            return None
         v = _check_runway_buffer(db, wp, constraint, surfaces)
         if v:
             return v
