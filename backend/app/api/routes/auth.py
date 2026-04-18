@@ -53,7 +53,7 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
     """exchange refresh token for new access token."""
     try:
         payload = auth_service.decode_token(body.refresh_token)
-    except Exception:
+    except DomainError:
         raise HTTPException(status_code=401, detail="invalid or expired refresh token")
 
     if payload.get("type") != "refresh":
@@ -61,7 +61,7 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
 
     try:
         user = auth_service.get_user_by_id(db, payload["sub"])
-    except (NotFoundError, Exception):
+    except NotFoundError:
         raise HTTPException(status_code=401, detail="invalid or expired refresh token")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="user deactivated")
@@ -100,8 +100,6 @@ def setup_password(body: SetupPasswordRequest, db: Session = Depends(get_db)):
         auth_service.setup_password(db, body.token, body.password)
     except DomainError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=400, detail="password setup failed")
 
     return {"message": "password set successfully"}
 
@@ -113,7 +111,5 @@ def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
         auth_service.reset_password(db, body.token, body.new_password)
     except DomainError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=400, detail="password reset failed")
 
     return {"message": "password reset successfully"}

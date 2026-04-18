@@ -18,9 +18,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """create user table and user_airports junction."""
+    """create users table and user_airports junction."""
     op.create_table(
-        "user",
+        "users",
         sa.Column("id", UUID, primary_key=True),
         sa.Column("email", sa.String, unique=True, nullable=False, index=True),
         sa.Column("hashed_password", sa.String, nullable=True),
@@ -49,7 +49,7 @@ def upgrade() -> None:
         sa.Column(
             "user_id",
             UUID,
-            sa.ForeignKey("user.id", ondelete="CASCADE"),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
             primary_key=True,
         ),
         sa.Column(
@@ -64,4 +64,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     """drop user_airports and user tables."""
     op.drop_table("user_airports")
-    op.drop_table("user")
+    op.drop_table("users")

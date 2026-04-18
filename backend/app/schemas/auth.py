@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AirportSummary(BaseModel):
@@ -56,7 +56,7 @@ class UserUpdate(BaseModel):
     """update own profile - name and/or password."""
 
     name: str | None = None
-    password: str | None = None
+    password: str | None = Field(default=None, min_length=8)
     current_password: str | None = None
 
 
@@ -64,11 +64,11 @@ class SetupPasswordRequest(BaseModel):
     """set password from invitation link."""
 
     token: str
-    password: str
+    password: str = Field(min_length=8)
 
 
 class ResetPasswordRequest(BaseModel):
     """reset password via token."""
 
     token: str
-    new_password: str
+    new_password: str = Field(min_length=8)

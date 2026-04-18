@@ -74,13 +74,11 @@ def list_airports(
     db: Session = Depends(get_db),
 ):
     """list all available airports for user."""
-    airports = airport_service.list_airports(db)
-
-    # scope by user's assigned airports
+    airport_ids = None
     if current_user.role != "SUPER_ADMIN":
-        user_airport_ids = {str(a.id) for a in current_user.airports}
-        airports = [a for a in airports if str(a.id) in user_airport_ids]
+        airport_ids = [a.id for a in current_user.airports]
 
+    airports = airport_service.list_airports(db, airport_ids=airport_ids)
     return AirportListResponse(data=airports, meta=ListMeta(total=len(airports)))
 
 
@@ -90,12 +88,11 @@ def list_airports_summary(
     db: Session = Depends(get_db),
 ):
     """list all airports with infrastructure and mission counts."""
-    summaries = airport_service.list_airports_with_counts(db)
-
+    airport_ids = None
     if current_user.role != "SUPER_ADMIN":
-        user_airport_ids = {str(a.id) for a in current_user.airports}
-        summaries = [s for s in summaries if str(s.id) in user_airport_ids]
+        airport_ids = [a.id for a in current_user.airports]
 
+    summaries = airport_service.list_airports_with_counts(db, airport_ids=airport_ids)
     return AirportSummaryListResponse(data=summaries, meta=ListMeta(total=len(summaries)))
 
 

@@ -263,6 +263,37 @@ class TestAuthEndpoints:
         assert resp.status_code == 200
         assert resp.json()["name"] == "Updated Name"
 
+    def test_setup_password_too_short(self, seeded_auth_client):
+        """setup-password rejects passwords shorter than 8 chars."""
+        resp = seeded_auth_client.post(
+            "/api/v1/auth/setup-password",
+            json={"token": "fake-token", "password": "short"},
+        )
+        assert resp.status_code == 422
+
+    def test_reset_password_too_short(self, seeded_auth_client):
+        """reset-password rejects passwords shorter than 8 chars."""
+        resp = seeded_auth_client.post(
+            "/api/v1/auth/reset-password",
+            json={"token": "fake-token", "new_password": "short"},
+        )
+        assert resp.status_code == 422
+
+    def test_update_me_password_too_short(self, seeded_auth_client):
+        """update-me rejects passwords shorter than 8 chars."""
+        login = seeded_auth_client.post(
+            "/api/v1/auth/login",
+            json={"email": "operator@tarmacview.com", "password": "operator123"},
+        )
+        token = login.json()["access_token"]
+
+        resp = seeded_auth_client.put(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"password": "short", "current_password": "operator123"},
+        )
+        assert resp.status_code == 422
+
 
 # role-based access control tests
 

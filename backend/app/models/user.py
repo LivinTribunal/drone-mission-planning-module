@@ -13,7 +13,7 @@ from app.models.enums import UserRole
 user_airports = Table(
     "user_airports",
     Base.metadata,
-    Column("user_id", UUID, ForeignKey("user.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_id", UUID, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
     Column("airport_id", UUID, ForeignKey("airport.id", ondelete="CASCADE"), primary_key=True),
 )
 
@@ -21,7 +21,7 @@ user_airports = Table(
 class User(Base):
     """application user with role-based access."""
 
-    __tablename__ = "user"
+    __tablename__ = "users"
 
     id = Column(UUID, primary_key=True, default=uuid4)
     email = Column(String, unique=True, nullable=False, index=True)

@@ -114,6 +114,16 @@ def seed_users(db: Session) -> None:
         logger.info("skipping user seeding in production environment")
         return
 
+    # warn when using default seed passwords
+    defaults = {"admin123", "coord123", "operator123"}
+    active = {
+        settings.seed_admin_password,
+        settings.seed_coordinator_password,
+        settings.seed_operator_password,
+    }
+    if active & defaults:
+        logger.warning("seed users using default passwords - set SEED_*_PASSWORD env vars")
+
     count = db.query(User).count()
     if count > 0:
         return

@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.exceptions import NotFoundError
 from app.models.enums import UserRole
 from app.models.user import User
 from app.services import auth_service
@@ -25,7 +26,7 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="invalid token")
     try:
         user = auth_service.get_user_by_id(db, UUID(user_id))
-    except Exception:
+    except NotFoundError:
         raise HTTPException(status_code=401, detail="user not found")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="user deactivated")
