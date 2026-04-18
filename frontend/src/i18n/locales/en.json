@@ -708,6 +708,14 @@
         "noTakeoffLanding": "Export starts/ends at transit altitude - no ground-level takeoff or landing",
         "measurementsOnly": "Export includes measurement waypoints only - no takeoff, landing, or transit"
       }
+    },
+    "flightBrief": {
+      "title": "Flight Brief",
+      "download": "Download Flight Brief (PDF)",
+      "description": "ATC coordination document with maps, altitude profile, and timeline",
+      "generating": "Generating Flight Brief...",
+      "noFlightPlan": "Generate a flight plan first",
+      "error": "Failed to generate Flight Brief"
     }
   },
   "missionList": {

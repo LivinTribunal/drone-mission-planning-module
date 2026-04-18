@@ -21,7 +21,7 @@ from app.schemas.mission import (
     ReorderRequest,
     ReorderResponse,
 )
-from app.services import export_service, inspection_service, mission_service
+from app.services import export_service, flight_brief_service, inspection_service, mission_service
 
 router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
 
@@ -116,10 +116,23 @@ def export_mission(mission_id: UUID, body: ExportRequest, db: Session = Depends(
         for filename, (data, _) in files.items():
             zf.writestr(filename, data)
 
+    zip_name = safe_name.replace('"', "").replace("\r", "").replace("\n", "")
     return Response(
         content=buf.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{safe_name} export.zip"'},
+        headers={"Content-Disposition": f'attachment; filename="{zip_name} export.zip"'},
+    )
+
+
+@router.get("/{mission_id}/flight-brief", response_class=Response)
+def get_flight_brief(mission_id: UUID, db: Session = Depends(get_db)):
+    """generate and download flight brief pdf for atc coordination."""
+    pdf_bytes, filename = flight_brief_service.generate_flight_brief(db, mission_id)
+    sanitized = filename.replace('"', "").replace("\r", "").replace("\n", "")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{sanitized}"'},
     )
 
 

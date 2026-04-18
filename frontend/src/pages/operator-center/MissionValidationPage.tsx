@@ -13,6 +13,7 @@ import {
   cancelMission,
   deleteMission,
 } from "@/api/missions";
+import useDownloadFlightBrief from "@/hooks/useDownloadFlightBrief";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
@@ -156,11 +157,20 @@ export default function MissionValidationPage() {
     };
   }, []);
 
-  function showNotification(msg: string) {
-    if (notificationTimer.current) clearTimeout(notificationTimer.current);
-    setNotification(msg);
-    notificationTimer.current = setTimeout(() => setNotification(null), 4000);
-  }
+  const showNotification = useCallback(
+    (msg: string) => {
+      if (notificationTimer.current) clearTimeout(notificationTimer.current);
+      setNotification(msg);
+      notificationTimer.current = setTimeout(() => setNotification(null), 4000);
+    },
+    [],
+  );
+
+  const { isDownloadingBrief, handleDownloadBrief } = useDownloadFlightBrief(
+    id,
+    mission?.name,
+    showNotification,
+  );
 
   async function handleValidate() {
     if (!id) return;
@@ -411,6 +421,9 @@ export default function MissionValidationPage() {
               onCancel={handleCancel}
               onDelete={handleDelete}
               isExporting={isExporting}
+              onDownloadBrief={handleDownloadBrief}
+              isDownloadingBrief={isDownloadingBrief}
+              hasFlightPlan={flightPlan !== null}
               statsSlot={
                 <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
                   <StatsPanel

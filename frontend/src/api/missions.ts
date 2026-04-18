@@ -86,8 +86,7 @@ function parseContentDispositionFilename(
   headers: unknown,
 ): string | null {
   const raw =
-    (headers as { "content-disposition"?: string })?.["content-disposition"] ??
-    (headers as { "Content-Disposition"?: string })?.["Content-Disposition"];
+    (headers as { "content-disposition"?: string })?.["content-disposition"];
   if (!raw) return null;
   const star = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/i.exec(raw);
   if (star?.[1]) {
@@ -99,6 +98,15 @@ function parseContentDispositionFilename(
   }
   const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(raw);
   return plain?.[1] ?? null;
+}
+
+export async function downloadFlightBrief(
+  id: string,
+): Promise<{ blob: Blob; filename: string | null }> {
+  const res = await client.get(`/missions/${id}/flight-brief`, {
+    responseType: "blob",
+  });
+  return { blob: res.data, filename: parseContentDispositionFilename(res.headers) };
 }
 
 export async function completeMission(
