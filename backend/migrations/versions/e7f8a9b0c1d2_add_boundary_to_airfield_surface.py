@@ -23,11 +23,9 @@ def upgrade() -> None:
         "airfield_surface",
         sa.Column("boundary", geoalchemy2.Geometry("POLYGONZ", srid=4326), nullable=True),
     )
-    op.create_index(
-        "idx_airfield_surface_boundary",
-        "airfield_surface",
-        ["boundary"],
-        postgresql_using="gist",
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_airfield_surface_boundary "
+        "ON airfield_surface USING gist (boundary)"
     )
 
 

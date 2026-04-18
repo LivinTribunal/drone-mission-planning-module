@@ -204,6 +204,14 @@ class Obstacle(Base):
         ),
     )
 
+    @staticmethod
+    def centroid_from_boundary_ring(ring: list) -> tuple[float, float, float]:
+        """compute centroid (lon, lat, z) from a polygon boundary ring."""
+        lons = [c[0] for c in ring]
+        lats = [c[1] for c in ring]
+        z = ring[0][2] if len(ring[0]) >= 3 else 0.0
+        return sum(lons) / len(lons), sum(lats) / len(lats), z
+
     def recalculate_dimensions(self) -> dict:
         """compute length, width, heading from the stored polygon boundary.
 

@@ -65,18 +65,20 @@ Flag any import that violates these boundaries. Never import from `commands` or 
 - Do NOT flag issues already caught by eslint or the TypeScript compiler.
 - Do NOT comment on test file style — test files have more flexibility.
 - Keep findings concise: one sentence per issue, with file and line reference.
+- Do NOT praise code that is correct. Only write about things that need attention. Silence means approval.
+- Do NOT describe what the code does well or list things that pass. Focus exclusively on problems.
 
 ## Output Format
 
-Write your review in natural markdown. Structure it as follows:
+Write your review in natural markdown. Be concise — only elaborate on actual problems. Structure it as follows:
 
 ### Summary
 
-One paragraph summarizing the changes and their purpose.
+One sentence describing what the PR does. No filler.
 
 ### Risk Assessment
 
-State the confirmed risk tier (Tier 1/2/3) and briefly explain why.
+State the confirmed risk tier (Tier 1/2/3) in one line.
 
 ### Issues
 
@@ -86,15 +88,15 @@ If you found issues, list them as a numbered list. For each issue include:
 - **Location** (`file:line`)
 - **Description** — what is wrong and how to fix it
 
-If no issues were found, say so explicitly.
+If no issues were found, write "No issues found." and nothing else.
 
 ### Architecture
 
-Note whether the changes comply with the architectural boundary rules. Flag any violations.
+If there are boundary violations, describe them. If everything is clean, write one sentence (e.g., "No boundary violations.") and move on. Do NOT describe what is correct or well-structured — only flag problems.
 
 ### Test Coverage
 
-Briefly assess whether test coverage is adequate for the changes.
+Only mention missing or inadequate test coverage. Do NOT praise existing tests or describe what is well-tested. If coverage is adequate, write "Adequate." and nothing else.
 
 ## Automated Feedback Loop
 
