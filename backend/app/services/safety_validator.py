@@ -500,7 +500,6 @@ def _check_runway_buffer(
     return None
 
 
-
 def _wp_to_ewkt(wp) -> str:
     """convert waypoint position to EWKT point string"""
     return geojson_to_ewkt({"type": "Point", "coordinates": [wp.lon, wp.lat, wp.alt]})
