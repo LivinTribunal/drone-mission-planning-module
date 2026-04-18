@@ -1,5 +1,6 @@
 import type { Map as MaplibreMap } from "maplibre-gl";
 import type { SurfaceResponse } from "@/types/airport";
+import { formatAglDisplayName } from "@/utils/agl";
 import { aglColorForType } from "@/utils/aglColor";
 
 export const AGL_SOURCE = "agls";
@@ -16,18 +17,21 @@ export function addAglLayers(
   map: MaplibreMap,
   surfaces: SurfaceResponse[],
 ): string[] {
-  const agls = surfaces.flatMap((s) => s.agls);
+  const aglsWithSurface = surfaces.flatMap((s) =>
+    s.agls.map((a) => ({ agl: a, surface: s })),
+  );
+  const agls = aglsWithSurface.map((x) => x.agl);
   const lhas = agls.flatMap((a) => a.lhas);
 
   map.addSource(AGL_SOURCE, {
     type: "geojson",
     data: {
       type: "FeatureCollection",
-      features: agls.map((a) => ({
+      features: aglsWithSurface.map(({ agl: a, surface: s }) => ({
         type: "Feature" as const,
         properties: {
           id: a.id,
-          name: a.name,
+          displayName: formatAglDisplayName(a, s),
           aglType: a.agl_type,
           entityType: "agl",
           color: aglColorForType(a.agl_type),
@@ -58,7 +62,7 @@ export function addAglLayers(
     type: "symbol",
     source: AGL_SOURCE,
     layout: {
-      "text-field": ["get", "name"],
+      "text-field": ["get", "displayName"],
       "text-size": 11,
       "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
       "text-offset": [0, 1.5],
@@ -157,6 +161,7 @@ export function addAglLayers(
   // connecting line across edge-light rows for at-a-glance orientation
   const edgeLightLines = agls
     .filter((a) => a.agl_type === "RUNWAY_EDGE_LIGHTS" && a.lhas.length >= 2)
+    .filter((a) => a.lhas.every((l) => l.position?.coordinates?.length >= 2))
     .map((a) => {
       const ordered = [...a.lhas].sort((x, y) => x.unit_number - y.unit_number);
       const first = ordered[0].position.coordinates;

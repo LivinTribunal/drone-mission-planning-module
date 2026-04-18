@@ -1,0 +1,149 @@
+name: Retry Failed Agent Jobs
+
+on:
+  schedule:
+    - cron: "0 1-8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+jobs:
+  retry:
+    name: Retry failed agent jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Find and retry failed issues
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // three failure modes to retry:
+            // 1. agent:implement + agent:needs-judgment -> re-dispatch issue-implementer
+            // 2. agent:plan + agent:needs-judgment     -> re-dispatch issue-planner
+            // 3. triage:failed + agent:needs-judgment   -> reopen to re-trigger triage
+            const retryConfigs = [
+              {
+                labels: 'agent:implement,agent:needs-judgment',
+                workflow: 'issue-implementer.yml',
+                name: 'implementation',
+                skipLabel: 'agent:needs-judgment',
+              },
+              {
+                labels: 'agent:plan,agent:needs-judgment',
+                workflow: 'issue-planner.yml',
+                name: 'planning',
+                skipLabel: 'agent:needs-judgment',
+              },
+              {
+                labels: 'triage:failed,agent:needs-judgment',
+                workflow: null,
+                name: 'triage',
+                skipLabel: 'agent:needs-judgment',
+                removeExtra: 'triage:failed',
+                // triage triggers on reopened - close+reopen after removing labels
+                reopen: true,
+              },
+            ];
+
+            let totalRetried = 0;
+
+            for (const config of retryConfigs) {
+              const { data: issues } = await github.rest.issues.listForRepo({
+                owner, repo,
+                labels: config.labels,
+                state: 'open',
+                per_page: 10,
+              });
+
+              if (issues.length === 0) continue;
+              core.info(`Found ${issues.length} failed ${config.name} issue(s).`);
+
+              for (const issue of issues) {
+                const issueNumber = issue.number;
+                core.info(`Retrying ${config.name} for issue #${issueNumber}: ${issue.title}`);
+
+                const { data: comments } = await github.rest.issues.listComments({
+                  owner, repo,
+                  issue_number: issueNumber,
+                  per_page: 100,
+                });
+
+                // for implementer: skip if PR already exists
+                if (config.workflow === 'issue-implementer.yml') {
+                  const hasPr = comments.some(c =>
+                    c.body && c.body.includes(`<!-- issue-implementer: #${issueNumber} -->`) &&
+                    c.body.includes('PR Created')
+                  );
+                  if (hasPr) {
+                    core.info(`Issue #${issueNumber} already has a PR — skipping.`);
+                    try {
+                      await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: config.skipLabel });
+                    } catch {}
+                    continue;
+                  }
+                }
+
+                // max 3 retries
+                const retryComments = comments.filter(c =>
+                  c.body && c.body.includes('<!-- retry-agent:')
+                );
+                if (retryComments.length >= 3) {
+                  core.warning(`Issue #${issueNumber} has been retried 3 times — giving up.`);
+                  continue;
+                }
+
+                // remove needs-judgment label
+                try {
+                  await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: config.skipLabel });
+                } catch {}
+
+                // remove extra label if configured (e.g. triage:failed)
+                if (config.removeExtra) {
+                  try {
+                    await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: config.removeExtra });
+                  } catch {}
+                }
+
+                // post retry comment
+                await github.rest.issues.createComment({
+                  owner, repo,
+                  issue_number: issueNumber,
+                  body: [
+                    `<!-- retry-agent: attempt-${retryComments.length + 1} -->`,
+                    `Retrying ${config.name} (attempt ${retryComments.length + 2}).`,
+                    '',
+                    '---',
+                    '*🤖 [Retry Agent](https://github.com/codefactory) — automated retry.*',
+                  ].join('\n'),
+                });
+
+                if (config.workflow) {
+                  await github.rest.actions.createWorkflowDispatch({
+                    owner, repo,
+                    workflow_id: config.workflow,
+                    ref: 'main',
+                    inputs: { issue_number: String(issueNumber) },
+                  });
+                  core.info(`Dispatched ${config.workflow} for issue #${issueNumber}`);
+                }
+
+                if (config.reopen) {
+                  // triage triggers on 'reopened' - close+reopen to re-trigger
+                  await github.rest.issues.update({ owner, repo, issue_number: issueNumber, state: 'closed' });
+                  await github.rest.issues.update({ owner, repo, issue_number: issueNumber, state: 'open' });
+                  core.info(`Reopened issue #${issueNumber} to re-trigger triage`);
+                }
+
+                totalRetried++;
+              }
+            }
+
+            core.info(`Retried ${totalRetried} issue(s) total.`);
