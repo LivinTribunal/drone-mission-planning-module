@@ -7,13 +7,21 @@ from shapely.prepared import prep
 from app.core.config import settings
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.enums import CameraAction, WaypointType
-from app.services.safety_validator import (
+from app.utils.geo import (
+    astar,
+    bearing_between,
+    elevation_angle,
+    euclidean_distance,
+    total_path_distance,
+)
+
+from .safety_validator import (
     check_obstacle,
     segment_runway_crossing_length,
     segments_intersect_obstacle,
     segments_intersect_zone,
 )
-from app.services.trajectory_types import (
+from .types import (
     DEFAULT_OBSTACLE_RADIUS,
     GRID_EDGE_RADIUS,
     GRID_NODE_SPACING,
@@ -33,13 +41,6 @@ from app.services.trajectory_types import (
     MetersPerSecond,
     Point3D,
     WaypointData,
-)
-from app.utils.geo import (
-    astar,
-    bearing_between,
-    elevation_angle,
-    euclidean_distance,
-    total_path_distance,
 )
 
 logger = logging.getLogger(__name__)

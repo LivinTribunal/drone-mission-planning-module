@@ -6,13 +6,11 @@ from uuid import uuid4
 import pytest
 
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
-from app.services.trajectory_computation import (
-    calculate_fly_over_path,
-    calculate_hover_point_lock_path,
-    calculate_parallel_side_sweep_path,
-    compute_measurement_trajectory,
-)
-from app.services.trajectory_types import (
+from app.services.trajectory.methods import compute_measurement_trajectory
+from app.services.trajectory.methods.fly_over import calculate_fly_over_path
+from app.services.trajectory.methods.hover_point_lock import calculate_hover_point_lock_path
+from app.services.trajectory.methods.parallel_side_sweep import calculate_parallel_side_sweep_path
+from app.services.trajectory.types import (
     DEFAULT_FLY_OVER_HEIGHT,
     DEFAULT_HOVER_DISTANCE_PAPI,
     DEFAULT_HOVER_DISTANCE_RUNWAY,

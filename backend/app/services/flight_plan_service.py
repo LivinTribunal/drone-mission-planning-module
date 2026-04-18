@@ -14,7 +14,7 @@ from app.models.flight_plan import (
 from app.models.mission import Mission
 from app.schemas.flight_plan import TransitWaypointInsertRequest, WaypointPositionUpdate
 from app.services.geometry_converter import geojson_to_ewkt
-from app.services.trajectory_types import WaypointData
+from app.services.trajectory.types import WaypointData
 
 
 def _to_point_ewkt(lon: float, lat: float, alt: float) -> str:

@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 from app.core.config import Settings
 from app.models.enums import MissionStatus
-from app.services.trajectory_types import WaypointData
+from app.services.trajectory.types import WaypointData
 
 # settings override via env
 
@@ -53,8 +53,8 @@ def test_obstacle_null_containment_treated_as_safe():
     """waypoint outside obstacle boundary is not flagged."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import check_obstacle
-    from app.services.trajectory_types import LocalObstacle
+    from app.services.trajectory.safety_validator import check_obstacle
+    from app.services.trajectory.types import LocalObstacle
 
     obs = LocalObstacle(
         polygon=box(0, 0, 10, 10),
@@ -70,8 +70,8 @@ def test_obstacle_null_containment_treated_as_safe():
 
 def test_zone_null_containment_treated_as_not_inside(monkeypatch):
     """ST_Contains returning NULL for zone must not report waypoint as inside."""
-    from app.services import safety_validator
-    from app.services.safety_validator import check_safety_zone
+    from app.services.trajectory import safety_validator
+    from app.services.trajectory.safety_validator import check_safety_zone
 
     monkeypatch.setattr(safety_validator, "_geom_to_ewkt", lambda g: "SRID=4326;POINT(0 0 0)")
 
@@ -97,8 +97,8 @@ def test_zone_null_containment_treated_as_not_inside(monkeypatch):
 
 def test_geofence_null_containment_flags_violation(monkeypatch):
     """ST_Contains returning NULL for geofence must flag waypoint as outside."""
-    from app.services import safety_validator
-    from app.services.safety_validator import _check_constraint
+    from app.services.trajectory import safety_validator
+    from app.services.trajectory.safety_validator import _check_constraint
 
     monkeypatch.setattr(safety_validator, "_geom_to_ewkt", lambda g: "SRID=4326;POINT(0 0 0)")
 
@@ -156,7 +156,7 @@ def test_mission_invalidate_trajectory_noop_for_draft():
 
 def _empty_local_geoms():
     """build LocalGeometries with no obstacles, zones, or surfaces."""
-    from app.services.trajectory_types import LocalGeometries
+    from app.services.trajectory.types import LocalGeometries
     from app.utils.local_projection import LocalProjection
 
     proj = LocalProjection(ref_lon=14.26, ref_lat=50.10)
@@ -165,7 +165,7 @@ def _empty_local_geoms():
 
 def test_batch_check_obstacles_empty_obstacles():
     """no obstacles returns empty list"""
-    from app.services.safety_validator import _batch_check_obstacles
+    from app.services.trajectory.safety_validator import _batch_check_obstacles
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
     local_geoms = _empty_local_geoms()
@@ -177,8 +177,8 @@ def test_batch_check_obstacles_empty_waypoints():
     """no waypoints returns empty list"""
     from shapely.geometry import box
 
-    from app.services.safety_validator import _batch_check_obstacles
-    from app.services.trajectory_types import LocalGeometries, LocalObstacle
+    from app.services.trajectory.safety_validator import _batch_check_obstacles
+    from app.services.trajectory.types import LocalGeometries, LocalObstacle
     from app.utils.local_projection import LocalProjection
 
     proj = LocalProjection(ref_lon=14.26, ref_lat=50.10)
@@ -194,7 +194,7 @@ def test_batch_check_obstacles_empty_waypoints():
 
 def test_batch_check_obstacles_no_boundary():
     """empty obstacle list returns empty violations."""
-    from app.services.safety_validator import _batch_check_obstacles
+    from app.services.trajectory.safety_validator import _batch_check_obstacles
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
     local_geoms = _empty_local_geoms()
@@ -204,7 +204,7 @@ def test_batch_check_obstacles_no_boundary():
 
 def test_batch_check_zones_empty_zones():
     """no zones returns empty list"""
-    from app.services.safety_validator import _batch_check_zones
+    from app.services.trajectory.safety_validator import _batch_check_zones
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
     local_geoms = _empty_local_geoms()
@@ -214,7 +214,7 @@ def test_batch_check_zones_empty_zones():
 
 def test_batch_check_zones_empty_waypoints():
     """no waypoints returns empty list"""
-    from app.services.safety_validator import _batch_check_zones
+    from app.services.trajectory.safety_validator import _batch_check_zones
 
     local_geoms = _empty_local_geoms()
     result = _batch_check_zones([], local_geoms)
@@ -223,7 +223,7 @@ def test_batch_check_zones_empty_waypoints():
 
 def test_batch_check_zones_no_geometry():
     """no zones in local_geoms returns empty list"""
-    from app.services.safety_validator import _batch_check_zones
+    from app.services.trajectory.safety_validator import _batch_check_zones
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
     local_geoms = _empty_local_geoms()
@@ -233,7 +233,7 @@ def test_batch_check_zones_no_geometry():
 
 def test_buffer_distance_zero_in_max_buffer_calc():
     """buffer_distance=0 in max_buffer calc should use 0, not DEFAULT_OBSTACLE_RADIUS."""
-    from app.services.trajectory_types import DEFAULT_OBSTACLE_RADIUS
+    from app.services.trajectory.types import DEFAULT_OBSTACLE_RADIUS
 
     obstacles = [
         type("O", (), {"buffer_distance": 0.0})(),

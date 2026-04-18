@@ -14,7 +14,8 @@ from app.models.mission import DroneProfile
 from app.models.value_objects import Speed
 from app.schemas.geometry import parse_ewkb
 from app.services.geometry_converter import geojson_to_ewkt
-from app.services.trajectory_types import (
+
+from .types import (
     DEFAULT_RUNWAY_BUFFER,
     HARD_ZONE_TYPES,
     MINIMUM_ALTITUDE_THRESHOLD,

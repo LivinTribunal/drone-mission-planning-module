@@ -7,21 +7,21 @@ from uuid import uuid4
 import pytest
 
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
-from app.services.trajectory_computation import (
-    calculate_arc_path,
-    calculate_fly_over_path,
-    calculate_parallel_side_sweep_path,
-    calculate_vertical_path,
+from app.services.trajectory.config_resolver import (
     check_sensor_fov,
     check_speed_framerate,
-    compute_measurement_trajectory,
     compute_optimal_density,
     compute_optimal_speed,
     resolve_density,
     resolve_speed,
     resolve_with_defaults,
 )
-from app.services.trajectory_types import (
+from app.services.trajectory.methods import compute_measurement_trajectory
+from app.services.trajectory.methods.angular_sweep import calculate_arc_path
+from app.services.trajectory.methods.fly_over import calculate_fly_over_path
+from app.services.trajectory.methods.parallel_side_sweep import calculate_parallel_side_sweep_path
+from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
+from app.services.trajectory.types import (
     DEFAULT_SWEEP_ANGLE,
     HOVER_ANGLE_TOLERANCE,
     MAX_ELEVATION_ANGLE,

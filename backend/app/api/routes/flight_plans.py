@@ -12,7 +12,7 @@ from app.schemas.flight_plan import (
     WaypointBatchUpdateRequest,
 )
 from app.services import flight_plan_service, mission_service
-from app.services.trajectory_orchestrator import generate_trajectory
+from app.services.trajectory.orchestrator import generate_trajectory
 
 router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
 

@@ -193,6 +193,20 @@ class WaypointData:
 
 
 @dataclass
+class MethodPrep:
+    """pre-computation output from a method's prepare step."""
+
+    path_distance: Meters = 0.0
+    default_speed: MetersPerSecond = 5.0
+    density_for_speed: int = 8
+    needs_fov_check: bool = False
+    runway_center: Point3D | None = None
+    target_lha_pos: Point3D | None = None
+    target_agl_type: str | None = None
+    rwy_heading_override: float | None = None
+
+
+@dataclass
 class InspectionPass:
     """waypoints from a single inspection"""
 

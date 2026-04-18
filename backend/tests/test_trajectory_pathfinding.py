@@ -10,7 +10,7 @@ from shapely.geometry import Point, box
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.airport import Airport, Obstacle, Runway
 from app.models.enums import CameraAction, SafetyZoneType, WaypointType
-from app.services.trajectory_pathfinding import (
+from app.services.trajectory.pathfinding import (
     _build_visibility_graph,
     _collect_graph_nodes_in_circle,
     _max_effective_buffer,
@@ -19,7 +19,7 @@ from app.services.trajectory_pathfinding import (
     compute_transit_path,
     resolve_inspection_collisions,
 )
-from app.services.trajectory_types import (
+from app.services.trajectory.types import (
     DEFAULT_OBSTACLE_RADIUS,
     GRID_EDGE_RADIUS,
     LocalObstacle,
@@ -219,7 +219,7 @@ class TestMaxEffectiveBuffer:
         """a 0.0 override should not zero out the search radius."""
         from shapely.geometry import box
 
-        from app.services.trajectory_types import LocalObstacle
+        from app.services.trajectory.types import LocalObstacle
 
         obstacles = [
             LocalObstacle(
@@ -243,7 +243,7 @@ class TestMaxEffectiveBuffer:
         """None override uses max per-obstacle buffer."""
         from shapely.geometry import box
 
-        from app.services.trajectory_types import LocalObstacle
+        from app.services.trajectory.types import LocalObstacle
 
         obstacles = [
             LocalObstacle(
@@ -267,7 +267,7 @@ class TestMaxEffectiveBuffer:
         """positive override replaces per-obstacle values."""
         from shapely.geometry import box
 
-        from app.services.trajectory_types import LocalObstacle
+        from app.services.trajectory.types import LocalObstacle
 
         obstacles = [
             LocalObstacle(

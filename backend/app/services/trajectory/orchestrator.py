@@ -15,40 +15,39 @@ from app.models.value_objects import Coordinate
 from app.schemas.geometry import parse_ewkb
 from app.services.elevation_provider import create_elevation_provider
 from app.services.flight_plan_service import persist_flight_plan
-from app.services.safety_validator import (
-    check_battery,
-    segment_runway_crossing_length,
-    validate_inspection_pass,
-)
-from app.services.trajectory_computation import (
+from app.utils.geo import bearing_between, distance_between, total_path_distance
+from app.utils.local_projection import LocalProjection, build_local_geometries
+
+from .config_resolver import (
     check_sensor_fov,
     check_speed_framerate,
-    compute_measurement_trajectory,
-    determine_end_position,
-    determine_start_position,
-    find_lha_by_id,
-    find_lha_in_surfaces,
+    resolve_density,
+    resolve_speed,
+    resolve_with_defaults,
+)
+from .helpers import (
+    _apply_camera_actions,
     get_glide_slope_angle,
     get_lha_positions,
     get_lha_positions_from_surfaces,
     get_lha_setting_angles,
     get_ordered_lha_positions,
-    get_runway_centerline_midpoint,
     get_runway_heading,
-    resolve_density,
-    resolve_speed,
-    resolve_with_defaults,
 )
-from app.services.trajectory_pathfinding import (
+from .methods import PREPARE_REGISTRY, compute_measurement_trajectory
+from .pathfinding import (
     compute_transit_path,
     has_line_of_sight,
     resolve_inspection_collisions,
 )
-from app.services.trajectory_types import (
+from .safety_validator import (
+    check_battery,
+    segment_runway_crossing_length,
+    validate_inspection_pass,
+)
+from .types import (
     DEFAULT_ACCELERATION,
     DEFAULT_DECELERATION,
-    DEFAULT_FLY_OVER_SPEED,
-    DEFAULT_PARALLEL_SPEED,
     DEFAULT_RESERVE_MARGIN,
     DEFAULT_SPEED,
     GIMBAL_SETTLE_TIME,
@@ -64,8 +63,6 @@ from app.services.trajectory_types import (
     Violation,
     WaypointData,
 )
-from app.utils.geo import bearing_between, distance_between, total_path_distance
-from app.utils.local_projection import LocalProjection, build_local_geometries
 
 
 def _parse_coordinate(ewkb_data, label: str) -> list[float]:
@@ -239,24 +236,6 @@ def _format_soft_warnings(
             # build idx: references for waypoint id resolution
             wp_ids = [f"idx:{(i - 1) + wp_offset}" for i in indices]
             warnings.append((full, wp_ids))
-
-
-def _apply_camera_actions(waypoints: list[WaypointData]):
-    """set lead-in and lead-out waypoints to NONE camera action.
-
-    preserves RECORDING_START/RECORDING_STOP on video capture hover waypoints.
-    """
-    if len(waypoints) >= 2:
-        if waypoints[0].camera_action not in (
-            CameraAction.RECORDING_START,
-            CameraAction.RECORDING_STOP,
-        ):
-            waypoints[0].camera_action = CameraAction.NONE
-        if waypoints[-1].camera_action not in (
-            CameraAction.RECORDING_START,
-            CameraAction.RECORDING_STOP,
-        ):
-            waypoints[-1].camera_action = CameraAction.NONE
 
 
 def generate_trajectory(
@@ -441,52 +420,29 @@ def _generate_trajectory_inner(
         # ordered LHA positions are used by fly-over and parallel-side-sweep
         ordered_lhas = get_ordered_lha_positions(template, lha_ids)
 
-        # parallel-side-sweep needs a point on the runway centerline to orient
-        # the perpendicular offset. LHA row centroid is not a substitute.
-        runway_center: Point3D | None = None
-        if inspection.method == InspectionMethod.PARALLEL_SIDE_SWEEP:
-            runway_center = get_runway_centerline_midpoint(template, data.surfaces)
-            if runway_center is None:
-                raise TrajectoryGenerationError(
-                    f"{template.name} #{inspection.sequence_order}: "
-                    "parallel-side-sweep requires a runway surface with a centerline "
-                    "for its target AGL"
-                )
+        # method-specific pre-computation via registry
+        prepare_fn = PREPARE_REGISTRY.get(inspection.method)
+        if prepare_fn is None:
+            raise TrajectoryGenerationError(f"unsupported inspection method: {inspection.method}")
 
-        # hover-point-lock needs a single operator-selected LHA
-        target_lha_pos: Point3D | None = None
-        target_agl_type: str | None = None
-        is_new_method = inspection.method in (
-            InspectionMethod.FLY_OVER,
-            InspectionMethod.PARALLEL_SIDE_SWEEP,
-            InspectionMethod.HOVER_POINT_LOCK,
+        prep = prepare_fn(
+            inspection=inspection,
+            config=config,
+            center=center,
+            rwy_heading=rwy_heading,
+            glide_slope=glide_slope,
+            ordered_lhas=ordered_lhas,
+            default_speed=default_speed,
+            template=template,
+            surfaces=data.surfaces,
+            label=label,
         )
-        if inspection.method == InspectionMethod.HOVER_POINT_LOCK:
-            selected_id = config.selected_lha_id
-            if selected_id is None:
-                raise TrajectoryGenerationError(
-                    f"{template.name} #{inspection.sequence_order}: "
-                    "hover-point-lock requires a selected LHA"
-                )
-            # hover-point-lock is AGL-agnostic: search across all airport AGLs
-            # instead of the template's target list.
-            match = find_lha_by_id(template, selected_id)
-            if match is None:
-                match = find_lha_in_surfaces(data.surfaces, selected_id)
-            if match is None:
-                raise TrajectoryGenerationError(
-                    f"{template.name} #{inspection.sequence_order}: "
-                    f"selected LHA {selected_id} not found in airport"
-                )
-            target_lha_pos, target_agl = match
-            target_agl_type = target_agl.agl_type
-            # hover can reference a "RUNWAY" bearing - resolve heading from the
-            # surface hosting the selected LHA's AGL when the template has no
-            # target AGLs of its own (AGL-agnostic hover templates).
-            for surface in data.surfaces:
-                if surface.id == target_agl.surface_id and surface.heading:
-                    rwy_heading = surface.heading
-                    break
+
+        runway_center = prep.runway_center
+        target_lha_pos = prep.target_lha_pos
+        target_agl_type = prep.target_agl_type
+        if prep.rwy_heading_override is not None:
+            rwy_heading = prep.rwy_heading_override
 
         # suggest optimal density without overriding user's choice
         _, density_suggestion = resolve_density(inspection.method, setting_angles, config)
@@ -498,50 +454,8 @@ def _generate_trajectory_inner(
                 )
             )
 
-        # compute path distance for speed/framerate check
-        if inspection.method == InspectionMethod.HOVER_POINT_LOCK:
-            # hover has zero travel distance by definition
-            path_dist = 0.0
-        elif is_new_method:
-            path_dist = 0.0
-            for k in range(1, len(ordered_lhas)):
-                path_dist += distance_between(
-                    ordered_lhas[k - 1].lon,
-                    ordered_lhas[k - 1].lat,
-                    ordered_lhas[k].lon,
-                    ordered_lhas[k].lat,
-                )
-        else:
-            start_pos = determine_start_position(
-                center, config, inspection.method, rwy_heading, glide_slope
-            )
-            end_pos = determine_end_position(
-                center, config, inspection.method, rwy_heading, glide_slope
-            )
-            path_dist = distance_between(start_pos.lon, start_pos.lat, end_pos.lon, end_pos.lat)
-
-        # method-specific default speed overrides mission default for new methods
-        if inspection.method == InspectionMethod.FLY_OVER:
-            method_default_speed = DEFAULT_FLY_OVER_SPEED
-        elif inspection.method == InspectionMethod.PARALLEL_SIDE_SWEEP:
-            method_default_speed = DEFAULT_PARALLEL_SPEED
-        else:
-            method_default_speed = default_speed
-
-        # fly-over and parallel-side-sweep generate exactly len(ordered_lhas)
-        # waypoints (one per LHA), not config.measurement_density. passing the
-        # wrong density inflates waypoint_spacing and yields over-conservative
-        # speed recommendations plus spurious framerate warnings.
-        if inspection.method in (
-            InspectionMethod.FLY_OVER,
-            InspectionMethod.PARALLEL_SIDE_SWEEP,
-        ):
-            density_for_speed = max(len(ordered_lhas), 2)
-        else:
-            density_for_speed = config.measurement_density
-
         speed, speed_warning, optimal_speed = resolve_speed(
-            path_dist, density_for_speed, drone, method_default_speed
+            prep.path_distance, prep.density_for_speed, drone, prep.default_speed
         )
         if speed_warning:
             warnings.append(
@@ -564,13 +478,7 @@ def _generate_trajectory_inner(
                 if ms_warning:
                     warnings.append((f"measurement speed: {ms_warning}", []))
 
-        # FOV check only applies to methods where the drone hovers/approaches at a fixed
-        # standoff radius - fly-over and parallel-side-sweep fly along the lights so
-        # horizontal_distance is not a meaningful approach distance for them.
-        if drone and inspection.method in (
-            InspectionMethod.ANGULAR_SWEEP,
-            InspectionMethod.VERTICAL_PROFILE,
-        ):
+        if drone and prep.needs_fov_check:
             fov_distance = config.horizontal_distance or MIN_ARC_RADIUS
             approach = (rwy_heading + 180) % 360
             warning = check_sensor_fov(drone, lha_positions, fov_distance, approach)

@@ -3,16 +3,14 @@
 from uuid import uuid4
 
 from app.models.enums import CameraAction, WaypointType
-from app.services.trajectory_computation import (
-    _insert_video_hover_waypoints,
-    calculate_arc_path,
-    calculate_vertical_path,
-    compute_measurement_trajectory,
-)
-from app.services.trajectory_orchestrator import (
+from app.services.trajectory.helpers import (
     _apply_camera_actions,
+    _insert_video_hover_waypoints,
 )
-from app.services.trajectory_types import Point3D, ResolvedConfig, WaypointData
+from app.services.trajectory.methods import compute_measurement_trajectory
+from app.services.trajectory.methods.angular_sweep import calculate_arc_path
+from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
+from app.services.trajectory.types import Point3D, ResolvedConfig, WaypointData
 
 # --- video mode arc path ---
 
@@ -275,7 +273,7 @@ def test_merge_fields_include_capture_mode():
 
 def test_config_fields_include_capture_mode():
     """CONFIG_FIELDS includes capture_mode and recording_setup_duration."""
-    from app.services.trajectory_computation import CONFIG_FIELDS
+    from app.models.inspection import CONFIG_FIELDS
 
     assert "capture_mode" in CONFIG_FIELDS
     assert "recording_setup_duration" in CONFIG_FIELDS

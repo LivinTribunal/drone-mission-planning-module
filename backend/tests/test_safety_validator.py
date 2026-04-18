@@ -1,11 +1,11 @@
-from app.services.trajectory_types import WaypointData
+from app.services.trajectory.types import WaypointData
 
 # altitude constraint
 
 
 def test_altitude_above_max():
     """waypoint above max altitude triggers hard violation."""
-    from app.services.safety_validator import _check_constraint
+    from app.services.trajectory.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=600.0)
     constraint = type(
@@ -29,7 +29,7 @@ def test_altitude_above_max():
 
 def test_altitude_below_min():
     """waypoint below min altitude triggers violation."""
-    from app.services.safety_validator import _check_constraint
+    from app.services.trajectory.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=30.0)
     constraint = type(
@@ -55,7 +55,7 @@ def test_altitude_below_min():
 
 def test_speed_exceeds_max():
     """speed above max triggers soft warning."""
-    from app.services.safety_validator import _check_constraint
+    from app.services.trajectory.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=300.0, speed=30.0)
     constraint = type(
@@ -80,7 +80,7 @@ def test_speed_exceeds_max():
 
 def test_geofence_constraint_with_no_db():
     """geofence constraint with db=None returns soft warning violation."""
-    from app.services.safety_validator import _check_constraint
+    from app.services.trajectory.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
     constraint = type(
@@ -103,7 +103,7 @@ def test_geofence_constraint_with_no_db():
 
 def test_runway_buffer_constraint_with_no_db():
     """runway buffer constraint with db=None returns soft warning violation."""
-    from app.services.safety_validator import _check_constraint
+    from app.services.trajectory.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
     constraint = type(
@@ -129,7 +129,7 @@ def test_runway_buffer_constraint_with_no_db():
 
 def test_drone_max_altitude():
     """waypoint exceeding drone max altitude returns violation."""
-    from app.services.safety_validator import check_drone_constraints
+    from app.services.trajectory.safety_validator import check_drone_constraints
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=600.0)
     drone = type("D", (), {"max_altitude": 500.0, "max_speed": 23.0})()
@@ -139,7 +139,7 @@ def test_drone_max_altitude():
 
 def test_drone_within_limits():
     """waypoint within drone limits returns no violation."""
-    from app.services.safety_validator import check_drone_constraints
+    from app.services.trajectory.safety_validator import check_drone_constraints
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=200.0, speed=10.0)
     drone = type("D", (), {"max_altitude": 500.0, "max_speed": 23.0})()
@@ -152,7 +152,7 @@ def test_drone_within_limits():
 
 def test_battery_exceeded():
     """flight duration exceeding battery endurance returns violation."""
-    from app.services.safety_validator import check_battery
+    from app.services.trajectory.safety_validator import check_battery
 
     drone = type("D", (), {"endurance_minutes": 55.0})()
 
@@ -161,7 +161,7 @@ def test_battery_exceeded():
 
 def test_battery_ok():
     """flight within battery endurance returns no violation."""
-    from app.services.safety_validator import check_battery
+    from app.services.trajectory.safety_validator import check_battery
 
     drone = type("D", (), {"endurance_minutes": 55.0})()
 
@@ -173,7 +173,7 @@ def test_battery_ok():
 
 def test_safety_zone_no_geometry():
     """zone with no geometry is skipped."""
-    from app.services.safety_validator import check_safety_zone
+    from app.services.trajectory.safety_validator import check_safety_zone
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
     zone = type(
@@ -195,8 +195,8 @@ def test_obstacle_check_local_no_containment():
     """obstacle check returns False when waypoint is outside."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import check_obstacle
-    from app.services.trajectory_types import LocalObstacle
+    from app.services.trajectory.safety_validator import check_obstacle
+    from app.services.trajectory.types import LocalObstacle
 
     obs = LocalObstacle(
         polygon=box(0, 0, 10, 10),
@@ -213,8 +213,8 @@ def test_obstacle_check_local_inside_below_top():
     """obstacle check returns True when inside and below obstacle top."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import check_obstacle
-    from app.services.trajectory_types import LocalObstacle
+    from app.services.trajectory.safety_validator import check_obstacle
+    from app.services.trajectory.types import LocalObstacle
 
     obs = LocalObstacle(
         polygon=box(0, 0, 10, 10),
@@ -231,8 +231,8 @@ def test_obstacle_check_local_inside_above_top():
     """obstacle check returns False when inside but above obstacle top."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import check_obstacle
-    from app.services.trajectory_types import LocalObstacle
+    from app.services.trajectory.safety_validator import check_obstacle
+    from app.services.trajectory.types import LocalObstacle
 
     obs = LocalObstacle(
         polygon=box(0, 0, 10, 10),
@@ -250,7 +250,7 @@ def test_obstacle_check_local_inside_above_top():
 
 def test_altitude_constraint_zero_min():
     """constraint with min_altitude=0 must still fire when waypoint is below 0"""
-    from app.services.safety_validator import _check_constraint
+    from app.services.trajectory.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=-5.0)
     constraint = type(
@@ -273,7 +273,7 @@ def test_altitude_constraint_zero_min():
 
 def test_altitude_constraint_zero_max():
     """constraint with max_altitude=0 must still fire when waypoint is above 0"""
-    from app.services.safety_validator import _check_constraint
+    from app.services.trajectory.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
     constraint = type(
@@ -296,7 +296,7 @@ def test_altitude_constraint_zero_max():
 
 def test_speed_constraint_zero_max():
     """constraint with max_horizontal_speed=0 must fire when waypoint has any speed"""
-    from app.services.safety_validator import _check_constraint
+    from app.services.trajectory.safety_validator import _check_constraint
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=300.0, speed=1.0)
     constraint = type(
@@ -317,7 +317,7 @@ def test_speed_constraint_zero_max():
 
 def test_drone_zero_max_altitude():
     """drone with max_altitude=0 must trigger violation"""
-    from app.services.safety_validator import check_drone_constraints
+    from app.services.trajectory.safety_validator import check_drone_constraints
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
     drone = type("D", (), {"max_altitude": 0.0, "max_speed": 23.0})()
@@ -327,7 +327,7 @@ def test_drone_zero_max_altitude():
 
 def test_drone_zero_max_speed():
     """drone with max_speed=0 must trigger violation"""
-    from app.services.safety_validator import check_drone_constraints
+    from app.services.trajectory.safety_validator import check_drone_constraints
 
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0, speed=1.0)
     drone = type("D", (), {"max_altitude": 500.0, "max_speed": 0.0})()
@@ -342,8 +342,8 @@ def test_segments_intersect_obstacle_crossing():
     """line crossing obstacle polygon returns True."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import segments_intersect_obstacle
-    from app.services.trajectory_types import LocalObstacle
+    from app.services.trajectory.safety_validator import segments_intersect_obstacle
+    from app.services.trajectory.types import LocalObstacle
 
     obs = LocalObstacle(
         polygon=box(4, 4, 6, 6),
@@ -359,8 +359,8 @@ def test_segments_intersect_obstacle_no_crossing():
     """line not crossing obstacle polygon returns False."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import segments_intersect_obstacle
-    from app.services.trajectory_types import LocalObstacle
+    from app.services.trajectory.safety_validator import segments_intersect_obstacle
+    from app.services.trajectory.types import LocalObstacle
 
     obs = LocalObstacle(
         polygon=box(4, 4, 6, 6),
@@ -376,7 +376,7 @@ def test_segments_intersect_zone_crossing():
     """line crossing zone polygon returns True."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import segments_intersect_zone
+    from app.services.trajectory.safety_validator import segments_intersect_zone
 
     zone_poly = box(4, 4, 6, 6)
     assert segments_intersect_zone(0, 5, 10, 5, zone_poly) is True
@@ -386,7 +386,7 @@ def test_segment_runway_crossing_length_positive():
     """line crossing runway polygon returns positive length."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import segment_runway_crossing_length
+    from app.services.trajectory.safety_validator import segment_runway_crossing_length
 
     runway_poly = box(-100, -25, 100, 25)
     length = segment_runway_crossing_length(0, -50, 0, 50, runway_poly)
@@ -398,7 +398,7 @@ def test_segment_runway_crossing_length_no_crossing():
     """line not crossing runway polygon returns 0."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import segment_runway_crossing_length
+    from app.services.trajectory.safety_validator import segment_runway_crossing_length
 
     runway_poly = box(-100, -25, 100, 25)
     length = segment_runway_crossing_length(0, 30, 10, 30, runway_poly)
@@ -410,7 +410,7 @@ def test_segment_runway_crossing_length_no_crossing():
 
 def test_speed_framerate_fallback_no_optimal():
     """fallback fires when optimal_speed is None and speed exceeds max_speed margin"""
-    from app.services.trajectory_computation import check_speed_framerate
+    from app.services.trajectory.config_resolver import check_speed_framerate
 
     drone = type("D", (), {"camera_frame_rate": 30, "max_speed": 10.0})()
     warning = check_speed_framerate(speed=9.5, drone=drone, optimal_speed=None)
@@ -421,7 +421,7 @@ def test_speed_framerate_fallback_no_optimal():
 
 def test_speed_framerate_fallback_skipped_with_optimal():
     """fallback does not fire when optimal_speed is computed"""
-    from app.services.trajectory_computation import check_speed_framerate
+    from app.services.trajectory.config_resolver import check_speed_framerate
 
     drone = type("D", (), {"camera_frame_rate": 30, "max_speed": 10.0})()
     warning = check_speed_framerate(speed=4.0, drone=drone, optimal_speed=5.0)
@@ -436,8 +436,8 @@ def test_obstacle_below_base_alt_no_violation():
     """waypoint below obstacle base_alt should not trigger violation."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import check_obstacle
-    from app.services.trajectory_types import LocalObstacle
+    from app.services.trajectory.safety_validator import check_obstacle
+    from app.services.trajectory.types import LocalObstacle
 
     obs = LocalObstacle(
         polygon=box(0, 0, 10, 10),
@@ -454,8 +454,8 @@ def test_obstacle_ground_level_inside_violation():
     """waypoint at ground level inside a ground-level obstacle triggers violation."""
     from shapely.geometry import box
 
-    from app.services.safety_validator import check_obstacle
-    from app.services.trajectory_types import LocalObstacle
+    from app.services.trajectory.safety_validator import check_obstacle
+    from app.services.trajectory.types import LocalObstacle
 
     obs = LocalObstacle(
         polygon=box(0, 0, 10, 10),
