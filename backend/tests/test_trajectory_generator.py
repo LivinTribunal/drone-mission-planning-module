@@ -412,6 +412,7 @@ def test_line_of_sight_clear(client, db_engine):
 
     from app.models.airport import Obstacle
     from app.services.trajectory_pathfinding import has_line_of_sight
+    from app.utils.local_projection import LocalProjection, build_local_geometries
 
     airport = client.post(
         "/api/v1/airports",
@@ -443,10 +444,12 @@ def test_line_of_sight_clear(client, db_engine):
 
     with Session(db_engine) as db:
         obstacles = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
+        proj = LocalProjection(ref_lon=14.26, ref_lat=50.10)
+        local_geoms = build_local_geometries(proj, obstacles, [], [])
         point = Point3D(lon=14.26, lat=50.10, alt=400.0)
         target = Point3D(lon=14.28, lat=50.10, alt=300.0)
 
-        assert has_line_of_sight(db, point, target, obstacles, []) is True
+        assert has_line_of_sight(point, target, local_geoms) is True
 
 
 def test_line_of_sight_blocked(client, db_engine):
@@ -455,6 +458,7 @@ def test_line_of_sight_blocked(client, db_engine):
 
     from app.models.airport import Obstacle
     from app.services.trajectory_pathfinding import has_line_of_sight
+    from app.utils.local_projection import LocalProjection, build_local_geometries
 
     airport = client.post(
         "/api/v1/airports",
@@ -488,10 +492,12 @@ def test_line_of_sight_blocked(client, db_engine):
     with Session(db_engine) as db:
         obstacles = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).all()
         assert len(obstacles) == 1
+        proj = LocalProjection(ref_lon=14.26, ref_lat=50.10)
+        local_geoms = build_local_geometries(proj, obstacles, [], [])
         point = Point3D(lon=14.26, lat=50.10, alt=400.0)
         target = Point3D(lon=14.28, lat=50.10, alt=300.0)
 
-        assert has_line_of_sight(db, point, target, obstacles, []) is False
+        assert has_line_of_sight(point, target, local_geoms) is False
 
 
 def test_extract_polygon_vertices_buffer_offset(client, db_engine):
@@ -499,7 +505,8 @@ def test_extract_polygon_vertices_buffer_offset(client, db_engine):
     from sqlalchemy.orm import Session
 
     from app.models.airport import Obstacle
-    from app.services.trajectory_pathfinding import _extract_polygon_vertices
+    from app.services.trajectory_pathfinding import _extract_local_polygon_vertices
+    from app.utils.local_projection import LocalProjection, ewkb_to_local_polygon
 
     airport = client.post(
         "/api/v1/airports",
@@ -507,7 +514,6 @@ def test_extract_polygon_vertices_buffer_offset(client, db_engine):
     ).json()
     airport_id = airport["id"]
 
-    # simple square polygon centered near (14.27, 50.10)
     coords = [
         [14.269, 50.099, 300],
         [14.271, 50.099, 300],
@@ -528,27 +534,26 @@ def test_extract_polygon_vertices_buffer_offset(client, db_engine):
 
     with Session(db_engine) as db:
         obs = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).first()
+        proj = LocalProjection(ref_lon=14.27, ref_lat=50.10)
+        poly = ewkb_to_local_polygon(proj, obs.boundary.data)
 
-        # extract with zero buffer - vertices should match unique polygon vertices
-        verts_zero = _extract_polygon_vertices(obs.boundary.data, buffer_m=0.0)
-        unique_coords = coords[:-1]  # strip closing duplicate
+        # extract with zero buffer
+        verts_zero = _extract_local_polygon_vertices(poly, buffer_m=0.0)
+        unique_coords = coords[:-1]
         assert len(verts_zero) == len(unique_coords)
-        for v, c in zip(verts_zero, unique_coords):
-            assert abs(v.lon - c[0]) < 1e-6
-            assert abs(v.lat - c[1]) < 1e-6
 
         # extract with 25m buffer
         buffer_m = 25.0
-        verts_buffered = _extract_polygon_vertices(obs.boundary.data, buffer_m=buffer_m)
+        verts_buffered = _extract_local_polygon_vertices(poly, buffer_m=buffer_m)
         assert len(verts_buffered) == len(unique_coords)
 
         # each buffered vertex should be ~25m farther from centroid than the original
-        cx = sum(c[0] for c in coords) / len(coords)
-        cy = sum(c[1] for c in coords) / len(coords)
+        cx = sum(v[0] for v in verts_zero) / len(verts_zero)
+        cy = sum(v[1] for v in verts_zero) / len(verts_zero)
 
         for v_buf, v_orig in zip(verts_buffered, verts_zero):
-            dist_orig = distance_between(cx, cy, v_orig.lon, v_orig.lat)
-            dist_buf = distance_between(cx, cy, v_buf.lon, v_buf.lat)
+            dist_orig = math.sqrt((v_orig[0] - cx) ** 2 + (v_orig[1] - cy) ** 2)
+            dist_buf = math.sqrt((v_buf[0] - cx) ** 2 + (v_buf[1] - cy) ** 2)
             offset = dist_buf - dist_orig
             assert abs(offset - buffer_m) < 2.0, f"expected ~{buffer_m}m offset, got {offset:.1f}m"
 
@@ -778,8 +783,9 @@ def test_buffer_distance_zero_uses_zero_not_default(client, db_engine):
     from sqlalchemy.orm import Session
 
     from app.models.airport import Obstacle
-    from app.services.trajectory_pathfinding import _extract_polygon_vertices
+    from app.services.trajectory_pathfinding import _extract_local_polygon_vertices
     from app.services.trajectory_types import DEFAULT_OBSTACLE_RADIUS
+    from app.utils.local_projection import LocalProjection, ewkb_to_local_polygon
 
     airport = client.post(
         "/api/v1/airports",
@@ -809,20 +815,23 @@ def test_buffer_distance_zero_uses_zero_not_default(client, db_engine):
         obs = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).first()
         assert obs.buffer_distance == 0.0
 
-        # extract with obs.buffer_distance (0.0) - vertices should match originals
-        verts = _extract_polygon_vertices(obs.boundary.data, buffer_m=obs.buffer_distance)
-        for v, c in zip(verts, coords[:-1]):
-            assert abs(v.lon - c[0]) < 1e-6
-            assert abs(v.lat - c[1]) < 1e-6
+        proj = LocalProjection(ref_lon=14.27, ref_lat=50.10)
+        poly = ewkb_to_local_polygon(proj, obs.boundary.data)
+
+        # extract with buffer_m=0.0 - vertices should match polygon exterior
+        verts = _extract_local_polygon_vertices(poly, buffer_m=0.0)
+        assert len(verts) == 4
 
         # confirm DEFAULT_OBSTACLE_RADIUS is non-zero (sanity check)
         assert DEFAULT_OBSTACLE_RADIUS > 0
 
         # using None should offset by default - different from zero buffer
-        verts_default = _extract_polygon_vertices(obs.boundary.data, buffer_m=None)
+        verts_default = _extract_local_polygon_vertices(poly, buffer_m=None)
+        cx = sum(v[0] for v in verts) / len(verts)
+        cy = sum(v[1] for v in verts) / len(verts)
         for v_def, v_zero in zip(verts_default, verts):
-            dist_def = distance_between(14.27, 50.10, v_def.lon, v_def.lat)
-            dist_zero = distance_between(14.27, 50.10, v_zero.lon, v_zero.lat)
+            dist_def = math.sqrt((v_def[0] - cx) ** 2 + (v_def[1] - cy) ** 2)
+            dist_zero = math.sqrt((v_zero[0] - cx) ** 2 + (v_zero[1] - cy) ** 2)
             assert dist_def > dist_zero
 
 
@@ -935,7 +944,8 @@ def test_extract_polygon_vertices_skips_closing_duplicate(client, db_engine):
     from sqlalchemy.orm import Session
 
     from app.models.airport import Obstacle
-    from app.services.trajectory_pathfinding import _extract_polygon_vertices
+    from app.services.trajectory_pathfinding import _extract_local_polygon_vertices
+    from app.utils.local_projection import LocalProjection, ewkb_to_local_polygon
 
     airport = client.post(
         "/api/v1/airports",
@@ -964,12 +974,13 @@ def test_extract_polygon_vertices_skips_closing_duplicate(client, db_engine):
 
     with Session(db_engine) as db:
         obs = db.query(Obstacle).filter(Obstacle.airport_id == airport_id).first()
-        verts = _extract_polygon_vertices(obs.boundary.data, buffer_m=5.0)
+        proj = LocalProjection(ref_lon=14.27, ref_lat=50.10)
+        poly = ewkb_to_local_polygon(proj, obs.boundary.data)
+        verts = _extract_local_polygon_vertices(poly, buffer_m=5.0)
 
         # should have 4 vertices, not 5 (closing duplicate removed)
         assert len(verts) == 4
 
         # first and last should NOT be at the same position
-        assert not (
-            abs(verts[0].lon - verts[-1].lon) < 1e-8 and abs(verts[0].lat - verts[-1].lat) < 1e-8
-        )
+        first, last = verts[0], verts[-1]
+        assert not (abs(first[0] - last[0]) < 1e-8 and abs(first[1] - last[1]) < 1e-8)

@@ -8,12 +8,15 @@ from sqlalchemy import text
 
 from app.models.enums import SafetyZoneType
 from app.services.safety_validator import _batch_check_boundary_zones, check_safety_zone
-from app.services.trajectory_types import WaypointData
+from app.services.trajectory_types import LocalBoundary, LocalGeometries, WaypointData
+from app.utils.local_projection import LocalProjection
 
 # boundary square around prague area
 _BOUNDARY_WKT = (
     "POLYGON Z ((14.25 50.09 0, 14.27 50.09 0, 14.27 50.11 0, 14.25 50.11 0, 14.25 50.09 0))"
 )
+
+_REF_LON, _REF_LAT = 14.26, 50.10
 
 
 @pytest.fixture
@@ -38,22 +41,37 @@ def _boundary_zone(geom, name: str = "fence") -> SimpleNamespace:
     )
 
 
-def test_waypoint_inside_boundary_no_violation(db_session, boundary_wkb):
+def _build_boundary_local_geoms(name: str = "fence") -> LocalGeometries:
+    """build LocalGeometries with boundary matching the WKT polygon."""
+    proj = LocalProjection(ref_lon=_REF_LON, ref_lat=_REF_LAT)
+    # convert WKT boundary corners to local coords
+    corners = [(14.25, 50.09), (14.27, 50.09), (14.27, 50.11), (14.25, 50.11)]
+    local_corners = [proj.to_local(lon, lat) for lon, lat in corners]
+    from shapely.geometry import Polygon
+
+    poly = Polygon(local_corners)
+    boundary = LocalBoundary(polygon=poly, name=name)
+    return LocalGeometries(
+        proj=proj, obstacles=[], zones=[], boundary_zones=[boundary], surfaces=[]
+    )
+
+
+def test_waypoint_inside_boundary_no_violation():
     """waypoint inside the boundary polygon does not produce a violation."""
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
-    zone = _boundary_zone(boundary_wkb)
+    local_geoms = _build_boundary_local_geoms()
 
-    result = _batch_check_boundary_zones(db_session, [wp], [zone])
+    result = _batch_check_boundary_zones([wp], local_geoms)
 
     assert result == []
 
 
-def test_waypoint_outside_boundary_soft_violation(db_session, boundary_wkb):
+def test_waypoint_outside_boundary_soft_violation():
     """waypoint outside the boundary polygon is a soft geofence warning (pending A* rerouting)."""
     wp = WaypointData(lon=14.30, lat=50.20, alt=100.0)
-    zone = _boundary_zone(boundary_wkb, name="prague fence")
+    local_geoms = _build_boundary_local_geoms(name="prague fence")
 
-    result = _batch_check_boundary_zones(db_session, [wp], [zone])
+    result = _batch_check_boundary_zones([wp], local_geoms)
 
     assert len(result) == 1
     violation = result[0]
@@ -63,13 +81,13 @@ def test_waypoint_outside_boundary_soft_violation(db_session, boundary_wkb):
     assert violation.waypoint_index == 0
 
 
-def test_mixed_waypoints_only_outside_flagged(db_session, boundary_wkb):
+def test_mixed_waypoints_only_outside_flagged():
     """only the waypoint outside the boundary is flagged."""
     inside = WaypointData(lon=14.26, lat=50.10, alt=100.0)
     outside = WaypointData(lon=14.50, lat=50.50, alt=100.0)
-    zone = _boundary_zone(boundary_wkb)
+    local_geoms = _build_boundary_local_geoms()
 
-    result = _batch_check_boundary_zones(db_session, [inside, outside], [zone])
+    result = _batch_check_boundary_zones([inside, outside], local_geoms)
 
     indices = {v.waypoint_index for v in result}
     assert indices == {1}
@@ -95,16 +113,13 @@ def test_check_safety_zone_inside_boundary_no_violation(db_session, boundary_wkb
     assert check_safety_zone(db_session, inside, zone) is None
 
 
-def test_boundary_ignores_altitude_band(db_session, boundary_wkb):
+def test_boundary_ignores_altitude_band():
     """boundary violations trigger regardless of altitude_floor/ceiling values."""
     # very low outside waypoint - altitude band would otherwise suppress the violation
     outside = WaypointData(lon=14.30, lat=50.20, alt=5.0)
-    zone = _boundary_zone(boundary_wkb)
-    # explicitly set an altitude band that does not contain 5m
-    zone.altitude_floor = 100.0
-    zone.altitude_ceiling = 500.0
+    local_geoms = _build_boundary_local_geoms()
 
-    result = _batch_check_boundary_zones(db_session, [outside], [zone])
+    result = _batch_check_boundary_zones([outside], local_geoms)
 
     assert len(result) == 1
     assert result[0].violation_kind == "geofence"

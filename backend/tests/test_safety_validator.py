@@ -142,23 +142,58 @@ def test_safety_zone_no_geometry():
     assert check_safety_zone(None, wp, zone) is None
 
 
-def test_obstacle_no_boundary():
-    """obstacle with no boundary returns None."""
+def test_obstacle_check_local_no_containment():
+    """obstacle check returns False when waypoint is outside."""
+    from shapely.geometry import box
+
     from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import LocalObstacle
 
-    wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
-    obs = type(
-        "O",
-        (),
-        {
-            "boundary": None,
-            "height": 40.0,
-            "name": "Test",
-            "buffer_distance": 5.0,
-        },
-    )()
+    obs = LocalObstacle(
+        polygon=box(0, 0, 10, 10),
+        name="Test",
+        height=40.0,
+        base_alt=0.0,
+        buffer_distance=5.0,
+    )
+    # point outside the obstacle
+    assert check_obstacle(20.0, 20.0, 5.0, obs) is False
 
-    assert check_obstacle(None, wp, obs) is None
+
+def test_obstacle_check_local_inside_below_top():
+    """obstacle check returns True when inside and below obstacle top."""
+    from shapely.geometry import box
+
+    from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import LocalObstacle
+
+    obs = LocalObstacle(
+        polygon=box(0, 0, 10, 10),
+        name="Test",
+        height=40.0,
+        base_alt=0.0,
+        buffer_distance=0.0,
+    )
+    # point inside the obstacle, alt below top
+    assert check_obstacle(5.0, 5.0, 30.0, obs) is True
+
+
+def test_obstacle_check_local_inside_above_top():
+    """obstacle check returns False when inside but above obstacle top."""
+    from shapely.geometry import box
+
+    from app.services.safety_validator import check_obstacle
+    from app.services.trajectory_types import LocalObstacle
+
+    obs = LocalObstacle(
+        polygon=box(0, 0, 10, 10),
+        name="Test",
+        height=40.0,
+        base_alt=0.0,
+        buffer_distance=0.0,
+    )
+    # point inside but alt above top
+    assert check_obstacle(5.0, 5.0, 50.0, obs) is False
 
 
 # zero-value constraint checks - regression tests for truthiness bug
@@ -251,27 +286,74 @@ def test_drone_zero_max_speed():
     assert check_drone_constraints(wp, drone) is not None
 
 
-# segment intersection null-geometry early exits
+# Shapely-based segment intersection tests
 
 
-def test_segments_intersect_obstacle_null_boundary():
-    """obstacle with no boundary returns False."""
+def test_segments_intersect_obstacle_crossing():
+    """line crossing obstacle polygon returns True."""
+    from shapely.geometry import box
+
     from app.services.safety_validator import segments_intersect_obstacle
+    from app.services.trajectory_types import LocalObstacle
 
-    obstacle = type("O", (), {"boundary": None})()
-    result = segments_intersect_obstacle(None, 14.0, 50.0, 14.1, 50.1, obstacle)
+    obs = LocalObstacle(
+        polygon=box(4, 4, 6, 6),
+        name="Test",
+        height=10.0,
+        base_alt=0.0,
+        buffer_distance=0.0,
+    )
+    assert segments_intersect_obstacle(0, 5, 10, 5, obs) is True
 
-    assert result is False
+
+def test_segments_intersect_obstacle_no_crossing():
+    """line not crossing obstacle polygon returns False."""
+    from shapely.geometry import box
+
+    from app.services.safety_validator import segments_intersect_obstacle
+    from app.services.trajectory_types import LocalObstacle
+
+    obs = LocalObstacle(
+        polygon=box(4, 4, 6, 6),
+        name="Test",
+        height=10.0,
+        base_alt=0.0,
+        buffer_distance=0.0,
+    )
+    assert segments_intersect_obstacle(0, 0, 10, 0, obs) is False
 
 
-def test_segments_intersect_zone_null_geometry():
-    """safety zone with no geometry returns False"""
+def test_segments_intersect_zone_crossing():
+    """line crossing zone polygon returns True."""
+    from shapely.geometry import box
+
     from app.services.safety_validator import segments_intersect_zone
 
-    zone = type("Z", (), {"geometry": None, "type": "PROHIBITED"})()
-    result = segments_intersect_zone(None, 14.0, 50.0, 14.1, 50.1, zone)
+    zone_poly = box(4, 4, 6, 6)
+    assert segments_intersect_zone(0, 5, 10, 5, zone_poly) is True
 
-    assert result is False
+
+def test_segment_runway_crossing_length_positive():
+    """line crossing runway polygon returns positive length."""
+    from shapely.geometry import box
+
+    from app.services.safety_validator import segment_runway_crossing_length
+
+    runway_poly = box(-100, -25, 100, 25)
+    length = segment_runway_crossing_length(0, -50, 0, 50, runway_poly)
+    assert length > 0
+    assert abs(length - 50.0) < 1.0
+
+
+def test_segment_runway_crossing_length_no_crossing():
+    """line not crossing runway polygon returns 0."""
+    from shapely.geometry import box
+
+    from app.services.safety_validator import segment_runway_crossing_length
+
+    runway_poly = box(-100, -25, 100, 25)
+    length = segment_runway_crossing_length(0, 30, 10, 30, runway_poly)
+    assert length == 0.0
 
 
 # check_speed_framerate fallback branch
@@ -296,41 +378,3 @@ def test_speed_framerate_fallback_skipped_with_optimal():
     warning = check_speed_framerate(speed=4.0, drone=drone, optimal_speed=5.0)
 
     assert warning is None
-
-
-# geometry parse failure paths
-
-
-def test_check_obstacle_null_boundary_altitude():
-    """obstacle with no boundary defaults altitude to 0."""
-    from app.services.safety_validator import check_obstacle
-    from app.services.trajectory_types import WaypointData
-
-    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
-    obstacle = type(
-        "O", (), {"boundary": None, "height": 10.0, "id": "o1", "buffer_distance": 5.0}
-    )()
-
-    # no boundary means no containment check - returns None
-    result = check_obstacle(None, wp, obstacle)
-    assert result is None
-
-
-def test_check_obstacle_corrupt_boundary():
-    """obstacle with corrupt boundary data raises trajectory error."""
-    import pytest
-
-    from app.core.exceptions import TrajectoryGenerationError
-    from app.services.safety_validator import check_obstacle
-    from app.services.trajectory_types import WaypointData
-
-    wp = WaypointData(lon=14.26, lat=50.10, alt=5.0)
-
-    # boundary with corrupt data that will fail parse_ewkb
-    corrupt_geom = type("G", (), {"data": b"\x00\x00\x00"})()
-    obstacle = type(
-        "O", (), {"boundary": corrupt_geom, "height": 10.0, "id": "o1", "buffer_distance": 5.0}
-    )()
-
-    with pytest.raises(TrajectoryGenerationError):
-        check_obstacle(None, wp, obstacle)
