@@ -109,7 +109,11 @@ def reset_password(db: Session, token: str, new_password: str) -> None:
 
 
 def seed_users(db: Session) -> None:
-    """create default users if none exist."""
+    """create default users if none exist. skipped in production."""
+    if settings.environment == "production":
+        logger.info("skipping user seeding in production environment")
+        return
+
     count = db.query(User).count()
     if count > 0:
         return
@@ -118,9 +122,19 @@ def seed_users(db: Session) -> None:
     logger.info("seeding %d default users with %d airports", 3, len(airports))
 
     seed_data = [
-        ("admin@tarmacview.com", "admin123", "Admin", UserRole.SUPER_ADMIN.value),
-        ("coordinator@tarmacview.com", "coord123", "Coordinator", UserRole.COORDINATOR.value),
-        ("operator@tarmacview.com", "operator123", "Operator", UserRole.OPERATOR.value),
+        ("admin@tarmacview.com", settings.seed_admin_password, "Admin", UserRole.SUPER_ADMIN.value),
+        (
+            "coordinator@tarmacview.com",
+            settings.seed_coordinator_password,
+            "Coordinator",
+            UserRole.COORDINATOR.value,
+        ),
+        (
+            "operator@tarmacview.com",
+            settings.seed_operator_password,
+            "Operator",
+            UserRole.OPERATOR.value,
+        ),
     ]
 
     for email, password, name, role in seed_data:

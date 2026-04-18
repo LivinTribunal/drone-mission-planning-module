@@ -8,6 +8,10 @@ import {
   type ReactNode,
 } from "react";
 import client from "@/api/client";
+import {
+  setAccessToken as setGlobalAccessToken,
+  setLogoutHandler,
+} from "@/auth/tokenStore";
 
 const REFRESH_TOKEN_KEY = "tarmacview_refresh_token";
 
@@ -36,17 +40,6 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-let globalAccessToken: string | null = null;
-let globalLogout: (() => void) | null = null;
-
-export function getAccessToken(): string | null {
-  return globalAccessToken;
-}
-
-export function triggerLogout(): void {
-  globalLogout?.();
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -57,13 +50,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     setAccessToken(null);
     setUser(null);
-    globalAccessToken = null;
+    setGlobalAccessToken(null);
   }, []);
 
   useEffect(() => {
-    globalLogout = logout;
+    setLogoutHandler(logout);
     return () => {
-      globalLogout = null;
+      setLogoutHandler(null);
     };
   }, [logout]);
 
@@ -82,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((res) => {
         const token = res.data.access_token;
         setAccessToken(token);
-        globalAccessToken = token;
+        setGlobalAccessToken(token);
         return client.get("/auth/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -98,18 +91,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
-  const login = useCallback(
-    async (email: string, password: string) => {
-      const res = await client.post("/auth/login", { email, password });
-      const { access_token, refresh_token, user: userData } = res.data;
+  const login = useCallback(async (email: string, password: string) => {
+    const res = await client.post("/auth/login", { email, password });
+    const { access_token, refresh_token, user: userData } = res.data;
 
-      localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
-      setAccessToken(access_token);
-      globalAccessToken = access_token;
-      setUser(userData);
-    },
-    [],
-  );
+    localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
+    setAccessToken(access_token);
+    setGlobalAccessToken(access_token);
+    setUser(userData);
+  }, []);
 
   return (
     <AuthContext.Provider

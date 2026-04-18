@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     terrain_api_batch_size: int = 2000  # max points per API request
     open_elevation_url: str = "https://api.open-elevation.com/api/v1/lookup"
 
+    # deployment environment
+    environment: str = "development"
+
+    # seed user passwords - only used in non-production environments
+    seed_admin_password: str = "admin123"
+    seed_coordinator_password: str = "coord123"
+    seed_operator_password: str = "operator123"
+
     # openaip integration
     openaip_api_url: str = "https://api.core.openaip.net/api"
     openaip_api_key: str = ""

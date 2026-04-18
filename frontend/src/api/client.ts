@@ -1,5 +1,5 @@
 import axios, { isAxiosError } from "axios";
-import { getAccessToken, triggerLogout } from "@/contexts/AuthContext";
+import { getAccessToken, setAccessToken, triggerLogout } from "@/auth/tokenStore";
 
 export { isAxiosError };
 
@@ -78,6 +78,7 @@ client.interceptors.response.use(
           refresh_token: refreshToken,
         });
         const newToken = res.data.access_token;
+        setAccessToken(newToken);
 
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         processQueue(newToken, null);

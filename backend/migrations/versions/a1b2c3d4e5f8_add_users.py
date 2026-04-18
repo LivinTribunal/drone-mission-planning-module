@@ -19,8 +19,6 @@ depends_on = None
 
 def upgrade() -> None:
     """create user table and user_airports junction."""
-    op.execute("CREATE TYPE userrole AS ENUM ('OPERATOR', 'COORDINATOR', 'SUPER_ADMIN')")
-
     op.create_table(
         "user",
         sa.Column("id", UUID, primary_key=True),
@@ -67,4 +65,3 @@ def downgrade() -> None:
     """drop user_airports and user tables."""
     op.drop_table("user_airports")
     op.drop_table("user")
-    op.execute("DROP TYPE IF EXISTS userrole")

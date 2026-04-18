@@ -9,6 +9,7 @@ from testcontainers.postgres import PostgresContainer
 import app.models  # noqa: F401
 from app.core.database import Base, get_db
 from app.main import app
+from app.models.airport import Airport
 from app.models.enums import UserRole
 from app.models.user import User
 from app.services import auth_service
@@ -306,3 +307,54 @@ class TestRBAC:
         """health endpoint needs no auth."""
         resp = seeded_auth_client.get("/api/v1/health")
         assert resp.status_code == 200
+
+    def test_operator_cannot_access_other_airport_sub_resources(
+        self, seeded_auth_client, auth_session_factory
+    ):
+        """operator assigned to airport A cannot read surfaces of airport B."""
+        db = auth_session_factory()
+        try:
+            airport_a = Airport(
+                icao_code="AAAA",
+                name="Airport A",
+                elevation=100.0,
+                location="SRID=4326;POINTZ(17.0 48.0 100)",
+            )
+            airport_b = Airport(
+                icao_code="BBBB",
+                name="Airport B",
+                elevation=200.0,
+                location="SRID=4326;POINTZ(18.0 49.0 200)",
+            )
+            db.add_all([airport_a, airport_b])
+            db.flush()
+
+            user = User(
+                email="scoped-op@tarmacview.com",
+                name="Scoped Op",
+                role=UserRole.OPERATOR.value,
+                is_active=True,
+            )
+            user.set_password("scoped123")
+            user.airports = [airport_a]
+            db.add(user)
+            db.commit()
+
+            airport_b_id = str(airport_b.id)
+        finally:
+            db.close()
+
+        token = self._get_token(seeded_auth_client, "scoped-op@tarmacview.com", "scoped123")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # sub-resource endpoints should return 403 for airport B
+        resp = seeded_auth_client.get(f"/api/v1/airports/{airport_b_id}/surfaces", headers=headers)
+        assert resp.status_code == 403
+
+        resp = seeded_auth_client.get(f"/api/v1/airports/{airport_b_id}/obstacles", headers=headers)
+        assert resp.status_code == 403
+
+        resp = seeded_auth_client.get(
+            f"/api/v1/airports/{airport_b_id}/safety-zones", headers=headers
+        )
+        assert resp.status_code == 403

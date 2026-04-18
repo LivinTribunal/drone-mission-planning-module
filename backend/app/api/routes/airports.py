@@ -165,6 +165,7 @@ def bulk_change_drone(
     db: Session = Depends(get_db),
 ):
     """change drone profile on missions at an airport."""
+    check_airport_access(current_user, airport_id)
     count, regressed, ids = airport_service.bulk_change_drone(
         db,
         airport_id,
@@ -201,6 +202,7 @@ def upload_terrain_dem(
     db: Session = Depends(get_db),
 ):
     """upload a GeoTIFF DEM file for terrain-following altitude."""
+    check_airport_access(current_user, airport_id)
     try:
         import rasterio
     except ImportError:
@@ -300,6 +302,7 @@ def delete_terrain_dem(
     db: Session = Depends(get_db),
 ):
     """remove DEM file and revert airport to flat terrain."""
+    check_airport_access(current_user, airport_id)
     old_dem_path = airport_service.get_dem_file_path(db, airport_id)
 
     airport_service.delete_terrain_dem(db, airport_id)
@@ -320,6 +323,8 @@ async def download_terrain_data(
     db: Session = Depends(get_db),
 ):
     """download elevation data from Open-Elevation API and cache as GeoTIFF."""
+    check_airport_access(current_user, airport_id)
+
     # read airport data in the async context where the session lives
     airport = airport_service.get_airport(db, airport_id)
     apt_lon, apt_lat = airport_service.get_airport_lonlat(airport)
@@ -381,6 +386,7 @@ def list_surfaces(
     db: Session = Depends(get_db),
 ):
     """list all surfaces for airport"""
+    check_airport_access(current_user, airport_id)
     surfaces = airport_service.list_surfaces(db, airport_id)
 
     return SurfaceListResponse(data=surfaces, meta=ListMeta(total=len(surfaces)))
@@ -394,6 +400,7 @@ def create_surface(
     db: Session = Depends(get_db),
 ):
     """create surface for airport"""
+    check_airport_access(current_user, airport_id)
     return airport_service.create_surface(db, airport_id, body)
 
 
@@ -406,6 +413,7 @@ def update_surface(
     db: Session = Depends(get_db),
 ):
     """update surface for airport"""
+    check_airport_access(current_user, airport_id)
     return airport_service.update_surface(db, airport_id, surface_id, body)
 
 
@@ -417,6 +425,7 @@ def delete_surface(
     db: Session = Depends(get_db),
 ):
     """delete surface for airport"""
+    check_airport_access(current_user, airport_id)
     airport_service.delete_surface(db, airport_id, surface_id)
 
     return DeleteResponse(deleted=True)
@@ -433,6 +442,7 @@ def recalculate_surface(
     db: Session = Depends(get_db),
 ):
     """recompute surface length/width/heading from geometry without persisting."""
+    check_airport_access(current_user, airport_id)
     return airport_service.recalculate_surface_dimensions(db, airport_id, surface_id)
 
 
@@ -444,6 +454,7 @@ def list_obstacles(
     db: Session = Depends(get_db),
 ):
     """list all obstacles for airport"""
+    check_airport_access(current_user, airport_id)
     obstacles = airport_service.list_obstacles(db, airport_id)
 
     return ObstacleListResponse(data=obstacles, meta=ListMeta(total=len(obstacles)))
@@ -457,6 +468,7 @@ def create_obstacle(
     db: Session = Depends(get_db),
 ):
     """create obstacle for airport"""
+    check_airport_access(current_user, airport_id)
     return airport_service.create_obstacle(db, airport_id, body)
 
 
@@ -469,6 +481,7 @@ def update_obstacle(
     db: Session = Depends(get_db),
 ):
     """update obstacle"""
+    check_airport_access(current_user, airport_id)
     return airport_service.update_obstacle(db, airport_id, obstacle_id, body)
 
 
@@ -480,6 +493,7 @@ def delete_obstacle(
     db: Session = Depends(get_db),
 ):
     """delete obstacle"""
+    check_airport_access(current_user, airport_id)
     airport_service.delete_obstacle(db, airport_id, obstacle_id)
 
     return DeleteResponse(deleted=True)
@@ -496,6 +510,7 @@ def recalculate_obstacle(
     db: Session = Depends(get_db),
 ):
     """recompute obstacle dimensions from boundary geometry without persisting."""
+    check_airport_access(current_user, airport_id)
     return airport_service.recalculate_obstacle_dimensions(db, airport_id, obstacle_id)
 
 
@@ -507,6 +522,7 @@ def list_safety_zones(
     db: Session = Depends(get_db),
 ):
     """list all safety zones for airport"""
+    check_airport_access(current_user, airport_id)
     zones = airport_service.list_safety_zones(db, airport_id)
 
     return SafetyZoneListResponse(data=zones, meta=ListMeta(total=len(zones)))
@@ -520,6 +536,7 @@ def create_safety_zone(
     db: Session = Depends(get_db),
 ):
     """create safety zone for airport"""
+    check_airport_access(current_user, airport_id)
     return airport_service.create_safety_zone(db, airport_id, body)
 
 
@@ -532,6 +549,7 @@ def update_safety_zone(
     db: Session = Depends(get_db),
 ):
     """update safety zone"""
+    check_airport_access(current_user, airport_id)
     return airport_service.update_safety_zone(db, airport_id, zone_id, body)
 
 
@@ -543,6 +561,7 @@ def delete_safety_zone(
     db: Session = Depends(get_db),
 ):
     """delete safety zone"""
+    check_airport_access(current_user, airport_id)
     airport_service.delete_safety_zone(db, airport_id, zone_id)
 
     return DeleteResponse(deleted=True)
@@ -557,6 +576,7 @@ def list_agls(
     db: Session = Depends(get_db),
 ):
     """list all AGLs for surface"""
+    check_airport_access(current_user, airport_id)
     agls = airport_service.list_agls(db, airport_id, surface_id)
 
     return AGLListResponse(data=agls, meta=ListMeta(total=len(agls)))
@@ -573,6 +593,7 @@ def create_agl(
     db: Session = Depends(get_db),
 ):
     """create AGL for surface"""
+    check_airport_access(current_user, airport_id)
     return airport_service.create_agl(db, airport_id, surface_id, body)
 
 
@@ -586,6 +607,7 @@ def update_agl(
     db: Session = Depends(get_db),
 ):
     """update AGL"""
+    check_airport_access(current_user, airport_id)
     return airport_service.update_agl(db, airport_id, surface_id, agl_id, body)
 
 
@@ -598,6 +620,7 @@ def delete_agl(
     db: Session = Depends(get_db),
 ):
     """delete AGL"""
+    check_airport_access(current_user, airport_id)
     airport_service.delete_agl(db, airport_id, surface_id, agl_id)
 
     return DeleteResponse(deleted=True)
@@ -615,6 +638,7 @@ def list_lhas(
     db: Session = Depends(get_db),
 ):
     """list all LHAs for AGL"""
+    check_airport_access(current_user, airport_id)
     lhas = airport_service.list_lhas(db, airport_id, surface_id, agl_id)
 
     return LHAListResponse(data=lhas, meta=ListMeta(total=len(lhas)))
@@ -634,6 +658,7 @@ def create_lha(
     db: Session = Depends(get_db),
 ):
     """create LHA for AGL"""
+    check_airport_access(current_user, airport_id)
     return airport_service.create_lha(db, airport_id, surface_id, agl_id, body)
 
 
@@ -651,6 +676,7 @@ def update_lha(
     db: Session = Depends(get_db),
 ):
     """update LHA"""
+    check_airport_access(current_user, airport_id)
     return airport_service.update_lha(db, airport_id, surface_id, agl_id, lha_id, body)
 
 
@@ -668,6 +694,7 @@ def bulk_generate_lhas(
     db: Session = Depends(get_db),
 ):
     """generate evenly-spaced LHAs between two points via linear interpolation."""
+    check_airport_access(current_user, airport_id)
     created = airport_service.bulk_generate_lhas(db, airport_id, surface_id, agl_id, body)
 
     return LHABulkGenerateResponse(generated=created)
@@ -686,6 +713,7 @@ def delete_lha(
     db: Session = Depends(get_db),
 ):
     """delete LHA"""
+    check_airport_access(current_user, airport_id)
     airport_service.delete_lha(db, airport_id, surface_id, agl_id, lha_id)
 
     return DeleteResponse(deleted=True)

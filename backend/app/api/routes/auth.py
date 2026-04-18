@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db
+from app.core.exceptions import DomainError, NotFoundError
 from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
@@ -58,7 +59,10 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
     if payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="invalid token type")
 
-    user = auth_service.get_user_by_id(db, payload["sub"])
+    try:
+        user = auth_service.get_user_by_id(db, payload["sub"])
+    except (NotFoundError, Exception):
+        raise HTTPException(status_code=401, detail="invalid or expired refresh token")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="user deactivated")
 
@@ -94,8 +98,10 @@ def setup_password(body: SetupPasswordRequest, db: Session = Depends(get_db)):
     """complete invitation - set password and activate account."""
     try:
         auth_service.setup_password(db, body.token, body.password)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except DomainError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=400, detail="password setup failed")
 
     return {"message": "password set successfully"}
 
@@ -105,7 +111,9 @@ def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     """reset password using token."""
     try:
         auth_service.reset_password(db, body.token, body.new_password)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except DomainError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=400, detail="password reset failed")
 
     return {"message": "password reset successfully"}
