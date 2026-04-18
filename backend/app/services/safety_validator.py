@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import logging
 
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, Polygon
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import TrajectoryGenerationError
-from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
+from app.models.airport import AirfieldSurface, SafetyZone
 from app.models.enums import ConstraintType, SafetyZoneType, SurfaceType, WaypointType
 from app.models.flight_plan import ConstraintRule
 from app.models.mission import DroneProfile
@@ -329,7 +329,7 @@ def segments_intersect_zone(
     from_y: float,
     to_x: float,
     to_y: float,
-    zone_polygon,
+    zone_polygon: Polygon,
 ) -> bool:
     """check if a line segment intersects a safety zone's 2D footprint."""
     line = LineString([(from_x, from_y), (to_x, to_y)])
@@ -435,6 +435,7 @@ def _check_constraint(
 
     elif ctype == ConstraintType.GEOFENCE and constraint.boundary:
         if db is None:
+            logger.debug("skipping GEOFENCE constraint check - no db session")
             return None
         wp_ewkt = _wp_to_ewkt(wp)
         contained = db.execute(
@@ -451,6 +452,7 @@ def _check_constraint(
 
     elif ctype == ConstraintType.RUNWAY_BUFFER:
         if db is None:
+            logger.debug("skipping RUNWAY_BUFFER constraint check - no db session")
             return None
         v = _check_runway_buffer(db, wp, constraint, surfaces)
         if v:
@@ -497,20 +499,6 @@ def _check_runway_buffer(
 
     return None
 
-
-def _obstacle_base_altitude(obstacle: Obstacle) -> float:
-    """extract base altitude from obstacle boundary centroid z-coordinate."""
-    if not obstacle.boundary:
-        return 0.0
-    try:
-        geojson = parse_ewkb(obstacle.boundary.data)
-        coords = geojson.get("coordinates", [[]])[0]
-        if coords:
-            alts = [c[2] for c in coords if len(c) > 2]
-            return min(alts) if alts else 0.0
-    except (IndexError, KeyError, ValueError) as exc:
-        logger.warning("failed to read obstacle base altitude for %s: %s", obstacle.id, exc)
-    return 0.0
 
 
 def _wp_to_ewkt(wp) -> str:

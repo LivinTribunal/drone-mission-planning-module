@@ -1,12 +1,18 @@
 """equirectangular projection + WGS84-to-Shapely conversion utilities."""
 
+from __future__ import annotations
+
 import logging
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from shapely.geometry import LineString, Point, Polygon
 
 from app.schemas.geometry import parse_ewkb
+
+if TYPE_CHECKING:
+    from app.models.airport import AirfieldSurface, Obstacle, SafetyZone
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +157,8 @@ def ewkb_to_local_linestring(proj: LocalProjection, ewkb_data: bytes) -> LineStr
         if ls.is_empty:
             return None
         return ls
-    except Exception:
+    except Exception as exc:
+        logger.warning("failed to build local linestring: %s", exc)
         return None
 
 
@@ -168,7 +175,12 @@ def obstacle_base_altitude_from_ewkb(ewkb_data: bytes) -> float:
     return 0.0
 
 
-def build_local_geometries(proj, obstacles, zones, surfaces):
+def build_local_geometries(
+    proj: LocalProjection,
+    obstacles: list[Obstacle],
+    zones: list[SafetyZone],
+    surfaces: list[AirfieldSurface],
+) -> LocalGeometries:
     """build LocalGeometries from ORM objects and a projection."""
     from app.models.enums import SafetyZoneType
 

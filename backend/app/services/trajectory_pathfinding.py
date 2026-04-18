@@ -96,24 +96,17 @@ def _collect_nearby_objects_local(
             if buffer_distance_override is not None
             else obs.buffer_distance
         )
-        verts = _extract_local_polygon_vertices(obs.polygon, buf)
-        if not verts:
-            continue
-        obs_cx = sum(v[0] for v in verts) / len(verts)
-        obs_cy = sum(v[1] for v in verts) / len(verts)
-        if euclidean_distance(center_x, center_y, obs_cx, obs_cy) <= search_radius:
+        buffered = obs.polygon.buffer(buf) if buf and buf > 0 else obs.polygon
+        c = buffered.centroid
+        if euclidean_distance(center_x, center_y, c.x, c.y) <= search_radius:
             nearby_obs.append(obs)
 
     nearby_zones = []
     for zone in local_geoms.zones:
         if zone.zone_type not in HARD_ZONE_TYPES:
             continue
-        verts = _extract_local_polygon_vertices(zone.polygon)
-        if not verts:
-            continue
-        zone_cx = sum(v[0] for v in verts) / len(verts)
-        zone_cy = sum(v[1] for v in verts) / len(verts)
-        if euclidean_distance(center_x, center_y, zone_cx, zone_cy) <= search_radius:
+        c = zone.polygon.centroid
+        if euclidean_distance(center_x, center_y, c.x, c.y) <= search_radius:
             nearby_zones.append(zone)
 
     return nearby_obs, nearby_zones
