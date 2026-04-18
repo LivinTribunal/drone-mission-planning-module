@@ -29,6 +29,26 @@ class Settings(BaseSettings):
     terrain_api_batch_size: int = 2000  # max points per API request
     open_elevation_url: str = "https://api.open-elevation.com/api/v1/lookup"
 
+    # deployment environment
+    environment: str = "development"
+
+    # user seeding - opt-in via env var
+    seed_users: bool = False
+    seed_admin_email: str = "admin@tmv.com"
+    seed_admin_password: str = "adminadmin"
+    seed_coordinator_email: str = "coord@tmv.com"
+    seed_coordinator_password: str = "coordinator"
+    seed_operator_email: str = "operator@tmv.com"
+    seed_operator_password: str = "operator"
+
+    # refresh token cookie settings
+    refresh_cookie_name: str = "tarmacview_refresh"
+    refresh_cookie_secure: bool = False
+    refresh_cookie_domain: str | None = None
+
+    # jwt algorithm
+    jwt_algorithm: str = "HS256"
+
     # openaip integration
     openaip_api_url: str = "https://api.core.openaip.net/api"
     openaip_api_key: str = ""
@@ -43,3 +63,11 @@ settings = Settings()
 
 # backwards-compatible alias
 TERRAIN_DIR = settings.terrain_dir
+
+# warn about insecure default jwt secret
+if settings.jwt_secret == "change-me-in-production-minimum-256-bits":
+    import logging as _log
+
+    _log.getLogger(__name__).warning(
+        "jwt_secret is using the built-in default - set JWT_SECRET env var in production"
+    )

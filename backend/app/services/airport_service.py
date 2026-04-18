@@ -43,13 +43,18 @@ logger = logging.getLogger(__name__)
 
 
 # airports
-def list_airports(db: Session) -> list[Airport]:
-    """list all airports."""
-    return db.query(Airport).all()
+def list_airports(db: Session, airport_ids: list[UUID] | None = None) -> list[Airport]:
+    """list airports, optionally filtered by id list."""
+    query = db.query(Airport)
+    if airport_ids is not None:
+        query = query.filter(Airport.id.in_(airport_ids))
+    return query.all()
 
 
-def list_airports_with_counts(db: Session) -> list[AirportSummaryResponse]:
-    """list all airports with infrastructure and mission counts."""
+def list_airports_with_counts(
+    db: Session, airport_ids: list[UUID] | None = None
+) -> list[AirportSummaryResponse]:
+    """list airports with infrastructure and mission counts, optionally filtered."""
     surfaces_sub = (
         db.query(
             AirfieldSurface.airport_id,
@@ -78,7 +83,7 @@ def list_airports_with_counts(db: Session) -> list[AirportSummaryResponse]:
         .subquery()
     )
 
-    rows = (
+    query = (
         db.query(
             Airport,
             func.coalesce(surfaces_sub.c.surfaces_count, 0).label("surfaces_count"),
@@ -88,8 +93,10 @@ def list_airports_with_counts(db: Session) -> list[AirportSummaryResponse]:
         .outerjoin(surfaces_sub, Airport.id == surfaces_sub.c.airport_id)
         .outerjoin(agls_sub, Airport.id == agls_sub.c.airport_id)
         .outerjoin(missions_sub, Airport.id == missions_sub.c.airport_id)
-        .all()
     )
+    if airport_ids is not None:
+        query = query.filter(Airport.id.in_(airport_ids))
+    rows = query.all()
 
     results = []
     for airport, s_count, a_count, m_count in rows:

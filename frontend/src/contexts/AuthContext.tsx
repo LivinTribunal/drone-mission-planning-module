@@ -4,101 +4,93 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
-import { setOnUnauthorized } from "@/api/client";
+import client from "@/api/client";
+import {
+  setAccessToken as setGlobalAccessToken,
+  setLogoutHandler,
+} from "@/auth/tokenStore";
+import type { AuthUser } from "@/types/auth";
 
-const TOKEN_KEY = "tarmacview_token";
-const USER_KEY = "tarmacview_user";
-
-export interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  roles: string[];
-}
+export type { AuthUser };
 
 interface AuthContextValue {
   user: AuthUser | null;
-  token: string | null;
+  accessToken: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-
-  // rehydrate from localStorage on mount
-  useEffect(() => {
-    const savedToken = localStorage.getItem(TOKEN_KEY);
-    const savedUser = localStorage.getItem(USER_KEY);
-    if (savedToken && savedUser) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        // validate shape - reset if stale schema
-        if (
-          parsed?.id &&
-          parsed?.email &&
-          typeof parsed?.name === "string" &&
-          Array.isArray(parsed?.roles)
-        ) {
-          setToken(savedToken);
-          setUser(parsed as AuthUser);
-        } else {
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
-        }
-      } catch {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_KEY);
-      }
-    }
-  }, []);
-
-  // register 401 handler so axios interceptor can clear react state
-  useEffect(() => {
-    setOnUnauthorized(() => {
-      setToken(null);
-      setUser(null);
-      localStorage.removeItem(USER_KEY);
-    });
-    return () => setOnUnauthorized(null);
-  }, []);
-
-  // TODO: replace with real JWT auth when backend auth endpoints are implemented
-  const login = useCallback(async (email: string, password: string) => {
-    // mock auth - any credentials succeed, token is not a real JWT
-    void password;
-    const mockUser: AuthUser = {
-      id: "00000000-0000-0000-0000-000000000001",
-      email,
-      name: "Stefan Moravik",
-      roles: ["OPERATOR", "COORDINATOR"],
-    };
-    const mockToken = btoa(
-      JSON.stringify({ sub: mockUser.id, email: mockUser.email }),
-    );
-
-    localStorage.setItem(TOKEN_KEY, mockToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(mockUser));
-    setToken(mockToken);
-    setUser(mockUser);
-  }, []);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const initializedRef = useRef(false);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    setToken(null);
+    setAccessToken(null);
     setUser(null);
+    setGlobalAccessToken(null);
+    client.post("/auth/logout").catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setLogoutHandler(logout);
+    return () => {
+      setLogoutHandler(null);
+    };
+  }, [logout]);
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    client
+      .post("/auth/refresh")
+      .then((res) => {
+        const token = res.data.access_token;
+        setAccessToken(token);
+        setGlobalAccessToken(token);
+        return client.get("/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      })
+      .then((res) => {
+        setUser(res.data);
+      })
+      .catch(() => {
+        // no valid refresh cookie - stay logged out
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const res = await client.post("/auth/login", { email, password });
+    const { access_token, user: userData } = res.data;
+
+    setAccessToken(access_token);
+    setGlobalAccessToken(access_token);
+    setUser(userData);
   }, []);
 
   return (
     <AuthContext.Provider
-      value={{ user, token, login, logout, isAuthenticated: !!token }}
+      value={{
+        user,
+        accessToken,
+        login,
+        logout,
+        isAuthenticated: !!accessToken && !!user,
+        isLoading,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import CoordinatorUser, OperatorUser
 from app.core.dependencies import get_db
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.inspection_template import (
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/api/v1/inspection-templates", tags=["inspection-temp
 
 @router.get("", response_model=InspectionTemplateListResponse)
 def list_templates(
+    current_user: OperatorUser,
     airport_id: UUID | None = Query(None),
     db: Session = Depends(get_db),
 ):
@@ -28,27 +30,38 @@ def list_templates(
 
 
 @router.get("/{template_id}", response_model=InspectionTemplateResponse)
-def get_template(template_id: UUID, db: Session = Depends(get_db)):
+def get_template(template_id: UUID, current_user: OperatorUser, db: Session = Depends(get_db)):
     """get inspection template by id"""
     return inspection_template_service.get_template(db, template_id)
 
 
 @router.post("", status_code=201, response_model=InspectionTemplateResponse)
-def create_template(body: InspectionTemplateCreate, db: Session = Depends(get_db)):
+def create_template(
+    body: InspectionTemplateCreate,
+    current_user: CoordinatorUser,
+    db: Session = Depends(get_db),
+):
     """create inspection template"""
     return inspection_template_service.create_template(db, body)
 
 
 @router.put("/{template_id}", response_model=InspectionTemplateResponse)
 def update_template(
-    template_id: UUID, body: InspectionTemplateUpdate, db: Session = Depends(get_db)
+    template_id: UUID,
+    body: InspectionTemplateUpdate,
+    current_user: CoordinatorUser,
+    db: Session = Depends(get_db),
 ):
     """update inspection template"""
     return inspection_template_service.update_template(db, template_id, body)
 
 
 @router.delete("/{template_id}", response_model=DeleteResponse)
-def delete_template(template_id: UUID, db: Session = Depends(get_db)):
+def delete_template(
+    template_id: UUID,
+    current_user: CoordinatorUser,
+    db: Session = Depends(get_db),
+):
     """delete inspection template"""
     inspection_template_service.delete_template(db, template_id)
 

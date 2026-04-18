@@ -1,6 +1,14 @@
 import enum
 
 
+class UserRole(str, enum.Enum):
+    """user access level."""
+
+    OPERATOR = "OPERATOR"
+    COORDINATOR = "COORDINATOR"
+    SUPER_ADMIN = "SUPER_ADMIN"
+
+
 class MissionStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     PLANNED = "PLANNED"

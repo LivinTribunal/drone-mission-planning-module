@@ -5,12 +5,17 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { waitFor, act } from "@testing-library/react";
 import { renderHook } from "@testing-library/react";
 import { type ReactNode } from "react";
+import client from "@/api/client";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { AirportProvider, useAirport } from "./AirportContext";
 import { ThemeProvider, useTheme } from "./ThemeContext";
 
 vi.mock("@/api/client", () => ({
-  setOnUnauthorized: vi.fn(),
+  default: {
+    post: vi.fn(),
+    get: vi.fn(),
+  },
+  isAxiosError: vi.fn(),
 }));
 
 vi.mock("@/api/airports", () => ({
@@ -61,15 +66,41 @@ describe("AuthContext", () => {
     );
   });
 
-  it("starts unauthenticated", () => {
+  it("starts unauthenticated when refresh cookie fails", async () => {
+    vi.mocked(client.post).mockRejectedValueOnce(new Error("no cookie"));
+
     const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.user).toBeNull();
-    expect(result.current.token).toBeNull();
+    expect(result.current.accessToken).toBeNull();
   });
 
-  it("login stores credentials in state and localStorage", async () => {
+  it("login stores credentials in state without localStorage", async () => {
+    const mockUser = {
+      id: "u-1",
+      email: "test@example.com",
+      name: "Test User",
+      role: "OPERATOR",
+      airports: [],
+    };
+
+    // mount-time refresh fails (no cookie), then login succeeds
+    vi.mocked(client.post)
+      .mockRejectedValueOnce(new Error("no cookie"))
+      .mockResolvedValueOnce({
+        data: {
+          access_token: "test-access-token",
+          user: mockUser,
+        },
+      });
+
     const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
 
     await act(async () => {
       await result.current.login("test@example.com", "password123");
@@ -77,13 +108,32 @@ describe("AuthContext", () => {
 
     expect(result.current.isAuthenticated).toBe(true);
     expect(result.current.user?.email).toBe("test@example.com");
-    expect(result.current.token).toBeTruthy();
-    expect(localStorage.getItem("tarmacview_token")).toBeTruthy();
-    expect(localStorage.getItem("tarmacview_user")).toBeTruthy();
+    expect(result.current.accessToken).toBe("test-access-token");
+    expect(localStorage.getItem("tarmacview_refresh_token")).toBeNull();
   });
 
-  it("logout clears credentials from state and localStorage", async () => {
+  it("logout clears credentials from state", async () => {
+    // mount-time refresh fails, then login succeeds, then logout posts
+    vi.mocked(client.post)
+      .mockRejectedValueOnce(new Error("no cookie"))
+      .mockResolvedValueOnce({
+        data: {
+          access_token: "tok",
+          user: {
+            id: "u-1",
+            email: "test@example.com",
+            name: "Test",
+            role: "OPERATOR",
+            airports: [],
+          },
+        },
+      })
+      .mockResolvedValueOnce({});
+
     const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
 
     await act(async () => {
       await result.current.login("test@example.com", "pw");
@@ -96,55 +146,44 @@ describe("AuthContext", () => {
 
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.user).toBeNull();
-    expect(result.current.token).toBeNull();
-    expect(localStorage.getItem("tarmacview_token")).toBeNull();
-    expect(localStorage.getItem("tarmacview_user")).toBeNull();
+    expect(result.current.accessToken).toBeNull();
   });
 
-  it("rehydrates valid user from localStorage on mount", async () => {
-    const storedUser = {
-      id: "u-1",
-      email: "saved@example.com",
-      name: "Saved User",
-      roles: ["OPERATOR"],
-    };
-    localStorage.setItem("tarmacview_token", "saved-token");
-    localStorage.setItem("tarmacview_user", JSON.stringify(storedUser));
+  it("rehydrates session from refresh cookie on mount", async () => {
+    vi.mocked(client.post).mockResolvedValueOnce({
+      data: { access_token: "refreshed-token" },
+    });
+    vi.mocked(client.get).mockResolvedValueOnce({
+      data: {
+        id: "u-1",
+        email: "saved@example.com",
+        name: "Saved User",
+        role: "OPERATOR",
+        airports: [],
+      },
+    });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
     await waitFor(() => {
-      expect(result.current.isAuthenticated).toBe(true);
+      expect(result.current.isLoading).toBe(false);
     });
+
+    expect(result.current.isAuthenticated).toBe(true);
     expect(result.current.user?.email).toBe("saved@example.com");
-    expect(result.current.token).toBe("saved-token");
+    expect(result.current.accessToken).toBe("refreshed-token");
   });
 
-  it("clears corrupt localStorage data on mount", async () => {
-    localStorage.setItem("tarmacview_token", "bad-token");
-    localStorage.setItem("tarmacview_user", "not-json{{{");
+  it("stays logged out when refresh cookie is invalid", async () => {
+    vi.mocked(client.post).mockRejectedValueOnce(new Error("expired"));
 
-    renderHook(() => useAuth(), { wrapper });
-
-    await waitFor(() => {
-      expect(localStorage.getItem("tarmacview_token")).toBeNull();
-      expect(localStorage.getItem("tarmacview_user")).toBeNull();
-    });
-  });
-
-  it("clears localStorage when user shape is invalid", async () => {
-    localStorage.setItem("tarmacview_token", "token");
-    localStorage.setItem(
-      "tarmacview_user",
-      JSON.stringify({ id: "u-1", email: "a@b.com" }),
-    );
-
-    renderHook(() => useAuth(), { wrapper });
+    const { result } = renderHook(() => useAuth(), { wrapper });
 
     await waitFor(() => {
-      expect(localStorage.getItem("tarmacview_token")).toBeNull();
-      expect(localStorage.getItem("tarmacview_user")).toBeNull();
+      expect(result.current.isLoading).toBe(false);
     });
+
+    expect(result.current.isAuthenticated).toBe(false);
   });
 });
 

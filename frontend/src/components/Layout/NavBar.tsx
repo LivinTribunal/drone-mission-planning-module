@@ -26,7 +26,8 @@ export default function NavBar({ items, role }: NavBarProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const hasCoordinatorRole = user?.roles.includes("COORDINATOR");
+  const hasCoordinatorRole =
+    user?.role === "COORDINATOR" || user?.role === "SUPER_ADMIN";
 
   const availableLanguages = Object.keys(i18n.options.resources ?? {});
 
@@ -156,7 +157,7 @@ export default function NavBar({ items, role }: NavBarProps) {
               bg-tv-surface text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
             data-testid="user-menu-button"
           >
-            {user?.name ?? "User"}
+            {user?.name ?? t("user.defaultName")}
             <svg
               className={`h-4 w-4 transition-transform duration-200 ${userMenuOpen ? "rotate-180" : ""}`}
               viewBox="0 0 20 20"
@@ -207,7 +208,7 @@ export default function NavBar({ items, role }: NavBarProps) {
                   {t("nav.missionCenter")}
                 </button>
               )}
-              {role !== "admin" && hasCoordinatorRole && (
+              {role !== "admin" && user?.role === "SUPER_ADMIN" && (
                 <button
                   onClick={() => {
                     setUserMenuOpen(false);

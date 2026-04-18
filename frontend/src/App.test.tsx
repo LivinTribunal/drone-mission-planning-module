@@ -1,13 +1,22 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AirportProvider } from "@/contexts/AirportContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import client from "@/api/client";
 import App from "./App";
 import LoginPage from "@/pages/LoginPage";
 import ProtectedRoute from "@/components/Auth/ProtectedRoute";
 import { Routes, Route } from "react-router-dom";
+
+vi.mock("@/api/client", () => ({
+  default: {
+    post: vi.fn(),
+    get: vi.fn(),
+  },
+  isAxiosError: vi.fn(),
+}));
 
 function renderWithProviders(ui: React.ReactElement, { route = "/" } = {}) {
   return render(
@@ -24,16 +33,19 @@ function renderWithProviders(ui: React.ReactElement, { route = "/" } = {}) {
 describe("App", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.mocked(client.post).mockRejectedValueOnce(new Error("no cookie"));
   });
 
-  it("renders login page at /login", () => {
+  it("renders login page at /login", async () => {
     renderWithProviders(<LoginPage />);
-    expect(screen.getByTestId("email-input")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("email-input")).toBeInTheDocument();
+    });
     expect(screen.getByTestId("password-input")).toBeInTheDocument();
     expect(screen.getByTestId("login-button")).toBeInTheDocument();
   });
 
-  it("redirects unauthenticated users to login", () => {
+  it("redirects unauthenticated users to login", async () => {
     renderWithProviders(
       <Routes>
         <Route element={<ProtectedRoute />}>
@@ -43,11 +55,30 @@ describe("App", () => {
       </Routes>,
       { route: "/dashboard" },
     );
-    expect(screen.getByText("Login Page")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Login Page")).toBeInTheDocument();
+    });
   });
 
-  it("login stores token and shows authenticated content", async () => {
+  it("login sets access token in memory without localStorage", async () => {
+    vi.mocked(client.post).mockResolvedValueOnce({
+      data: {
+        access_token: "test-access",
+        user: {
+          id: "u-1",
+          email: "test@example.com",
+          name: "Test",
+          role: "OPERATOR",
+          airports: [],
+        },
+      },
+    });
+
     renderWithProviders(<LoginPage />, { route: "/login" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("email-input")).toBeInTheDocument();
+    });
 
     fireEvent.change(screen.getByTestId("email-input"), {
       target: { value: "test@example.com" },
@@ -58,8 +89,7 @@ describe("App", () => {
     fireEvent.click(screen.getByTestId("login-button"));
 
     await waitFor(() => {
-      expect(localStorage.getItem("tarmacview_token")).toBeTruthy();
-      expect(localStorage.getItem("tarmacview_user")).toBeTruthy();
+      expect(localStorage.getItem("tarmacview_refresh_token")).toBeNull();
     });
   });
 });
@@ -67,6 +97,7 @@ describe("App", () => {
 describe("full app routing", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.mocked(client.post).mockRejectedValueOnce(new Error("no cookie"));
   });
 
   it("smoke test - app renders without crashing", () => {

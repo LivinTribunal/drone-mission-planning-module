@@ -6,6 +6,8 @@ import CoordinatorLayout from "@/components/Layout/CoordinatorLayout";
 import SuperAdminLayout from "@/components/Layout/SuperAdminLayout";
 import MissionTabNav from "@/components/Layout/MissionTabNav";
 import LoginPage from "@/pages/LoginPage";
+import SetupPasswordPage from "@/pages/SetupPasswordPage";
+import MaintenancePage from "@/pages/MaintenancePage";
 import DashboardPage from "@/pages/operator-center/DashboardPage";
 import MissionListPage from "@/pages/operator-center/MissionListPage";
 import MissionOverviewPage from "@/pages/operator-center/MissionOverviewPage";
@@ -38,6 +40,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/setup-password" element={<SetupPasswordPage />} />
+        <Route path="/maintenance" element={<MaintenancePage />} />
 
         {/* operator center */}
         <Route element={<ProtectedRoute requiredRole="OPERATOR" />}>
