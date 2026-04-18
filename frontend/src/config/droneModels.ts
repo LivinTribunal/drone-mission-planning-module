@@ -12,6 +12,12 @@ export const BUNDLED_DRONE_MODELS = [
     thumbnail: "/models/drones/thumbnails/dji_matrice_300.png",
   },
   {
+    id: "dji_mavic_2",
+    name: "DJI Mavic 2 Pro",
+    path: "/models/drones/dji_mavic_3.glb", // placeholder - no mavic 2 model asset yet
+    thumbnail: "/models/drones/thumbnails/dji_mavic_3.png", // placeholder
+  },
+  {
     id: "dji_mavic_3",
     name: "DJI Mavic 3 Enterprise",
     path: "/models/drones/dji_mavic_3.glb",

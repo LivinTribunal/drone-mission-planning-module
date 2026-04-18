@@ -42,7 +42,6 @@ export default function MissionOverviewPage() {
   const [selectedWarning, setSelectedWarning] = useState<ValidationViolation | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
-
   const inspectionIndexMap = useMemo(() => {
     if (!mission) return undefined;
     const sorted = [...mission.inspections].sort((a, b) => a.sequence_order - b.sequence_order);
