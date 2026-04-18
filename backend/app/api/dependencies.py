@@ -35,8 +35,8 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="invalid token")
     try:
         user = auth_service.get_user_by_id(db, UUID(user_id))
-    except NotFoundError:
-        raise HTTPException(status_code=401, detail="user not found")
+    except (NotFoundError, ValueError):
+        raise HTTPException(status_code=401, detail="invalid token")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="user deactivated")
     return user

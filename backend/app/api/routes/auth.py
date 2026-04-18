@@ -70,7 +70,7 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
 def refresh(
     response: Response,
     db: Session = Depends(get_db),
-    tarmacview_refresh: str | None = Cookie(default=None),
+    tarmacview_refresh: str | None = Cookie(default=None, alias=settings.refresh_cookie_name),
 ):
     """exchange refresh token cookie for new access token."""
     if not tarmacview_refresh:

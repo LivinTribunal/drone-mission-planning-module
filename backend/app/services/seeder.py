@@ -28,12 +28,24 @@ def seed_users(db: Session) -> None:
     logger.info("seeding %d default users with %d airports", 3, len(airports))
 
     seed_data = [
-        (settings.seed_admin_email, settings.seed_admin_password,
-         "Admin", UserRole.SUPER_ADMIN.value),
-        (settings.seed_coordinator_email, settings.seed_coordinator_password,
-         "Coordinator", UserRole.COORDINATOR.value),
-        (settings.seed_operator_email, settings.seed_operator_password,
-         "Operator", UserRole.OPERATOR.value),
+        (
+            settings.seed_admin_email,
+            settings.seed_admin_password,
+            "Admin",
+            UserRole.SUPER_ADMIN.value,
+        ),
+        (
+            settings.seed_coordinator_email,
+            settings.seed_coordinator_password,
+            "Coordinator",
+            UserRole.COORDINATOR.value,
+        ),
+        (
+            settings.seed_operator_email,
+            settings.seed_operator_password,
+            "Operator",
+            UserRole.OPERATOR.value,
+        ),
     ]
 
     for email, password, name, role in seed_data:

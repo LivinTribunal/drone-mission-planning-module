@@ -180,7 +180,6 @@ class TestAuthService:
         settings.seed_users = False
         try:
             auth_db.query(User).delete()
-            auth_db.commit()
             seed_users(auth_db)
             assert auth_db.query(User).count() == 0
         finally:
