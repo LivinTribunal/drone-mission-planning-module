@@ -3,16 +3,19 @@ import math
 from app.models.enums import InspectionMethod
 from app.models.inspection import CONFIG_FIELDS, InspectionConfiguration
 from app.models.mission import DroneProfile
+from app.utils.geo import angular_span_at_distance, point_at_distance
 
 from .types import (
     DEFAULT_SWEEP_ANGLE,
     HOVER_ANGLE_TOLERANCE,
     MAX_ELEVATION_ANGLE,
     MIN_ELEVATION_ANGLE,
+    MIN_LHA_FOR_FOV_CHECK,
     SPEED_FRAMERATE_MARGIN,
     Degrees,
     Meters,
     MetersPerSecond,
+    Point3D,
     ResolvedConfig,
 )
 
@@ -187,12 +190,8 @@ def check_sensor_fov(
     drone, lha_positions: list, distance: Meters, approach_heading: Degrees = 0.0
 ) -> str | None:
     """verify camera field of view covers all LHA units at the given distance."""
-    from .types import MIN_LHA_FOR_FOV_CHECK, Point3D
-
     if not drone.sensor_fov or len(lha_positions) < MIN_LHA_FOR_FOV_CHECK:
         return None
-
-    from app.utils.geo import angular_span_at_distance, point_at_distance
 
     tuples = [p.to_tuple() for p in lha_positions]
     center = Point3D.center(lha_positions)
