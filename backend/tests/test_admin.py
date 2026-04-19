@@ -508,9 +508,6 @@ class TestAdminAirports:
             # airport B gets one mission with one drone
             db.add(Mission(name="M3", airport_id=airport_b.id, drone_profile_id=drone1.id))
             db.commit()
-
-            aid_a = str(airport_a.id)
-            aid_b = str(airport_b.id)
         finally:
             db.close()
 
