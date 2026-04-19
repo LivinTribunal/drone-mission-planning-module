@@ -185,7 +185,7 @@ def delete_mission(db: Session, mission_id: UUID):
         )
 
     db.delete(mission)
-    db.commit()
+    db.flush()
 
 
 def duplicate_mission(db: Session, mission_id: UUID) -> Mission:

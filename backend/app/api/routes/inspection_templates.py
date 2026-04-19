@@ -1,10 +1,11 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import CoordinatorUser, OperatorUser
 from app.core.dependencies import get_db
+from app.core.enums import AuditAction
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.inspection_template import (
     BulkCreateTemplatesRequest,
@@ -15,6 +16,7 @@ from app.schemas.inspection_template import (
     InspectionTemplateUpdate,
 )
 from app.services import inspection_template_service
+from app.utils.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/inspection-templates", tags=["inspection-templates"])
 
@@ -52,31 +54,66 @@ def get_template(template_id: UUID, current_user: OperatorUser, db: Session = De
 @router.post("", status_code=201, response_model=InspectionTemplateResponse)
 def create_template(
     body: InspectionTemplateCreate,
+    request: Request,
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """create inspection template"""
-    return inspection_template_service.create_template(db, body)
+    template = inspection_template_service.create_template(db, body)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.CREATE,
+        entity_type="InspectionTemplate",
+        entity_id=template.id,
+        entity_name=template.name,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return template
 
 
 @router.put("/{template_id}", response_model=InspectionTemplateResponse)
 def update_template(
     template_id: UUID,
     body: InspectionTemplateUpdate,
+    request: Request,
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """update inspection template"""
-    return inspection_template_service.update_template(db, template_id, body)
+    template = inspection_template_service.update_template(db, template_id, body)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.UPDATE,
+        entity_type="InspectionTemplate",
+        entity_id=template_id,
+        entity_name=template.name,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return template
 
 
 @router.delete("/{template_id}", response_model=DeleteResponse)
 def delete_template(
     template_id: UUID,
+    request: Request,
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """delete inspection template"""
+    template = inspection_template_service.get_template(db, template_id)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.DELETE,
+        entity_type="InspectionTemplate",
+        entity_id=template_id,
+        entity_name=template.name,
+        ip_address=request.client.host if request.client else None,
+    )
     inspection_template_service.delete_template(db, template_id)
 
     return DeleteResponse(deleted=True)

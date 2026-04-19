@@ -1,5 +1,6 @@
 from app.core.enums import (  # noqa: F401
     METHOD_AGL_COMPAT,
+    AuditAction,
     CameraAction,
     ComputationStatus,
     ConstraintType,

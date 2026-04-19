@@ -26,6 +26,7 @@ import DroneEditPage from "@/pages/coordinator-center/DroneEditPage";
 import SuperAdminUsersPage from "@/pages/super-admin/SuperAdminUsersPage";
 import SuperAdminAirportsPage from "@/pages/super-admin/SuperAdminAirportsPage";
 import SuperAdminSystemPage from "@/pages/super-admin/SuperAdminSystemPage";
+import SuperAdminAuditLogPage from "@/pages/super-admin/SuperAdminAuditLogPage";
 
 function CatchAllRedirect() {
   const { isAuthenticated } = useAuth();
@@ -83,8 +84,10 @@ function App() {
         <Route element={<ProtectedRoute requiredRole="SUPER_ADMIN" />}>
           <Route element={<SuperAdminLayout />}>
             <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
+            <Route path="/super-admin/users/:id" element={<SuperAdminUsersPage />} />
             <Route path="/super-admin/airports" element={<SuperAdminAirportsPage />} />
             <Route path="/super-admin/system" element={<SuperAdminSystemPage />} />
+            <Route path="/super-admin/audit-log" element={<SuperAdminAuditLogPage />} />
           </Route>
         </Route>
 

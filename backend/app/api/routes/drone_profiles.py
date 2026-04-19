@@ -1,11 +1,12 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import CoordinatorUser, OperatorUser
 from app.core.dependencies import get_db
+from app.core.enums import AuditAction
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.drone_profile import (
     DroneProfileCreate,
@@ -14,6 +15,7 @@ from app.schemas.drone_profile import (
     DroneProfileUpdate,
 )
 from app.services import drone_profile_service
+from app.utils.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/drone-profiles", tags=["drone-profiles"])
 
@@ -45,11 +47,22 @@ def get_drone(drone_id: UUID, current_user: OperatorUser, db: Session = Depends(
 @router.post("", status_code=201, response_model=DroneProfileResponse)
 def create_drone(
     body: DroneProfileCreate,
+    request: Request,
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """create drone profile."""
     drone = drone_profile_service.create_drone(db, body)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.CREATE,
+        entity_type="DroneProfile",
+        entity_id=drone.id,
+        entity_name=drone.name,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
     resp = DroneProfileResponse.model_validate(drone)
     resp.mission_count = 0
     return resp
@@ -59,11 +72,22 @@ def create_drone(
 def update_drone(
     drone_id: UUID,
     body: DroneProfileUpdate,
+    request: Request,
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """update drone profile."""
     drone = drone_profile_service.update_drone(db, drone_id, body)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.UPDATE,
+        entity_type="DroneProfile",
+        entity_id=drone_id,
+        entity_name=drone.name,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
     resp = DroneProfileResponse.model_validate(drone)
     resp.mission_count = drone_profile_service.get_mission_count(db, drone_id)
     return resp
@@ -72,10 +96,21 @@ def update_drone(
 @router.delete("/{drone_id}", response_model=DeleteResponse)
 def delete_drone(
     drone_id: UUID,
+    request: Request,
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """delete drone profile - returns warnings if missions use it."""
+    drone = drone_profile_service.get_drone(db, drone_id)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.DELETE,
+        entity_type="DroneProfile",
+        entity_id=drone_id,
+        entity_name=drone.name,
+        ip_address=request.client.host if request.client else None,
+    )
     warnings = drone_profile_service.delete_drone(db, drone_id)
 
     return DeleteResponse(deleted=True, warnings=warnings)

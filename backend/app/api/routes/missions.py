@@ -2,7 +2,7 @@ import io
 import zipfile
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from app.api.dependencies import (
     get_user_airport_ids,
 )
 from app.core.dependencies import get_db
+from app.core.enums import AuditAction
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.export import ExportRequest
 from app.schemas.mission import (
@@ -28,6 +29,7 @@ from app.schemas.mission import (
     ReorderResponse,
 )
 from app.services import export_service, flight_brief_service, inspection_service, mission_service
+from app.utils.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
 
@@ -78,12 +80,24 @@ def get_mission(
 @router.post("", status_code=201, response_model=MissionResponse)
 def create_mission(
     body: MissionCreate,
+    request: Request,
     current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """create mission in DRAFT status"""
     check_airport_access(current_user, body.airport_id)
-    return mission_service.create_mission(db, body)
+    mission = mission_service.create_mission(db, body)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.CREATE,
+        entity_type="Mission",
+        entity_id=mission.id,
+        entity_name=mission.name,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return mission
 
 
 @router.put("/{mission_id}", response_model=MissionResponse)
@@ -101,12 +115,23 @@ def update_mission(
 @router.delete("/{mission_id}", response_model=DeleteResponse)
 def delete_mission(
     mission_id: UUID,
+    request: Request,
     current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """delete mission"""
-    check_mission_access(db, current_user, mission_id)
+    mission = check_mission_access(db, current_user, mission_id)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.DELETE,
+        entity_type="Mission",
+        entity_id=mission_id,
+        entity_name=mission.name,
+        ip_address=request.client.host if request.client else None,
+    )
     mission_service.delete_mission(db, mission_id)
+    db.commit()
 
     return DeleteResponse(deleted=True)
 
@@ -126,24 +151,47 @@ def duplicate_mission(
 @router.post("/{mission_id}/validate", response_model=MissionResponse)
 def validate_mission(
     mission_id: UUID,
+    request: Request,
     current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """PLANNED -> VALIDATED"""
     check_mission_access(db, current_user, mission_id)
-    return mission_service.transition_mission(db, mission_id, "VALIDATED")
+    result = mission_service.transition_mission(db, mission_id, "VALIDATED")
+    log_audit(
+        db,
+        current_user,
+        AuditAction.STATUS_CHANGE,
+        entity_type="Mission",
+        entity_id=mission_id,
+        details={"to": "VALIDATED"},
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return result
 
 
 @router.post("/{mission_id}/export")
 def export_mission(
     mission_id: UUID,
     body: ExportRequest,
+    request: Request,
     current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """generate export files and transition VALIDATED -> EXPORTED."""
     check_mission_access(db, current_user, mission_id)
     files, safe_name = export_service.export_mission(db, mission_id, body.formats)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.EXPORT,
+        entity_type="Mission",
+        entity_id=mission_id,
+        details={"formats": body.formats},
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
 
     # single file - return directly
     if len(files) == 1:
@@ -189,23 +237,47 @@ def get_flight_brief(
 @router.post("/{mission_id}/complete", response_model=MissionResponse)
 def complete_mission(
     mission_id: UUID,
+    request: Request,
     current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """EXPORTED -> COMPLETED"""
     check_mission_access(db, current_user, mission_id)
-    return mission_service.transition_mission(db, mission_id, "COMPLETED")
+    result = mission_service.transition_mission(db, mission_id, "COMPLETED")
+    log_audit(
+        db,
+        current_user,
+        AuditAction.STATUS_CHANGE,
+        entity_type="Mission",
+        entity_id=mission_id,
+        details={"to": "COMPLETED"},
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return result
 
 
 @router.post("/{mission_id}/cancel", response_model=MissionResponse)
 def cancel_mission(
     mission_id: UUID,
+    request: Request,
     current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """EXPORTED -> CANCELLED"""
     check_mission_access(db, current_user, mission_id)
-    return mission_service.transition_mission(db, mission_id, "CANCELLED")
+    result = mission_service.transition_mission(db, mission_id, "CANCELLED")
+    log_audit(
+        db,
+        current_user,
+        AuditAction.STATUS_CHANGE,
+        entity_type="Mission",
+        entity_id=mission_id,
+        details={"to": "CANCELLED"},
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return result
 
 
 # inspections

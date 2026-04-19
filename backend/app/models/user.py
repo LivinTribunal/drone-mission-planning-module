@@ -43,6 +43,9 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+    # multi-tenancy prep - nullable until org logic is implemented
+    organization_id = Column(UUID, nullable=True)
+
     # relationships
     airports = relationship("Airport", secondary=user_airports)
 

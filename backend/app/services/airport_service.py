@@ -170,7 +170,7 @@ def delete_airport(db: Session, airport_id: UUID):
         raise NotFoundError("airport not found")
 
     db.delete(airport)
-    db.commit()
+    db.flush()
 
 
 def set_default_drone(db: Session, airport_id: UUID, drone_profile_id: UUID | None) -> Airport:

@@ -120,6 +120,24 @@ class FlightPlanScope(str, enum.Enum):
     MEASUREMENTS_ONLY = "MEASUREMENTS_ONLY"
 
 
+class AuditAction(str, enum.Enum):
+    """action types for audit log entries."""
+
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    STATUS_CHANGE = "STATUS_CHANGE"
+    EXPORT = "EXPORT"
+    VALIDATE = "VALIDATE"
+    GENERATE_TRAJECTORY = "GENERATE_TRAJECTORY"
+    INVITE_USER = "INVITE_USER"
+    DEACTIVATE_USER = "DEACTIVATE_USER"
+    ASSIGN_AIRPORT = "ASSIGN_AIRPORT"
+    SYSTEM_SETTING_CHANGE = "SYSTEM_SETTING_CHANGE"
+
+
 class ComputationStatus(str, enum.Enum):
     """trajectory computation lifecycle status."""
 

@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAirport } from "@/contexts/AirportContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import AirportSelector from "@/components/common/AirportSelector";
+import { getSystemSettings } from "@/api/admin";
 
 export interface NavItem {
   label: string;
@@ -30,6 +31,15 @@ export default function NavBar({ items, role }: NavBarProps) {
     user?.role === "COORDINATOR" || user?.role === "SUPER_ADMIN";
 
   const availableLanguages = Object.keys(i18n.options.resources ?? {});
+
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+
+  useEffect(() => {
+    if (role !== "admin") return;
+    getSystemSettings()
+      .then((s) => setMaintenanceMode(s.maintenance_mode))
+      .catch(() => {});
+  }, [role]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -112,8 +122,30 @@ export default function NavBar({ items, role }: NavBarProps) {
           })}
         </div>
 
-        {/* airport selector - hidden for admin */}
-        {role !== "admin" && <AirportSelector />}
+        {/* airport selector or system status */}
+        {role === "admin" ? (
+          <div
+            className="flex items-center gap-2 rounded-full px-4 h-11"
+            style={
+              maintenanceMode
+                ? { backgroundColor: "color-mix(in srgb, var(--tv-warning) 15%, transparent)" }
+                : { backgroundColor: "var(--tv-surface)" }
+            }
+          >
+            <span
+              className="h-2 w-2 rounded-full flex-shrink-0"
+              style={{ backgroundColor: maintenanceMode ? "var(--tv-warning)" : "var(--tv-success)" }}
+            />
+            <span
+              className="text-sm font-medium whitespace-nowrap"
+              style={{ color: maintenanceMode ? "var(--tv-warning)" : "var(--tv-success)" }}
+            >
+              {maintenanceMode ? t("admin.maintenanceActive") : t("admin.systemOnline")}
+            </span>
+          </div>
+        ) : (
+          <AirportSelector />
+        )}
 
         {/* theme toggle */}
         <div className="flex items-center gap-1 rounded-full bg-tv-surface p-1 h-11">
