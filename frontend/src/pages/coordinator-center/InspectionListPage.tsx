@@ -318,7 +318,7 @@ export default function InspectionListPage() {
         agls={allAgls}
         existingTemplates={templates}
         onSubmit={async () => {
-          if (!airportDetail) return;
+          if (!airportDetail) throw new Error("no airport loaded");
           const result = await bulkCreateInspectionTemplates(airportDetail.id);
           showNotif(
             t("coordinator.inspections.bulkCreateSuccess", { count: result.created.length }),

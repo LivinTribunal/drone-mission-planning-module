@@ -199,7 +199,7 @@ export default function CreationForm({
     const count = surfaces.filter((s) => s.surface_type === surfaceType).length;
     const prefix = entityType === "runway" ? "RWY" : "TWY";
     setName(`${prefix} ${count + 1}`);
-  }, [entityType, category, surfaces]);
+  }, [entityType, category]); // surfaces intentionally excluded - only prefill on type change
 
   // auto-prefill obstacle name based on type + count
   useEffect(() => {
@@ -208,7 +208,7 @@ export default function CreationForm({
     const sub = OBSTACLE_SUBTYPES.find((s) => s.value === obstacleType);
     const label = sub ? t(sub.labelKey) : obstacleType;
     setName(`${label} ${count + 1}`);
-  }, [obstacleType, category, obstacles, t]);
+  }, [obstacleType, category, t]); // obstacles intentionally excluded - only prefill on type change
 
   // auto-prefill AGL name based on connected surface and type
   useEffect(() => {
@@ -374,7 +374,7 @@ export default function CreationForm({
     const label = sub ? t(sub.labelKey) : zoneType;
     const count = safetyZones.filter((z) => z.type === zoneType).length;
     setName(`${label} ${count + 1}`);
-  }, [effectiveEntityType, safetyZones, t, isSafetyZone, isAirportBoundary]);
+  }, [effectiveEntityType, t, isSafetyZone, isAirportBoundary]); // safetyZones intentionally excluded - only prefill on type change
 
   // auto-prefill safety zone altitude floor from airport elevation
   useEffect(() => {

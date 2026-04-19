@@ -249,6 +249,12 @@ def bulk_create_templates(db: Session, airport_id: UUID) -> tuple[list[Inspectio
             db.add(template)
             db.flush()
 
+            try:
+                template.validate_method_agl_compat([method.value])
+            except ValueError as e:
+                db.rollback()
+                raise DomainError(str(e), status_code=400) from e
+
             db.execute(
                 insp_template_methods.insert().values(template_id=template.id, method=method.value)
             )
