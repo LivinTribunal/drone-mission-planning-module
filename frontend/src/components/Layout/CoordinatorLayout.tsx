@@ -12,7 +12,7 @@ export default function CoordinatorLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const mountedRef = useRef(false);
-  const prevAirportIdRef = useRef<string | undefined>(undefined);
+  const prevAirportIdRef = useRef<string | undefined>(selectedAirport?.id);
   const pathnameRef = useRef(location.pathname);
 
   useEffect(() => {

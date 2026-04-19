@@ -98,24 +98,29 @@ export default function InspectionListPage() {
     }
   }, [airportDetail?.id]);
 
-  const fetchTemplates = useCallback(async () => {
+  const fetchTemplates = useCallback(async (signal?: AbortSignal) => {
     /**fetch templates for the selected airport.*/
     setLoading(true);
     setError(null);
     try {
       const res = await listInspectionTemplates(
         airportDetail ? { airport_id: airportDetail.id } : undefined,
+        signal,
       );
-      setTemplates(res.data);
+      if (!signal?.aborted) setTemplates(res.data);
     } catch (err) {
+      if (signal?.aborted) return;
       setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [airportDetail, t]);
 
   useEffect(() => {
-    if (airportDetail) fetchTemplates();
+    if (!airportDetail) return;
+    const controller = new AbortController();
+    fetchTemplates(controller.signal);
+    return () => controller.abort();
   }, [fetchTemplates, airportDetail]);
 
   // filtered templates
@@ -277,7 +282,7 @@ export default function InspectionListPage() {
         ) : error ? (
           <div className="px-6 py-16 text-center text-sm text-tv-error">
             {error}
-            <button onClick={fetchTemplates} className="ml-2 underline hover:no-underline">
+            <button onClick={() => fetchTemplates()} className="ml-2 underline hover:no-underline">
               {t("common.retry")}
             </button>
           </div>
