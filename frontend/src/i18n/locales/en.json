@@ -322,16 +322,14 @@
       "PAPI_HORIZONTAL_RANGE": "PAPI Horizontal Range",
       "FLY_OVER": "Fly Over",
       "PARALLEL_SIDE_SWEEP": "Parallel Side Sweep",
-      "HOVER_POINT_LOCK": "Hover Point Lock",
-      "PAPI_HORIZONTAL_RANGE": "PAPI Horizontal Range"
+      "HOVER_POINT_LOCK": "Hover Point Lock"
     },
     "inspectionMethodShort": {
       "VERTICAL_PROFILE": "Vertical",
       "PAPI_HORIZONTAL_RANGE": "PAPI H-Range",
       "FLY_OVER": "Fly Over",
       "PARALLEL_SIDE_SWEEP": "Side Sweep",
-      "HOVER_POINT_LOCK": "Hover Lock",
-      "PAPI_HORIZONTAL_RANGE": "PAPI Horiz."
+      "HOVER_POINT_LOCK": "Hover Lock"
     },
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
