@@ -242,7 +242,7 @@ class LHAResponse(BaseModel):
 
     id: UUID
     agl_id: UUID
-    unit_designator: str
+    unit_designator: UnitDesignatorStr
     setting_angle: float | None = None
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr

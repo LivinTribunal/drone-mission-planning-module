@@ -40,7 +40,18 @@ def upgrade() -> None:
         op.execute(
             f"UPDATE lha SET unit_designator = '{letter}' WHERE unit_number = {num}"
         )
-    # fallback for any unit_number outside 1-4
+    # reject data that cannot be safely migrated
+    conn = op.get_bind()
+    bad_rows = conn.execute(
+        sa.text("SELECT COUNT(*) FROM lha WHERE unit_number > 4")
+    ).scalar()
+    if bad_rows:
+        raise RuntimeError(
+            f"migration blocked: {bad_rows} lha row(s) have unit_number > 4 - "
+            "clean up before migrating"
+        )
+
+    # fallback for rows with null unit_number (e.g. unit_number was null)
     op.execute(
         "UPDATE lha SET unit_designator = 'D' "
         "WHERE unit_designator IS NULL"

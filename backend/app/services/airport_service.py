@@ -905,6 +905,12 @@ def bulk_generate_lhas(
     all_designators = ["A", "B", "C", "D"]
     available_designators = [d for d in all_designators if d not in used_designators]
 
+    if not available_designators:
+        raise DomainError(
+            "all 4 designator slots (A-D) are occupied for this agl",
+            status_code=422,
+        )
+
     # number of LHAs, bounded to avoid runaway generation, enforcing cumulative cap
     count = max(2, int(round(total_distance / schema.spacing_m)) + 1)
     remaining_slots = max(0, 200 - existing_count)
@@ -913,7 +919,7 @@ def bulk_generate_lhas(
             "agl already has 200 lha units - delete some before generating more",
             status_code=422,
         )
-    count = min(count, remaining_slots)
+    count = min(count, remaining_slots, len(available_designators))
 
     # default angle: RUNWAY_EDGE_LIGHTS uses 0, PAPI stays null for coordinator fill-in
     is_edge_lights = agl.agl_type == "RUNWAY_EDGE_LIGHTS"
@@ -938,12 +944,7 @@ def bulk_generate_lhas(
             ground = provider.get_elevation(lat, lon)
 
             wkt = f"SRID=4326;POINTZ({lon} {lat} {ground})"
-            # assign letter designator if available, otherwise fall back to index-based
-            designator = (
-                available_designators[i]
-                if i < len(available_designators)
-                else all_designators[i % len(all_designators)]
-            )
+            designator = available_designators[i]
             lha = LHA(
                 agl_id=agl_id,
                 unit_designator=designator,

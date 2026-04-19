@@ -41,8 +41,8 @@ def test_bulk_generate_edge_lights_lhas(client):
         assert lha["unit_designator"] in ("A", "B", "C", "D")
 
 
-def test_bulk_generate_custom_spacing_produces_many(client):
-    """longer distance with smaller spacing produces more LHAs."""
+def test_bulk_generate_caps_at_available_designators(client):
+    """bulk-generate is capped at 4 (available designator slots A-D)."""
     apt_id, surface_id, agl_id = _setup(client, "LZBM")
 
     body = {
@@ -56,9 +56,10 @@ def test_bulk_generate_custom_spacing_produces_many(client):
     )
     assert r.status_code == 201
     generated = r.json()["generated"]
-    # ~357m / 5m = ~71 LHAs expected
-    assert len(generated) > 50
-    assert len(generated) <= 200
+    # capped by 4 available designators even though distance would produce more
+    assert len(generated) == 4
+    designators = {lha["unit_designator"] for lha in generated}
+    assert designators == {"A", "B", "C", "D"}
 
 
 def test_bulk_generate_rejects_same_position(client):
@@ -117,11 +118,11 @@ def test_bulk_generate_edge_lights_setting_angle_is_zero_not_null(client):
         assert lha["setting_angle"] == 0.0
 
 
-def test_bulk_generate_caps_at_200(client):
-    """distance that would produce >200 LHAs is silently capped at 200."""
+def test_bulk_generate_caps_at_designators_not_200(client):
+    """designator limit (4) is tighter than the 200 cap."""
     apt_id, surface_id, agl_id = _setup(client, "LZCP")
 
-    # ~2200m at 1m spacing - far exceeds the 200 cap
+    # ~2200m at 1m spacing - would exceed 200 cap, but designators cap at 4
     body = {
         "first_position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
         "last_position": {"type": "Point", "coordinates": [14.3000, 50.1000, 380.0]},
@@ -133,14 +134,42 @@ def test_bulk_generate_caps_at_200(client):
     )
     assert r.status_code == 201
     generated = r.json()["generated"]
-    assert len(generated) == 200
+    assert len(generated) == 4
+
+
+def test_bulk_generate_rejects_when_all_designators_occupied(client):
+    """bulk-generate rejects when all 4 designator slots are occupied."""
+    apt_id, surface_id, agl_id = _setup(client, "LZDO")
+
+    # create 4 individual LHAs to occupy all designator slots
+    for designator in ("A", "B", "C", "D"):
+        client.post(
+            f"/api/v1/airports/{apt_id}/surfaces/{surface_id}/agls/{agl_id}/lhas",
+            json={
+                "unit_designator": designator,
+                "lamp_type": "HALOGEN",
+                "position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
+            },
+        )
+
+    body = {
+        "first_position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
+        "last_position": {"type": "Point", "coordinates": [14.2704, 50.1000, 380.0]},
+        "spacing_m": 10.0,
+    }
+    r = client.post(
+        f"/api/v1/airports/{apt_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/bulk",
+        json=body,
+    )
+    assert r.status_code == 422
+    assert "designator" in r.json()["detail"].lower()
 
 
 def test_bulk_generate_cumulative_cap_across_calls(client):
-    """second call cannot push cumulative LHA count past 200."""
+    """second call rejected after first call exhausts all designators."""
     apt_id, surface_id, agl_id = _setup(client, "LZCC")
 
-    # first call fills up to the 200 cap
+    # first call uses all 4 designators
     first_body = {
         "first_position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
         "last_position": {"type": "Point", "coordinates": [14.3000, 50.1000, 380.0]},
@@ -151,9 +180,9 @@ def test_bulk_generate_cumulative_cap_across_calls(client):
         json=first_body,
     )
     assert r1.status_code == 201
-    assert len(r1.json()["generated"]) == 200
+    assert len(r1.json()["generated"]) == 4
 
-    # second call must be rejected - cap already reached
+    # second call must be rejected - all designator slots occupied
     second_body = {
         "first_position": {"type": "Point", "coordinates": [14.3001, 50.1000, 380.0]},
         "last_position": {"type": "Point", "coordinates": [14.3010, 50.1000, 380.0]},
@@ -164,4 +193,4 @@ def test_bulk_generate_cumulative_cap_across_calls(client):
         json=second_body,
     )
     assert r2.status_code == 422
-    assert "200" in r2.json()["detail"]
+    assert "designator" in r2.json()["detail"].lower()
