@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Users, ExternalLink, Trash2 } from "lucide-react";
+import { Users, ExternalLink } from "lucide-react";
 import {
   ListPageContainer,
   ListPageContent,

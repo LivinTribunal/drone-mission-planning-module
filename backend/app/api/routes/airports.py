@@ -6,7 +6,7 @@ import tempfile
 from functools import partial
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import (
@@ -61,6 +61,7 @@ from app.schemas.infrastructure import (
 )
 from app.schemas.openaip import AirportLookupResponse
 from app.services import airport_service, openaip_service
+from app.utils.audit import log_audit
 
 logger = logging.getLogger(__name__)
 
@@ -104,33 +105,68 @@ def get_airport(
 @router.post("", status_code=201, response_model=AirportResponse)
 def create_airport(
     body: AirportCreate,
+    request: Request,
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """create airport"""
-    return airport_service.create_airport(db, body)
+    airport = airport_service.create_airport(db, body)
+    log_audit(
+        db,
+        current_user,
+        "CREATE",
+        entity_type="Airport",
+        entity_id=airport.id,
+        entity_name=airport.name,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return airport
 
 
 @router.put("/{airport_id}", response_model=AirportResponse)
 def update_airport(
     airport_id: UUID,
     body: AirportUpdate,
+    request: Request,
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """update airport"""
     check_airport_access(current_user, airport_id)
-    return airport_service.update_airport(db, airport_id, body)
+    airport = airport_service.update_airport(db, airport_id, body)
+    log_audit(
+        db,
+        current_user,
+        "UPDATE",
+        entity_type="Airport",
+        entity_id=airport_id,
+        entity_name=airport.name,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return airport
 
 
 @router.delete("/{airport_id}", response_model=DeleteResponse)
 def delete_airport(
     airport_id: UUID,
+    request: Request,
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
     """delete airport"""
     check_airport_access(current_user, airport_id)
+    airport = airport_service.get_airport(db, airport_id)
+    log_audit(
+        db,
+        current_user,
+        "DELETE",
+        entity_type="Airport",
+        entity_id=airport_id,
+        entity_name=airport.name,
+        ip_address=request.client.host if request.client else None,
+    )
     airport_service.delete_airport(db, airport_id)
 
     return DeleteResponse(deleted=True)

@@ -81,8 +81,32 @@ def get_user_airport_ids(user: User) -> list[UUID] | None:
     return [a.id for a in user.airports]
 
 
+def get_optional_current_user(
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """extract jwt and return user if valid, otherwise none."""
+    if not token:
+        return None
+    try:
+        payload = auth_service.decode_token(token)
+    except DomainError:
+        return None
+    user_id = payload.get("sub")
+    if not user_id or payload.get("type") != "access":
+        return None
+    try:
+        user = auth_service.get_user_by_id(db, UUID(user_id))
+    except (NotFoundError, ValueError):
+        return None
+    if not user.is_active:
+        return None
+    return user
+
+
 # annotated dependency types for route signatures
 CurrentUser = Annotated[User, Depends(get_current_user)]
+OptionalUser = Annotated[User | None, Depends(get_optional_current_user)]
 OperatorUser = Annotated[User, Depends(require_operator)]
 CoordinatorUser = Annotated[User, Depends(require_coordinator)]
 SuperAdminUser = Annotated[User, Depends(require_super_admin)]

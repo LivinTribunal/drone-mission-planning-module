@@ -13,7 +13,6 @@ from app.main import app
 from app.models.airport import Airport
 from app.models.enums import UserRole
 from app.models.user import User
-from app.services import auth_service
 from app.services.seeder import seed_users
 
 

@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import CurrentUser
+from app.api.dependencies import CurrentUser, OptionalUser
 from app.core.config import settings
 from app.core.dependencies import get_db
 from app.core.exceptions import DomainError, NotFoundError
@@ -117,8 +117,25 @@ def refresh(
 
 
 @router.post("/logout")
-def logout(response: Response):
-    """clear refresh token cookie."""
+def logout(
+    response: Response,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: OptionalUser = None,
+):
+    """clear refresh token cookie and log audit."""
+    if current_user:
+        log_audit(
+            db,
+            current_user,
+            "LOGOUT",
+            entity_type="User",
+            entity_id=current_user.id,
+            entity_name=current_user.email,
+            ip_address=request.client.host if request.client else None,
+        )
+        db.commit()
+
     _clear_refresh_cookie(response)
     return {"message": "logged out"}
 
