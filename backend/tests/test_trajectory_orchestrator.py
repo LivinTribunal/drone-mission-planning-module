@@ -75,7 +75,7 @@ def test_generate_trajectory_no_waypoints_generated(client):
         "/api/v1/inspection-templates",
         json={
             "name": "No LHA Template",
-            "methods": ["ANGULAR_SWEEP"],
+            "methods": ["PAPI_HORIZONTAL_RANGE"],
             "target_agl_ids": [agl["id"]],
             "default_config": {"measurement_density": 6},
         },
@@ -95,7 +95,7 @@ def test_generate_trajectory_no_waypoints_generated(client):
 
     client.post(
         f"/api/v1/missions/{mission['id']}/inspections",
-        json={"template_id": template["id"], "method": "ANGULAR_SWEEP"},
+        json={"template_id": template["id"], "method": "PAPI_HORIZONTAL_RANGE"},
     )
 
     response = client.post(f"/api/v1/missions/{mission['id']}/generate-trajectory")
@@ -159,7 +159,7 @@ def test_validation_result_always_created(client):
         "/api/v1/inspection-templates",
         json={
             "name": "Val Result Template",
-            "methods": ["ANGULAR_SWEEP"],
+            "methods": ["PAPI_HORIZONTAL_RANGE"],
             "target_agl_ids": [agl_id],
             "default_config": {"measurement_density": 6},
         },
@@ -182,7 +182,7 @@ def test_validation_result_always_created(client):
 
     client.post(
         f"/api/v1/missions/{mission_id}/inspections",
-        json={"template_id": template["id"], "method": "ANGULAR_SWEEP"},
+        json={"template_id": template["id"], "method": "PAPI_HORIZONTAL_RANGE"},
     )
 
     response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
@@ -223,7 +223,7 @@ def test_regeneration_replaces_flight_plan(client):
         "/api/v1/inspection-templates",
         json={
             "name": "Regen Template",
-            "methods": ["ANGULAR_SWEEP"],
+            "methods": ["PAPI_HORIZONTAL_RANGE"],
             "target_agl_ids": [agl_id],
             "default_config": {"measurement_density": 6},
         },
@@ -246,7 +246,7 @@ def test_regeneration_replaces_flight_plan(client):
 
     client.post(
         f"/api/v1/missions/{mission_id}/inspections",
-        json={"template_id": template["id"], "method": "ANGULAR_SWEEP"},
+        json={"template_id": template["id"], "method": "PAPI_HORIZONTAL_RANGE"},
     )
 
     r1 = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
@@ -294,7 +294,7 @@ def _create_mission_with_inspection(client, icao_code, **mission_extras):
         "/api/v1/inspection-templates",
         json={
             "name": f"Template {icao_code}",
-            "methods": ["ANGULAR_SWEEP"],
+            "methods": ["PAPI_HORIZONTAL_RANGE"],
             "target_agl_ids": [agl_id],
             "default_config": {"measurement_density": 6},
         },
@@ -317,7 +317,7 @@ def _create_mission_with_inspection(client, icao_code, **mission_extras):
 
     client.post(
         f"/api/v1/missions/{mission_id}/inspections",
-        json={"template_id": template["id"], "method": "ANGULAR_SWEEP"},
+        json={"template_id": template["id"], "method": "PAPI_HORIZONTAL_RANGE"},
     )
 
     return mission_id, airport_id

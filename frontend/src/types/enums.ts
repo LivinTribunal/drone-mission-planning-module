@@ -36,11 +36,10 @@ export type ExportFormat =
 
 export type InspectionMethod =
   | "VERTICAL_PROFILE"
-  | "ANGULAR_SWEEP"
+  | "PAPI_HORIZONTAL_RANGE"
   | "FLY_OVER"
   | "PARALLEL_SIDE_SWEEP"
-  | "HOVER_POINT_LOCK"
-  | "PAPI_HORIZONTAL_RANGE";
+  | "HOVER_POINT_LOCK";
 
 export type SafetyZoneType =
   | "CTR"

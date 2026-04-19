@@ -24,20 +24,29 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+def _designator_sort_key(designator: str | None) -> tuple:
+    """sort key that orders numeric designators numerically and alpha ones lexically."""
+    d = designator or ""
+    try:
+        return (0, int(d), "")
+    except (ValueError, TypeError):
+        return (1, 0, d)
+
+
 def _opposite_bearing(heading: Degrees) -> Degrees:
     """bearing 180 degrees opposite of given heading, wrapped to [0, 360)."""
     return (heading + 180) % 360
 
 
 def get_ordered_lha_positions(template, lha_ids: list | None = None) -> list[Point3D]:
-    """extract LHA positions sorted by unit_number within each AGL."""
+    """extract LHA positions sorted by unit_designator within each AGL."""
     lha_id_set = {str(i) for i in lha_ids} if lha_ids else None
 
     positions = []
     for agl in template.targets:
         ordered = sorted(
             (lha for lha in agl.lhas if lha.position),
-            key=lambda lha: lha.unit_number if lha.unit_number is not None else 0,
+            key=lambda lha: _designator_sort_key(lha.unit_designator),
         )
         for lha in ordered:
             if lha_id_set and str(lha.id) not in lha_id_set:
@@ -229,7 +238,7 @@ def determine_start_position(
     approach = _opposite_bearing(runway_heading)
 
     match method:
-        case InspectionMethod.ANGULAR_SWEEP:
+        case InspectionMethod.PAPI_HORIZONTAL_RANGE:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
             half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             angle = approach - half_sweep
@@ -275,7 +284,7 @@ def determine_end_position(
     approach = _opposite_bearing(runway_heading)
 
     match method:
-        case InspectionMethod.ANGULAR_SWEEP:
+        case InspectionMethod.PAPI_HORIZONTAL_RANGE:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
             half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             angle = approach + half_sweep

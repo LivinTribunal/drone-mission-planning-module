@@ -160,7 +160,7 @@ export default function AGLPanel({
                           />
                           <div className="flex-1 min-w-0">
                             <span className="text-xs font-medium text-tv-text-primary">
-                              {t("airport.lhaUnit", { number: lha.unit_number })}
+                              {t("airport.lhaUnit", { designator: lha.unit_designator })}
                             </span>
                             <span className="text-xs text-tv-text-secondary ml-2">
                               {lha.setting_angle != null ? `${lha.setting_angle}°` : "—"}

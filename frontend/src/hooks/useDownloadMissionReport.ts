@@ -1,25 +1,25 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { downloadFlightBrief } from "@/api/missions";
+import { downloadMissionReport } from "@/api/missions";
 
-/** download flight brief pdf and trigger browser save dialog. */
-export default function useDownloadFlightBrief(
+/** download mission technical report pdf and trigger browser save dialog. */
+export default function useDownloadMissionReport(
   missionId: string | undefined,
   missionName: string | undefined,
   showNotification: (msg: string) => void,
 ) {
   const { t } = useTranslation();
-  const [isDownloadingBrief, setIsDownloadingBrief] = useState(false);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
 
-  const handleDownloadBrief = useCallback(async () => {
+  const handleDownloadReport = useCallback(async () => {
     if (!missionId) return;
-    setIsDownloadingBrief(true);
+    setIsDownloadingReport(true);
     try {
-      const { blob, filename } = await downloadFlightBrief(missionId);
+      const { blob, filename } = await downloadMissionReport(missionId);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename ?? `FlightBrief_${missionName ?? "mission"}.pdf`;
+      a.download = filename ?? `MissionReport_${missionName ?? "mission"}.pdf`;
       document.body.appendChild(a);
       try {
         a.click();
@@ -29,14 +29,14 @@ export default function useDownloadFlightBrief(
       }
     } catch (err) {
       console.error(
-        "flight brief download failed:",
+        "mission report download failed:",
         err instanceof Error ? err.message : String(err),
       );
-      showNotification(t("mission.flightBrief.error"));
+      showNotification(t("mission.missionReport.error"));
     } finally {
-      setIsDownloadingBrief(false);
+      setIsDownloadingReport(false);
     }
   }, [missionId, missionName, t, showNotification]);
 
-  return { isDownloadingBrief, handleDownloadBrief };
+  return { isDownloadingReport, handleDownloadReport };
 }

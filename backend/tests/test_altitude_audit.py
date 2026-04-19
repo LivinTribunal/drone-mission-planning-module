@@ -5,7 +5,7 @@ import math
 
 from app.services.elevation_provider import FlatElevationProvider
 from app.services.trajectory.helpers import _apply_terrain_delta
-from app.services.trajectory.methods.angular_sweep import calculate_arc_path
+from app.services.trajectory.methods.papi_horizontal_range import calculate_arc_path
 from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
 from app.services.trajectory.types import (
     MIN_ARC_RADIUS,
@@ -437,7 +437,7 @@ def test_lha_position_normalized_on_create(client):
     resp = client.post(
         f"/api/v1/airports/{aid}/surfaces/{sid}/agls/{agl['id']}/lhas",
         json={
-            "unit_number": 1,
+            "unit_designator": "A",
             "setting_angle": 3.0,
             "lamp_type": "LED",
             "position": {"type": "Point", "coordinates": [14.271, 50.10, 350.0]},
@@ -457,7 +457,7 @@ def test_lha_position_normalized_on_update(client):
     lha = client.post(
         f"/api/v1/airports/{aid}/surfaces/{sid}/agls/{agl['id']}/lhas",
         json={
-            "unit_number": 1,
+            "unit_designator": "A",
             "setting_angle": 3.0,
             "lamp_type": "LED",
             "position": {"type": "Point", "coordinates": [14.271, 50.10, 300.0]},
@@ -641,7 +641,7 @@ def test_renormalize_airport_altitudes(client):
     client.post(
         f"/api/v1/airports/{aid}/surfaces/{sid}/agls/{agl['id']}/lhas",
         json={
-            "unit_number": 1,
+            "unit_designator": "A",
             "setting_angle": 3.0,
             "lamp_type": "LED",
             "position": {"type": "Point", "coordinates": [14.271, 50.10, 300]},

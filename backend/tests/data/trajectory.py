@@ -40,9 +40,13 @@ DEFAULT_TAKEOFF = {"type": "Point", "coordinates": [14.26, 50.105, 300]}
 DEFAULT_LANDING = {"type": "Point", "coordinates": [14.26, 50.105, 300]}
 
 
+DESIGNATOR_MAP = {1: "D", 2: "C", 3: "B", 4: "A"}
+
+
 def make_lha_payload(i: int) -> dict:
+    """build lha create payload with icao-style designator."""
     return {
-        "unit_number": i,
+        "unit_designator": DESIGNATOR_MAP[i],
         "setting_angle": 3.0 + (i - 1) * 0.5,
         "lamp_type": "HALOGEN",
         "position": {

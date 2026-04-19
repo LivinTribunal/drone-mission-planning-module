@@ -282,7 +282,7 @@ describe("CreationForm", () => {
         {
           id: "lha-1",
           agl_id: "agl-papi",
-          unit_number: 1,
+          unit_designator: "A",
           setting_angle: 2.5,
           transition_sector_width: null,
           lamp_type: "LED" as const,
@@ -292,7 +292,7 @@ describe("CreationForm", () => {
         {
           id: "lha-2",
           agl_id: "agl-papi",
-          unit_number: 3,
+          unit_designator: "C",
           setting_angle: 3.5,
           transition_sector_width: null,
           lamp_type: "LED" as const,
@@ -316,7 +316,7 @@ describe("CreationForm", () => {
         {
           id: "lha-e1",
           agl_id: "agl-edge",
-          unit_number: 2,
+          unit_designator: "B",
           setting_angle: 0.0,
           transition_sector_width: null,
           lamp_type: "HALOGEN" as const,
@@ -339,7 +339,7 @@ describe("CreationForm", () => {
       const aglSelect = screen.getByText("coordinator.creation.selectAgl").parentElement as HTMLSelectElement;
       fireEvent.change(aglSelect, { target: { value: "agl-papi" } });
 
-      // most recent lha has unit_number=3, tolerance=0.45, lamp=LED
+      // most recent lha has unit_designator=C, tolerance=0.45, lamp=LED
       const toleranceInput = screen.getByDisplayValue("0.45");
       expect(toleranceInput).toBeInTheDocument();
 

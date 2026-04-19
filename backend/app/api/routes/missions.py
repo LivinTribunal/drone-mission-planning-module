@@ -28,7 +28,7 @@ from app.schemas.mission import (
     ReorderRequest,
     ReorderResponse,
 )
-from app.services import export_service, flight_brief_service, inspection_service, mission_service
+from app.services import export_service, inspection_service, mission_report_service, mission_service
 from app.utils.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
@@ -217,15 +217,15 @@ def export_mission(
     )
 
 
-@router.get("/{mission_id}/flight-brief", response_class=Response)
-def get_flight_brief(
+@router.get("/{mission_id}/mission-report", response_class=Response)
+def get_mission_report(
     mission_id: UUID,
     current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
-    """generate and download flight brief pdf for atc coordination."""
+    """generate and download mission technical report pdf."""
     check_mission_access(db, current_user, mission_id)
-    pdf_bytes, filename = flight_brief_service.generate_flight_brief(db, mission_id)
+    pdf_bytes, filename = mission_report_service.generate_mission_report(db, mission_id)
     sanitized = filename.replace('"', "").replace("\r", "").replace("\n", "")
     return Response(
         content=pdf_bytes,

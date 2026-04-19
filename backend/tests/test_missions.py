@@ -117,7 +117,7 @@ def test_duplicate_mission_preserves_lha_ids(client, airport_id):
     # create mission with inspection that has lha_ids in config
     template = client.post(
         "/api/v1/inspection-templates",
-        json={"name": "LHA Dup Template", "methods": ["ANGULAR_SWEEP"]},
+        json={"name": "LHA Dup Template", "methods": ["PAPI_HORIZONTAL_RANGE"]},
     ).json()
 
     mission = client.post(
@@ -132,7 +132,7 @@ def test_duplicate_mission_preserves_lha_ids(client, airport_id):
         f"/api/v1/missions/{mission['id']}/inspections",
         json={
             "template_id": template["id"],
-            "method": "ANGULAR_SWEEP",
+            "method": "PAPI_HORIZONTAL_RANGE",
             "config": {"lha_ids": [lha_id_1, lha_id_2]},
         },
     )
@@ -173,10 +173,10 @@ def test_add_inspection(client):
 
     response = client.post(
         f"/api/v1/missions/{mission_id}/inspections",
-        json={"template_id": template["id"], "method": "ANGULAR_SWEEP"},
+        json={"template_id": template["id"], "method": "PAPI_HORIZONTAL_RANGE"},
     )
     assert response.status_code == 201
-    assert response.json()["method"] == "ANGULAR_SWEEP"
+    assert response.json()["method"] == "PAPI_HORIZONTAL_RANGE"
 
 
 def test_list_missions_includes_inspection_count_and_duration(client):

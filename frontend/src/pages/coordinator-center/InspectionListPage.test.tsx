@@ -95,7 +95,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
     data: [
       {
         id: "tpl-1",
-        name: "PAPI RWY 22 - Angular Sweep",
+        name: "PAPI RWY 22 - Horizontal Range",
         description: null,
         angular_tolerances: null,
         created_by: null,
@@ -103,7 +103,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
         updated_at: "2026-03-01T00:00:00Z",
         default_config: null,
         target_agl_ids: ["agl-1"],
-        methods: ["ANGULAR_SWEEP"],
+        methods: ["PAPI_HORIZONTAL_RANGE"],
         mission_count: 0,
       },
       {
@@ -125,7 +125,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
   createInspectionTemplate: vi.fn().mockResolvedValue({
     id: "tpl-new",
     name: "New Template",
-    methods: ["ANGULAR_SWEEP"],
+    methods: ["PAPI_HORIZONTAL_RANGE"],
     target_agl_ids: ["agl-1"],
     mission_count: 0,
   }),
@@ -158,7 +158,7 @@ describe("InspectionListPage", () => {
     /** verify templates appear in the table. */
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+      expect(screen.getByText("PAPI RWY 22 - Horizontal Range")).toBeInTheDocument();
     });
     expect(screen.getByText("PAPI RWY 04 - Vertical Profile")).toBeInTheDocument();
   });
@@ -167,11 +167,11 @@ describe("InspectionListPage", () => {
     /** verify search narrows visible rows. */
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+      expect(screen.getByText("PAPI RWY 22 - Horizontal Range")).toBeInTheDocument();
     });
     const searchInput = screen.getByTestId("template-search");
     fireEvent.change(searchInput, { target: { value: "RWY 04" } });
-    expect(screen.queryByText("PAPI RWY 22 - Angular Sweep")).not.toBeInTheDocument();
+    expect(screen.queryByText("PAPI RWY 22 - Horizontal Range")).not.toBeInTheDocument();
     expect(screen.getByText("PAPI RWY 04 - Vertical Profile")).toBeInTheDocument();
   });
 
@@ -201,7 +201,7 @@ describe("InspectionListPage", () => {
     /** verify add button shows the create template dialog. */
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+      expect(screen.getByText("PAPI RWY 22 - Horizontal Range")).toBeInTheDocument();
     });
     fireEvent.click(screen.getByText("coordinator.inspections.addNew"));
     await waitFor(() => {
@@ -213,7 +213,7 @@ describe("InspectionListPage", () => {
     /** verify all inspection method pills are present. */
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("method-pill-ANGULAR_SWEEP")).toBeInTheDocument();
+      expect(screen.getByTestId("method-pill-PAPI_HORIZONTAL_RANGE")).toBeInTheDocument();
     });
     expect(screen.getByTestId("method-pill-VERTICAL_PROFILE")).toBeInTheDocument();
     expect(screen.getByTestId("method-pill-FLY_OVER")).toBeInTheDocument();
@@ -231,7 +231,7 @@ describe("InspectionListPage", () => {
     fireEvent.click(flyOverPill);
     expect(flyOverPill.className).not.toContain("opacity-40");
 
-    const angularPill = screen.getByTestId("method-pill-ANGULAR_SWEEP");
+    const angularPill = screen.getByTestId("method-pill-PAPI_HORIZONTAL_RANGE");
     expect(angularPill.className).toContain("opacity-40");
   });
 
@@ -242,7 +242,7 @@ describe("InspectionListPage", () => {
 
     const { rerender } = renderPage();
     await waitFor(() => {
-      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+      expect(screen.getByText("PAPI RWY 22 - Horizontal Range")).toBeInTheDocument();
     });
 
     mockList.mockResolvedValueOnce({

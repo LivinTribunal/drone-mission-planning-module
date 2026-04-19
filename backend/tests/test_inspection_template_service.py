@@ -18,12 +18,12 @@ def test_create_template_basic(db_session):
     """create a template with name and methods via service"""
     schema = InspectionTemplateCreate(
         name="Service Test Template",
-        methods=["ANGULAR_SWEEP"],
+        methods=["PAPI_HORIZONTAL_RANGE"],
     )
     result = create_template(db_session, schema)
 
     assert result.name == "Service Test Template"
-    assert result.methods == ["ANGULAR_SWEEP"]
+    assert result.methods == ["PAPI_HORIZONTAL_RANGE"]
     assert result.id is not None
 
 
@@ -76,27 +76,27 @@ def test_update_template_name(db_session):
     """update template name"""
     created = create_template(
         db_session,
-        InspectionTemplateCreate(name="Before Update", methods=["ANGULAR_SWEEP"]),
+        InspectionTemplateCreate(name="Before Update", methods=["PAPI_HORIZONTAL_RANGE"]),
     )
 
     schema = InspectionTemplateUpdate(name="After Update")
     result = update_template(db_session, created.id, schema)
 
     assert result.name == "After Update"
-    assert result.methods == ["ANGULAR_SWEEP"]
+    assert result.methods == ["PAPI_HORIZONTAL_RANGE"]
 
 
 def test_update_template_methods(db_session):
     """update template methods"""
     created = create_template(
         db_session,
-        InspectionTemplateCreate(name="Methods Test", methods=["ANGULAR_SWEEP"]),
+        InspectionTemplateCreate(name="Methods Test", methods=["PAPI_HORIZONTAL_RANGE"]),
     )
 
-    schema = InspectionTemplateUpdate(methods=["ANGULAR_SWEEP", "VERTICAL_PROFILE"])
+    schema = InspectionTemplateUpdate(methods=["PAPI_HORIZONTAL_RANGE", "VERTICAL_PROFILE"])
     result = update_template(db_session, created.id, schema)
 
-    assert sorted(result.methods) == ["ANGULAR_SWEEP", "VERTICAL_PROFILE"]
+    assert sorted(result.methods) == ["PAPI_HORIZONTAL_RANGE", "VERTICAL_PROFILE"]
 
 
 def test_update_template_config(db_session):
@@ -191,7 +191,7 @@ def test_delete_template_with_linked_inspection(db_session):
 
     created = create_template(
         db_session,
-        InspectionTemplateCreate(name="Linked Template", methods=["ANGULAR_SWEEP"]),
+        InspectionTemplateCreate(name="Linked Template", methods=["PAPI_HORIZONTAL_RANGE"]),
     )
 
     airport = Airport(
@@ -210,7 +210,7 @@ def test_delete_template_with_linked_inspection(db_session):
     inspection = Inspection(
         mission_id=mission.id,
         template_id=created.id,
-        method="ANGULAR_SWEEP",
+        method="PAPI_HORIZONTAL_RANGE",
         sequence_order=1,
     )
     db_session.add(inspection)
@@ -227,7 +227,7 @@ def test_create_template_with_lha_ids(db_session):
 
     schema = InspectionTemplateCreate(
         name="Template With LHA IDs",
-        methods=["ANGULAR_SWEEP"],
+        methods=["PAPI_HORIZONTAL_RANGE"],
         default_config={
             "lha_ids": [lha_id_1, lha_id_2],
             "altitude_offset": 1.0,
@@ -248,7 +248,7 @@ def test_mission_count_enrichment(db_session):
 
     created = create_template(
         db_session,
-        InspectionTemplateCreate(name="Count Template", methods=["ANGULAR_SWEEP"]),
+        InspectionTemplateCreate(name="Count Template", methods=["PAPI_HORIZONTAL_RANGE"]),
     )
 
     assert created.mission_count == 0
@@ -269,7 +269,7 @@ def test_mission_count_enrichment(db_session):
     inspection = Inspection(
         mission_id=mission.id,
         template_id=created.id,
-        method="ANGULAR_SWEEP",
+        method="PAPI_HORIZONTAL_RANGE",
         sequence_order=1,
     )
     db_session.add(inspection)

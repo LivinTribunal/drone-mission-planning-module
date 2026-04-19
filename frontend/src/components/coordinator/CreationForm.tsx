@@ -170,13 +170,19 @@ export default function CreationForm({
     return agls;
   }, [surfaces]);
 
-  // auto-increment lha unit number based on selected agl
-  const nextUnitNumber = useMemo(() => {
-    if (!lhaAglId) return 1;
-    const agl = allAgls.find((a) => a.id === lhaAglId);
-    if (!agl) return 1;
-    return Math.max(0, ...agl.lhas.map((l) => l.unit_number)) + 1;
-  }, [lhaAglId, allAgls]);
+  // next available designator based on selected agl
+  const selectedAgl = useMemo(() => allAgls.find((a) => a.id === lhaAglId), [lhaAglId, allAgls]);
+  const isPapiAgl = selectedAgl?.agl_type === "PAPI";
+  const nextDesignator = useMemo(() => {
+    if (!selectedAgl) return "A";
+    if (isPapiAgl) {
+      const used = new Set(selectedAgl.lhas.map((l) => l.unit_designator));
+      return ["A", "B", "C", "D"].find((d) => !used.has(d)) ?? null;
+    }
+    const nums = selectedAgl.lhas.map((l) => parseInt(l.unit_designator, 10)).filter((n) => !isNaN(n));
+    return String(nums.length > 0 ? Math.max(...nums) + 1 : 1);
+  }, [selectedAgl, isPapiAgl]);
+  const papiSlotsExhausted = isPapiAgl && nextDesignator === null;
 
   // manual coordinate entry for AGL/LHA - altitude is always airport elevation (set by handleCreate on page)
   const [manualLat, setManualLat] = useState(pointPosition ? String(pointPosition[1]) : "");
@@ -234,17 +240,22 @@ export default function CreationForm({
 
   // auto-prefill LHA name
   useEffect(() => {
-    if (category !== "lha" || !lhaAglId) return;
-    setName(`LHA Unit ${nextUnitNumber}`);
-  }, [lhaAglId, category, nextUnitNumber]);
+    if (category !== "lha" || !lhaAglId || nextDesignator === null) return;
+    setName(`LHA Unit ${nextDesignator}`);
+  }, [lhaAglId, category, nextDesignator]);
 
-  // pre-fill lha fields from most recent lha on the selected agl (highest unit_number).
+  // pre-fill lha fields from most recent lha on the selected agl.
   // position intentionally stays blank - user places each lha on the map.
   useEffect(() => {
     if (category !== "lha" || !lhaAglId) return;
     const agl = allAgls.find((a) => a.id === lhaAglId);
     if (!agl) return;
-    const recent = [...agl.lhas].sort((a, b) => b.unit_number - a.unit_number)[0];
+    const sorted = [...agl.lhas].sort((a, b) => {
+      const an = parseInt(a.unit_designator, 10);
+      const bn = parseInt(b.unit_designator, 10);
+      return !isNaN(an) && !isNaN(bn) ? an - bn : a.unit_designator.localeCompare(b.unit_designator);
+    });
+    const recent = sorted[sorted.length - 1];
     if (recent) {
       setLhaTolerance(recent.tolerance != null ? String(recent.tolerance) : "0.2");
       setLhaLampType(recent.lamp_type);
@@ -338,7 +349,7 @@ export default function CreationForm({
 
       if (effectiveEntityType === "lha") {
         data.agl_id = lhaAglId;
-        data.unit_number = nextUnitNumber;
+        data.unit_designator = nextDesignator;
         // parent agl type decides whether a blank setting_angle is allowed (PAPI -> null)
         const parentAgl = allAgls.find((a) => a.id === lhaAglId);
         if (lhaSettingAngle) {
@@ -411,7 +422,8 @@ export default function CreationForm({
   const canSubmit = effectiveEntityType && name.trim()
     && (effectiveEntityType !== "lha" || lhaAglId)
     && (effectiveEntityType !== "agl" || surfaceId)
-    && ((effectiveEntityType !== "agl" && effectiveEntityType !== "lha") || hasValidCoords);
+    && ((effectiveEntityType !== "agl" && effectiveEntityType !== "lha") || hasValidCoords)
+    && !papiSlotsExhausted;
 
   return (
     <div
@@ -819,8 +831,10 @@ export default function CreationForm({
                   </select>
                 </div>
                 {lhaAglId && (
-                  <p className="text-[10px] text-tv-text-muted">
-                    {t("coordinator.creation.unitNumber")}: {nextUnitNumber}
+                  <p className={`text-[10px] ${papiSlotsExhausted ? "text-tv-error" : "text-tv-text-muted"}`}>
+                    {papiSlotsExhausted
+                      ? t("coordinator.creation.allPapiSlotsUsed")
+                      : `${t("coordinator.creation.unitDesignator")}: ${nextDesignator}`}
                   </p>
                 )}
                 <Input

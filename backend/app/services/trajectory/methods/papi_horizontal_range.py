@@ -25,7 +25,7 @@ def calculate_arc_path(
     inspection_id: UUID | None,
     speed: MetersPerSecond,
 ) -> list[WaypointData]:
-    """generate angular sweep arc path on the approach side of the PAPI."""
+    """generate papi horizontal range arc path on the approach side of the PAPI."""
     density = config.measurement_density
     radius = config.horizontal_distance or MIN_ARC_RADIUS
     half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle

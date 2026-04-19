@@ -2,7 +2,7 @@
 
 adds vertical_profile_height to inspection_configuration so the VERTICAL_PROFILE
 method can specify the max altitude above the PAPI center to climb to, instead
-of reusing the angular-sweep sweep_angle field.
+of reusing the papi-horizontal-range sweep_angle field.
 
 Revision ID: d8e9f0a1b2c3
 Revises: c1e2f3a4b5d6

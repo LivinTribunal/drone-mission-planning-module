@@ -5,16 +5,15 @@ import type { InspectionMethod } from "@/types/enums";
 // hover point lock is AGL-agnostic (targets LHA center, not a specific AGL system)
 export const METHOD_AGL_COMPAT: Record<InspectionMethod, AglType[]> = {
   VERTICAL_PROFILE: ["PAPI"],
-  ANGULAR_SWEEP: ["PAPI"],
+  PAPI_HORIZONTAL_RANGE: ["PAPI"],
   HOVER_POINT_LOCK: [],
   FLY_OVER: ["RUNWAY_EDGE_LIGHTS"],
   PARALLEL_SIDE_SWEEP: ["RUNWAY_EDGE_LIGHTS"],
-  PAPI_HORIZONTAL_RANGE: ["PAPI"],
 };
 
 // all methods by AGL type (useful for the 2-step picker)
 export const METHODS_BY_AGL: Record<AglType, InspectionMethod[]> = {
-  PAPI: ["VERTICAL_PROFILE", "ANGULAR_SWEEP", "PAPI_HORIZONTAL_RANGE"],
+  PAPI: ["VERTICAL_PROFILE", "PAPI_HORIZONTAL_RANGE"],
   RUNWAY_EDGE_LIGHTS: ["FLY_OVER", "PARALLEL_SIDE_SWEEP"],
 };
 

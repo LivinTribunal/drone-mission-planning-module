@@ -19,9 +19,8 @@ class TestMethodAglHelper:
     """tests for is_method_compatible_with_agl helper."""
 
     def test_papi_compat(self):
-        """PAPI compatible with VERTICAL_PROFILE, ANGULAR_SWEEP, PAPI_HORIZONTAL_RANGE."""
+        """PAPI compatible with VERTICAL_PROFILE, PAPI_HORIZONTAL_RANGE."""
         assert is_method_compatible_with_agl("VERTICAL_PROFILE", "PAPI")
-        assert is_method_compatible_with_agl("ANGULAR_SWEEP", "PAPI")
         assert is_method_compatible_with_agl("PAPI_HORIZONTAL_RANGE", "PAPI")
 
     def test_runway_compat(self):
@@ -41,9 +40,8 @@ class TestMethodAglHelper:
         assert not is_method_compatible_with_agl("HOVER_POINT_LOCK", "PAPI")
 
     def test_runway_incompat(self):
-        """RUNWAY_EDGE_LIGHTS rejects VERTICAL_PROFILE, ANGULAR_SWEEP, PAPI_HORIZONTAL_RANGE, and HOVER_POINT_LOCK."""
+        """RUNWAY_EDGE_LIGHTS rejects VERTICAL_PROFILE, PAPI_HORIZONTAL_RANGE, HOVER_POINT_LOCK."""
         assert not is_method_compatible_with_agl("VERTICAL_PROFILE", "RUNWAY_EDGE_LIGHTS")
-        assert not is_method_compatible_with_agl("ANGULAR_SWEEP", "RUNWAY_EDGE_LIGHTS")
         assert not is_method_compatible_with_agl("PAPI_HORIZONTAL_RANGE", "RUNWAY_EDGE_LIGHTS")
         assert not is_method_compatible_with_agl("HOVER_POINT_LOCK", "RUNWAY_EDGE_LIGHTS")
 
@@ -103,11 +101,11 @@ class TestTemplateValidator:
         with pytest.raises(ValueError, match="VERTICAL_PROFILE"):
             t.validate_method_agl_compat(["VERTICAL_PROFILE"])
 
-    def test_angular_sweep_on_runway_rejected(self):
-        """ANGULAR_SWEEP on RUNWAY_EDGE_LIGHTS raises."""
+    def test_papi_horizontal_range_on_runway_rejected(self):
+        """PAPI_HORIZONTAL_RANGE on RUNWAY_EDGE_LIGHTS raises."""
         t = self._make(["RUNWAY_EDGE_LIGHTS"])
-        with pytest.raises(ValueError, match="ANGULAR_SWEEP"):
-            t.validate_method_agl_compat(["ANGULAR_SWEEP"])
+        with pytest.raises(ValueError, match="PAPI_HORIZONTAL_RANGE"):
+            t.validate_method_agl_compat(["PAPI_HORIZONTAL_RANGE"])
 
     def test_unknown_method_rejected(self):
         """unknown method raises."""
@@ -136,7 +134,7 @@ class TestTemplateValidator:
         names = {m.value for m in InspectionMethod}
         assert {
             "VERTICAL_PROFILE",
-            "ANGULAR_SWEEP",
+            "PAPI_HORIZONTAL_RANGE",
             "FLY_OVER",
             "PARALLEL_SIDE_SWEEP",
             "HOVER_POINT_LOCK",

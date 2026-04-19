@@ -321,7 +321,12 @@ class TestInspectionLhaIds:
         uid1 = uuid4()
         uid2 = uuid4()
         config = InspectionConfiguration(lha_ids=[str(uid1), str(uid2)])
-        insp = Inspection(id=uuid4(), template_id=uuid4(), method="ANGULAR_SWEEP", sequence_order=1)
+        insp = Inspection(
+            id=uuid4(),
+            template_id=uuid4(),
+            method="PAPI_HORIZONTAL_RANGE",
+            sequence_order=1,
+        )
         insp.config = config
 
         result = insp.lha_ids
@@ -333,7 +338,12 @@ class TestInspectionLhaIds:
 
     def test_lha_ids_none_when_no_config(self):
         """returns None when config is missing."""
-        insp = Inspection(id=uuid4(), template_id=uuid4(), method="ANGULAR_SWEEP", sequence_order=1)
+        insp = Inspection(
+            id=uuid4(),
+            template_id=uuid4(),
+            method="PAPI_HORIZONTAL_RANGE",
+            sequence_order=1,
+        )
         insp.config = None
 
         assert insp.lha_ids is None
@@ -341,7 +351,12 @@ class TestInspectionLhaIds:
     def test_lha_ids_none_when_config_has_no_lha_ids(self):
         """returns None when config.lha_ids is None."""
         config = InspectionConfiguration(lha_ids=None)
-        insp = Inspection(id=uuid4(), template_id=uuid4(), method="ANGULAR_SWEEP", sequence_order=1)
+        insp = Inspection(
+            id=uuid4(),
+            template_id=uuid4(),
+            method="PAPI_HORIZONTAL_RANGE",
+            sequence_order=1,
+        )
         insp.config = config
 
         assert insp.lha_ids is None

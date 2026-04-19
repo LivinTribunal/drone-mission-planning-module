@@ -210,10 +210,12 @@ class SafetyZoneResponse(BaseModel):
 
 
 # AGLs for airport surfaces
+
+
 class LHACreate(BaseModel):
     """lha create schema"""
 
-    unit_number: int
+    unit_designator: str = Field(min_length=1, max_length=4)
     setting_angle: float | None = None
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr
@@ -224,7 +226,7 @@ class LHACreate(BaseModel):
 class LHAUpdate(BaseModel):
     """lha update schema"""
 
-    unit_number: int | None = None
+    unit_designator: str | None = Field(default=None, min_length=1, max_length=4)
     setting_angle: float | None = None
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr | None = None
@@ -239,7 +241,7 @@ class LHAResponse(BaseModel):
 
     id: UUID
     agl_id: UUID
-    unit_number: int
+    unit_designator: str
     setting_angle: float | None = None
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr
