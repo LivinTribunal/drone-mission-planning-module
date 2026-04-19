@@ -78,6 +78,19 @@ vi.mock("@/components/map/overlays/TerrainToggle", () => ({
   default: () => <button data-testid="terrain-toggle">terrain</button>,
 }));
 
+vi.mock("@/contexts/ComputationContext", () => ({
+  useComputation: () => ({
+    status: "IDLE",
+    missionId: null,
+    missionName: null,
+    error: null,
+    isComputing: false,
+    lastResult: null,
+    startComputation: vi.fn(),
+    dismiss: vi.fn(),
+  }),
+}));
+
 import { getMission, getFlightPlan } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 

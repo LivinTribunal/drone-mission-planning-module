@@ -118,3 +118,12 @@ class FlightPlanScope(str, enum.Enum):
     FULL = "FULL"
     NO_TAKEOFF_LANDING = "NO_TAKEOFF_LANDING"
     MEASUREMENTS_ONLY = "MEASUREMENTS_ONLY"
+
+
+class ComputationStatus(str, enum.Enum):
+    """trajectory computation lifecycle status."""
+
+    IDLE = "IDLE"
+    COMPUTING = "COMPUTING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"

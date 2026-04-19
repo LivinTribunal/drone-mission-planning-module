@@ -11,6 +11,8 @@ import { useTranslation } from "react-i18next";
 import { isAxiosError } from "@/api/client";
 import { Loader2 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
+import { useComputation } from "@/contexts/ComputationContext";
+import { useOnComputationCompleted } from "@/hooks/useOnComputationCompleted";
 import {
   getMission,
   updateMission,
@@ -19,7 +21,6 @@ import {
   removeInspection,
   reorderInspections,
   getFlightPlan,
-  generateAndFetchTrajectory,
 } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import { listInspectionTemplates } from "@/api/inspectionTemplates";
@@ -64,6 +65,7 @@ export default function MissionConfigPage() {
   const { airportDetail } = useAirport();
   const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage, leftPanelEl } =
     useOutletContext<MissionTabOutletContext>();
+  const computation = useComputation();
 
   // core data
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
@@ -84,7 +86,6 @@ export default function MissionConfigPage() {
     new Set(),
   );
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const [computing, setComputing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(
@@ -129,10 +130,6 @@ export default function MissionConfigPage() {
   const canModify = mission
     ? !TERMINAL_STATUSES.includes(mission.status)
     : false;
-
-  const computeRef = useRef<() => void>(() => {});
-  // keep compute ref pointed at the latest handler; safe to mutate during render
-  computeRef.current = handleComputeTrajectory;
 
   const isDirty =
     Object.keys(missionDirty).length > 0 ||
@@ -342,9 +339,9 @@ export default function MissionConfigPage() {
 
   useEffect(() => {
     setComputeContext({
-      onCompute: () => computeRef.current(),
+      onCompute: id ? () => computation.startComputation(id) : null,
       canCompute: isDraft && hasCoordinates,
-      isComputing: computing,
+      isComputing: computation.isComputing,
       ...(!hasCoordinates && isDraft
         ? { label: t("mission.config.setCoordinatesFirst"), tooltip: t("mission.config.setCoordinatesTooltip") }
         : {}),
@@ -357,7 +354,7 @@ export default function MissionConfigPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext, isDraft, computing, hasCoordinates, t]);
+  }, [setComputeContext, isDraft, computation.isComputing, computation.startComputation, hasCoordinates, t, id]);
 
   // unsaved changes on beforeunload
   useEffect(() => {
@@ -532,30 +529,17 @@ export default function MissionConfigPage() {
     });
   }
 
-  async function handleComputeTrajectory() {
-    if (!id || !mission) return;
-    setComputing(true);
-    try {
-      const { flightPlan, missionStatus } = await generateAndFetchTrajectory(id);
-      setFlightPlan(flightPlan);
+  useOnComputationCompleted((result) => {
+    setFlightPlan(result);
+    const violations = result.validation_result?.violations ?? [];
+    setWarnings(violations.length > 0 ? violations : null);
 
-      const violations = flightPlan.validation_result?.violations ?? [];
-      setWarnings(violations.length > 0 ? violations : null);
-
-      updateMissionState({ ...mission, status: missionStatus });
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.status && [400, 409, 422].includes(err.response.status)) {
-        const detail = err.response?.data?.detail;
-        showNotification(
-          typeof detail === "string" ? detail : t("mission.config.trajectoryError"),
-        );
-      } else {
-        showNotification(t("mission.config.trajectoryError"));
-      }
-    } finally {
-      setComputing(false);
+    if (id) {
+      getMission(id)
+        .then((fresh) => updateMissionState(fresh))
+        .catch((err) => console.warn("mission refresh failed", err));
     }
-  }
+  });
 
   function handleEditWaypoints() {
     if (isDirty) {

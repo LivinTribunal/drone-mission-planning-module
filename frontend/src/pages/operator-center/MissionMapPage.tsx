@@ -10,12 +10,13 @@ import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
+import { useComputation } from "@/contexts/ComputationContext";
+import { useOnComputationCompleted } from "@/hooks/useOnComputationCompleted";
 import {
   getMission,
   updateMission,
   getFlightPlan,
   batchUpdateWaypoints,
-  generateAndFetchTrajectory,
   insertTransitWaypoint,
   deleteTransitWaypoint,
 } from "@/api/missions";
@@ -66,6 +67,7 @@ export default function MissionMapPage() {
   const { airportDetail } = useAirport();
   const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage, setCompactLeftPanel } =
     useOutletContext<MissionTabOutletContext>();
+  const computation = useComputation();
 
   // hide left panel column - map uses full width
   useEffect(() => {
@@ -80,7 +82,6 @@ export default function MissionMapPage() {
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [computing, setComputing] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [enduranceMinutes, setEnduranceMinutes] = useState<number | null>(null);
 
@@ -278,32 +279,21 @@ export default function MissionMapPage() {
     };
   }, [setSaveContext, handleSave, isDirty, saving, lastSaved]);
 
-  // compute / recompute trajectory
-  const handleCompute = useCallback(async () => {
-    if (!id || !mission) return;
-    setComputing(true);
-    try {
-      const { flightPlan, missionStatus } = await generateAndFetchTrajectory(id);
-      setFlightPlan(flightPlan);
-      setDirtyWaypoints({});
-      clearHistory();
+  useOnComputationCompleted((result) => {
+    setFlightPlan(result);
+    setDirtyWaypoints({});
+    clearHistory();
 
-      const updatedMission = { ...mission, status: missionStatus };
-      setMission(updatedMission);
-      updateMissionFromPage(updatedMission);
-      refreshMissions();
-      showNotification(t("map.changesSaved"));
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.data?.detail) {
-        const detail = err.response?.data?.detail;
-        showNotification(typeof detail === "string" ? detail : t("mission.config.trajectoryError"));
-      } else {
-        showNotification(t("mission.config.trajectoryError"));
-      }
-    } finally {
-      setComputing(false);
+    if (id) {
+      getMission(id)
+        .then((fresh) => {
+          setMission(fresh);
+          updateMissionFromPage(fresh);
+          refreshMissions();
+        })
+        .catch((err) => console.warn("mission refresh failed", err));
     }
-  }, [id, mission, clearHistory, t, refreshMissions, updateMissionFromPage]);
+  });
 
   // compute button state
   const computeLabel = useMemo(() => {
@@ -323,9 +313,9 @@ export default function MissionMapPage() {
   // wire compute context to tab bar - "Compute / Recompute Trajectory" button
   useEffect(() => {
     setComputeContext({
-      onCompute: handleCompute,
-      canCompute: canCompute && !computing,
-      isComputing: computing,
+      onCompute: id ? () => computation.startComputation(id) : null,
+      canCompute: canCompute && !computation.isComputing,
+      isComputing: computation.isComputing,
       label: computeLabel,
       ...(!hasCoordinates ? { tooltip: t("mission.config.setCoordinatesTooltip") } : {}),
     });
@@ -336,7 +326,7 @@ export default function MissionMapPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext, handleCompute, canCompute, computing, computeLabel, hasCoordinates, t]);
+  }, [setComputeContext, computation.isComputing, computation.startComputation, canCompute, computeLabel, hasCoordinates, t, id]);
 
   // handle map click based on active tool
   const handleMapClick = useCallback(

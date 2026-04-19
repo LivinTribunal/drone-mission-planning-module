@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field, field_validator
 from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
 
+# computation status values - mirrors ComputationStatus enum
+ComputationStatusStr = Literal["IDLE", "COMPUTING", "COMPLETED", "FAILED"]
+
 # flight plan scope values - mirrors FlightPlanScope enum
 FlightPlanScopeStr = Literal["FULL", "NO_TAKEOFF_LANDING", "MEASUREMENTS_ONLY"]
 
@@ -214,6 +217,9 @@ class MissionResponse(BaseModel):
     require_perpendicular_runway_crossing: bool = True
     flight_plan_scope: FlightPlanScopeStr = "FULL"
     has_unsaved_map_changes: bool = False
+    computation_status: ComputationStatusStr = "IDLE"
+    computation_error: str | None = None
+    computation_started_at: datetime | None = None
     inspection_count: int = 0
     estimated_duration: float | None = None
 
@@ -224,6 +230,16 @@ class MissionDetailResponse(MissionResponse):
     """mission with inspections"""
 
     inspections: list[InspectionResponse] = []
+
+
+class ComputationStatusResponse(BaseModel):
+    """lightweight computation status for polling."""
+
+    computation_status: ComputationStatusStr
+    computation_error: str | None = None
+    computation_started_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class MissionListResponse(BaseModel):
