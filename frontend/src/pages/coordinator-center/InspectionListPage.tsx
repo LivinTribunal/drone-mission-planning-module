@@ -86,26 +86,38 @@ export default function InspectionListPage() {
     [allAgls],
   );
 
-  const fetchTemplates = useCallback(
-    async (signal?: AbortSignal) => {
-      /**fetch templates for the selected airport.*/
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await listInspectionTemplates(
-          airportDetail ? { airport_id: airportDetail.id } : undefined,
-          signal,
-        );
-        setTemplates(res.data);
-      } catch (err) {
-        if (signal?.aborted) return;
-        setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
-      } finally {
-        if (!signal?.aborted) setLoading(false);
-      }
-    },
-    [airportDetail, t],
-  );
+  // clear stale templates when airport changes
+  const prevAirportIdRef = useRef<string | undefined>(airportDetail?.id);
+  useEffect(() => {
+    const prevId = prevAirportIdRef.current;
+    const newId = airportDetail?.id;
+    prevAirportIdRef.current = newId;
+    if (prevId && prevId !== newId) {
+      setTemplates([]);
+      setPage(0);
+      setSearch("");
+      setMethodFilter(new Set());
+      setAglFilter("");
+    }
+  }, [airportDetail?.id]);
+
+  const fetchTemplates = useCallback(async (signal?: AbortSignal) => {
+    /**fetch templates for the selected airport.*/
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await listInspectionTemplates(
+        airportDetail ? { airport_id: airportDetail.id } : undefined,
+        signal,
+      );
+      if (!signal?.aborted) setTemplates(res.data);
+    } catch (err) {
+      if (signal?.aborted) return;
+      setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, [airportDetail, t]);
 
   useEffect(() => {
     if (!airportDetail) return;

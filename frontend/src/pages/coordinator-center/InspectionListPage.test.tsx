@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import InspectionListPage from "./InspectionListPage";
+import type { InspectionMethod } from "@/types/enums";
 
 // stable t reference to avoid infinite re-render from useCallback([..., t])
 const stableT = (key: string) => key;
@@ -9,7 +10,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: stableT, i18n: { language: "en" } }),
 }));
 
-const mockAirportDetail = {
+const mockAirportDetail1 = {
   id: "apt-1",
   icao_code: "LZIB",
   name: "Bratislava",
@@ -51,10 +52,36 @@ const mockAirportDetail = {
   safety_zones: [],
 };
 
+const mockAirportDetail2 = {
+  ...mockAirportDetail1,
+  id: "apt-2",
+  icao_code: "LZKZ",
+  name: "Kosice",
+  surfaces: [
+    {
+      ...mockAirportDetail1.surfaces[0],
+      id: "srf-2",
+      airport_id: "apt-2",
+      identifier: "RWY 01",
+      agls: [
+        {
+          ...mockAirportDetail1.surfaces[0].agls[0],
+          id: "agl-2",
+          surface_id: "srf-2",
+          name: "PAPI RWY 01",
+        },
+      ],
+    },
+  ],
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let currentAirportDetail: any = mockAirportDetail1;
+
 vi.mock("@/contexts/AirportContext", () => ({
   useAirport: () => ({
-    airportDetail: mockAirportDetail,
-    selectedAirport: mockAirportDetail,
+    airportDetail: currentAirportDetail,
+    selectedAirport: currentAirportDetail,
     airportDetailLoading: false,
     airportDetailError: false,
     selectAirport: vi.fn(),
@@ -123,6 +150,7 @@ function renderPage() {
 describe("InspectionListPage", () => {
   /** test suite for the inspection list page. */
   beforeEach(() => {
+    currentAirportDetail = mockAirportDetail1;
     mockNavigate.mockClear();
   });
 
@@ -205,5 +233,53 @@ describe("InspectionListPage", () => {
 
     const angularPill = screen.getByTestId("method-pill-ANGULAR_SWEEP");
     expect(angularPill.className).toContain("opacity-40");
+  });
+
+  it("re-fetches templates when airport changes", async () => {
+    /** verify templates reload after airport switch on a live component. */
+    const { listInspectionTemplates } = await import("@/api/inspectionTemplates");
+    const mockList = vi.mocked(listInspectionTemplates);
+
+    const { rerender } = renderPage();
+    await waitFor(() => {
+      expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
+    });
+
+    mockList.mockResolvedValueOnce({
+      data: [
+        {
+          id: "tpl-3",
+          name: "Kosice Template",
+          description: null,
+          angular_tolerances: null,
+          created_by: null,
+          created_at: "2026-03-01T00:00:00Z",
+          updated_at: "2026-03-01T00:00:00Z",
+          default_config: null,
+          target_agl_ids: ["agl-2"],
+          methods: ["FLY_OVER"] as InspectionMethod[],
+          mission_count: 0,
+        },
+      ],
+      meta: { total: 1 },
+    } as never);
+
+    currentAirportDetail = mockAirportDetail2;
+
+    rerender(
+      <MemoryRouter>
+        <InspectionListPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText("Kosice Template")).toBeInTheDocument();
+    });
+  });
+
+  it("shows select-airport guard when airport is null", () => {
+    /** verify guard message when no airport selected. */
+    currentAirportDetail = null;
+    renderPage();
+    expect(screen.getByText("coordinator.inspections.selectAirportFirst")).toBeInTheDocument();
   });
 });
