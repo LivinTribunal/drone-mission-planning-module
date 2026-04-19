@@ -44,6 +44,7 @@ notebooks/
 *.ipynb
 
 docs/specs/ZEPHYR_Príručka_Meranie LPZ_v2.pdf
+docs/ISSUES.md
 
 # Custom 3D models
 backend/static/models/custom/

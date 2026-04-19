@@ -277,9 +277,7 @@ def seed_inspection_templates() -> None:
         db.flush()
 
         db.execute(
-            insp_template_methods.insert().values(
-                template_id=sweep.id, method="HORIZONTAL_RANGE"
-            )
+            insp_template_methods.insert().values(template_id=sweep.id, method="HORIZONTAL_RANGE")
         )
 
         vp_config = InspectionConfiguration(
