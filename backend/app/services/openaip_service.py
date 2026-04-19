@@ -662,7 +662,7 @@ def lookup_airport_by_icao(icao_code: str, radius_km: float = 3.0) -> AirportLoo
 
 
 def _extract_items(payload: Any) -> list[dict]:
-    """extract the list of items from an openaip list response, tolerating shapes."""
+    """extract the item list from an openaip response, tolerating various shapes."""
     if isinstance(payload, list):
         return [x for x in payload if isinstance(x, dict)]
 
