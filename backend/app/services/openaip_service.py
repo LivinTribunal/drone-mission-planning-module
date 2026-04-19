@@ -306,36 +306,162 @@ def _extract_elevation(elev: dict | float | int | None) -> float | None:
     return None
 
 
-def _parse_runway(
+def _bearing_between(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    """compute initial bearing (degrees) from point 1 to point 2."""
+    lat1_r = math.radians(lat1)
+    lat2_r = math.radians(lat2)
+    dlon_r = math.radians(lon2 - lon1)
+    x = math.sin(dlon_r) * math.cos(lat2_r)
+    y = math.cos(lat1_r) * math.sin(lat2_r) - math.sin(lat1_r) * math.cos(lat2_r) * math.cos(dlon_r)
+    return math.degrees(math.atan2(x, y)) % 360.0
+
+
+def _distance_between(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    """haversine distance in meters between two points."""
+    lat1_r, lat2_r = math.radians(lat1), math.radians(lat2)
+    dlat = lat2_r - lat1_r
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1_r) * math.cos(lat2_r) * math.sin(dlon / 2) ** 2
+    return _EARTH_RADIUS_M * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _parse_runway_from_dual_thresholds(
+    designator: str,
+    run_a: dict,
+    run_b: dict,
+    width_m: float,
+    fallback_elevation: float,
+) -> RunwaySuggestion | None:
+    """build a runway suggestion from two runway direction (run) entries with threshold coords."""
+    pt_a = _extract_point(run_a.get("thresholdLocation"))
+    pt_b = _extract_point(run_b.get("thresholdLocation"))
+    if pt_a is None or pt_b is None:
+        return None
+
+    lon_a, lat_a = pt_a
+    lon_b, lat_b = pt_b
+
+    heading = _bearing_between(lon_a, lat_a, lon_b, lat_b)
+    length = _distance_between(lon_a, lat_a, lon_b, lat_b)
+
+    if length < 1.0:
+        return None
+
+    geoms = _compute_runway_geometry(
+        threshold_lat=lat_a,
+        threshold_lon=lon_a,
+        heading_deg=heading,
+        length_m=length,
+        width_m=width_m,
+        elevation_m=fallback_elevation,
+    )
+
+    return RunwaySuggestion(
+        identifier=str(designator),
+        heading=heading,
+        length=length,
+        width=width_m,
+        threshold_position=PointZ(
+            type="Point",
+            coordinates=[lon_a, lat_a, fallback_elevation],
+        ),
+        end_position=PointZ(
+            type="Point",
+            coordinates=[lon_b, lat_b, fallback_elevation],
+        ),
+        geometry=geoms["geometry"],
+        boundary=geoms["boundary"],
+    )
+
+
+def _parse_runs(
     rw: dict,
     fallback_elevation: float,
-    airport_center: tuple[float, float] | None = None,
-) -> RunwaySuggestion | None:
-    """parse a single openaip runway into a suggestion, returning None if incomplete.
+) -> list[RunwaySuggestion]:
+    """parse openaip runway with a `runs` array - one physical strip, two directions.
 
-    when the runway payload has no threshold coords (common for openaip), fall back
-    to the airport center and project the threshold back by length/2 along -heading,
-    so the centerline ends up centered on the airport.
+    when both runs have threshold locations, builds geometry directly from the two
+    thresholds for maximum accuracy. falls back to single-run parsing otherwise.
     """
-    designator = rw.get("designator") or rw.get("name")
+    runs = rw.get("runs") or []
+    if len(runs) < 2:
+        return []
+
     dimensions = rw.get("dimension") or {}
-    length = _convert_length(
-        (dimensions.get("length") or {}).get("value"),
-        (dimensions.get("length") or {}).get("unit"),
-    )
     width = _convert_length(
         (dimensions.get("width") or {}).get("value"),
         (dimensions.get("width") or {}).get("unit"),
     )
-    heading_field = rw.get("trueHeading")
+    if width is None:
+        # try getting width from individual runs
+        for run in runs:
+            run_dim = run.get("dimension") or {}
+            width = _convert_length(
+                (run_dim.get("width") or {}).get("value"),
+                (run_dim.get("width") or {}).get("unit"),
+            )
+            if width is not None:
+                break
+    if width is None:
+        width = 45.0
+
+    # check if both runs have threshold locations
+    run_a, run_b = runs[0], runs[1]
+    pt_a = _extract_point(run_a.get("thresholdLocation"))
+    pt_b = _extract_point(run_b.get("thresholdLocation"))
+
+    results: list[RunwaySuggestion] = []
+
+    if pt_a is not None and pt_b is not None:
+        # dual thresholds - build both directions from the exact positions
+        des_a = run_a.get("designator") or run_a.get("name") or ""
+        des_b = run_b.get("designator") or run_b.get("name") or ""
+        designator = f"{des_a}/{des_b}" if des_a and des_b else (des_a or des_b)
+
+        suggestion = _parse_runway_from_dual_thresholds(
+            designator, run_a, run_b, width, fallback_elevation
+        )
+        if suggestion is not None:
+            results.append(suggestion)
+    else:
+        # fall back to single-run parsing for each run that has enough data
+        for run in runs:
+            parsed = _parse_single_run(run, fallback_elevation, width_override=width)
+            if parsed is not None:
+                results.append(parsed)
+
+    return results
+
+
+def _parse_single_run(
+    run: dict,
+    fallback_elevation: float,
+    airport_center: tuple[float, float] | None = None,
+    width_override: float | None = None,
+) -> RunwaySuggestion | None:
+    """parse a single runway run/direction entry."""
+    designator = run.get("designator") or run.get("name")
+    dimensions = run.get("dimension") or {}
+    length = _convert_length(
+        (dimensions.get("length") or {}).get("value"),
+        (dimensions.get("length") or {}).get("unit"),
+    )
+    width = width_override
+    if width is None:
+        width = _convert_length(
+            (dimensions.get("width") or {}).get("value"),
+            (dimensions.get("width") or {}).get("unit"),
+        )
+
+    heading_field = run.get("trueHeading")
     if heading_field is None:
-        heading_field = rw.get("heading")
+        heading_field = run.get("heading")
 
     if not designator or length is None or width is None or heading_field is None:
         return None
 
     heading = float(heading_field)
-    threshold = _extract_point(rw.get("thresholdLocation") or rw.get("location"))
+    threshold = _extract_point(run.get("thresholdLocation") or run.get("location"))
     if threshold is None:
         if airport_center is None:
             return None
@@ -367,6 +493,31 @@ def _parse_runway(
         geometry=geoms["geometry"],
         boundary=geoms["boundary"],
     )
+
+
+def _parse_runway(
+    rw: dict,
+    fallback_elevation: float,
+    airport_center: tuple[float, float] | None = None,
+) -> list[RunwaySuggestion]:
+    """parse an openaip runway object into suggestions.
+
+    openaip runways may contain a `runs` array with per-direction data including
+    threshold locations. when both thresholds are available, geometry is built
+    directly from them for maximum accuracy. otherwise falls back to projection.
+    returns a list (possibly empty) of suggestions.
+    """
+    # try dual-threshold parsing via runs array first
+    runs_results = _parse_runs(rw, fallback_elevation)
+    if runs_results:
+        return runs_results
+
+    # legacy single-runway format
+    result = _parse_single_run(rw, fallback_elevation, airport_center=airport_center)
+    if result is not None:
+        return [result]
+
+    return []
 
 
 def _parse_polygon_geometry(geom: dict | None, default_z: float = 0.0) -> PolygonZ | None:
@@ -450,7 +601,7 @@ def _parse_obstacle(item: dict, fallback_elevation: float) -> ObstacleSuggestion
 
 
 # public api
-def lookup_airport_by_icao(icao_code: str) -> AirportLookupResponse:
+def lookup_airport_by_icao(icao_code: str, radius_km: float = 3.0) -> AirportLookupResponse:
     """fetch airport + nearby airspaces + nearby obstacles for an icao code.
 
     raises NotFoundError if no airport matches the icao code.
@@ -461,6 +612,12 @@ def lookup_airport_by_icao(icao_code: str) -> AirportLookupResponse:
     if not _ICAO_PATTERN.match(icao):
         raise DomainError(
             "icao_code must be exactly 4 uppercase letters",
+            status_code=400,
+        )
+
+    if radius_km <= 0 or radius_km > 50:
+        raise DomainError(
+            "radius_km must be between 0 and 50",
             status_code=400,
         )
 
@@ -486,12 +643,10 @@ def lookup_airport_by_icao(icao_code: str) -> AirportLookupResponse:
         runways_raw = airport.get("runways") or []
         runways: list[RunwaySuggestion] = []
         for rw in runways_raw:
-            parsed = _parse_runway(rw, elevation, airport_center=(lon, lat))
-            if parsed is not None:
-                runways.append(parsed)
+            runways.extend(_parse_runway(rw, elevation, airport_center=(lon, lat)))
 
-        airspaces = _fetch_nearby_airspaces(client, lat, lon, _NEARBY_RADIUS_KM)
-        obstacles = _fetch_nearby_obstacles(client, lat, lon, _NEARBY_RADIUS_KM, elevation)
+        airspaces = _fetch_nearby_airspaces(client, lat, lon, radius_km)
+        obstacles = _fetch_nearby_obstacles(client, lat, lon, radius_km, elevation)
 
     return AirportLookupResponse(
         icao_code=icao,

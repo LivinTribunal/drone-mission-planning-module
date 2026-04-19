@@ -50,6 +50,7 @@ export default function CreateAirportDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
+  const [importRadius, setImportRadius] = useState("3");
   const [looking, setLooking] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupEmpty, setLookupEmpty] = useState(false);
@@ -75,6 +76,7 @@ export default function CreateAirportDialog({
       setLat("");
       setLon("");
       setAlt("");
+      setImportRadius("3");
       setErrors({});
       setLookupError(null);
       setLookupEmpty(false);
@@ -140,7 +142,11 @@ export default function CreateAirportDialog({
     setLookupEmpty(false);
     setSuggestions(null);
     try {
-      const result = await lookupAirport(icaoCode);
+      const radius = parseFloat(importRadius);
+      const result = await lookupAirport(
+        icaoCode,
+        !isNaN(radius) && radius > 0 ? radius : undefined,
+      );
       applyLookup(result);
     } catch (err) {
       if (isAxiosError(err)) {
@@ -364,6 +370,22 @@ export default function CreateAirportDialog({
                 ? t("coordinator.createAirport.lookup.looking")
                 : t("coordinator.createAirport.lookup.button")}
             </Button>
+          </div>
+          <div>
+            <Input
+              id="import-radius"
+              label={t("coordinator.createAirport.importRadius")}
+              type="number"
+              min="0.5"
+              max="50"
+              step="0.5"
+              value={importRadius}
+              onChange={(e) => setImportRadius(e.target.value)}
+              data-testid="import-radius-input"
+            />
+            <p className="text-[10px] text-tv-text-muted mt-0.5">
+              {t("coordinator.createAirport.importRadiusHint")}
+            </p>
           </div>
           {errors.icaoCode && (
             <p className="text-xs text-tv-error -mt-2" data-testid="icao-error">{errors.icaoCode}</p>

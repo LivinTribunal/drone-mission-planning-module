@@ -203,7 +203,7 @@ describe("CreateAirportDialog - lookup", () => {
       expect(screen.getByTestId("lookup-suggestions")).toBeInTheDocument();
     });
 
-    expect(mockLookup).toHaveBeenCalledWith("LZIB");
+    expect(mockLookup).toHaveBeenCalledWith("LZIB", 3);
     expect(screen.getByLabelText("coordinator.createAirport.name")).toHaveValue(
       "Bratislava Airport",
     );
