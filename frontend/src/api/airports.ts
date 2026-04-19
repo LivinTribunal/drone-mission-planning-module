@@ -61,9 +61,11 @@ export async function createAirport(
 
 export async function lookupAirport(
   icaoCode: string,
+  radiusKm?: number,
 ): Promise<AirportLookupResponse> {
   const res = await client.get(
     `/airports/lookup/${encodeURIComponent(icaoCode)}`,
+    { params: radiusKm != null ? { radius_km: radiusKm } : undefined },
   );
   return res.data;
 }

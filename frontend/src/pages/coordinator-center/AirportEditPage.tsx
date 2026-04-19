@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
-import { getAirport } from "@/api/airports";
+import { getAirport, deleteAirport } from "@/api/airports";
 import {
   deleteSurface,
   deleteObstacle,
@@ -40,6 +40,7 @@ import EditableFeatureInfo from "@/components/coordinator/EditableFeatureInfo";
 import CreationForm from "@/components/coordinator/CreationForm";
 import type { PendingGeometryType, EntityType } from "@/components/coordinator/CreationForm";
 import UnsavedChangesDialog from "@/components/coordinator/UnsavedChangesDialog";
+import ConfirmDeleteDialog from "@/components/coordinator/ConfirmDeleteDialog";
 import MapDrawingToolbar from "@/components/coordinator/MapDrawingToolbar";
 import CoordinatorMapHelpPanel from "@/components/coordinator/CoordinatorMapHelpPanel";
 import GeoJsonEditorModal from "@/components/coordinator/GeoJsonEditorModal";
@@ -131,7 +132,7 @@ export default function AirportEditPage() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { selectAirport } = useAirport();
+  const { selectAirport, clearAirport } = useAirport();
   const selectAirportRef = useRef(selectAirport);
   selectAirportRef.current = selectAirport;
 
@@ -147,6 +148,8 @@ export default function AirportEditPage() {
   const [saveError, setSaveError] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
   const [showGeoJsonEditor, setShowGeoJsonEditor] = useState(false);
+  const [showDeleteAirportDialog, setShowDeleteAirportDialog] = useState(false);
+  const [deleteAirportError, setDeleteAirportError] = useState<string | null>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [bearing, setBearing] = useState(0);
   const [bearingResetKey, setBearingResetKey] = useState(0);
@@ -783,6 +786,20 @@ export default function AirportEditPage() {
     }
   }, [clearAll, pendingNav, navigate]);
 
+  const handleDeleteAirport = useCallback(async () => {
+    /** delete the entire airport and navigate back to list. */
+    if (!id) return;
+    setDeleteAirportError(null);
+    try {
+      await deleteAirport(id);
+      clearAirport();
+      navigate("/coordinator-center/airports");
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      setDeleteAirportError(t("coordinator.detail.deleteAirportError"));
+    }
+  }, [id, clearAirport, navigate, t]);
+
   const handleDeleteSurface = useCallback(
     async (surfaceId: string) => {
       /** delete a surface and refresh. */
@@ -1354,6 +1371,7 @@ export default function AirportEditPage() {
             <AirportInfoPanel
               airport={airport}
               onUpdate={handleAirportUpdate}
+              onDelete={() => setShowDeleteAirportDialog(true)}
             />
             <TerrainSettingsCard
               airport={airport}
@@ -1503,6 +1521,31 @@ export default function AirportEditPage() {
         onClose={() => setShowGeoJsonEditor(false)}
         onApply={handleGeoJsonApply}
       />
+
+      {airport && (
+        <ConfirmDeleteDialog
+          isOpen={showDeleteAirportDialog}
+          name={airport.name}
+          warnings={[
+            ...(airport.surfaces.length > 0
+              ? [t("coordinator.detail.deleteAirportWarnSurfaces", { count: airport.surfaces.length })]
+              : []),
+            ...(airport.obstacles.length > 0
+              ? [t("coordinator.detail.deleteAirportWarnObstacles", { count: airport.obstacles.length })]
+              : []),
+            ...(airport.safety_zones.length > 0
+              ? [t("coordinator.detail.deleteAirportWarnZones", { count: airport.safety_zones.length })]
+              : []),
+            t("coordinator.detail.deleteAirportWarnMissions"),
+          ]}
+          error={deleteAirportError}
+          onConfirm={handleDeleteAirport}
+          onCancel={() => {
+            setShowDeleteAirportDialog(false);
+            setDeleteAirportError(null);
+          }}
+        />
+      )}
     </div>
   );
 }

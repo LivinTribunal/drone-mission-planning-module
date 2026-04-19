@@ -2,16 +2,19 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import Input from "@/components/common/Input";
+import Button from "@/components/common/Button";
 import type { AirportDetailResponse } from "@/types/airport";
 
 interface AirportInfoPanelProps {
   airport: AirportDetailResponse;
   onUpdate: (data: Record<string, unknown>) => void;
+  onDelete?: () => void;
 }
 
 export default function AirportInfoPanel({
   airport,
   onUpdate,
+  onDelete,
 }: AirportInfoPanelProps) {
   /** collapsible editable airport metadata panel. */
   const { t } = useTranslation();
@@ -105,6 +108,18 @@ export default function AirportInfoPanel({
             }}
             className="!px-3 !py-1.5 !text-xs"
           />
+          {onDelete && (
+            <div className="pt-2 border-t border-tv-border mt-2">
+              <Button
+                variant="danger"
+                onClick={onDelete}
+                className="w-full !text-xs"
+                data-testid="delete-airport-button"
+              >
+                {t("coordinator.detail.deleteAirport")}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
