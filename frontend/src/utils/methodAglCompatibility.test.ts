@@ -9,9 +9,9 @@ import {
 } from "./methodAglCompatibility";
 
 describe("isMethodCompatibleWithAgl", () => {
-  it("PAPI accepts VERTICAL_PROFILE / PAPI_HORIZONTAL_RANGE", () => {
+  it("PAPI accepts VERTICAL_PROFILE / HORIZONTAL_RANGE", () => {
     expect(isMethodCompatibleWithAgl("VERTICAL_PROFILE", "PAPI")).toBe(true);
-    expect(isMethodCompatibleWithAgl("PAPI_HORIZONTAL_RANGE", "PAPI")).toBe(true);
+    expect(isMethodCompatibleWithAgl("HORIZONTAL_RANGE", "PAPI")).toBe(true);
   });
 
   it("PAPI rejects FLY_OVER, PARALLEL_SIDE_SWEEP, and HOVER_POINT_LOCK", () => {
@@ -25,15 +25,15 @@ describe("isMethodCompatibleWithAgl", () => {
     expect(isMethodCompatibleWithAgl("PARALLEL_SIDE_SWEEP", "RUNWAY_EDGE_LIGHTS")).toBe(true);
   });
 
-  it("RUNWAY_EDGE_LIGHTS rejects VERTICAL_PROFILE, PAPI_HORIZONTAL_RANGE, and HOVER_POINT_LOCK", () => {
+  it("RUNWAY_EDGE_LIGHTS rejects VERTICAL_PROFILE, HORIZONTAL_RANGE, and HOVER_POINT_LOCK", () => {
     expect(isMethodCompatibleWithAgl("VERTICAL_PROFILE", "RUNWAY_EDGE_LIGHTS")).toBe(false);
-    expect(isMethodCompatibleWithAgl("PAPI_HORIZONTAL_RANGE", "RUNWAY_EDGE_LIGHTS")).toBe(false);
+    expect(isMethodCompatibleWithAgl("HORIZONTAL_RANGE", "RUNWAY_EDGE_LIGHTS")).toBe(false);
     expect(isMethodCompatibleWithAgl("HOVER_POINT_LOCK", "RUNWAY_EDGE_LIGHTS")).toBe(false);
   });
 });
 
 describe("methodsForAgl / aglTypesForMethod", () => {
-  it("methodsForAgl returns two AGL-specific methods per type", () => {
+  it("methodsForAgl returns expected method count per type", () => {
     expect(methodsForAgl("PAPI")).toHaveLength(2);
     expect(methodsForAgl("RUNWAY_EDGE_LIGHTS")).toHaveLength(2);
   });

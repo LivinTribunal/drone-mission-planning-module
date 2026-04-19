@@ -114,7 +114,7 @@ const baseMission = {
       mission_id: "m-1",
       template_id: "t-1",
       config_id: null,
-      method: "PAPI_HORIZONTAL_RANGE",
+      method: "HORIZONTAL_RANGE",
       sequence_order: 1,
       lha_ids: null,
       config: null,

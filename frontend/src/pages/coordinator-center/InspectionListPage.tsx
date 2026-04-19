@@ -26,7 +26,7 @@ import {
 } from "@/components/common/ListPageLayout";
 
 const ALL_METHODS: InspectionMethod[] = [
-  "PAPI_HORIZONTAL_RANGE",
+  "HORIZONTAL_RANGE",
   "VERTICAL_PROFILE",
   "FLY_OVER",
   "PARALLEL_SIDE_SWEEP",

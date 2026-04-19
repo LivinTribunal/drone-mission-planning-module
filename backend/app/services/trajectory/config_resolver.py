@@ -73,7 +73,7 @@ def compute_optimal_density(
 
             return optimal
 
-        case InspectionMethod.PAPI_HORIZONTAL_RANGE:
+        case InspectionMethod.HORIZONTAL_RANGE:
             half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             # at least one point per degree of sweep
             optimal = math.ceil(2 * half_sweep) + 1

@@ -176,6 +176,31 @@ def get_lha_setting_angles(template, lha_ids=None) -> list[Degrees]:
     return sorted(angles)
 
 
+def derive_observation_angle(
+    setting_angles: list[Degrees],
+    angle_offset: Degrees,
+) -> Degrees:
+    """derive papi observation angle from max lha setting angle + offset.
+
+    places the drone in the all-white zone above all papi transition sectors.
+    """
+    return max(setting_angles) + angle_offset
+
+
+def check_missing_setting_angles(template, lha_ids=None) -> list[str]:
+    """return unit_designators of lhas with missing setting_angle."""
+    lha_id_set = {str(i) for i in lha_ids} if lha_ids else None
+    missing = []
+    for agl in template.targets:
+        for lha in agl.lhas:
+            if lha_id_set and str(lha.id) not in lha_id_set:
+                continue
+            if lha.setting_angle is None:
+                missing.append(lha.unit_designator)
+
+    return sorted(missing)
+
+
 def get_glide_slope_angle(template) -> Degrees:
     """return the first non-null glide slope angle from template targets, or default."""
     for agl in template.targets:
@@ -238,7 +263,7 @@ def determine_start_position(
     approach = _opposite_bearing(runway_heading)
 
     match method:
-        case InspectionMethod.PAPI_HORIZONTAL_RANGE:
+        case InspectionMethod.HORIZONTAL_RANGE:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
             half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             angle = approach - half_sweep
@@ -284,7 +309,7 @@ def determine_end_position(
     approach = _opposite_bearing(runway_heading)
 
     match method:
-        case InspectionMethod.PAPI_HORIZONTAL_RANGE:
+        case InspectionMethod.HORIZONTAL_RANGE:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
             half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             angle = approach + half_sweep

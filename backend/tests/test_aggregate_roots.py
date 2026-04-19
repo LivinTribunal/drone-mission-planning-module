@@ -325,7 +325,7 @@ class TestInspectionLhaIds:
         insp = Inspection(
             id=uuid4(),
             template_id=uuid4(),
-            method="PAPI_HORIZONTAL_RANGE",
+            method="HORIZONTAL_RANGE",
             sequence_order=1,
         )
         insp.config = config
@@ -342,7 +342,7 @@ class TestInspectionLhaIds:
         insp = Inspection(
             id=uuid4(),
             template_id=uuid4(),
-            method="PAPI_HORIZONTAL_RANGE",
+            method="HORIZONTAL_RANGE",
             sequence_order=1,
         )
         insp.config = None
@@ -355,7 +355,7 @@ class TestInspectionLhaIds:
         insp = Inspection(
             id=uuid4(),
             template_id=uuid4(),
-            method="PAPI_HORIZONTAL_RANGE",
+            method="HORIZONTAL_RANGE",
             sequence_order=1,
         )
         insp.config = config

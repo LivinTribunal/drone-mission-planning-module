@@ -74,7 +74,7 @@ def test_elevation_angle_above():
 # arc path tests
 def test_arc_path_count():
     """arc path should generate measurement_density waypoints"""
-    from app.services.trajectory.methods.papi_horizontal_range import calculate_arc_path
+    from app.services.trajectory.methods.horizontal_range import calculate_arc_path
 
     config = ResolvedConfig(measurement_density=10)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -87,7 +87,7 @@ def test_arc_path_count():
 
 def test_arc_path_radius():
     """all arc waypoints should be >= 350m from center"""
-    from app.services.trajectory.methods.papi_horizontal_range import calculate_arc_path
+    from app.services.trajectory.methods.horizontal_range import calculate_arc_path
     from app.services.trajectory.types import MIN_ARC_RADIUS
 
     config = ResolvedConfig(measurement_density=8)
@@ -102,7 +102,7 @@ def test_arc_path_radius():
 
 def test_arc_path_heading_towards_center():
     """measurement waypoints should point at LHA center"""
-    from app.services.trajectory.methods.papi_horizontal_range import calculate_arc_path
+    from app.services.trajectory.methods.horizontal_range import calculate_arc_path
 
     config = ResolvedConfig(measurement_density=5)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -120,7 +120,7 @@ def test_arc_path_heading_towards_center():
 
 def test_arc_path_altitude_uses_glide_slope():
     """arc altitude = center_alt + r * tan(glide_slope) + offset"""
-    from app.services.trajectory.methods.papi_horizontal_range import calculate_arc_path
+    from app.services.trajectory.methods.horizontal_range import calculate_arc_path
     from app.services.trajectory.types import MIN_ARC_RADIUS
 
     config = ResolvedConfig(measurement_density=3, altitude_offset=5.0)
@@ -253,7 +253,7 @@ def test_lead_in_lead_out_none():
 # gimbal pitch tests
 def test_arc_path_has_gimbal_pitch():
     """arc waypoints should have gimbal pitch computed"""
-    from app.services.trajectory.methods.papi_horizontal_range import calculate_arc_path
+    from app.services.trajectory.methods.horizontal_range import calculate_arc_path
 
     config = ResolvedConfig(measurement_density=5)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -321,7 +321,7 @@ def test_astar_no_path():
 
 # interface methods
 def test_determine_start_end_positions():
-    """start and end positions should differ for papi horizontal range"""
+    """start and end positions should differ for horizontal range"""
     from app.services.trajectory.helpers import determine_end_position, determine_start_position
 
     config = ResolvedConfig(measurement_density=8)
@@ -330,14 +330,14 @@ def test_determine_start_end_positions():
     start = determine_start_position(
         center,
         config,
-        InspectionMethod.PAPI_HORIZONTAL_RANGE,
+        InspectionMethod.HORIZONTAL_RANGE,
         243.0,
         3.0,
     )
     end = determine_end_position(
         center,
         config,
-        InspectionMethod.PAPI_HORIZONTAL_RANGE,
+        InspectionMethod.HORIZONTAL_RANGE,
         243.0,
         3.0,
     )
@@ -349,7 +349,7 @@ def test_determine_start_end_positions():
 # config override tests
 def test_config_override_sweep_angle():
     """arc path uses overridden sweep angle"""
-    from app.services.trajectory.methods.papi_horizontal_range import calculate_arc_path
+    from app.services.trajectory.methods.horizontal_range import calculate_arc_path
 
     default_config = ResolvedConfig(measurement_density=5)
     wide_config = ResolvedConfig(measurement_density=5, sweep_angle=20.0)
@@ -414,7 +414,7 @@ def test_compute_optimal_density_arc():
 
     config = ResolvedConfig()
 
-    density = compute_optimal_density(InspectionMethod.PAPI_HORIZONTAL_RANGE, [], config)
+    density = compute_optimal_density(InspectionMethod.HORIZONTAL_RANGE, [], config)
 
     assert density is not None
     # 2 * 15 degrees + 1 = 31
@@ -600,7 +600,7 @@ def test_full_pipeline(client):
         "/api/v1/inspection-templates",
         json={
             "name": "E2E Test Template",
-            "methods": ["PAPI_HORIZONTAL_RANGE"],
+            "methods": ["HORIZONTAL_RANGE"],
             "target_agl_ids": [agl_id],
             "default_config": {"measurement_density": 6},
         },
@@ -623,7 +623,7 @@ def test_full_pipeline(client):
 
     client.post(
         f"/api/v1/missions/{mission_id}/inspections",
-        json={"template_id": template["id"], "method": "PAPI_HORIZONTAL_RANGE"},
+        json={"template_id": template["id"], "method": "HORIZONTAL_RANGE"},
     )
 
     response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")

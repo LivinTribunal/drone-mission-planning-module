@@ -53,7 +53,7 @@ SEGMENT_COLORS = [
 
 METHOD_LABELS = {
     "VERTICAL_PROFILE": "Vertical Profile",
-    "PAPI_HORIZONTAL_RANGE": "PAPI Horizontal Range",
+    "HORIZONTAL_RANGE": "Horizontal Range",
     "FLY_OVER": "Fly Over",
     "PARALLEL_SIDE_SWEEP": "Parallel Side Sweep",
     "HOVER_POINT_LOCK": "Hover Point Lock",

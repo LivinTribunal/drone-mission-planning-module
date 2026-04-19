@@ -12,8 +12,8 @@ def test_create_template(client):
     assert response.status_code == 201
     data = response.json()
 
-    assert data["name"] == "PAPI Horizontal Range"
-    assert data["methods"] == ["PAPI_HORIZONTAL_RANGE"]
+    assert data["name"] == "Horizontal Range"
+    assert data["methods"] == ["HORIZONTAL_RANGE"]
     assert data["default_config"]["measurement_density"] == 10
 
 
@@ -33,7 +33,7 @@ def test_get_template(client):
 
     response = client.get(f"/api/v1/inspection-templates/{template_id}")
     assert response.status_code == 200
-    assert response.json()["name"] == "PAPI Horizontal Range"
+    assert response.json()["name"] == "Horizontal Range"
 
 
 def test_update_template(client):

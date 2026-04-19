@@ -163,7 +163,7 @@ export default function TemplatePicker({
   function handleSelect(tpl: InspectionTemplateResponse) {
     const methods = compatMethods(tpl);
     const method =
-      selectedMethod[tpl.id] ?? methods[0] ?? tpl.methods[0] ?? "PAPI_HORIZONTAL_RANGE";
+      selectedMethod[tpl.id] ?? methods[0] ?? tpl.methods[0] ?? "HORIZONTAL_RANGE";
     onSelect(tpl.id, method);
     handleClose();
   }

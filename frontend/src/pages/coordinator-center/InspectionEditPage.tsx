@@ -56,7 +56,7 @@ export default function InspectionEditPage() {
 
   // config edit state
   const [editConfig, setEditConfig] = useState<Omit<InspectionConfigResponse, "id"> | null>(null);
-  const [editMethod, setEditMethod] = useState<InspectionMethod>("PAPI_HORIZONTAL_RANGE");
+  const [editMethod, setEditMethod] = useState<InspectionMethod>("HORIZONTAL_RANGE");
   const [selectedAglId, setSelectedAglId] = useState<string>("");
   const [selectedLhaIds, setSelectedLhaIds] = useState<Set<string>>(new Set());
   const [editName, setEditName] = useState("");
@@ -205,7 +205,7 @@ export default function InspectionEditPage() {
           },
     );
 
-    setEditMethod((tpl.methods[0] ?? "PAPI_HORIZONTAL_RANGE") as InspectionMethod);
+    setEditMethod((tpl.methods[0] ?? "HORIZONTAL_RANGE") as InspectionMethod);
     setEditName(tpl.name);
 
     const aglId = tpl.target_agl_ids[0] ?? "";
@@ -214,7 +214,7 @@ export default function InspectionEditPage() {
     // initialize lha selection from config or all lhas.
     // hover-point-lock templates don't pin specific LHAs - the operator picks
     // one at mission time - so leave the set empty here.
-    const method = (tpl.methods[0] ?? "PAPI_HORIZONTAL_RANGE") as InspectionMethod;
+    const method = (tpl.methods[0] ?? "HORIZONTAL_RANGE") as InspectionMethod;
     if (cfg?.lha_ids && cfg.lha_ids.length > 0) {
       setSelectedLhaIds(new Set(cfg.lha_ids.map(String)));
     } else if (aglId && method !== "HOVER_POINT_LOCK") {
@@ -237,7 +237,7 @@ export default function InspectionEditPage() {
     if (!agl) return;
 
     const cfg = template.default_config;
-    const method = (template.methods[0] ?? "PAPI_HORIZONTAL_RANGE") as InspectionMethod;
+    const method = (template.methods[0] ?? "HORIZONTAL_RANGE") as InspectionMethod;
     if (cfg?.lha_ids && cfg.lha_ids.length > 0) {
       setSelectedLhaIds(new Set(cfg.lha_ids.map(String)));
     } else if (method !== "HOVER_POINT_LOCK") {

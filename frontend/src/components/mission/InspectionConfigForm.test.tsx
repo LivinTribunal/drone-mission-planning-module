@@ -35,7 +35,7 @@ const runwayTemplate = {
 const papiTemplate = {
   ...runwayTemplate,
   id: "t-2",
-  methods: ["VERTICAL_PROFILE", "PAPI_HORIZONTAL_RANGE", "HOVER_POINT_LOCK"],
+  methods: ["VERTICAL_PROFILE", "HORIZONTAL_RANGE", "HOVER_POINT_LOCK"],
   target_agl_ids: ["agl-papi"],
 };
 
@@ -147,9 +147,9 @@ describe("InspectionConfigForm method variants", () => {
     ).toBeInTheDocument();
   });
 
-  it("does not render method-specific sections for PAPI_HORIZONTAL_RANGE", () => {
+  it("does not render method-specific sections for HORIZONTAL_RANGE", () => {
     renderForm({
-      inspection: baseInspection({ method: "PAPI_HORIZONTAL_RANGE" }),
+      inspection: baseInspection({ method: "HORIZONTAL_RANGE" }),
       template: papiTemplate as never,
     });
     expect(screen.queryByTestId("fly-over-fields")).not.toBeInTheDocument();
@@ -224,11 +224,11 @@ describe("InspectionConfigForm method variants", () => {
     }
   });
 
-  it("renders geometry-override fields for VERTICAL_PROFILE and PAPI_HORIZONTAL_RANGE", () => {
-    // papi horizontal range shows horizontal_distance + sweep_angle;
+  it("renders geometry-override fields for VERTICAL_PROFILE and HORIZONTAL_RANGE", () => {
+    // horizontal range shows horizontal_distance + sweep_angle;
     // vertical profile shows horizontal_distance + vertical_profile_height.
-    const cases: Array<{ method: "VERTICAL_PROFILE" | "PAPI_HORIZONTAL_RANGE"; secondField: string }> = [
-      { method: "PAPI_HORIZONTAL_RANGE", secondField: "inspection-sweep-angle" },
+    const cases: Array<{ method: "VERTICAL_PROFILE" | "HORIZONTAL_RANGE"; secondField: string }> = [
+      { method: "HORIZONTAL_RANGE", secondField: "inspection-sweep-angle" },
       { method: "VERTICAL_PROFILE", secondField: "inspection-vertical-profile-height" },
     ];
     for (const { method, secondField } of cases) {
@@ -249,7 +249,7 @@ describe("InspectionConfigForm method variants", () => {
       "VERTICAL_PROFILE",
       "FLY_OVER",
       "PARALLEL_SIDE_SWEEP",
-      "PAPI_HORIZONTAL_RANGE",
+      "HORIZONTAL_RANGE",
     ] as const) {
       const { unmount } = renderForm({
         inspection: baseInspection({ method }),

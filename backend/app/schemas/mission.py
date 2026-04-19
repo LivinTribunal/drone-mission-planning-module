@@ -16,7 +16,7 @@ FlightPlanScopeStr = Literal["FULL", "NO_TAKEOFF_LANDING", "MEASUREMENTS_ONLY"]
 # inspection method values - mirrors InspectionMethod enum
 InspectionMethodStr = Literal[
     "VERTICAL_PROFILE",
-    "PAPI_HORIZONTAL_RANGE",
+    "HORIZONTAL_RANGE",
     "FLY_OVER",
     "PARALLEL_SIDE_SWEEP",
     "HOVER_POINT_LOCK",
@@ -44,6 +44,7 @@ class InspectionConfigOverride(BaseModel):
     """config overrides for an inspection within a mission"""
 
     altitude_offset: float | None = None
+    angle_offset: float | None = Field(default=None, ge=0, le=10)
     measurement_speed_override: float | None = Field(default=None, gt=0)
     measurement_density: int | None = Field(default=None, ge=1)
     custom_tolerances: dict[str, float] | None = None
@@ -100,6 +101,7 @@ class InspectionConfigResponse(BaseModel):
     """inspection configuration values"""
 
     altitude_offset: float | None = None
+    angle_offset: float | None = None
     measurement_speed_override: float | None = None
     measurement_density: int | None = None
     custom_tolerances: dict[str, float] | None = None
