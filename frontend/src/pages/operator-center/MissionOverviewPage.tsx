@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { useComputation } from "@/contexts/ComputationContext";
+import { useOnComputationCompleted } from "@/hooks/useOnComputationCompleted";
 import { getMission, getFlightPlan } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { MissionDetailResponse } from "@/types/mission";
@@ -47,29 +48,20 @@ export default function MissionOverviewPage() {
     return Object.fromEntries(sorted.map((insp, i) => [insp.id, i + 1]));
   }, [mission]);
 
-  // consume computation result when trajectory finishes on any page
-  const prevComputationStatus = useRef(computation.status);
-  useEffect(() => {
-    if (
-      prevComputationStatus.current === "COMPUTING" &&
-      computation.status === "COMPLETED" &&
-      computation.lastResult
-    ) {
-      setFlightPlan(computation.lastResult);
-      const violations = computation.lastResult.validation_result?.violations ?? [];
-      setWarnings(violations.length > 0 ? violations : null);
+  useOnComputationCompleted((result) => {
+    setFlightPlan(result);
+    const violations = result.validation_result?.violations ?? [];
+    setWarnings(violations.length > 0 ? violations : null);
 
-      if (id) {
-        getMission(id)
-          .then((fresh) => {
-            setMission(fresh);
-            refreshMissions();
-          })
-          .catch((err) => console.warn("mission refresh failed", err));
-      }
+    if (id) {
+      getMission(id)
+        .then((fresh) => {
+          setMission(fresh);
+          refreshMissions();
+        })
+        .catch((err) => console.warn("mission refresh failed", err));
     }
-    prevComputationStatus.current = computation.status;
-  }, [computation.status, computation.lastResult, id, refreshMissions]);
+  });
 
   // wire up disabled save button
   useEffect(() => {

@@ -12,6 +12,7 @@ import { isAxiosError } from "@/api/client";
 import { Loader2 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { useComputation } from "@/contexts/ComputationContext";
+import { useOnComputationCompleted } from "@/hooks/useOnComputationCompleted";
 import {
   getMission,
   updateMission,
@@ -528,26 +529,17 @@ export default function MissionConfigPage() {
     });
   }
 
-  // consume computation result when trajectory finishes on any page
-  const prevComputationStatus = useRef(computation.status);
-  useEffect(() => {
-    if (
-      prevComputationStatus.current === "COMPUTING" &&
-      computation.status === "COMPLETED" &&
-      computation.lastResult
-    ) {
-      setFlightPlan(computation.lastResult);
-      const violations = computation.lastResult.validation_result?.violations ?? [];
-      setWarnings(violations.length > 0 ? violations : null);
+  useOnComputationCompleted((result) => {
+    setFlightPlan(result);
+    const violations = result.validation_result?.violations ?? [];
+    setWarnings(violations.length > 0 ? violations : null);
 
-      if (id) {
-        getMission(id)
-          .then((fresh) => updateMissionState(fresh))
-          .catch((err) => console.warn("mission refresh failed", err));
-      }
+    if (id) {
+      getMission(id)
+        .then((fresh) => updateMissionState(fresh))
+        .catch((err) => console.warn("mission refresh failed", err));
     }
-    prevComputationStatus.current = computation.status;
-  }, [computation.status, computation.lastResult, id, updateMissionState]);
+  });
 
   function handleEditWaypoints() {
     if (isDirty) {

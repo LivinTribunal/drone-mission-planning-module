@@ -74,7 +74,7 @@ describe("ComputationContext", () => {
       expect(result.current.status).toBe("COMPLETED");
     });
 
-    expect(mockGenerateTrajectory).toHaveBeenCalledWith("m-1");
+    expect(mockGenerateTrajectory).toHaveBeenCalledWith("m-1", expect.any(AbortSignal));
     expect(result.current.lastResult).toEqual(mockFlightPlan);
     expect(result.current.isComputing).toBe(false);
     expect(mockRefreshMissions).toHaveBeenCalled();

@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,9 +20,6 @@ from app.services.trajectory.orchestrator import generate_trajectory
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
-
-# staleness threshold - if computing for longer than this, consider it timed out
-_COMPUTATION_TIMEOUT_MINUTES = 5
 
 
 @router.post(
@@ -117,15 +113,8 @@ def get_computation_status(
     except NotFoundError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
-    # staleness detection - if computing for too long, persist failure and return
-    if mission.computation_status == "COMPUTING" and mission.computation_started_at is not None:
-        started = mission.computation_started_at
-        if started.tzinfo is None:
-            started = started.replace(tzinfo=timezone.utc)
-        elapsed = (datetime.now(timezone.utc) - started).total_seconds()
-        if elapsed > _COMPUTATION_TIMEOUT_MINUTES * 60:
-            mission.mark_computation_failed("computation timed out")
-            db.commit()
+    if mission.resolve_staleness():
+        db.commit()
 
     return ComputationStatusResponse(
         computation_status=mission.computation_status,

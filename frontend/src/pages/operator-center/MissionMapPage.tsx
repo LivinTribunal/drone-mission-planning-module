@@ -11,6 +11,7 @@ import { Loader2 } from "lucide-react";
 import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
 import { useComputation } from "@/contexts/ComputationContext";
+import { useOnComputationCompleted } from "@/hooks/useOnComputationCompleted";
 import {
   getMission,
   updateMission,
@@ -278,30 +279,21 @@ export default function MissionMapPage() {
     };
   }, [setSaveContext, handleSave, isDirty, saving, lastSaved]);
 
-  // consume computation result when trajectory finishes on any page
-  const prevComputationStatus = useRef(computation.status);
-  useEffect(() => {
-    if (
-      prevComputationStatus.current === "COMPUTING" &&
-      computation.status === "COMPLETED" &&
-      computation.lastResult
-    ) {
-      setFlightPlan(computation.lastResult);
-      setDirtyWaypoints({});
-      clearHistory();
+  useOnComputationCompleted((result) => {
+    setFlightPlan(result);
+    setDirtyWaypoints({});
+    clearHistory();
 
-      if (id) {
-        getMission(id)
-          .then((fresh) => {
-            setMission(fresh);
-            updateMissionFromPage(fresh);
-            refreshMissions();
-          })
-          .catch((err) => console.warn("mission refresh failed", err));
-      }
+    if (id) {
+      getMission(id)
+        .then((fresh) => {
+          setMission(fresh);
+          updateMissionFromPage(fresh);
+          refreshMissions();
+        })
+        .catch((err) => console.warn("mission refresh failed", err));
     }
-    prevComputationStatus.current = computation.status;
-  }, [computation.status, computation.lastResult, id, clearHistory, refreshMissions, updateMissionFromPage]);
+  });
 
   // compute button state
   const computeLabel = useMemo(() => {

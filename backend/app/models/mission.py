@@ -233,6 +233,25 @@ class Mission(Base):
         self.computation_error = error
         self.computation_started_at = None
 
+    def resolve_staleness(self, timeout_minutes: int = 5) -> bool:
+        """check if a COMPUTING state is stale and mark as failed if so.
+
+        returns true if status was stale and changed to FAILED.
+        """
+        if self.computation_status != ComputationStatus.COMPUTING:
+            return False
+        if self.computation_started_at is None:
+            return False
+
+        started = self.computation_started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+        if elapsed > timeout_minutes * 60:
+            self.mark_computation_failed("computation timed out")
+            return True
+        return False
+
     def reset_computation_status(self):
         """reset computation status to IDLE."""
         self.computation_status = ComputationStatus.IDLE

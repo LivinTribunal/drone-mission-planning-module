@@ -110,10 +110,6 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
         lastResult: null,
       });
 
-      // abort any previous in-flight request
-      if (abortRef.current) {
-        abortRef.current.abort();
-      }
       const controller = new AbortController();
       abortRef.current = controller;
 
