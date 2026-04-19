@@ -13,6 +13,7 @@ from app.api.dependencies import (
     get_user_airport_ids,
 )
 from app.core.dependencies import get_db
+from app.core.enums import AuditAction
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.export import ExportRequest
 from app.schemas.mission import (
@@ -89,7 +90,7 @@ def create_mission(
     log_audit(
         db,
         current_user,
-        "CREATE",
+        AuditAction.CREATE,
         entity_type="Mission",
         entity_id=mission.id,
         entity_name=mission.name,
@@ -123,7 +124,7 @@ def delete_mission(
     log_audit(
         db,
         current_user,
-        "DELETE",
+        AuditAction.DELETE,
         entity_type="Mission",
         entity_id=mission_id,
         entity_name=mission.name,
@@ -159,7 +160,7 @@ def validate_mission(
     log_audit(
         db,
         current_user,
-        "STATUS_CHANGE",
+        AuditAction.STATUS_CHANGE,
         entity_type="Mission",
         entity_id=mission_id,
         details={"to": "VALIDATED"},
@@ -183,7 +184,7 @@ def export_mission(
     log_audit(
         db,
         current_user,
-        "EXPORT",
+        AuditAction.EXPORT,
         entity_type="Mission",
         entity_id=mission_id,
         details={"formats": body.formats},
@@ -245,7 +246,7 @@ def complete_mission(
     log_audit(
         db,
         current_user,
-        "STATUS_CHANGE",
+        AuditAction.STATUS_CHANGE,
         entity_type="Mission",
         entity_id=mission_id,
         details={"to": "COMPLETED"},
@@ -268,7 +269,7 @@ def cancel_mission(
     log_audit(
         db,
         current_user,
-        "STATUS_CHANGE",
+        AuditAction.STATUS_CHANGE,
         entity_type="Mission",
         entity_id=mission_id,
         details={"to": "CANCELLED"},

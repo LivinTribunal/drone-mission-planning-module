@@ -10,13 +10,14 @@ if TYPE_CHECKING:
 
     from app.models.user import User
 
+from app.core.enums import AuditAction
 from app.models.audit_log import AuditLog
 
 
 def log_audit(
     db: Session,
     user: User | None,
-    action: str,
+    action: AuditAction,
     entity_type: str | None = None,
     entity_id: UUID | None = None,
     entity_name: str | None = None,

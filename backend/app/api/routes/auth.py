@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import CurrentUser, OptionalUser
 from app.core.config import settings
 from app.core.dependencies import get_db
+from app.core.enums import AuditAction
 from app.core.exceptions import DomainError, NotFoundError
 from app.schemas.auth import (
     LoginRequest,
@@ -60,7 +61,7 @@ def login(body: LoginRequest, request: Request, response: Response, db: Session 
     log_audit(
         db,
         user,
-        "LOGIN",
+        AuditAction.LOGIN,
         entity_type="User",
         entity_id=user.id,
         entity_name=user.email,
@@ -128,7 +129,7 @@ def logout(
         log_audit(
             db,
             current_user,
-            "LOGOUT",
+            AuditAction.LOGOUT,
             entity_type="User",
             entity_id=current_user.id,
             entity_name=current_user.email,

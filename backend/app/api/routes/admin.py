@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import SuperAdminUser
 from app.core.dependencies import get_db
+from app.core.enums import AuditAction
 from app.schemas.admin import (
     AirportAssignmentUpdate,
     AuditLogResponse,
@@ -87,7 +88,7 @@ def invite_user(
     log_audit(
         db,
         current_user,
-        "INVITE_USER",
+        AuditAction.INVITE_USER,
         entity_type="User",
         entity_id=user.id,
         entity_name=user.email,
@@ -115,7 +116,7 @@ def update_user(
     log_audit(
         db,
         current_user,
-        "UPDATE",
+        AuditAction.UPDATE,
         entity_type="User",
         entity_id=user.id,
         entity_name=user.email,
@@ -139,7 +140,7 @@ def deactivate_user(
     log_audit(
         db,
         current_user,
-        "DEACTIVATE_USER",
+        AuditAction.DEACTIVATE_USER,
         entity_type="User",
         entity_id=user.id,
         entity_name=user.email,
@@ -163,7 +164,7 @@ def activate_user(
     log_audit(
         db,
         current_user,
-        "UPDATE",
+        AuditAction.UPDATE,
         entity_type="User",
         entity_id=user.id,
         entity_name=user.email,
@@ -189,7 +190,7 @@ def delete_user(
     log_audit(
         db,
         current_user,
-        "DELETE",
+        AuditAction.DELETE,
         entity_type="User",
         entity_id=user_id,
         entity_name=email,
@@ -213,7 +214,7 @@ def reset_password(
     log_audit(
         db,
         current_user,
-        "UPDATE",
+        AuditAction.UPDATE,
         entity_type="User",
         entity_id=user_id,
         details={"reset_password": True},
@@ -238,7 +239,7 @@ def update_airport_assignments(
     log_audit(
         db,
         current_user,
-        "ASSIGN_AIRPORT",
+        AuditAction.ASSIGN_AIRPORT,
         entity_type="User",
         entity_id=user.id,
         entity_name=user.email,
@@ -301,7 +302,7 @@ def update_system_settings(
     log_audit(
         db,
         current_user,
-        "SYSTEM_SETTING_CHANGE",
+        AuditAction.SYSTEM_SETTING_CHANGE,
         entity_type="SystemSettings",
         details=safe_details,
         ip_address=request.client.host if request.client else None,

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import CoordinatorUser, OperatorUser
 from app.core.dependencies import get_db
+from app.core.enums import AuditAction
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.inspection_template import (
     BulkCreateTemplatesRequest,
@@ -62,7 +63,7 @@ def create_template(
     log_audit(
         db,
         current_user,
-        "CREATE",
+        AuditAction.CREATE,
         entity_type="InspectionTemplate",
         entity_id=template.id,
         entity_name=template.name,
@@ -85,7 +86,7 @@ def update_template(
     log_audit(
         db,
         current_user,
-        "UPDATE",
+        AuditAction.UPDATE,
         entity_type="InspectionTemplate",
         entity_id=template_id,
         entity_name=template.name,
@@ -107,7 +108,7 @@ def delete_template(
     log_audit(
         db,
         current_user,
-        "DELETE",
+        AuditAction.DELETE,
         entity_type="InspectionTemplate",
         entity_id=template_id,
         entity_name=template.name,

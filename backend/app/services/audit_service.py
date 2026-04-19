@@ -7,7 +7,10 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import DomainError
 from app.models.audit_log import AuditLog
+
+EXPORT_LIMIT = 100_000
 
 SORTABLE_COLUMNS = {
     "timestamp": AuditLog.timestamp,
@@ -71,6 +74,12 @@ def export_audit_csv(
         query = query.filter(AuditLog.timestamp >= date_from)
     if date_to:
         query = query.filter(AuditLog.timestamp <= date_to)
+
+    row_count = query.count()
+    if row_count > EXPORT_LIMIT:
+        raise DomainError(
+            f"export limited to {EXPORT_LIMIT} rows, got {row_count} - narrow the date range"
+        )
 
     entries = query.order_by(AuditLog.timestamp.desc()).all()
 

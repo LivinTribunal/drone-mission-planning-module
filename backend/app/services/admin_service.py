@@ -29,20 +29,27 @@ def list_users(
     offset: int = 0,
 ) -> tuple[list[User], int]:
     """list users with optional filters."""
-    query = db.query(User).options(joinedload(User.airports))
+    base = db.query(User)
 
     if role:
-        query = query.filter(User.role == role)
+        base = base.filter(User.role == role)
     if is_active is not None:
-        query = query.filter(User.is_active == is_active)
+        base = base.filter(User.is_active == is_active)
     if airport_id:
-        query = query.filter(User.airports.any(Airport.id == airport_id))
+        base = base.filter(User.airports.any(Airport.id == airport_id))
     if search:
         pattern = f"%{search}%"
-        query = query.filter((User.name.ilike(pattern)) | (User.email.ilike(pattern)))
+        base = base.filter((User.name.ilike(pattern)) | (User.email.ilike(pattern)))
 
-    total = query.count()
-    users = query.order_by(User.created_at.desc()).offset(offset).limit(limit).all()
+    # count on base query without joinedload to avoid row inflation
+    total = base.count()
+    users = (
+        base.options(joinedload(User.airports))
+        .order_by(User.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
     return users, total
 
 

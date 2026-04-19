@@ -17,6 +17,7 @@ from app.api.dependencies import (
 )
 from app.core.config import TERRAIN_DIR
 from app.core.dependencies import get_db
+from app.core.enums import AuditAction
 from app.core.exceptions import DomainError, NotFoundError
 from app.schemas.airport import (
     AirportCreate,
@@ -114,7 +115,7 @@ def create_airport(
     log_audit(
         db,
         current_user,
-        "CREATE",
+        AuditAction.CREATE,
         entity_type="Airport",
         entity_id=airport.id,
         entity_name=airport.name,
@@ -138,7 +139,7 @@ def update_airport(
     log_audit(
         db,
         current_user,
-        "UPDATE",
+        AuditAction.UPDATE,
         entity_type="Airport",
         entity_id=airport_id,
         entity_name=airport.name,
@@ -161,7 +162,7 @@ def delete_airport(
     log_audit(
         db,
         current_user,
-        "DELETE",
+        AuditAction.DELETE,
         entity_type="Airport",
         entity_id=airport_id,
         entity_name=airport.name,

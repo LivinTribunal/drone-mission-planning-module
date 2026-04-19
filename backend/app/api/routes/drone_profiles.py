@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import CoordinatorUser, OperatorUser
 from app.core.dependencies import get_db
+from app.core.enums import AuditAction
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.drone_profile import (
     DroneProfileCreate,
@@ -55,7 +56,7 @@ def create_drone(
     log_audit(
         db,
         current_user,
-        "CREATE",
+        AuditAction.CREATE,
         entity_type="DroneProfile",
         entity_id=drone.id,
         entity_name=drone.name,
@@ -80,7 +81,7 @@ def update_drone(
     log_audit(
         db,
         current_user,
-        "UPDATE",
+        AuditAction.UPDATE,
         entity_type="DroneProfile",
         entity_id=drone_id,
         entity_name=drone.name,
@@ -104,7 +105,7 @@ def delete_drone(
     log_audit(
         db,
         current_user,
-        "DELETE",
+        AuditAction.DELETE,
         entity_type="DroneProfile",
         entity_id=drone_id,
         entity_name=drone.name,
