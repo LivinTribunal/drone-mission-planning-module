@@ -150,7 +150,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (
       selectedMission?.computation_status === "COMPUTING" &&
-      state.status !== "COMPUTING" &&
+      state.status === "IDLE" &&
       !computingRef.current
     ) {
       setState({
@@ -193,12 +193,12 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
               error: null,
             }));
           }
-        } catch {
+        } catch (err) {
           clearPollTimer();
           setState((prev) => ({
             ...prev,
             status: "FAILED",
-            error: "failed to check computation status",
+            error: err instanceof Error ? err.message : String(err),
           }));
           scheduleDismiss(AUTO_DISMISS_FAILURE_MS);
         }

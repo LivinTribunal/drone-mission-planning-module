@@ -65,7 +65,7 @@ export default function MissionOverviewPage() {
             setMission(fresh);
             refreshMissions();
           })
-          .catch(() => {});
+          .catch((err) => console.warn("mission refresh failed", err));
       }
     }
     prevComputationStatus.current = computation.status;

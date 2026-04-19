@@ -115,6 +115,9 @@ def get_computation_status(
             started = started.replace(tzinfo=timezone.utc)
         elapsed = (datetime.now(timezone.utc) - started).total_seconds()
         if elapsed > _COMPUTATION_TIMEOUT_MINUTES * 60:
+            mission.mark_computation_failed("computation timed out")
+            db.commit()
+
             return ComputationStatusResponse(
                 computation_status="FAILED",
                 computation_error="computation timed out",

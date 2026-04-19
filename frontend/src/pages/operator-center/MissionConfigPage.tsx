@@ -544,7 +544,7 @@ export default function MissionConfigPage() {
       if (id) {
         getMission(id)
           .then((fresh) => updateMissionState(fresh))
-          .catch(() => {});
+          .catch((err) => console.warn("mission refresh failed", err));
       }
     }
     prevComputationStatus.current = computation.status;
