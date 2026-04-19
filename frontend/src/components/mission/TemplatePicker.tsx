@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Modal from "@/components/common/Modal";
 import type { AGLResponse, AglType, SurfaceResponse } from "@/types/airport";
@@ -6,6 +6,8 @@ import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { InspectionMethod } from "@/types/enums";
 import { compatibleMethods } from "@/utils/methodAglCompatibility";
 import { methodBadgeStyle } from "@/utils/inspectionMethodBadge";
+
+const AGL_SESSION_KEY = "tarmacview_lastAglSystem";
 
 interface TemplatePickerProps {
   isOpen: boolean;
@@ -70,7 +72,9 @@ function sortByRunway(
     const kb = sortKey(b);
     if (ka === "" && kb !== "") return 1;
     if (ka !== "" && kb === "") return -1;
-    return compareRunway(ka, kb);
+    const cmp = compareRunway(ka, kb);
+    if (cmp !== 0) return cmp;
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
   });
   return copy;
 }
@@ -89,6 +93,22 @@ export default function TemplatePicker({
     Record<string, InspectionMethod>
   >({});
   const [selectedAgl, setSelectedAgl] = useState<AglType | null>(null);
+
+  // restore last-selected AGL system when the picker opens
+  useEffect(() => {
+    if (!isOpen) return;
+    const cached = sessionStorage.getItem(AGL_SESSION_KEY);
+    if (cached === "PAPI" || cached === "RUNWAY_EDGE_LIGHTS") {
+      setSelectedAgl(cached);
+    }
+  }, [isOpen]);
+
+  // persist AGL selection for next open
+  useEffect(() => {
+    if (selectedAgl) {
+      sessionStorage.setItem(AGL_SESSION_KEY, selectedAgl);
+    }
+  }, [selectedAgl]);
 
   // group templates by AGL type if we have airport AGLs to resolve against.
   // hover-point-lock templates are AGL-agnostic and always land in the "special" bucket.
@@ -119,12 +139,14 @@ export default function TemplatePicker({
     return { byType, special };
   }, [templates, agls, surfaces]);
 
-  // flat fallback list - also sorted by runway when surfaces are available
+  // flat fallback list - sorted by runway when surfaces+agls available, by name otherwise
   const flatTemplates = useMemo(() => {
-    if (!surfaces || surfaces.length === 0 || !agls || agls.length === 0) {
-      return templates;
+    if (surfaces && surfaces.length > 0 && agls && agls.length > 0) {
+      return sortByRunway(templates, buildSortKey(agls, surfaces));
     }
-    return sortByRunway(templates, buildSortKey(agls, surfaces));
+    const copy = [...templates];
+    copy.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+    return copy;
   }, [templates, agls, surfaces]);
 
   function compatMethods(tpl: InspectionTemplateResponse): InspectionMethod[] {
@@ -135,7 +157,6 @@ export default function TemplatePicker({
   }
 
   function handleClose() {
-    setSelectedAgl(null);
     onClose();
   }
 

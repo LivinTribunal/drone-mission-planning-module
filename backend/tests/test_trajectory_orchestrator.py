@@ -580,6 +580,53 @@ def test_validated_mission_auto_regresses_on_regeneration(client):
     assert mission["status"] == "PLANNED"
 
 
+def test_exported_mission_allows_regeneration(client, db_engine):
+    """generating trajectory on EXPORTED mission auto-regresses and produces PLANNED"""
+    from sqlalchemy.orm import Session
+
+    from app.models.mission import Mission
+
+    mission_id, _ = _create_mission_with_inspection(client, "EXRG")
+
+    # generate -> PLANNED
+    client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+
+    # validate -> VALIDATED
+    client.post(f"/api/v1/missions/{mission_id}/validate")
+
+    # transition to EXPORTED directly via model
+    with Session(db_engine) as db:
+        mission = db.query(Mission).filter(Mission.id == mission_id).first()
+        mission.transition_to("EXPORTED")
+        db.commit()
+
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["status"] == "EXPORTED"
+
+    # regenerate -> auto-regresses to PLANNED
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    mission = client.get(f"/api/v1/missions/{mission_id}").json()
+    assert mission["status"] == "PLANNED"
+
+    # waypoints should be present
+    fp = response.json()["flight_plan"]
+    assert len(fp["waypoints"]) > 0
+
+
+def test_generate_response_includes_mission_status(client):
+    """trajectory response includes mission_status field"""
+    mission_id, _ = _create_mission_with_inspection(client, "MSST")
+
+    response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "mission_status" in data
+    assert data["mission_status"] == "PLANNED"
+
+
 def test_buffer_distance_override_respected_in_trajectory(client):
     """mission with default_buffer_distance generates trajectory using the override."""
     mission_id, _ = _create_mission_with_inspection(
@@ -805,14 +852,17 @@ def _setup_airport_template_for_method(
         ).json()
         lha_ids.append(lha["id"])
 
+    template_payload: dict = {
+        "name": f"Template {icao_code}",
+        "methods": [method],
+        "default_config": {"measurement_density": 4},
+    }
+    if method != "HOVER_POINT_LOCK":
+        template_payload["target_agl_ids"] = [agl_id]
+
     template = client.post(
         "/api/v1/inspection-templates",
-        json={
-            "name": f"Template {icao_code}",
-            "methods": [method],
-            "target_agl_ids": [agl_id],
-            "default_config": {"measurement_density": 4},
-        },
+        json=template_payload,
     ).json()
 
     return airport_id, agl_id, template["id"], lha_ids
@@ -1090,7 +1140,6 @@ def test_hover_point_lock_missing_selected_lha_raises(client, db_engine):
         json={
             "name": "Hover Template",
             "methods": ["HOVER_POINT_LOCK"],
-            "target_agl_ids": [agl_id],
             "default_config": {"measurement_density": 4},
         },
     ).json()

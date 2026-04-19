@@ -6,12 +6,18 @@ import NavBar from "./NavBar";
 import type { NavItem } from "./NavBar";
 
 export default function CoordinatorLayout() {
-  /** coordinator center layout - clears operator airport on mount, syncs selector to routes. */
+  /** coordinator layout - clears airport on mount, navigates on airport selector change. */
   const { t } = useTranslation();
   const { selectedAirport, clearAirport } = useAirport();
   const navigate = useNavigate();
   const location = useLocation();
   const mountedRef = useRef(false);
+  const prevAirportIdRef = useRef<string | undefined>(selectedAirport?.id);
+  const pathnameRef = useRef(location.pathname);
+
+  useEffect(() => {
+    pathnameRef.current = location.pathname;
+  }, [location.pathname]);
 
   // clear operator's cached airport on first mount
   useEffect(() => {
@@ -22,15 +28,32 @@ export default function CoordinatorLayout() {
   // navigate when airport selection changes (only after mount)
   useEffect(() => {
     if (!mountedRef.current) return;
-    const onAirportsSection = location.pathname.startsWith("/coordinator-center/airports");
-    if (!onAirportsSection) return;
 
-    if (selectedAirport && location.pathname === "/coordinator-center/airports") {
-      navigate(`/coordinator-center/airports/${selectedAirport.id}`);
-    } else if (!selectedAirport && location.pathname !== "/coordinator-center/airports") {
-      navigate("/coordinator-center/airports");
+    const prevId = prevAirportIdRef.current;
+    const newId = selectedAirport?.id;
+    prevAirportIdRef.current = newId;
+
+    // skip if airport didn't actually change
+    if (prevId === newId) return;
+
+    const path = pathnameRef.current;
+
+    // airports section
+    if (path.startsWith("/coordinator-center/airports")) {
+      if (newId) {
+        navigate(`/coordinator-center/airports/${newId}`);
+      } else {
+        navigate("/coordinator-center/airports");
+      }
+      return;
     }
-  }, [selectedAirport, location.pathname, navigate]);
+
+    // inspections section - redirect detail pages to list on airport change
+    if (path.startsWith("/coordinator-center/inspections/")) {
+      navigate("/coordinator-center/inspections");
+      return;
+    }
+  }, [selectedAirport?.id, navigate]);
 
   const coordinatorItems: NavItem[] = [
     { label: t("nav.missionCenter"), to: "/operator-center/dashboard" },

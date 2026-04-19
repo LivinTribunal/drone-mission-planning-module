@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Loader2, RotateCcw, MapPin, AlertTriangle } from "lucide-react";
 import Input from "@/components/common/Input";
-import type { SurfaceResponse, AGLResponse, ObstacleResponse } from "@/types/airport";
+import type { SurfaceResponse, AGLResponse, ObstacleResponse, SafetyZoneResponse } from "@/types/airport";
 import { formatAglDisplayName } from "@/utils/agl";
 
 export type PendingGeometryType = "polygon" | "circle" | "point";
@@ -36,6 +36,7 @@ interface CreationFormProps {
   prefilledHeading?: number;
   prefilledArea?: number;
   obstacles?: ObstacleResponse[];
+  safetyZones?: SafetyZoneResponse[];
   airportElevation?: number;
   prefilledEntityType?: EntityType;
   pickingTouchpoint?: boolean;
@@ -76,6 +77,14 @@ const SAFETY_ZONE_SUBTYPES: { value: EntityType; labelKey: string }[] = [
   },
 ];
 
+const SAFETY_ZONE_TYPE_MAP: Record<string, string> = {
+  safety_zone_ctr: "CTR",
+  safety_zone_restricted: "RESTRICTED",
+  safety_zone_prohibited: "PROHIBITED",
+  safety_zone_no_fly: "TEMPORARY_NO_FLY",
+  safety_zone_airport_boundary: "AIRPORT_BOUNDARY",
+};
+
 const OBSTACLE_SUBTYPES: { value: string; labelKey: string }[] = [
   { value: "BUILDING", labelKey: "coordinator.detail.obstacleTypes.building" },
   { value: "ANTENNA", labelKey: "coordinator.detail.obstacleTypes.antenna" },
@@ -96,6 +105,7 @@ export default function CreationForm({
   prefilledHeading,
   prefilledArea,
   obstacles = [],
+  safetyZones = [],
   airportElevation = 0,
   prefilledEntityType,
   pickingTouchpoint = false,
@@ -190,6 +200,15 @@ export default function CreationForm({
     }
   }, [pickedTouchpointCoord, onPickedTouchpointConsumed]);
 
+  // auto-prefill surface identifier based on subtype + count
+  useEffect(() => {
+    if (category !== "surface" || !entityType) return;
+    const surfaceType = entityType === "runway" ? "RUNWAY" : "TAXIWAY";
+    const count = surfaces.filter((s) => s.surface_type === surfaceType).length;
+    const prefix = entityType === "runway" ? "RWY" : "TWY";
+    setName(`${prefix} ${count + 1}`);
+  }, [entityType, category]); // surfaces intentionally excluded - only prefill on type change
+
   // auto-prefill obstacle name based on type + count
   useEffect(() => {
     if (category !== "obstacle") return;
@@ -197,7 +216,7 @@ export default function CreationForm({
     const sub = OBSTACLE_SUBTYPES.find((s) => s.value === obstacleType);
     const label = sub ? t(sub.labelKey) : obstacleType;
     setName(`${label} ${count + 1}`);
-  }, [obstacleType, category, obstacles, t]);
+  }, [obstacleType, category, t]); // obstacles intentionally excluded - only prefill on type change
 
   // auto-prefill AGL name based on connected surface and type
   useEffect(() => {
@@ -355,6 +374,24 @@ export default function CreationForm({
     }
   }, [isAirportBoundary, name, t]);
 
+  // auto-prefill safety zone name based on zone type + count
+  useEffect(() => {
+    if (!isSafetyZone || isAirportBoundary) return;
+    const zoneType = SAFETY_ZONE_TYPE_MAP[effectiveEntityType] ?? effectiveEntityType;
+    const sub = SAFETY_ZONE_SUBTYPES.find((s) => s.value === effectiveEntityType);
+    const label = sub ? t(sub.labelKey) : zoneType;
+    const count = safetyZones.filter((z) => z.type === zoneType).length;
+    setName(`${label} ${count + 1}`);
+  }, [effectiveEntityType, t, isSafetyZone, isAirportBoundary]); // safetyZones intentionally excluded - only prefill on type change
+
+  // auto-prefill safety zone altitude floor from airport elevation
+  useEffect(() => {
+    if (!isSafetyZone || isAirportBoundary) return;
+    if (airportElevation > 0) {
+      setAltFloor(String(Math.round(airportElevation)));
+    }
+  }, [isSafetyZone, isAirportBoundary, airportElevation]);
+
   function namePlaceholder(): string {
     /** get the right placeholder for the name field. */
     if (effectiveEntityType === "runway") return t("coordinator.creation.namePlaceholderRunway");
@@ -367,7 +404,7 @@ export default function CreationForm({
   }
 
   const safetyZoneTypeLabel = isSafetyZone
-    ? effectiveEntityType.replace("safety_zone_", "").toUpperCase().replace("NO_FLY", "TEMPORARY_NO_FLY")
+    ? (SAFETY_ZONE_TYPE_MAP[effectiveEntityType] ?? effectiveEntityType)
     : "";
 
   const hasValidCoords = !isNaN(parseFloat(manualLat)) && !isNaN(parseFloat(manualLon));
@@ -464,7 +501,7 @@ export default function CreationForm({
             {!isAirportBoundary && (
               <Input
                 id="create-name"
-                label={t("coordinator.detail.obstacleName")}
+                label={category === "surface" ? t("coordinator.detail.surfaceIdentifier") : t("coordinator.detail.obstacleName")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={namePlaceholder()}

@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
-import { getMission, getFlightPlan, generateTrajectory } from "@/api/missions";
+import { getMission, getFlightPlan, generateAndFetchTrajectory } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -59,10 +59,10 @@ export default function MissionOverviewPage() {
     if (!id || !mission) return;
     setComputing(true);
     try {
-      const result = await generateTrajectory(id);
-      setFlightPlan(result.flight_plan);
-      const fresh = await getMission(id);
-      setMission(fresh);
+      const { flightPlan, missionStatus } = await generateAndFetchTrajectory(id);
+      setFlightPlan(flightPlan);
+
+      setMission({ ...mission, status: missionStatus });
       refreshMissions();
       showNotification(t("map.changesSaved"));
     } catch (err) {
@@ -239,6 +239,14 @@ export default function MissionOverviewPage() {
               showTerrainToggle={false}
               showWaypointList={false}
               showPoiInfo={false}
+              leftPanelChildren={
+                selectedFeature ? (
+                  <PoiInfoPanel
+                    feature={selectedFeature}
+                    onClose={() => setSelectedFeature(null)}
+                  />
+                ) : undefined
+              }
               simplifiedTrajectory
               is3D={is3D}
               onToggle3D={setIs3D}
@@ -265,16 +273,8 @@ export default function MissionOverviewPage() {
               highlightSeverity={selectedWarning?.severity}
               selectedWarning={selectedWarning}
               onWarningClose={() => setSelectedWarning(null)}
-            >
-              {selectedFeature && (
-                <div className="absolute top-3 right-3 z-10 w-56">
-                  <PoiInfoPanel
-                    feature={selectedFeature}
-                    onClose={() => setSelectedFeature(null)}
-                  />
-                </div>
-              )}
-            </AirportMap>
+            />
+
 
             {/* bottom bar */}
             <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">

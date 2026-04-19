@@ -161,9 +161,9 @@ def test_convert_altitude_limit_invalid_value_returns_none():
 
 # parse helpers
 def test_parse_runway_skips_incomplete():
-    """missing dimension or threshold returns None."""
+    """missing dimension or threshold returns empty list."""
     rw = {"designator": "09", "dimension": {}, "trueHeading": 90.0}
-    assert openaip_service._parse_runway(rw, 0.0) is None
+    assert openaip_service._parse_runway(rw, 0.0) == []
 
 
 def test_parse_runway_builds_geometry():
@@ -178,13 +178,85 @@ def test_parse_runway_builds_geometry():
         "thresholdLocation": {"type": "Point", "coordinates": [14.0, 50.0]},
     }
 
-    suggestion = openaip_service._parse_runway(rw, 100.0)
-    assert suggestion is not None
+    results = openaip_service._parse_runway(rw, 100.0)
+    assert len(results) == 1
+    suggestion = results[0]
     assert suggestion.identifier == "09"
     assert suggestion.length == 2000.0
     assert suggestion.width == 45.0
     assert suggestion.threshold_position.coordinates[2] == 100.0
     assert len(suggestion.boundary.coordinates[0]) == 5
+
+
+def test_parse_runway_dual_thresholds():
+    """runway with runs array and both threshold locations uses direct geometry."""
+    rw = {
+        "dimension": {"width": {"value": 45, "unit": 0}},
+        "runs": [
+            {
+                "designator": "04",
+                "trueHeading": 40.0,
+                "dimension": {"length": {"value": 2900, "unit": 0}},
+                "thresholdLocation": {
+                    "type": "Point",
+                    "coordinates": [17.19, 48.16],
+                },
+            },
+            {
+                "designator": "22",
+                "trueHeading": 220.0,
+                "dimension": {"length": {"value": 2900, "unit": 0}},
+                "thresholdLocation": {
+                    "type": "Point",
+                    "coordinates": [17.22, 48.18],
+                },
+            },
+        ],
+    }
+
+    results = openaip_service._parse_runway(rw, 133.0)
+    assert len(results) == 1
+    suggestion = results[0]
+    assert "04" in suggestion.identifier
+    assert "22" in suggestion.identifier
+    # length derived from threshold distance - should be close to haversine
+    assert suggestion.length > 2000.0
+    # heading derived from bearing between thresholds
+    assert 20.0 < suggestion.heading < 60.0
+    assert suggestion.width == 45.0
+
+
+def test_parse_runway_dual_thresholds_one_missing_falls_back():
+    """when only one run has threshold, falls back to single-run parsing."""
+    rw = {
+        "dimension": {"width": {"value": 45, "unit": 0}},
+        "runs": [
+            {
+                "designator": "09",
+                "trueHeading": 90.0,
+                "dimension": {
+                    "length": {"value": 2000, "unit": 0},
+                    "width": {"value": 45, "unit": 0},
+                },
+                "thresholdLocation": {
+                    "type": "Point",
+                    "coordinates": [14.0, 50.0],
+                },
+            },
+            {
+                "designator": "27",
+                "trueHeading": 270.0,
+                "dimension": {
+                    "length": {"value": 2000, "unit": 0},
+                    "width": {"value": 45, "unit": 0},
+                },
+            },
+        ],
+    }
+
+    results = openaip_service._parse_runway(rw, 100.0)
+    assert len(results) >= 1
+    assert results[0].identifier == "09"
 
 
 def test_parse_airspace_maps_and_polygon():
@@ -387,6 +459,52 @@ def test_lookup_airport_by_icao_happy_path(monkeypatch):
     assert result.obstacles[0].type == "TOWER"
 
 
+def test_lookup_airport_passes_radius_to_fetch(monkeypatch):
+    """radius_km parameter is forwarded to airspace/obstacle fetch calls."""
+    monkeypatch.setattr(settings, "openaip_api_key", "testkey")
+
+    captured_params: list[dict] = []
+
+    def fake_get(client, path, params=None):
+        """capture params for airspaces/obstacles calls."""
+        if params:
+            captured_params.append({"path": path, "params": params})
+        if path == "/airports":
+            return {
+                "items": [
+                    {
+                        "icaoCode": "LZIB",
+                        "name": "Bratislava",
+                        "elevation": {"value": 133, "unit": 0},
+                        "geometry": {"type": "Point", "coordinates": [17.21, 48.17]},
+                        "runways": [],
+                    }
+                ]
+            }
+        return {"items": []}
+
+    with patch.object(openaip_service, "_get", side_effect=fake_get):
+        openaip_service.lookup_airport_by_icao("LZIB", radius_km=5.0)
+
+    airspace_call = next((c for c in captured_params if c["path"] == "/airspaces"), None)
+    obstacle_call = next((c for c in captured_params if c["path"] == "/obstacles"), None)
+    assert airspace_call is not None
+    assert airspace_call["params"]["dist"] == 5000.0
+    assert obstacle_call is not None
+    assert obstacle_call["params"]["dist"] == 5000.0
+
+
+def test_lookup_airport_invalid_radius_raises(monkeypatch):
+    """radius_km out of bounds raises DomainError from bounds validation."""
+    monkeypatch.setattr(settings, "openaip_api_key", "testkey")
+
+    with pytest.raises(DomainError, match="radius_km must be between 0 and 50"):
+        openaip_service.lookup_airport_by_icao("LZIB", radius_km=0)
+
+    with pytest.raises(DomainError, match="radius_km must be between 0 and 50"):
+        openaip_service.lookup_airport_by_icao("LZIB", radius_km=51)
+
+
 def test_lookup_airport_not_found_when_search_empty(monkeypatch):
     """empty search response raises NotFoundError."""
     monkeypatch.setattr(settings, "openaip_api_key", "testkey")
@@ -411,6 +529,32 @@ def test_lookup_route_not_found(client, monkeypatch):
         r = client.get("/api/v1/airports/lookup/XXXX")
 
     assert r.status_code == 404
+
+
+def test_lookup_route_accepts_radius_km(client, monkeypatch):
+    """route accepts radius_km query param and forwards to service."""
+    monkeypatch.setattr(settings, "openaip_api_key", "testkey")
+
+    def fake_get(client, path, params=None):
+        """return minimal airport data."""
+        if path == "/airports":
+            return {
+                "items": [
+                    {
+                        "icaoCode": "LZIB",
+                        "name": "Bratislava",
+                        "elevation": {"value": 133, "unit": 0},
+                        "geometry": {"type": "Point", "coordinates": [17.21, 48.17]},
+                        "runways": [],
+                    }
+                ]
+            }
+        return {"items": []}
+
+    with patch.object(openaip_service, "_get", side_effect=fake_get):
+        r = client.get("/api/v1/airports/lookup/LZIB?radius_km=10")
+
+    assert r.status_code == 200
 
 
 def test_lookup_route_invalid_icao_returns_400(client, monkeypatch):

@@ -4,6 +4,7 @@ import CreateMissionDialog from "./CreateMissionDialog";
 import MissionConfigForm from "./MissionConfigForm";
 import InspectionList from "./InspectionList";
 import TemplatePicker from "./TemplatePicker";
+import BulkCreateTemplatesDialog from "./BulkCreateTemplatesDialog";
 
 vi.mock("@/api/missions", () => ({
   createMission: vi
@@ -30,6 +31,7 @@ import { listDroneProfiles } from "@/api/droneProfiles";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
 });
 
 /* ------------------------------------------------------------------ */
@@ -751,7 +753,7 @@ describe("TemplatePicker", () => {
         id: "t-papi",
         name: "PAPI Angular",
         description: null,
-        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP", "HOVER_POINT_LOCK"],
+        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP"],
         target_agl_ids: ["agl-papi"],
         default_config: null,
         angular_tolerances: null,
@@ -762,7 +764,7 @@ describe("TemplatePicker", () => {
         id: "t-runway",
         name: "Runway Fly-over",
         description: null,
-        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP", "HOVER_POINT_LOCK"],
+        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP"],
         target_agl_ids: ["agl-runway"],
         default_config: null,
         angular_tolerances: null,
@@ -1049,7 +1051,7 @@ describe("InspectionList method dropdown", () => {
         id: "t-1",
         name: "Runway Inspection",
         description: null,
-        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP", "HOVER_POINT_LOCK"],
+        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP"],
         target_agl_ids: ["agl-runway"],
         default_config: null,
         angular_tolerances: null,
@@ -1105,8 +1107,8 @@ describe("InspectionList method dropdown", () => {
     const values = Array.from(select.options).map((o) => o.value);
     expect(values).toContain("FLY_OVER");
     expect(values).toContain("PARALLEL_SIDE_SWEEP");
-    expect(values).toContain("HOVER_POINT_LOCK");
-    // PAPI-only methods must NOT appear
+    // AGL-agnostic and PAPI-only methods must NOT appear
+    expect(values).not.toContain("HOVER_POINT_LOCK");
     expect(values).not.toContain("VERTICAL_PROFILE");
     expect(values).not.toContain("ANGULAR_SWEEP");
   });
@@ -1134,5 +1136,233 @@ describe("InspectionList method dropdown", () => {
       target: { value: "PARALLEL_SIDE_SWEEP" },
     });
     expect(onChangeMethod).toHaveBeenCalledWith("i-1", "PARALLEL_SIDE_SWEEP");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  BulkCreateTemplatesDialog                                         */
+/* ------------------------------------------------------------------ */
+
+describe("BulkCreateTemplatesDialog", () => {
+  /** tests for the bulk create templates dialog component. */
+
+  const papiAgl = {
+    id: "agl-papi",
+    surface_id: "s-1",
+    agl_type: "PAPI" as const,
+    name: "PAPI RWY 09",
+    position: { lat: 0, lng: 0, alt: 0 },
+    side: null,
+    glide_slope_angle: null,
+    distance_from_threshold: null,
+    offset_from_centerline: null,
+    lhas: [],
+  };
+
+  const runwayAgl = {
+    id: "agl-runway",
+    surface_id: "s-1",
+    agl_type: "RUNWAY_EDGE_LIGHTS" as const,
+    name: "RWY EDGE 09",
+    position: { lat: 0, lng: 0, alt: 0 },
+    side: null,
+    glide_slope_angle: null,
+    distance_from_threshold: null,
+    offset_from_centerline: null,
+    lhas: [],
+  };
+
+  function renderDialog(
+    overrides: Partial<Parameters<typeof BulkCreateTemplatesDialog>[0]> = {},
+  ) {
+    /** render the bulk create dialog with defaults. */
+    const props = {
+      isOpen: true,
+      onClose: vi.fn(),
+      agls: [papiAgl, runwayAgl] as never,
+      existingTemplates: [] as never,
+      onSubmit: vi.fn().mockResolvedValue(undefined),
+      ...overrides,
+    };
+    return { ...render(<BulkCreateTemplatesDialog {...props} />), props };
+  }
+
+  it("shows all valid combinations when no existing templates", () => {
+    /** verify all compatible AGL x method combos plus hover point lock are listed. */
+    renderDialog();
+    // PAPI: VERTICAL_PROFILE, ANGULAR_SWEEP = 2
+    // RUNWAY_EDGE_LIGHTS: FLY_OVER, PARALLEL_SIDE_SWEEP = 2
+    // + 1 AGL-agnostic HOVER_POINT_LOCK = 5 total
+    expect(screen.getByText("coordinator.inspections.bulkCreateCount")).toBeInTheDocument();
+    expect(screen.getAllByText("PAPI RWY 09")).toHaveLength(2);
+    expect(screen.getAllByText("RWY EDGE 09")).toHaveLength(2);
+    expect(screen.getAllByText("map.inspectionMethodShort.HOVER_POINT_LOCK").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows all-skipped empty state when every combination exists", () => {
+    /** verify empty message when all combos are already covered. */
+    const existingTemplates = [
+      {
+        id: "t-1",
+        name: "Existing",
+        description: null,
+        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP"],
+        target_agl_ids: ["agl-papi"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+        updated_at: null,
+        mission_count: 0,
+      },
+      {
+        id: "t-2",
+        name: "Existing 2",
+        description: null,
+        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP"],
+        target_agl_ids: ["agl-runway"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+        updated_at: null,
+        mission_count: 0,
+      },
+      {
+        id: "t-3",
+        name: "Existing Hover",
+        description: null,
+        methods: ["HOVER_POINT_LOCK"],
+        target_agl_ids: [],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+        updated_at: null,
+        mission_count: 0,
+      },
+    ];
+    renderDialog({ existingTemplates: existingTemplates as never });
+    expect(
+      screen.getByText("coordinator.inspections.bulkCreateNone"),
+    ).toBeInTheDocument();
+  });
+
+  it("disables submit button when all combinations are skipped", () => {
+    /** verify button is disabled in the empty state. */
+    const existingTemplates = [
+      {
+        id: "t-1",
+        name: "All covered",
+        description: null,
+        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP"],
+        target_agl_ids: ["agl-papi"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+        updated_at: null,
+        mission_count: 0,
+      },
+      {
+        id: "t-2",
+        name: "All covered 2",
+        description: null,
+        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP"],
+        target_agl_ids: ["agl-runway"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+        updated_at: null,
+        mission_count: 0,
+      },
+      {
+        id: "t-3",
+        name: "All covered hover",
+        description: null,
+        methods: ["HOVER_POINT_LOCK"],
+        target_agl_ids: [],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+        updated_at: null,
+        mission_count: 0,
+      },
+    ];
+    renderDialog({ existingTemplates: existingTemplates as never });
+    const buttons = screen.getAllByRole("button");
+    const submitBtn = buttons.find(
+      (b) => b.textContent === "coordinator.inspections.bulkCreate",
+    );
+    expect(submitBtn).toBeDisabled();
+  });
+
+  it("calls onSubmit and closes on successful submit", async () => {
+    /** happy path: submitting calls onSubmit and closes dialog. */
+    const { props } = renderDialog();
+    const buttons = screen.getAllByRole("button");
+    const submitBtn = buttons.find(
+      (b) => b.textContent === "coordinator.inspections.bulkCreate",
+    )!;
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(props.onSubmit).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(props.onClose).toHaveBeenCalled();
+    });
+  });
+
+  it("shows error message when onSubmit rejects", async () => {
+    /** error path: failed submit shows error in UI. */
+    const onSubmit = vi.fn().mockRejectedValue(new Error("api failure"));
+    renderDialog({ onSubmit });
+    const buttons = screen.getAllByRole("button");
+    const submitBtn = buttons.find(
+      (b) => b.textContent === "coordinator.inspections.bulkCreate",
+    )!;
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("coordinator.inspections.createError"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("skips combinations that already exist in templates", () => {
+    /** verify deduplication filters out existing combos. */
+    const existingTemplates = [
+      {
+        id: "t-1",
+        name: "Existing PAPI",
+        description: null,
+        methods: ["VERTICAL_PROFILE"],
+        target_agl_ids: ["agl-papi"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+        updated_at: null,
+        mission_count: 0,
+      },
+    ];
+    renderDialog({
+      agls: [papiAgl] as never,
+      existingTemplates: existingTemplates as never,
+    });
+    // PAPI has 2 methods, 1 already exists -> 1 combo
+    expect(screen.getByText("coordinator.inspections.bulkCreateCount")).toBeInTheDocument();
+  });
+
+  it("renders nothing when not open", () => {
+    /** closed dialog should not render content. */
+    renderDialog({ isOpen: false });
+    expect(
+      screen.queryByText("coordinator.inspections.bulkCreate"),
+    ).not.toBeInTheDocument();
   });
 });

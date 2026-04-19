@@ -121,6 +121,7 @@ class FlightPlanScope(str, enum.Enum):
     MEASUREMENTS_ONLY = "MEASUREMENTS_ONLY"
 
 
+
 class AuditAction(str, enum.Enum):
     """action types for audit log entries."""
 

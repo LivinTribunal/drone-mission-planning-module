@@ -1,10 +1,12 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
 from app.models.agl import AGL
+from app.models.airport import AirfieldSurface
+from app.models.enums import METHOD_AGL_COMPAT, InspectionMethod
 from app.models.inspection import (
     Inspection,
     InspectionConfiguration,
@@ -58,7 +60,18 @@ def list_templates(db: Session, airport_id: UUID | None = None) -> list[Inspecti
     )
 
     if airport_id:
-        query = query.filter(InspectionTemplate.targets.any(AGL.surface.has(airport_id=airport_id)))
+        # include agl-targeted templates for this airport, plus global
+        # hover_point_lock templates (which have no agl targets)
+        query = query.filter(
+            or_(
+                InspectionTemplate.targets.any(AGL.surface.has(airport_id=airport_id)),
+                InspectionTemplate.id.in_(
+                    select(insp_template_methods.c.template_id).where(
+                        insp_template_methods.c.method == InspectionMethod.HOVER_POINT_LOCK.value
+                    )
+                ),
+            )
+        )
 
     templates = query.all()
 
@@ -205,3 +218,73 @@ def delete_template(db: Session, template_id: UUID):
         db.delete(config)
 
     db.commit()
+
+
+def bulk_create_templates(db: Session, airport_id: UUID) -> tuple[list[InspectionTemplate], int]:
+    """create templates for all valid agl x method combinations at an airport."""
+    agls = (
+        db.query(AGL)
+        .join(AirfieldSurface, AGL.surface_id == AirfieldSurface.id)
+        .filter(AirfieldSurface.airport_id == airport_id)
+        .all()
+    )
+    if not agls:
+        raise NotFoundError("no AGL systems found for this airport")
+
+    # collect existing templates for deduplication
+    existing = list_templates(db, airport_id=airport_id)
+    existing_keys: set[tuple[str, str]] = set()
+    for tpl in existing:
+        for method in tpl.methods:
+            method_val = method.value if hasattr(method, "value") else method
+            for agl_id in tpl.target_agl_ids:
+                existing_keys.add((str(agl_id), method_val))
+
+    created: list[InspectionTemplate] = []
+    skipped = 0
+
+    # agl-specific methods (everything except hover point lock)
+    for agl in agls:
+        for method, compat_types in METHOD_AGL_COMPAT.items():
+            if agl.agl_type not in compat_types:
+                continue
+
+            if (str(agl.id), method.value) in existing_keys:
+                skipped += 1
+                continue
+
+            side_part = f" {agl.side}" if agl.side else ""
+            template_name = f"{agl.name}{side_part} - {method.value.replace('_', ' ').title()}"
+
+            template = InspectionTemplate(name=template_name)
+            template.targets = [agl]
+            db.add(template)
+            db.flush()
+
+            db.execute(
+                insp_template_methods.insert().values(template_id=template.id, method=method.value)
+            )
+            created.append(template)
+
+    # hover point lock - AGL-agnostic, one per airport (no AGL targets)
+    hover_method = InspectionMethod.HOVER_POINT_LOCK
+    has_hover = any(
+        hover_method.value in [m.value if hasattr(m, "value") else m for m in tpl.methods]
+        for tpl in existing
+    )
+    if not has_hover:
+        template = InspectionTemplate(name="Hover Point Lock")
+        db.add(template)
+        db.flush()
+        db.execute(
+            insp_template_methods.insert().values(
+                template_id=template.id, method=hover_method.value
+            )
+        )
+        created.append(template)
+    else:
+        skipped += 1
+
+    db.commit()
+
+    return [_load_template(db, t.id) for t in created], skipped

@@ -9,6 +9,7 @@ import type {
   InspectionUpdate,
   ReorderRequest,
 } from "@/types/mission";
+import type { MissionStatus } from "@/types/enums";
 import type {
   FlightPlanResponse,
   GenerateTrajectoryResponse,
@@ -179,6 +180,13 @@ export async function getFlightPlan(
 ): Promise<FlightPlanResponse> {
   const res = await client.get(`/missions/${missionId}/flight-plan`);
   return res.data;
+}
+
+export async function generateAndFetchTrajectory(
+  missionId: string,
+): Promise<{ flightPlan: FlightPlanResponse; missionStatus: MissionStatus }> {
+  const result = await generateTrajectory(missionId);
+  return { flightPlan: result.flight_plan, missionStatus: result.mission_status };
 }
 
 export async function batchUpdateWaypoints(

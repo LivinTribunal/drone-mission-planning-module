@@ -7,6 +7,8 @@ from app.api.dependencies import CoordinatorUser, OperatorUser
 from app.core.dependencies import get_db
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.inspection_template import (
+    BulkCreateTemplatesRequest,
+    BulkCreateTemplatesResponse,
     InspectionTemplateCreate,
     InspectionTemplateListResponse,
     InspectionTemplateResponse,
@@ -28,6 +30,18 @@ def list_templates(
     templates = inspection_template_service.list_templates(db, airport_id=airport_id)
 
     return InspectionTemplateListResponse(data=templates, meta=ListMeta(total=len(templates)))
+
+
+@router.post("/bulk", status_code=201, response_model=BulkCreateTemplatesResponse)
+def bulk_create_templates(
+    body: BulkCreateTemplatesRequest,
+    current_user: CoordinatorUser,
+    db: Session = Depends(get_db),
+):
+    """bulk create templates for all valid agl x method combinations"""
+    created, skipped = inspection_template_service.bulk_create_templates(db, body.airport_id)
+
+    return BulkCreateTemplatesResponse(created=created, skipped=skipped)
 
 
 @router.get("/{template_id}", response_model=InspectionTemplateResponse)

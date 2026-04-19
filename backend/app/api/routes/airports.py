@@ -6,7 +6,7 @@ import tempfile
 from functools import partial
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import (
@@ -207,10 +207,14 @@ def bulk_change_drone(
 
 # openaip lookup
 @router.get("/lookup/{icao_code}", response_model=AirportLookupResponse)
-def lookup_airport(icao_code: str, current_user: OperatorUser):
+def lookup_airport(
+    icao_code: str,
+    current_user: OperatorUser,
+    radius_km: float = Query(default=3.0, gt=0, le=50),
+):
     """fetch airport data + nearby airspaces / obstacles from openaip."""
     try:
-        return openaip_service.lookup_airport_by_icao(icao_code)
+        return openaip_service.lookup_airport_by_icao(icao_code, radius_km=radius_km)
     except NotFoundError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
     except DomainError as e:

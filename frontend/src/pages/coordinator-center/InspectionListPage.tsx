@@ -7,6 +7,7 @@ import {
   listInspectionTemplates,
   createInspectionTemplate,
   deleteInspectionTemplate,
+  bulkCreateInspectionTemplates,
 } from "@/api/inspectionTemplates";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { AGLResponse } from "@/types/airport";
@@ -15,6 +16,7 @@ import { methodBadgeStyle } from "@/utils/inspectionMethodBadge";
 import { formatAglDisplayName } from "@/utils/agl";
 import InspectionTemplateTable from "@/components/mission/InspectionTemplateTable";
 import CreateTemplateDialog from "@/components/mission/CreateTemplateDialog";
+import BulkCreateTemplatesDialog from "@/components/mission/BulkCreateTemplatesDialog";
 import Modal from "@/components/common/Modal";
 import Button from "@/components/common/Button";
 import {
@@ -47,6 +49,7 @@ export default function InspectionListPage() {
   const [aglFilter, setAglFilter] = useState("");
 
   const [showCreate, setShowCreate] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
 
   // pagination
   const [page, setPage] = useState(0);
@@ -83,24 +86,44 @@ export default function InspectionListPage() {
     [allAgls],
   );
 
-  const fetchTemplates = useCallback(async () => {
+  // clear stale templates when airport changes
+  const prevAirportIdRef = useRef<string | undefined>(airportDetail?.id);
+  useEffect(() => {
+    const prevId = prevAirportIdRef.current;
+    const newId = airportDetail?.id;
+    prevAirportIdRef.current = newId;
+    if (prevId && prevId !== newId) {
+      setTemplates([]);
+      setPage(0);
+      setSearch("");
+      setMethodFilter(new Set());
+      setAglFilter("");
+    }
+  }, [airportDetail?.id]);
+
+  const fetchTemplates = useCallback(async (signal?: AbortSignal) => {
     /**fetch templates for the selected airport.*/
     setLoading(true);
     setError(null);
     try {
       const res = await listInspectionTemplates(
         airportDetail ? { airport_id: airportDetail.id } : undefined,
+        signal,
       );
-      setTemplates(res.data);
+      if (!signal?.aborted) setTemplates(res.data);
     } catch (err) {
+      if (signal?.aborted) return;
       setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [airportDetail, t]);
 
   useEffect(() => {
-    if (airportDetail) fetchTemplates();
+    if (!airportDetail) return;
+    const controller = new AbortController();
+    fetchTemplates(controller.signal);
+    return () => controller.abort();
   }, [fetchTemplates, airportDetail]);
 
   // filtered templates
@@ -208,6 +231,9 @@ export default function InspectionListPage() {
         placeholder={t("coordinator.inspections.searchPlaceholder")}
         testId="template-search"
       >
+        <Button variant="secondary" onClick={() => setShowBulk(true)} data-testid="bulk-create-btn">
+          {t("coordinator.inspections.bulkCreate")}
+        </Button>
         <Button onClick={() => setShowCreate(true)} data-testid="add-template-btn">
           {t("coordinator.inspections.addNew")}
         </Button>
@@ -262,7 +288,7 @@ export default function InspectionListPage() {
         ) : error ? (
           <div className="px-6 py-16 text-center text-sm text-tv-error">
             {error}
-            <button onClick={fetchTemplates} className="ml-2 underline hover:no-underline">
+            <button onClick={() => fetchTemplates()} className="ml-2 underline hover:no-underline">
               {t("common.retry")}
             </button>
           </div>
@@ -304,6 +330,21 @@ export default function InspectionListPage() {
         onClose={() => setShowCreate(false)}
         agls={allAgls}
         onSubmit={handleCreate}
+      />
+
+      <BulkCreateTemplatesDialog
+        isOpen={showBulk}
+        onClose={() => setShowBulk(false)}
+        agls={allAgls}
+        existingTemplates={templates}
+        onSubmit={async () => {
+          if (!airportDetail) throw new Error("no airport loaded");
+          const result = await bulkCreateInspectionTemplates(airportDetail.id);
+          showNotif(
+            t("coordinator.inspections.bulkCreateSuccess", { count: result.created.length }),
+          );
+          await fetchTemplates();
+        }}
       />
 
       {/* delete confirmation */}

@@ -61,7 +61,8 @@ def generate(
     except DomainError as error:
         raise HTTPException(status_code=error.status_code, detail=error.message)
 
-    return GenerateTrajectoryResponse(flight_plan=fp)
+    db.refresh(mission)
+    return GenerateTrajectoryResponse(flight_plan=fp, mission_status=mission.status)
 
 
 @router.get("/{mission_id}/flight-plan", response_model=FlightPlanResponse)
