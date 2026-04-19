@@ -6,7 +6,7 @@ import NavBar from "./NavBar";
 import type { NavItem } from "./NavBar";
 
 export default function CoordinatorLayout() {
-  /** coordinator center layout - clears operator airport on mount, syncs selector to routes. */
+  /** coordinator layout - clears airport on mount, navigates on airport selector change. */
   const { t } = useTranslation();
   const { selectedAirport, clearAirport } = useAirport();
   const navigate = useNavigate();
