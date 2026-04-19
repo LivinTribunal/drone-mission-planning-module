@@ -946,6 +946,13 @@
       "endPosition": "End Position",
       "centerlineWarning": "Position is {{distance}}m from runway centerline",
       "noPosition": "Not set - use Pick on Map to place",
+      "markers": {
+        "firstLha": "First LHA",
+        "lastLha": "Last LHA",
+        "touchpoint": "Touchpoint",
+        "threshold": "Threshold",
+        "endPosition": "End Position"
+      },
       "obstacleName": "Name",
       "obstacleType": "Type",
       "obstacleHeight": "Height (m)",

@@ -11,7 +11,7 @@ import type {
   ObstacleRecalculateResponse,
   AGLResponse,
 } from "@/types/airport";
-import type { PointZ } from "@/types/common";
+import type { LineStringZ, PointZ } from "@/types/common";
 import { recalculateSurface, recalculateObstacle, bulkCreateLHAs } from "@/api/airports";
 import { distanceFromCenterline } from "@/utils/centerlineDistance";
 
@@ -343,7 +343,7 @@ export default function EditableFeatureInfo({
                 formData={formData}
                 setFormData={setFormData}
                 onUpdate={onUpdate}
-                centerline={(formData.geometry as { coordinates?: number[][] } | undefined)?.coordinates}
+                centerline={(formData.geometry as LineStringZ | undefined)?.coordinates}
                 pickingThreshold={pickingThreshold}
                 onPickThresholdToggle={onPickThresholdToggle}
                 pickingEnd={pickingEnd}

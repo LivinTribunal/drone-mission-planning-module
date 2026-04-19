@@ -488,25 +488,25 @@ export default function AirportEditPage() {
     (["first", "last"] as const).forEach((which) => {
       const pos = lhaPickedMarkers[which];
       if (!pos) return;
-      makeDot("var(--tv-accent)", which === "first" ? "First LHA" : "Last LHA", pos);
+      makeDot("var(--tv-accent)", which === "first" ? t("coordinator.detail.markers.firstLha") : t("coordinator.detail.markers.lastLha"), pos);
     });
 
     if (touchpointPickedMarker) {
-      makeDot("#ffd166", "Touchpoint", touchpointPickedMarker);
+      makeDot("#ffd166", t("coordinator.detail.markers.touchpoint"), touchpointPickedMarker);
     }
 
     if (thresholdPickedMarker) {
-      makeDot("#4595e5", "Threshold", thresholdPickedMarker);
+      makeDot("#4595e5", t("coordinator.detail.markers.threshold"), thresholdPickedMarker);
     }
 
     if (endPickedMarker) {
-      makeDot("#e54545", "End Position", endPickedMarker);
+      makeDot("#e54545", t("coordinator.detail.markers.endPosition"), endPickedMarker);
     }
 
     return () => {
       markers.forEach((mk) => mk.remove());
     };
-  }, [lhaPickedMarkers, touchpointPickedMarker, thresholdPickedMarker, endPickedMarker, getMap]);
+  }, [lhaPickedMarkers, touchpointPickedMarker, thresholdPickedMarker, endPickedMarker, getMap, t]);
 
   // cancel pending creation when user picks another drawing tool, clear tools on switch
   const SAFE_TOOLS: DrawingTool[] = ["select", "pan", "zoom", "zoomReset", "measurement", "heading"];
