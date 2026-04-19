@@ -61,10 +61,15 @@ def upgrade() -> None:
         "ck_lha_unit_designator", "lha",
         "length(unit_designator) > 0",
     )
+    op.create_unique_constraint(
+        "uq_lha_agl_designator", "lha",
+        ["agl_id", "unit_designator"],
+    )
 
 
 def downgrade() -> None:
     """revert papi_horizontal_range -> angular_sweep, unit_designator -> unit_number."""
+    op.drop_constraint("uq_lha_agl_designator", "lha", type_="unique")
     op.drop_constraint("ck_lha_unit_designator", "lha", type_="check")
     op.add_column("lha", sa.Column("unit_number", sa.Integer(), nullable=True))
 

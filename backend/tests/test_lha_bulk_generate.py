@@ -164,6 +164,37 @@ def test_bulk_generate_rejects_when_all_designators_occupied(client):
     assert "designator" in r.json()["detail"].lower()
 
 
+def test_bulk_generate_edge_lights_cumulative_cap_across_calls(client):
+    """second edge lights call rejected when first call already hit 200 cap."""
+    apt_id, surface_id, agl_id = _setup(client, "LZEC")
+
+    # first call fills to 200
+    first_body = {
+        "first_position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
+        "last_position": {"type": "Point", "coordinates": [14.3000, 50.1000, 380.0]},
+        "spacing_m": 1.0,
+    }
+    r1 = client.post(
+        f"/api/v1/airports/{apt_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/bulk",
+        json=first_body,
+    )
+    assert r1.status_code == 201
+    assert len(r1.json()["generated"]) == 200
+
+    # second call must be rejected - 200 cap already hit
+    second_body = {
+        "first_position": {"type": "Point", "coordinates": [14.3001, 50.1000, 380.0]},
+        "last_position": {"type": "Point", "coordinates": [14.3010, 50.1000, 380.0]},
+        "spacing_m": 1.0,
+    }
+    r2 = client.post(
+        f"/api/v1/airports/{apt_id}/surfaces/{surface_id}/agls/{agl_id}/lhas/bulk",
+        json=second_body,
+    )
+    assert r2.status_code == 422
+    assert "200" in r2.json()["detail"]
+
+
 def test_bulk_generate_cumulative_cap_across_calls(client):
     """second call rejected after first call exhausts all papi designators."""
     apt_id, surface_id, agl_id = _setup(client, "LZCC", agl_type="PAPI")

@@ -529,13 +529,21 @@ export default function EditableFeatureInfo({
               {(() => {
                 const parentAgl = surfaces?.flatMap(s => s.agls).find(a => a.id === formData.agl_id);
                 const isPapi = parentAgl?.agl_type === "PAPI";
+                const siblingDesignators = new Set(
+                  parentAgl?.lhas
+                    ?.filter(l => l.id !== formData.id)
+                    .map(l => l.unit_designator) ?? []
+                );
+                const availableDesignators = ["A", "B", "C", "D"].filter(
+                  d => !siblingDesignators.has(d) || d === val("unit_designator")
+                );
                 return isPapi ? (
                   <select
                     value={val("unit_designator")}
                     onChange={(e) => handleChange("unit_designator", e.target.value)}
                     className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
                   >
-                    {["A", "B", "C", "D"].map((d) => (
+                    {availableDesignators.map((d) => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>

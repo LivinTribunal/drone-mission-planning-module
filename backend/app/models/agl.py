@@ -2,7 +2,7 @@ import logging
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
-from sqlalchemy import CheckConstraint, Column, Float, ForeignKey, String
+from sqlalchemy import CheckConstraint, Column, Float, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -97,4 +97,5 @@ class LHA(Base):
             "length(unit_designator) > 0",
             name="ck_lha_unit_designator",
         ),
+        UniqueConstraint("agl_id", "unit_designator", name="uq_lha_agl_designator"),
     )

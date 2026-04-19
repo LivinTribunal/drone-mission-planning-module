@@ -913,7 +913,8 @@ def bulk_generate_lhas(
                 status_code=422,
             )
     else:
-        next_num = max((int(lha.unit_designator) for lha in existing), default=0) + 1
+        nums = [int(d) for lha in existing if (d := lha.unit_designator).isdigit()]
+        next_num = max(nums, default=0) + 1
         available_designators = [str(i) for i in range(next_num, next_num + 200)]
 
     # number of LHAs, bounded to avoid runaway generation, enforcing cumulative cap

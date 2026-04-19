@@ -46,7 +46,7 @@ DESIGNATOR_MAP = {1: "D", 2: "C", 3: "B", 4: "A"}
 def make_lha_payload(i: int) -> dict:
     """build lha create payload with icao-style designator."""
     return {
-        "unit_designator": DESIGNATOR_MAP.get(i, "A"),
+        "unit_designator": DESIGNATOR_MAP[i],
         "setting_angle": 3.0 + (i - 1) * 0.5,
         "lamp_type": "HALOGEN",
         "position": {
