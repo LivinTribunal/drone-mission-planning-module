@@ -190,7 +190,7 @@ export default function CoordinatorAGLPanel({
                             />
                             <div className="flex-1 min-w-0">
                               <span className="text-xs font-medium text-tv-text-primary">
-                                {t("airport.lhaUnit", { number: lha.unit_number })}
+                                {t("airport.lhaUnit", { designator: lha.unit_designator })}
                               </span>
                               <span className="text-xs text-tv-text-secondary ml-2">
                                 {lha.setting_angle != null ? `${lha.setting_angle}°` : "—"}
@@ -246,7 +246,7 @@ export default function CoordinatorAGLPanel({
 
       <ConfirmDeleteDialog
         isOpen={deleteLhaTarget !== null}
-        name={deleteLhaTarget ? t("airport.lhaUnit", { number: deleteLhaTarget.unit_number }) : ""}
+        name={deleteLhaTarget ? t("airport.lhaUnit", { designator: deleteLhaTarget.unit_designator }) : ""}
         error={deleteError}
         onConfirm={async () => {
           if (!deleteLhaTarget || !onDeleteLha) return;

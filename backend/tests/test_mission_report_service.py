@@ -1,4 +1,4 @@
-"""tests for flight brief pdf generation service."""
+"""tests for mission report pdf generation service."""
 
 import struct
 from unittest.mock import MagicMock, patch
@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.services import flight_brief_service
+from app.services import mission_report_service
 
 _WKB_POINT_Z = 0x80000001
 _WKB_POLYGON_Z = 0x80000003
@@ -218,7 +218,7 @@ def _make_brief_data(
 
     constraints = [_make_constraint()]
 
-    return flight_brief_service.BriefData(
+    return mission_report_service.BriefData(
         mission=mission,
         flight_plan=flight_plan,
         airport=airport,
@@ -232,61 +232,61 @@ def _make_brief_data(
 
 
 class TestGenerateFlightBrief:
-    """tests for the flight brief pdf generation."""
+    """tests for the mission report pdf generation."""
 
-    @patch.object(flight_brief_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_brief_data")
     def test_generates_valid_pdf(self, mock_load):
         """generated output is a valid pdf."""
         data = _make_brief_data()
         mock_load.return_value = data
 
-        pdf_bytes, filename = flight_brief_service.generate_flight_brief(MagicMock(), uuid4())
+        pdf_bytes, filename = mission_report_service.generate_mission_report(MagicMock(), uuid4())
 
         assert pdf_bytes[:5] == b"%PDF-"
         assert len(pdf_bytes) > 1000
 
-    @patch.object(flight_brief_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_brief_data")
     def test_filename_format(self, mock_load):
         """filename follows the required pattern."""
         data = _make_brief_data()
         mock_load.return_value = data
 
-        _, filename = flight_brief_service.generate_flight_brief(MagicMock(), uuid4())
+        _, filename = mission_report_service.generate_mission_report(MagicMock(), uuid4())
 
-        assert filename.startswith("FlightBrief_LZTT_Test_Mission_")
+        assert filename.startswith("MissionReport_LZTT_Test_Mission_")
         assert filename.endswith(".pdf")
 
-    @patch.object(flight_brief_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_brief_data")
     def test_multiple_inspections(self, mock_load):
         """pdf generates successfully with multiple inspections."""
         data = _make_brief_data(num_inspections=3, num_waypoints=10)
         mock_load.return_value = data
 
-        pdf_bytes, _ = flight_brief_service.generate_flight_brief(MagicMock(), uuid4())
+        pdf_bytes, _ = mission_report_service.generate_mission_report(MagicMock(), uuid4())
 
         assert pdf_bytes[:5] == b"%PDF-"
 
-    @patch.object(flight_brief_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_brief_data")
     def test_no_inspections(self, mock_load):
         """pdf generates with zero inspections."""
         data = _make_brief_data(num_inspections=0, num_waypoints=3)
         mock_load.return_value = data
 
-        pdf_bytes, _ = flight_brief_service.generate_flight_brief(MagicMock(), uuid4())
+        pdf_bytes, _ = mission_report_service.generate_mission_report(MagicMock(), uuid4())
 
         assert pdf_bytes[:5] == b"%PDF-"
 
-    @patch.object(flight_brief_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_brief_data")
     def test_no_drone_profile(self, mock_load):
         """pdf generates without drone profile."""
         data = _make_brief_data(with_drone=False)
         mock_load.return_value = data
 
-        pdf_bytes, _ = flight_brief_service.generate_flight_brief(MagicMock(), uuid4())
+        pdf_bytes, _ = mission_report_service.generate_mission_report(MagicMock(), uuid4())
 
         assert pdf_bytes[:5] == b"%PDF-"
 
-    @patch.object(flight_brief_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_brief_data")
     def test_with_violations(self, mock_load):
         """pdf generates with validation violations."""
         data = _make_brief_data()
@@ -297,17 +297,17 @@ class TestGenerateFlightBrief:
         data.validation_result.violations = [v1, v2]
         mock_load.return_value = data
 
-        pdf_bytes, _ = flight_brief_service.generate_flight_brief(MagicMock(), uuid4())
+        pdf_bytes, _ = mission_report_service.generate_mission_report(MagicMock(), uuid4())
 
         assert pdf_bytes[:5] == b"%PDF-"
 
-    @patch.object(flight_brief_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_brief_data")
     def test_no_validation(self, mock_load):
         """pdf generates without validation results."""
         data = _make_brief_data(with_validation=False)
         mock_load.return_value = data
 
-        pdf_bytes, _ = flight_brief_service.generate_flight_brief(MagicMock(), uuid4())
+        pdf_bytes, _ = mission_report_service.generate_mission_report(MagicMock(), uuid4())
 
         assert pdf_bytes[:5] == b"%PDF-"
 
@@ -321,7 +321,7 @@ class TestLoadBriefData:
         db.query.return_value.options.return_value.filter.return_value.first.return_value = None
 
         with pytest.raises(NotFoundError, match="mission not found"):
-            flight_brief_service._load_brief_data(db, uuid4())
+            mission_report_service._load_brief_data(db, uuid4())
 
     def test_no_flight_plan_raises_409(self):
         """raises ConflictError when no flight plan exists."""
@@ -342,7 +342,7 @@ class TestLoadBriefData:
         query_mock.options.return_value.filter.return_value.first.side_effect = results
 
         with pytest.raises(ConflictError, match="no flight plan"):
-            flight_brief_service._load_brief_data(db, uuid4())
+            mission_report_service._load_brief_data(db, uuid4())
 
 
 class TestHelpers:
@@ -350,24 +350,24 @@ class TestHelpers:
 
     def test_sanitize_filename(self):
         """special characters are removed, spaces become underscores."""
-        assert flight_brief_service._sanitize_filename("Test Mission!@#") == "Test_Mission"
-        assert flight_brief_service._sanitize_filename("hello world") == "hello_world"
-        assert flight_brief_service._sanitize_filename("a/b/c") == "abc"
+        assert mission_report_service._sanitize_filename("Test Mission!@#") == "Test_Mission"
+        assert mission_report_service._sanitize_filename("hello world") == "hello_world"
+        assert mission_report_service._sanitize_filename("a/b/c") == "abc"
 
     def test_format_duration(self):
         """durations are formatted correctly."""
-        assert flight_brief_service._format_duration(None) == "N/A"
-        assert flight_brief_service._format_duration(0) == "N/A"
-        assert flight_brief_service._format_duration(30) == "30s"
-        assert flight_brief_service._format_duration(90) == "1m 30s"
-        assert flight_brief_service._format_duration(3600) == "60m 0s"
+        assert mission_report_service._format_duration(None) == "N/A"
+        assert mission_report_service._format_duration(0) == "N/A"
+        assert mission_report_service._format_duration(30) == "30s"
+        assert mission_report_service._format_duration(90) == "1m 30s"
+        assert mission_report_service._format_duration(3600) == "60m 0s"
 
     def test_format_distance(self):
         """distances are formatted correctly."""
-        assert flight_brief_service._format_distance(None) == "N/A"
-        assert flight_brief_service._format_distance(0) == "N/A"
-        assert flight_brief_service._format_distance(500) == "500.0 m"
-        assert flight_brief_service._format_distance(1500) == "1.50 km"
+        assert mission_report_service._format_distance(None) == "N/A"
+        assert mission_report_service._format_distance(0) == "N/A"
+        assert mission_report_service._format_distance(500) == "500.0 m"
+        assert mission_report_service._format_distance(1500) == "1.50 km"
 
     def test_haversine(self):
         """distance_between (replaced _haversine) returns reasonable distances."""
@@ -379,20 +379,20 @@ class TestHelpers:
     def test_point_in_polygon(self):
         """point-in-polygon test works correctly."""
         poly = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
-        assert flight_brief_service._point_in_polygon(5, 5, poly) is True
-        assert flight_brief_service._point_in_polygon(15, 5, poly) is False
+        assert mission_report_service._point_in_polygon(5, 5, poly) is True
+        assert mission_report_service._point_in_polygon(15, 5, poly) is False
 
     def test_extract_coords(self):
         """coordinate extraction from ewkb works."""
         geom = _make_geom(_make_ewkb(18.11, 49.69, 300.0))
-        lon, lat, alt = flight_brief_service._extract_coords(geom)
+        lon, lat, alt = mission_report_service._extract_coords(geom)
         assert abs(lon - 18.11) < 0.001
         assert abs(lat - 49.69) < 0.001
         assert abs(alt - 300.0) < 0.1
 
     def test_extract_coords_none(self):
         """none geometry returns zeros."""
-        lon, lat, alt = flight_brief_service._extract_coords(None)
+        lon, lat, alt = mission_report_service._extract_coords(None)
         assert lon == 0.0
         assert lat == 0.0
         assert alt == 0.0
@@ -400,17 +400,17 @@ class TestHelpers:
     def test_point_near_polygon_near_midpoint(self):
         """point close to edge midpoint is detected."""
         poly = [(0, 0), (0.01, 0), (0.01, 0.01), (0, 0.01), (0, 0)]
-        assert flight_brief_service._point_near_polygon(0.005, 0.0001, poly, 50) is True
+        assert mission_report_service._point_near_polygon(0.005, 0.0001, poly, 50) is True
 
     def test_point_near_polygon_near_endpoint(self):
         """point near edge endpoint - not just midpoint - is detected."""
         poly = [(0, 0), (0.1, 0), (0.1, 0.1), (0, 0.1), (0, 0)]
-        assert flight_brief_service._point_near_polygon(0.0001, 0.0001, poly, 50) is True
+        assert mission_report_service._point_near_polygon(0.0001, 0.0001, poly, 50) is True
 
     def test_point_near_polygon_far_away(self):
         """point far from all edges returns false."""
         poly = [(0, 0), (0.001, 0), (0.001, 0.001), (0, 0.001), (0, 0)]
-        assert flight_brief_service._point_near_polygon(1.0, 1.0, poly, 50) is False
+        assert mission_report_service._point_near_polygon(1.0, 1.0, poly, 50) is False
 
 
 class TestBuildActivities:
@@ -419,7 +419,7 @@ class TestBuildActivities:
     def test_basic_activity_sequence(self):
         """activities are built with correct names and colors."""
         data = _make_brief_data(num_waypoints=5, num_inspections=1)
-        activities = flight_brief_service._build_activities(data)
+        activities = mission_report_service._build_activities(data)
 
         names = [a["name"] for a in activities]
         assert "Takeoff" in names
@@ -428,7 +428,7 @@ class TestBuildActivities:
     def test_activity_colors_match_type(self):
         """each activity gets the correct color for its type."""
         data = _make_brief_data(num_waypoints=5, num_inspections=1)
-        activities = flight_brief_service._build_activities(data)
+        activities = mission_report_service._build_activities(data)
 
         for act in activities:
             if act["name"] == "Takeoff":
@@ -441,7 +441,7 @@ class TestBuildActivities:
     def test_no_zero_duration_activities(self):
         """all returned activities have positive duration."""
         data = _make_brief_data(num_waypoints=10, num_inspections=2)
-        activities = flight_brief_service._build_activities(data)
+        activities = mission_report_service._build_activities(data)
 
         for act in activities:
             assert act["duration"] > 0
@@ -450,17 +450,17 @@ class TestBuildActivities:
         """empty waypoint list produces no activities."""
         data = _make_brief_data(num_waypoints=0, num_inspections=0)
         data.waypoints = []
-        activities = flight_brief_service._build_activities(data)
+        activities = mission_report_service._build_activities(data)
 
         assert activities == []
 
 
 class TestRouteEndpoint:
-    """tests for the flight brief route."""
+    """tests for the mission report route."""
 
     @patch("app.api.routes.missions.mission_service.get_mission")
-    @patch.object(flight_brief_service, "generate_flight_brief")
-    def test_get_flight_brief_returns_pdf(self, mock_gen, mock_get_mission):
+    @patch.object(mission_report_service, "generate_mission_report")
+    def test_get_mission_report_returns_pdf(self, mock_gen, mock_get_mission):
         """endpoint returns pdf with correct content type."""
         from types import SimpleNamespace
 
@@ -482,13 +482,13 @@ class TestRouteEndpoint:
         fake_id = str(uuid4())
         stub_mission = SimpleNamespace(airport_id=uuid4())
         mock_get_mission.return_value = stub_mission
-        mock_gen.return_value = (b"%PDF-1.4 fake", "FlightBrief_LZTT_Test_2026-04-17.pdf")
+        mock_gen.return_value = (b"%PDF-1.4 fake", "MissionReport_LZTT_Test_2026-04-17.pdf")
 
         saved = app.dependency_overrides.get(get_current_user)
         app.dependency_overrides[get_current_user] = lambda: stub_user
         try:
             client = TestClient(app)
-            resp = client.get(f"/api/v1/missions/{fake_id}/flight-brief")
+            resp = client.get(f"/api/v1/missions/{fake_id}/mission-report")
         finally:
             if saved is not None:
                 app.dependency_overrides[get_current_user] = saved
@@ -497,5 +497,5 @@ class TestRouteEndpoint:
 
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "application/pdf"
-        assert "FlightBrief_LZTT_Test" in resp.headers["content-disposition"]
+        assert "MissionReport_LZTT_Test" in resp.headers["content-disposition"]
         assert resp.content == b"%PDF-1.4 fake"

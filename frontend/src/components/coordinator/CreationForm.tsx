@@ -170,12 +170,13 @@ export default function CreationForm({
     return agls;
   }, [surfaces]);
 
-  // auto-increment lha unit number based on selected agl
-  const nextUnitNumber = useMemo(() => {
-    if (!lhaAglId) return 1;
+  // next available designator letter based on selected agl
+  const nextDesignator = useMemo(() => {
+    if (!lhaAglId) return "A";
     const agl = allAgls.find((a) => a.id === lhaAglId);
-    if (!agl) return 1;
-    return Math.max(0, ...agl.lhas.map((l) => l.unit_number)) + 1;
+    if (!agl) return "A";
+    const used = new Set(agl.lhas.map((l) => l.unit_designator));
+    return ["A", "B", "C", "D"].find((d) => !used.has(d)) ?? "A";
   }, [lhaAglId, allAgls]);
 
   // manual coordinate entry for AGL/LHA - altitude is always airport elevation (set by handleCreate on page)
@@ -235,16 +236,17 @@ export default function CreationForm({
   // auto-prefill LHA name
   useEffect(() => {
     if (category !== "lha" || !lhaAglId) return;
-    setName(`LHA Unit ${nextUnitNumber}`);
-  }, [lhaAglId, category, nextUnitNumber]);
+    setName(`LHA Unit ${nextDesignator}`);
+  }, [lhaAglId, category, nextDesignator]);
 
-  // pre-fill lha fields from most recent lha on the selected agl (highest unit_number).
+  // pre-fill lha fields from most recent lha on the selected agl.
   // position intentionally stays blank - user places each lha on the map.
   useEffect(() => {
     if (category !== "lha" || !lhaAglId) return;
     const agl = allAgls.find((a) => a.id === lhaAglId);
     if (!agl) return;
-    const recent = [...agl.lhas].sort((a, b) => b.unit_number - a.unit_number)[0];
+    const sorted = [...agl.lhas].sort((a, b) => a.unit_designator.localeCompare(b.unit_designator));
+    const recent = sorted[sorted.length - 1];
     if (recent) {
       setLhaTolerance(recent.tolerance != null ? String(recent.tolerance) : "0.2");
       setLhaLampType(recent.lamp_type);
@@ -338,7 +340,7 @@ export default function CreationForm({
 
       if (effectiveEntityType === "lha") {
         data.agl_id = lhaAglId;
-        data.unit_number = nextUnitNumber;
+        data.unit_designator = nextDesignator;
         // parent agl type decides whether a blank setting_angle is allowed (PAPI -> null)
         const parentAgl = allAgls.find((a) => a.id === lhaAglId);
         if (lhaSettingAngle) {
@@ -820,7 +822,7 @@ export default function CreationForm({
                 </div>
                 {lhaAglId && (
                   <p className="text-[10px] text-tv-text-muted">
-                    {t("coordinator.creation.unitNumber")}: {nextUnitNumber}
+                    {t("coordinator.creation.unitDesignator")}: {nextDesignator}
                   </p>
                 )}
                 <Input

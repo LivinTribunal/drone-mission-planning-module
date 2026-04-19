@@ -45,7 +45,7 @@ vi.mock("@/api/airports", () => ({
               {
                 id: "lha-1",
                 agl_id: "agl-1",
-                unit_number: 1,
+                unit_designator: "A",
                 setting_angle: 2.83,
                 transition_sector_width: null,
                 lamp_type: "HALOGEN",

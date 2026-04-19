@@ -848,12 +848,6 @@ def delete_lha(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, lh
     db.delete(lha)
     db.flush()
 
-    # renumber remaining LHAs to keep unit_number contiguous
-    remaining = db.query(LHA).filter(LHA.agl_id == agl_id).order_by(LHA.unit_number.asc()).all()
-    for idx, item in enumerate(remaining, start=1):
-        if item.unit_number != idx:
-            item.unit_number = idx
-
     # drop deleted id from any inspection configs that reference it.
     # scoped by jsonb containment so we only touch configs that actually hold this id -
     # avoids the full-table scan we'd get from loading every config with non-null lha_ids.
@@ -904,10 +898,12 @@ def bulk_generate_lhas(
     if total_distance <= 0:
         raise DomainError("first and last positions must differ", status_code=422)
 
-    # start numbering after any existing LHAs - append-only semantics: calling
-    # this twice on the same AGL extends numbering past existing units and
-    # counts toward the cumulative 200-cap
-    existing_count = db.query(LHA).filter(LHA.agl_id == agl_id).count()
+    # assign designators from available letters
+    existing = db.query(LHA).filter(LHA.agl_id == agl_id).all()
+    existing_count = len(existing)
+    used_designators = {lha.unit_designator for lha in existing}
+    all_designators = ["A", "B", "C", "D"]
+    available_designators = [d for d in all_designators if d not in used_designators]
 
     # number of LHAs, bounded to avoid runaway generation, enforcing cumulative cap
     count = max(2, int(round(total_distance / schema.spacing_m)) + 1)
@@ -942,9 +938,15 @@ def bulk_generate_lhas(
             ground = provider.get_elevation(lat, lon)
 
             wkt = f"SRID=4326;POINTZ({lon} {lat} {ground})"
+            # assign letter designator if available, otherwise fall back to index-based
+            designator = (
+                available_designators[i]
+                if i < len(available_designators)
+                else all_designators[i % len(all_designators)]
+            )
             lha = LHA(
                 agl_id=agl_id,
-                unit_number=existing_count + i + 1,
+                unit_designator=designator,
                 setting_angle=setting_angle,
                 lamp_type=schema.lamp_type,
                 position=WKTElement(wkt, srid=4326),

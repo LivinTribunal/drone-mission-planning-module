@@ -8,7 +8,7 @@ from app.services.trajectory.helpers import (
     _insert_video_hover_waypoints,
 )
 from app.services.trajectory.methods import compute_measurement_trajectory
-from app.services.trajectory.methods.angular_sweep import calculate_arc_path
+from app.services.trajectory.methods.papi_horizontal_range import calculate_arc_path
 from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
 from app.services.trajectory.types import Point3D, ResolvedConfig, WaypointData
 
@@ -109,7 +109,7 @@ def test_compute_measurement_video_mode_wraps_arc():
         recording_setup_duration=5.0,
     )
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
-    inspection = FakeInspection("ANGULAR_SWEEP")
+    inspection = FakeInspection("PAPI_HORIZONTAL_RANGE")
 
     wps = compute_measurement_trajectory(inspection, config, center, 243.0, 3.0, 5.0, [])
 
@@ -129,7 +129,7 @@ def test_compute_measurement_photo_mode_no_wrapper():
     """photo mode does not add recording hover waypoints."""
     config = ResolvedConfig(measurement_density=3, capture_mode="PHOTO_CAPTURE")
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
-    inspection = FakeInspection("ANGULAR_SWEEP")
+    inspection = FakeInspection("PAPI_HORIZONTAL_RANGE")
 
     wps = compute_measurement_trajectory(inspection, config, center, 243.0, 3.0, 5.0, [])
 
@@ -247,7 +247,7 @@ def test_video_hover_duration_included():
         recording_setup_duration=5.0,
     )
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
-    inspection = FakeInspection("ANGULAR_SWEEP")
+    inspection = FakeInspection("PAPI_HORIZONTAL_RANGE")
 
     wps = compute_measurement_trajectory(inspection, config, center, 243.0, 3.0, 5.0, [])
 

@@ -168,7 +168,7 @@ describe("InspectionConfigForm LHA toggle", () => {
       {
         id: "lha-1",
         agl_id: "agl-1",
-        unit_number: 1,
+        unit_designator: "A",
         setting_angle: 3.0,
         transition_sector_width: null,
         lamp_type: "HALOGEN" as const,
@@ -178,7 +178,7 @@ describe("InspectionConfigForm LHA toggle", () => {
       {
         id: "lha-2",
         agl_id: "agl-1",
-        unit_number: 2,
+        unit_designator: "B",
         setting_angle: 3.5,
         transition_sector_width: null,
         lamp_type: "HALOGEN" as const,

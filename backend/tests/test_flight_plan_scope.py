@@ -127,7 +127,7 @@ def test_update_mission_scope_regresses_status(client):
         "/api/v1/inspection-templates",
         json={
             "name": "Scope Regress Template",
-            "methods": ["ANGULAR_SWEEP"],
+            "methods": ["PAPI_HORIZONTAL_RANGE"],
             "target_agl_ids": [agl["id"]],
             "default_config": {"measurement_density": 3},
         },
@@ -151,7 +151,7 @@ def test_update_mission_scope_regresses_status(client):
 
     client.post(
         f"/api/v1/missions/{mission_id}/inspections",
-        json={"template_id": template["id"], "method": "ANGULAR_SWEEP"},
+        json={"template_id": template["id"], "method": "PAPI_HORIZONTAL_RANGE"},
     )
 
     # generate trajectory to get to PLANNED
@@ -199,7 +199,7 @@ def _setup_trajectory_mission(client, icao: str, scope: str, with_coordinates: b
         "/api/v1/inspection-templates",
         json={
             "name": f"Scope Template {icao}",
-            "methods": ["ANGULAR_SWEEP"],
+            "methods": ["PAPI_HORIZONTAL_RANGE"],
             "target_agl_ids": [agl["id"]],
             "default_config": {"measurement_density": 3},
         },
@@ -224,7 +224,7 @@ def _setup_trajectory_mission(client, icao: str, scope: str, with_coordinates: b
 
     client.post(
         f"/api/v1/missions/{mission_id}/inspections",
-        json={"template_id": template["id"], "method": "ANGULAR_SWEEP"},
+        json={"template_id": template["id"], "method": "PAPI_HORIZONTAL_RANGE"},
     )
 
     return mission_id
@@ -352,7 +352,7 @@ def test_measurements_only_two_inspections_no_transit_between_passes(client):
         "/api/v1/inspection-templates",
         json={
             "name": "Scope M2 Template A",
-            "methods": ["ANGULAR_SWEEP"],
+            "methods": ["PAPI_HORIZONTAL_RANGE"],
             "target_agl_ids": [agl["id"]],
             "default_config": {"measurement_density": 3},
         },
@@ -361,7 +361,7 @@ def test_measurements_only_two_inspections_no_transit_between_passes(client):
         "/api/v1/inspection-templates",
         json={
             "name": "Scope M2 Template B",
-            "methods": ["ANGULAR_SWEEP"],
+            "methods": ["PAPI_HORIZONTAL_RANGE"],
             "target_agl_ids": [agl["id"]],
             "default_config": {"measurement_density": 3},
         },
@@ -384,11 +384,11 @@ def test_measurements_only_two_inspections_no_transit_between_passes(client):
 
     client.post(
         f"/api/v1/missions/{mission_id}/inspections",
-        json={"template_id": template1["id"], "method": "ANGULAR_SWEEP"},
+        json={"template_id": template1["id"], "method": "PAPI_HORIZONTAL_RANGE"},
     )
     client.post(
         f"/api/v1/missions/{mission_id}/inspections",
-        json={"template_id": template2["id"], "method": "ANGULAR_SWEEP"},
+        json={"template_id": template2["id"], "method": "PAPI_HORIZONTAL_RANGE"},
     )
 
     gen = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")

@@ -36,9 +36,9 @@ def test_bulk_generate_edge_lights_lhas(client):
     for lha in generated:
         assert lha["setting_angle"] == 0.0
         assert lha["lamp_type"] == "HALOGEN"
-    # unit numbers are sequential starting from 1
-    unit_numbers = [lha["unit_number"] for lha in generated]
-    assert unit_numbers == list(range(1, len(generated) + 1))
+    # designators are assigned from available letters
+    for lha in generated:
+        assert lha["unit_designator"] in ("A", "B", "C", "D")
 
 
 def test_bulk_generate_custom_spacing_produces_many(client):

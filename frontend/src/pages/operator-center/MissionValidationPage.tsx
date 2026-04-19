@@ -13,7 +13,7 @@ import {
   cancelMission,
   deleteMission,
 } from "@/api/missions";
-import useDownloadFlightBrief from "@/hooks/useDownloadFlightBrief";
+import useDownloadMissionReport from "@/hooks/useDownloadMissionReport";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
@@ -166,7 +166,7 @@ export default function MissionValidationPage() {
     [],
   );
 
-  const { isDownloadingBrief, handleDownloadBrief } = useDownloadFlightBrief(
+  const { isDownloadingReport, handleDownloadReport } = useDownloadMissionReport(
     id,
     mission?.name,
     showNotification,
@@ -422,8 +422,8 @@ export default function MissionValidationPage() {
               onCancel={handleCancel}
               onDelete={handleDelete}
               isExporting={isExporting}
-              onDownloadBrief={handleDownloadBrief}
-              isDownloadingBrief={isDownloadingBrief}
+              onDownloadReport={handleDownloadReport}
+              isDownloadingReport={isDownloadingReport}
               hasFlightPlan={flightPlan !== null}
               statsSlot={
                 <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">

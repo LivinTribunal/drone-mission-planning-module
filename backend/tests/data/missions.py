@@ -18,4 +18,4 @@ MISSION_SPEED_UPDATE_PAYLOAD = {"default_speed": 10.0}
 
 INVALID_AIRPORT_ID = "00000000-0000-0000-0000-000000000000"
 
-MISSION_TEMPLATE_PAYLOAD = {"name": "Mission Test Template", "methods": ["ANGULAR_SWEEP"]}
+MISSION_TEMPLATE_PAYLOAD = {"name": "Mission Test Template", "methods": ["PAPI_HORIZONTAL_RANGE"]}

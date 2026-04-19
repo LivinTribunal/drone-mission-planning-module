@@ -1,4 +1,4 @@
-"""flight brief pdf generator for atc coordination."""
+"""mission technical report pdf generator."""
 
 import io
 import re
@@ -53,7 +53,7 @@ SEGMENT_COLORS = [
 
 METHOD_LABELS = {
     "VERTICAL_PROFILE": "Vertical Profile",
-    "ANGULAR_SWEEP": "Angular Sweep",
+    "PAPI_HORIZONTAL_RANGE": "PAPI Horizontal Range",
     "FLY_OVER": "Fly Over",
     "PARALLEL_SIDE_SWEEP": "Parallel Side Sweep",
     "HOVER_POINT_LOCK": "Hover Point Lock",
@@ -131,8 +131,8 @@ def _format_distance(meters: float | None) -> str:
     return f"{meters:.1f} m"
 
 
-def generate_flight_brief(db: Session, mission_id: UUID) -> tuple[bytes, str]:
-    """generate a flight brief pdf for atc coordination."""
+def generate_mission_report(db: Session, mission_id: UUID) -> tuple[bytes, str]:
+    """generate a mission technical report pdf."""
     data = _load_brief_data(db, mission_id)
 
     buf = io.BytesIO()
@@ -141,7 +141,7 @@ def generate_flight_brief(db: Session, mission_id: UUID) -> tuple[bytes, str]:
     icao = data.airport.icao_code or "XXXX"
     mission_name = _sanitize_filename(data.mission.name or "Mission")
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    pdf_title = f"FlightBrief_{icao}_{mission_name}_{date_str}"
+    pdf_title = f"MissionReport_{icao}_{mission_name}_{date_str}"
     c.setTitle(pdf_title)
 
     page = 1

@@ -212,7 +212,7 @@ export default function InspectionConfigForm({
               <option value="">{t("mission.config.targetLhaSelect")}</option>
               {hoverAgl?.lhas.map((lha) => (
                 <option key={lha.id} value={lha.id}>
-                  {t("mission.config.unitNumber")} {lha.unit_number}
+                  {t("mission.config.unitDesignator")} {lha.unit_designator}
                   {lha.setting_angle != null ? ` (${lha.setting_angle}°)` : ""}
                 </option>
               ))}
@@ -247,7 +247,7 @@ export default function InspectionConfigForm({
                         data-testid={`lha-checkbox-${lha.id}`}
                       />
                       <span>
-                        {t("mission.config.unitNumber")} {lha.unit_number}
+                        {t("mission.config.unitDesignator")} {lha.unit_designator}
                       </span>
                       <span className="text-tv-text-muted text-xs">
                         {lha.setting_angle != null ? `${lha.setting_angle}°` : "—"}
@@ -397,7 +397,7 @@ export default function InspectionConfigForm({
 
       {/* geometry overrides - only methods that consume them */}
       {(inspection.method === "VERTICAL_PROFILE" ||
-        inspection.method === "ANGULAR_SWEEP") && (
+        inspection.method === "PAPI_HORIZONTAL_RANGE") && (
         <div
           className="grid grid-cols-2 gap-3"
           data-testid="geometry-override-fields"
@@ -419,7 +419,7 @@ export default function InspectionConfigForm({
               data-testid="inspection-horizontal-distance"
             />
           </div>
-          {inspection.method === "ANGULAR_SWEEP" && (
+          {inspection.method === "PAPI_HORIZONTAL_RANGE" && (
             <div>
               <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
                 {t("mission.config.sweepAngle")}

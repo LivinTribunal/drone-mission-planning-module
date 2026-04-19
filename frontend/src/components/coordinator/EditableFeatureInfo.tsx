@@ -522,13 +522,20 @@ export default function EditableFeatureInfo({
 
         {feature.type === "lha" && (
           <>
-            <Input
-              id="feat-unit"
-              label={t("coordinator.detail.lhaUnitNumber")}
-              type="number"
-              value={val("unit_number")}
-              onChange={(e) => handleChange("unit_number", e.target.value === "" ? null : parseInt(e.target.value))}
-            />
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("coordinator.detail.lhaUnitDesignator")}
+              </label>
+              <select
+                value={val("unit_designator")}
+                onChange={(e) => handleChange("unit_designator", e.target.value)}
+                className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+              >
+                {["A", "B", "C", "D"].map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
             <Input
               id="feat-angle"
               label={t("coordinator.detail.lhaSettingAngle")}
@@ -586,7 +593,7 @@ export default function EditableFeatureInfo({
       {onDelete && (
         <ConfirmDeleteDialog
           isOpen={showDeleteConfirm}
-          name={val("name") || val("identifier") || val("unit_number") || ""}
+          name={val("name") || val("identifier") || val("unit_designator") || ""}
           warnings={deleteWarnings}
           error={deleteError}
           onConfirm={async () => {
