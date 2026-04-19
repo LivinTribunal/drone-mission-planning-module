@@ -24,17 +24,35 @@ import {
   resetPassword,
   updateUserAirports,
   listAirportsAdmin,
+  listAuditLogs,
 } from "@/api/admin";
-import type { UserAdminResponse, AirportAdminResponse } from "@/types/admin";
+import type { UserAdminResponse, AirportAdminResponse, AuditLogEntry } from "@/types/admin";
 import type { AirportSummary } from "@/types/auth";
 
 type SortKey = "name" | "email" | "role" | "airports" | "is_active" | "last_login" | "created_at";
 type SortDir = "asc" | "desc";
 
-const ROLE_COLORS: Record<string, string> = {
-  OPERATOR: "bg-[var(--tv-accent)]/15 text-[var(--tv-accent)]",
-  COORDINATOR: "bg-[var(--tv-warning)]/15 text-[var(--tv-warning)]",
-  SUPER_ADMIN: "bg-[var(--tv-error)]/15 text-[var(--tv-error)]",
+const ROLE_BADGE: Record<string, React.CSSProperties> = {
+  OPERATOR: { backgroundColor: "color-mix(in srgb, var(--tv-success) 20%, transparent)", color: "var(--tv-success)" },
+  COORDINATOR: { backgroundColor: "color-mix(in srgb, var(--tv-warning) 20%, transparent)", color: "var(--tv-warning)" },
+  SUPER_ADMIN: { backgroundColor: "color-mix(in srgb, var(--tv-error) 20%, transparent)", color: "var(--tv-error)" },
+};
+
+const STATUS_BADGE: Record<string, React.CSSProperties> = {
+  active: { backgroundColor: "color-mix(in srgb, var(--tv-success) 20%, transparent)", color: "var(--tv-success)" },
+  inactive: { backgroundColor: "color-mix(in srgb, var(--tv-error) 15%, transparent)", color: "var(--tv-error)" },
+};
+
+const ACTION_BADGE: Record<string, React.CSSProperties> = {
+  LOGIN: { backgroundColor: "color-mix(in srgb, var(--tv-success) 20%, transparent)", color: "var(--tv-success)" },
+  LOGOUT: { backgroundColor: "var(--tv-surface-hover)", color: "var(--tv-text-muted)" },
+  CREATE: { backgroundColor: "color-mix(in srgb, var(--tv-accent) 20%, transparent)", color: "var(--tv-accent)" },
+  UPDATE: { backgroundColor: "color-mix(in srgb, var(--tv-warning) 20%, transparent)", color: "var(--tv-warning)" },
+  DELETE: { backgroundColor: "color-mix(in srgb, var(--tv-error) 20%, transparent)", color: "var(--tv-error)" },
+  INVITE_USER: { backgroundColor: "color-mix(in srgb, var(--tv-info) 20%, transparent)", color: "var(--tv-info)" },
+  DEACTIVATE_USER: { backgroundColor: "color-mix(in srgb, var(--tv-error) 20%, transparent)", color: "var(--tv-error)" },
+  ASSIGN_AIRPORT: { backgroundColor: "color-mix(in srgb, var(--tv-info) 20%, transparent)", color: "var(--tv-info)" },
+  SYSTEM_SETTING_CHANGE: { backgroundColor: "color-mix(in srgb, var(--tv-warning) 20%, transparent)", color: "var(--tv-warning)" },
 };
 
 export default function SuperAdminUsersPage() {
@@ -47,7 +65,7 @@ export default function SuperAdminUsersPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -69,6 +87,7 @@ export default function SuperAdminUsersPage() {
   const [editRole, setEditRole] = useState("");
   const [saving, setSaving] = useState(false);
   const [resetLink, setResetLink] = useState("");
+  const [userLogs, setUserLogs] = useState<AuditLogEntry[]>([]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -78,7 +97,6 @@ export default function SuperAdminUsersPage() {
         offset: page * pageSize,
       };
       if (search) params.search = search;
-      if (roleFilter) params.role = roleFilter;
       if (statusFilter) params.is_active = statusFilter === "active";
 
       const res = await listUsers(params as Parameters<typeof listUsers>[0]);
@@ -89,7 +107,7 @@ export default function SuperAdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, roleFilter, statusFilter]);
+  }, [page, pageSize, search, statusFilter]);
 
   useEffect(() => {
     fetchUsers();
@@ -115,8 +133,12 @@ export default function SuperAdminUsersPage() {
         setEditEmail(u.email);
         setEditRole(u.role);
       }).catch(() => navigate("/super-admin/users"));
+      listAuditLogs({ user_id: selectedUserId, limit: 20, sort_by: "timestamp", sort_dir: "desc" })
+        .then((res) => setUserLogs(res.data))
+        .catch(() => setUserLogs([]));
     } else {
       setSelectedUser(null);
+      setUserLogs([]);
     }
   }, [selectedUserId, navigate]);
 
@@ -129,7 +151,11 @@ export default function SuperAdminUsersPage() {
     }
   }
 
-  const sortedUsers = [...users].sort((a, b) => {
+  const filteredUsers = roleFilter.size > 0
+    ? users.filter((u) => roleFilter.has(u.role))
+    : users;
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
     const dir = sortDir === "asc" ? 1 : -1;
     const av = a[sortKey as keyof UserAdminResponse];
     const bv = b[sortKey as keyof UserAdminResponse];
@@ -227,30 +253,30 @@ export default function SuperAdminUsersPage() {
     );
 
     return (
-      <ListPageContainer>
-        <ListPageContent>
-          <div className="flex items-center gap-3 mb-6">
-            <button
-              onClick={() => navigate("/super-admin/users")}
-              className="text-sm text-tv-text-secondary hover:text-tv-text-primary transition-colors"
-            >
-              &larr; {t("admin.users")}
-            </button>
-          </div>
+      <div className="px-4 pt-2 pb-6">
+        <div className="mb-3">
+          <button
+            onClick={() => navigate("/super-admin/users")}
+            className="text-sm text-tv-text-secondary hover:text-tv-text-primary transition-colors"
+          >
+            &larr; {t("admin.users")}
+          </button>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* left panel */}
-            <div className="space-y-4">
+        <div className="flex">
+          {/* left panel - 30% with spacer matching navbar */}
+          <div className="w-[30%] flex-shrink-0 flex">
+            <div className="flex-1 space-y-4">
               <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
                 <h3 className="text-base font-semibold text-tv-text-primary mb-3">
                   {selectedUser.name}
                 </h3>
                 <p className="text-sm text-tv-text-secondary">{selectedUser.email}</p>
                 <div className="flex gap-2 mt-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[selectedUser.role] || ""}`}>
+                  <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={ROLE_BADGE[selectedUser.role]}>
                     {t(`admin.role.${selectedUser.role === "SUPER_ADMIN" ? "superAdmin" : selectedUser.role.toLowerCase()}`)}
                   </span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${selectedUser.is_active ? "bg-[var(--tv-accent)]/15 text-[var(--tv-accent)]" : "bg-tv-surface-hover text-tv-text-muted"}`}>
+                  <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={STATUS_BADGE[selectedUser.is_active ? "active" : "inactive"]}>
                     {selectedUser.is_active ? t("admin.status.active") : t("admin.status.inactive")}
                   </span>
                 </div>
@@ -298,9 +324,13 @@ export default function SuperAdminUsersPage() {
                 )}
               </div>
             </div>
+            <div className="w-6 flex-shrink-0" />
+          </div>
 
-            {/* right panel - edit form */}
-            <div className="lg:col-span-2">
+          {/* right area - mirrors navbar right section */}
+          <div className="flex-1 flex gap-4 min-w-0">
+            {/* center panel - edit form */}
+            <div className="flex-1 min-w-0">
               <div className="bg-tv-surface border border-tv-border rounded-2xl p-4 space-y-4">
                 <h3 className="text-base font-semibold text-tv-text-primary">
                   {t("admin.editUser")}
@@ -357,14 +387,90 @@ export default function SuperAdminUsersPage() {
                 )}
               </div>
             </div>
+
+            {/* right panel - aligned with system status + theme + user */}
+            <div className="w-[396px] flex-shrink-0 space-y-4">
+            <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
+              <h4 className="text-sm font-semibold text-tv-text-primary mb-3">
+                {t("admin.recentActivity")}
+              </h4>
+              {userLogs.length === 0 ? (
+                <p className="text-xs text-tv-text-muted">{t("admin.noActivityYet")}</p>
+              ) : (
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {userLogs.map((log) => (
+                    <div key={log.id} className="flex items-start gap-2 text-xs">
+                      <span
+                        className="rounded-full px-1.5 py-0.5 font-semibold flex-shrink-0 mt-0.5"
+                        style={ACTION_BADGE[log.action] || { backgroundColor: "var(--tv-surface-hover)", color: "var(--tv-text-primary)" }}
+                      >
+                        {log.action}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-tv-text-secondary truncate">
+                          {log.entity_type && `${log.entity_type}`}{log.entity_name && `: ${log.entity_name}`}
+                        </p>
+                        <p className="text-tv-text-muted">
+                          {new Date(log.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* account actions */}
+            <div className="bg-tv-surface border border-tv-border rounded-2xl p-4 space-y-2">
+              <h4 className="text-sm font-semibold text-tv-text-primary mb-1">
+                {t("admin.accountActions")}
+              </h4>
+              {selectedUser.is_active ? (
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => setConfirmAction({ type: "deactivate", user: selectedUser })}
+                >
+                  {t("admin.revokeAccess")}
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => setConfirmAction({ type: "activate", user: selectedUser })}
+                >
+                  {t("admin.activateUser")}
+                </Button>
+              )}
+              <Button
+                variant="danger"
+                className="w-full"
+                disabled={selectedUser.is_active}
+                onClick={() => setConfirmAction({ type: "delete", user: selectedUser })}
+              >
+                {t("admin.deleteAccountPermanently")}
+              </Button>
+            </div>
           </div>
-        </ListPageContent>
-      </ListPageContainer>
+        </div>
+        </div>
+      </div>
     );
   }
 
   // list view
   const roles = ["OPERATOR", "COORDINATOR", "SUPER_ADMIN"];
+
+  function toggleRole(role: string) {
+    /**toggle a role filter pill.*/
+    setRoleFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+    setPage(0);
+  }
 
   return (
     <ListPageContainer data-testid="admin-users-page">
@@ -374,134 +480,143 @@ export default function SuperAdminUsersPage() {
           onChange={(e) => { setSearch(e.target.value); setPage(0); }}
           placeholder={t("admin.searchUsers")}
         >
-          <div className="flex items-center gap-2">
+          <Button variant="danger" onClick={() => setInviteOpen(true)}>
+            + {t("admin.inviteUser")}
+          </Button>
+        </SearchBar>
+
+        {/* filter row */}
+        <div className="flex items-center w-full max-w-6xl mb-4 rounded-full border border-tv-border bg-tv-surface px-3 py-2">
+          <div className="flex items-center gap-1.5">
             {roles.map((r) => (
               <button
                 key={r}
-                onClick={() => { setRoleFilter(roleFilter === r ? "" : r); setPage(0); }}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  roleFilter === r
-                    ? "bg-tv-accent text-tv-accent-text"
-                    : "bg-tv-surface text-tv-text-secondary hover:bg-tv-surface-hover"
+                onClick={() => toggleRole(r)}
+                style={ROLE_BADGE[r]}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-opacity ${
+                  roleFilter.size > 0 && !roleFilter.has(r) ? "opacity-40" : ""
                 }`}
               >
                 {t(`admin.role.${r === "SUPER_ADMIN" ? "superAdmin" : r.toLowerCase()}`)}
               </button>
             ))}
+          </div>
+
+          <div className="w-px h-6 bg-tv-border mx-3" />
+
+          <div className="flex items-center gap-1.5">
             {["active", "inactive"].map((s) => (
               <button
                 key={s}
                 onClick={() => { setStatusFilter(statusFilter === s ? "" : s); setPage(0); }}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  statusFilter === s
-                    ? "bg-tv-accent text-tv-accent-text"
-                    : "bg-tv-surface text-tv-text-secondary hover:bg-tv-surface-hover"
+                style={STATUS_BADGE[s]}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-opacity ${
+                  statusFilter && statusFilter !== s ? "opacity-40" : ""
                 }`}
               >
                 {t(`admin.status.${s}`)}
               </button>
             ))}
-            <Button variant="danger" onClick={() => setInviteOpen(true)}>
-              {t("admin.inviteUser")}
-            </Button>
           </div>
-        </SearchBar>
+        </div>
 
-        {loading ? (
-          <p className="text-center text-tv-text-muted py-8">{t("common.loading")}</p>
-        ) : users.length === 0 ? (
-          <p className="text-center text-tv-text-muted py-8">{t("admin.noUsers")}</p>
-        ) : (
-          <div className="w-full overflow-x-auto">
-            <table className="w-full" data-testid="users-table">
-              <thead>
-                <tr className="border-b border-tv-border">
-                  <SortableHeader sortKey="name" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
-                    {t("admin.columns.name")}
-                  </SortableHeader>
-                  <SortableHeader sortKey="email" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
-                    {t("admin.columns.email")}
-                  </SortableHeader>
-                  <SortableHeader sortKey="role" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
-                    {t("admin.columns.role")}
-                  </SortableHeader>
-                  <SortableHeader sortKey="airports" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
-                    {t("admin.columns.airports")}
-                  </SortableHeader>
-                  <SortableHeader sortKey="is_active" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
-                    {t("admin.columns.status")}
-                  </SortableHeader>
-                  <SortableHeader sortKey="last_login" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
-                    {t("admin.columns.lastLogin")}
-                  </SortableHeader>
-                  <SortableHeader sortKey="created_at" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
-                    {t("admin.columns.created")}
-                  </SortableHeader>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {sortedUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    onClick={() => navigate(`/super-admin/users/${user.id}`)}
-                    className="border-b border-tv-border hover:bg-tv-surface-hover cursor-pointer transition-colors"
-                  >
-                    <td className="px-4 py-3 text-sm text-tv-text-primary font-medium">{user.name}</td>
-                    <td className="px-4 py-3 text-sm text-tv-text-secondary">{user.email}</td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[user.role] || ""}`}>
-                        {t(`admin.role.${user.role === "SUPER_ADMIN" ? "superAdmin" : user.role.toLowerCase()}`)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-tv-text-secondary">{user.airports?.length || 0}</td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${user.is_active ? "bg-[var(--tv-accent)]/15 text-[var(--tv-accent)]" : "bg-tv-surface-hover text-tv-text-muted"}`}>
-                        {user.is_active ? t("admin.status.active") : t("admin.status.inactive")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-tv-text-muted">{formatDate(user.last_login)}</td>
-                    <td className="px-4 py-3 text-sm text-tv-text-muted">{formatDate(user.created_at)}</td>
-                    <td className="px-4 py-3">
-                      <RowActionButtons
-                        actions={[
-                          {
-                            icon: Pencil,
-                            onClick: () => navigate(`/super-admin/users/${user.id}`),
-                            title: t("common.edit"),
-                          },
-                          user.is_active
-                            ? {
-                                icon: UserMinus,
-                                onClick: () => setConfirmAction({ type: "deactivate", user }),
-                                title: t("admin.deactivateUser"),
-                              }
-                            : {
-                                icon: UserCheck,
-                                onClick: () => setConfirmAction({ type: "activate", user }),
-                                title: t("admin.activateUser"),
-                              },
-                          {
-                            icon: Trash2,
-                            onClick: () => setConfirmAction({ type: "delete", user }),
-                            variant: "danger" as const,
-                            disabled: user.is_active,
-                            title: t("admin.deleteUser"),
-                          },
-                        ]}
-                      />
-                    </td>
+        <div className="rounded-2xl border border-tv-border bg-tv-surface overflow-hidden">
+          {loading ? (
+            <p className="text-center text-tv-text-muted py-8">{t("common.loading")}</p>
+          ) : users.length === 0 ? (
+            <p className="text-center text-tv-text-muted py-8">{t("admin.noUsers")}</p>
+          ) : (
+            <div className="w-full overflow-x-auto">
+              <table className="w-full" data-testid="users-table">
+                <thead>
+                  <tr className="border-b border-tv-border">
+                    <SortableHeader sortKey="name" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
+                      {t("admin.columns.name")}
+                    </SortableHeader>
+                    <SortableHeader sortKey="email" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
+                      {t("admin.columns.email")}
+                    </SortableHeader>
+                    <SortableHeader sortKey="role" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
+                      {t("admin.columns.role")}
+                    </SortableHeader>
+                    <SortableHeader sortKey="airports" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
+                      {t("admin.columns.airports")}
+                    </SortableHeader>
+                    <SortableHeader sortKey="is_active" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
+                      {t("admin.columns.status")}
+                    </SortableHeader>
+                    <SortableHeader sortKey="last_login" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
+                      {t("admin.columns.lastLogin")}
+                    </SortableHeader>
+                    <SortableHeader sortKey="created_at" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
+                      {t("admin.columns.created")}
+                    </SortableHeader>
+                    <th className="px-4 py-3" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  {sortedUsers.map((user) => (
+                    <tr
+                      key={user.id}
+                      onClick={() => navigate(`/super-admin/users/${user.id}`)}
+                      className="border-b border-tv-border hover:bg-tv-surface-hover cursor-pointer transition-colors"
+                    >
+                      <td className="px-4 py-3 text-sm text-tv-text-primary font-medium">{user.name}</td>
+                      <td className="px-4 py-3 text-sm text-tv-text-secondary">{user.email}</td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={ROLE_BADGE[user.role]}>
+                          {t(`admin.role.${user.role === "SUPER_ADMIN" ? "superAdmin" : user.role.toLowerCase()}`)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-tv-text-secondary">{user.airports?.length || 0}</td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={STATUS_BADGE[user.is_active ? "active" : "inactive"]}>
+                          {user.is_active ? t("admin.status.active") : t("admin.status.inactive")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-tv-text-muted">{formatDate(user.last_login)}</td>
+                      <td className="px-4 py-3 text-sm text-tv-text-muted">{formatDate(user.created_at)}</td>
+                      <td className="px-4 py-3">
+                        <RowActionButtons
+                          actions={[
+                            {
+                              icon: Pencil,
+                              onClick: () => navigate(`/super-admin/users/${user.id}`),
+                              title: t("common.edit"),
+                            },
+                            user.is_active
+                              ? {
+                                  icon: UserMinus,
+                                  onClick: () => setConfirmAction({ type: "deactivate", user }),
+                                  title: t("admin.deactivateUser"),
+                                }
+                              : {
+                                  icon: UserCheck,
+                                  onClick: () => setConfirmAction({ type: "activate", user }),
+                                  title: t("admin.activateUser"),
+                                },
+                            {
+                              icon: Trash2,
+                              onClick: () => setConfirmAction({ type: "delete", user }),
+                              variant: "danger" as const,
+                              disabled: user.is_active,
+                              title: t("admin.deleteUser"),
+                            },
+                          ]}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         <Pagination
           page={page}
           pageSize={pageSize}
-          totalItems={total}
+          totalItems={roleFilter.size > 0 ? filteredUsers.length : total}
           onPageChange={setPage}
           onPageSizeChange={(s) => { setPageSize(s); setPage(0); }}
           showingKey="admin.pagination"
