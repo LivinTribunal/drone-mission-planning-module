@@ -17,7 +17,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.models.enums import MissionStatus
+from app.models.enums import ComputationStatus, MissionStatus
 
 # max inspections per mission
 MAX_INSPECTIONS = 10
@@ -112,6 +112,11 @@ class Mission(Base):
     flight_plan_scope = Column(String(25), nullable=False, default="FULL", server_default="FULL")
     has_unsaved_map_changes = Column(Boolean, nullable=False, default=False, server_default="false")
 
+    # trajectory computation lifecycle
+    computation_status = Column(String(20), nullable=False, default="IDLE", server_default="IDLE")
+    computation_error = Column(String, nullable=True)
+    computation_started_at = Column(DateTime(timezone=True), nullable=True)
+
     airport = relationship("Airport")
     drone_profile = relationship("DroneProfile")
     inspections = relationship("Inspection", back_populates="mission", cascade="all, delete-orphan")
@@ -125,6 +130,10 @@ class Mission(Base):
         CheckConstraint(
             "flight_plan_scope IN ('FULL', 'NO_TAKEOFF_LANDING', 'MEASUREMENTS_ONLY')",
             name="ck_mission_flight_plan_scope",
+        ),
+        CheckConstraint(
+            "computation_status IN ('IDLE', 'COMPUTING', 'COMPLETED', 'FAILED')",
+            name="ck_mission_computation_status",
         ),
     )
 
@@ -203,6 +212,30 @@ class Mission(Base):
         """
         self.invalidate_trajectory()
         self.drone_profile_id = drone_profile_id
+
+    def mark_computing(self):
+        """set computation status to COMPUTING with timestamp."""
+        self.computation_status = ComputationStatus.COMPUTING
+        self.computation_error = None
+        self.computation_started_at = func.now()
+
+    def mark_computation_completed(self):
+        """set computation status to COMPLETED after successful generation."""
+        self.computation_status = ComputationStatus.COMPLETED
+        self.computation_error = None
+        self.computation_started_at = None
+
+    def mark_computation_failed(self, error: str):
+        """set computation status to FAILED with error message."""
+        self.computation_status = ComputationStatus.FAILED
+        self.computation_error = error
+        self.computation_started_at = None
+
+    def reset_computation_status(self):
+        """reset computation status to IDLE."""
+        self.computation_status = ComputationStatus.IDLE
+        self.computation_error = None
+        self.computation_started_at = None
 
     def validate_transit_altitude(self, drone: "DroneProfile | None" = None):
         """enforce transit altitude business rules.

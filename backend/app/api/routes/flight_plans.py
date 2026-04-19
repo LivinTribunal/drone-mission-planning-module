@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,10 +13,14 @@ from app.schemas.flight_plan import (
     TransitWaypointInsertRequest,
     WaypointBatchUpdateRequest,
 )
+from app.schemas.mission import ComputationStatusResponse
 from app.services import flight_plan_service
 from app.services.trajectory.orchestrator import generate_trajectory
 
 router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
+
+# staleness threshold - if computing for longer than this, consider it timed out
+_COMPUTATION_TIMEOUT_MINUTES = 5
 
 
 @router.post(
@@ -42,9 +47,18 @@ def generate(
             detail="Takeoff/landing coordinates must be set.",
         )
 
+    # mark computing before the heavy work
+    mission.mark_computing()
+    db.commit()
+
     try:
         flight_plan, _warnings = generate_trajectory(db, mission_id)
     except TrajectoryGenerationError as error:
+        # reload mission after trajectory call (it may have been modified)
+        db.refresh(mission)
+        mission.mark_computation_failed(error.message)
+        db.commit()
+
         detail = (
             {"error": error.message, "violations": error.violations}
             if error.violations is not None
@@ -53,7 +67,21 @@ def generate(
 
         raise HTTPException(status_code=error.status_code, detail=detail)
     except DomainError as error:
+        db.refresh(mission)
+        mission.mark_computation_failed(error.message)
+        db.commit()
+
         raise HTTPException(status_code=error.status_code, detail=error.message)
+    except Exception as error:
+        db.refresh(mission)
+        mission.mark_computation_failed(str(error))
+        db.commit()
+        raise
+
+    # mark completed
+    db.refresh(mission)
+    mission.mark_computation_completed()
+    db.commit()
 
     # reload with eager-loaded waypoints
     try:
@@ -63,6 +91,38 @@ def generate(
 
     db.refresh(mission)
     return GenerateTrajectoryResponse(flight_plan=fp, mission_status=mission.status)
+
+
+@router.get(
+    "/{mission_id}/computation-status",
+    response_model=ComputationStatusResponse,
+)
+def get_computation_status(
+    mission_id: UUID,
+    current_user: OperatorUser,
+    db: Session = Depends(get_db),
+):
+    """lightweight polling endpoint for trajectory computation status."""
+    try:
+        mission = check_mission_access(db, current_user, mission_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    # staleness detection - if computing for too long, treat as failed
+    if mission.computation_status == "COMPUTING" and mission.computation_started_at is not None:
+        started = mission.computation_started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+        if elapsed > _COMPUTATION_TIMEOUT_MINUTES * 60:
+            mission.mark_computation_failed("computation timed out")
+            db.commit()
+
+    return ComputationStatusResponse(
+        computation_status=mission.computation_status,
+        computation_error=mission.computation_error,
+        computation_started_at=mission.computation_started_at,
+    )
 
 
 @router.get("/{mission_id}/flight-plan", response_model=FlightPlanResponse)

@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
-import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
-import { getMission, getFlightPlan, generateAndFetchTrajectory } from "@/api/missions";
+import { useComputation } from "@/contexts/ComputationContext";
+import { getMission, getFlightPlan } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -28,6 +28,7 @@ export default function MissionOverviewPage() {
   const { airportDetail } = useAirport();
   const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage, leftPanelEl } =
     useOutletContext<MissionTabOutletContext>();
+  const computation = useComputation();
 
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
   const [droneProfiles, setDroneProfiles] = useState<DroneProfileResponse[]>([]);
@@ -37,8 +38,6 @@ export default function MissionOverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
   const [is3D, setIs3D] = useState(false);
-  const [computing, setComputing] = useState(false);
-  const [notification, setNotification] = useState<string | null>(null);
   const [selectedWarning, setSelectedWarning] = useState<ValidationViolation | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
@@ -48,34 +47,27 @@ export default function MissionOverviewPage() {
     return Object.fromEntries(sorted.map((insp, i) => [insp.id, i + 1]));
   }, [mission]);
 
-  const showNotification = useCallback((msg: string) => {
-    /** show a temporary toast message. */
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3000);
-  }, []);
+  // consume computation result when trajectory finishes on any page
+  const prevComputationStatus = useRef(computation.status);
+  useEffect(() => {
+    if (
+      prevComputationStatus.current === "COMPUTING" &&
+      computation.status === "COMPLETED" &&
+      computation.lastResult
+    ) {
+      setFlightPlan(computation.lastResult);
+      const violations = computation.lastResult.validation_result?.violations ?? [];
+      setWarnings(violations.length > 0 ? violations : null);
 
-  const handleCompute = useCallback(async () => {
-    /** trigger trajectory generation and refresh data. */
-    if (!id || !mission) return;
-    setComputing(true);
-    try {
-      const { flightPlan, missionStatus } = await generateAndFetchTrajectory(id);
-      setFlightPlan(flightPlan);
-
-      setMission({ ...mission, status: missionStatus });
-      refreshMissions();
-      showNotification(t("map.changesSaved"));
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.data?.detail) {
-        const detail = err.response.data.detail;
-        showNotification(typeof detail === "string" ? detail : t("mission.config.trajectoryError"));
-      } else {
-        showNotification(t("mission.config.trajectoryError"));
+      if (id) {
+        getMission(id).then((fresh) => {
+          setMission(fresh);
+          refreshMissions();
+        });
       }
-    } finally {
-      setComputing(false);
     }
-  }, [id, mission, t, refreshMissions, showNotification]);
+    prevComputationStatus.current = computation.status;
+  }, [computation.status, computation.lastResult, id, refreshMissions]);
 
   // wire up disabled save button
   useEffect(() => {
@@ -98,15 +90,15 @@ export default function MissionOverviewPage() {
 
   useEffect(() => {
     setComputeContext({
-      onCompute: handleCompute,
-      canCompute: hasCoordinates && !computing,
-      isComputing: computing,
+      onCompute: id ? () => computation.startComputation(id) : null,
+      canCompute: hasCoordinates && !computation.isComputing,
+      isComputing: computation.isComputing,
       label: computeLabel,
     });
     return () => {
       setComputeContext({ onCompute: null, canCompute: false, isComputing: false });
     };
-  }, [setComputeContext, handleCompute, hasCoordinates, computing, computeLabel]);
+  }, [setComputeContext, computation, hasCoordinates, computeLabel, id]);
 
   const fetchData = useCallback(async () => {
     /** load mission, drone profiles, and flight plan. */
@@ -320,15 +312,6 @@ export default function MissionOverviewPage() {
         )}
       </div>
 
-      {/* notification toast */}
-      {notification && (
-        <div
-          className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-tv-surface border border-tv-border text-sm text-tv-text-primary"
-          data-testid="notification-toast"
-        >
-          {notification}
-        </div>
-      )}
     </>
   );
 }

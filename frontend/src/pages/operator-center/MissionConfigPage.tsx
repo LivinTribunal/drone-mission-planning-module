@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { isAxiosError } from "@/api/client";
 import { Loader2 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
+import { useComputation } from "@/contexts/ComputationContext";
 import {
   getMission,
   updateMission,
@@ -64,6 +65,7 @@ export default function MissionConfigPage() {
   const { airportDetail } = useAirport();
   const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage, leftPanelEl } =
     useOutletContext<MissionTabOutletContext>();
+  const computation = useComputation();
 
   // core data
   const [mission, setMission] = useState<MissionDetailResponse | null>(null);
@@ -84,7 +86,6 @@ export default function MissionConfigPage() {
     new Set(),
   );
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const [computing, setComputing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(
@@ -129,10 +130,6 @@ export default function MissionConfigPage() {
   const canModify = mission
     ? !TERMINAL_STATUSES.includes(mission.status)
     : false;
-
-  const computeRef = useRef<() => void>(() => {});
-  // keep compute ref pointed at the latest handler; safe to mutate during render
-  computeRef.current = handleComputeTrajectory;
 
   const isDirty =
     Object.keys(missionDirty).length > 0 ||
@@ -342,9 +339,9 @@ export default function MissionConfigPage() {
 
   useEffect(() => {
     setComputeContext({
-      onCompute: () => computeRef.current(),
+      onCompute: id ? () => computation.startComputation(id) : null,
       canCompute: isDraft && hasCoordinates,
-      isComputing: computing,
+      isComputing: computation.isComputing,
       ...(!hasCoordinates && isDraft
         ? { label: t("mission.config.setCoordinatesFirst"), tooltip: t("mission.config.setCoordinatesTooltip") }
         : {}),
@@ -357,7 +354,7 @@ export default function MissionConfigPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext, isDraft, computing, hasCoordinates, t]);
+  }, [setComputeContext, isDraft, computation, hasCoordinates, t, id]);
 
   // unsaved changes on beforeunload
   useEffect(() => {
@@ -532,30 +529,24 @@ export default function MissionConfigPage() {
     });
   }
 
-  async function handleComputeTrajectory() {
-    if (!id || !mission) return;
-    setComputing(true);
-    try {
-      const { flightPlan, missionStatus } = await generateAndFetchTrajectory(id);
-      setFlightPlan(flightPlan);
-
-      const violations = flightPlan.validation_result?.violations ?? [];
+  // consume computation result when trajectory finishes on any page
+  const prevComputationStatus = useRef(computation.status);
+  useEffect(() => {
+    if (
+      prevComputationStatus.current === "COMPUTING" &&
+      computation.status === "COMPLETED" &&
+      computation.lastResult
+    ) {
+      setFlightPlan(computation.lastResult);
+      const violations = computation.lastResult.validation_result?.violations ?? [];
       setWarnings(violations.length > 0 ? violations : null);
 
-      updateMissionState({ ...mission, status: missionStatus });
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.status && [400, 409, 422].includes(err.response.status)) {
-        const detail = err.response?.data?.detail;
-        showNotification(
-          typeof detail === "string" ? detail : t("mission.config.trajectoryError"),
-        );
-      } else {
-        showNotification(t("mission.config.trajectoryError"));
+      if (id) {
+        getMission(id).then((fresh) => updateMissionState(fresh));
       }
-    } finally {
-      setComputing(false);
     }
-  }
+    prevComputationStatus.current = computation.status;
+  }, [computation.status, computation.lastResult, id, updateMissionState]);
 
   function handleEditWaypoints() {
     if (isDirty) {

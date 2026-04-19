@@ -10,12 +10,12 @@ import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
+import { useComputation } from "@/contexts/ComputationContext";
 import {
   getMission,
   updateMission,
   getFlightPlan,
   batchUpdateWaypoints,
-  generateAndFetchTrajectory,
   insertTransitWaypoint,
   deleteTransitWaypoint,
 } from "@/api/missions";
@@ -66,6 +66,7 @@ export default function MissionMapPage() {
   const { airportDetail } = useAirport();
   const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage, setCompactLeftPanel } =
     useOutletContext<MissionTabOutletContext>();
+  const computation = useComputation();
 
   // hide left panel column - map uses full width
   useEffect(() => {
@@ -80,7 +81,6 @@ export default function MissionMapPage() {
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [computing, setComputing] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [enduranceMinutes, setEnduranceMinutes] = useState<number | null>(null);
 
@@ -278,32 +278,28 @@ export default function MissionMapPage() {
     };
   }, [setSaveContext, handleSave, isDirty, saving, lastSaved]);
 
-  // compute / recompute trajectory
-  const handleCompute = useCallback(async () => {
-    if (!id || !mission) return;
-    setComputing(true);
-    try {
-      const { flightPlan, missionStatus } = await generateAndFetchTrajectory(id);
-      setFlightPlan(flightPlan);
+  // consume computation result when trajectory finishes on any page
+  const prevComputationStatus = useRef(computation.status);
+  useEffect(() => {
+    if (
+      prevComputationStatus.current === "COMPUTING" &&
+      computation.status === "COMPLETED" &&
+      computation.lastResult
+    ) {
+      setFlightPlan(computation.lastResult);
       setDirtyWaypoints({});
       clearHistory();
 
-      const updatedMission = { ...mission, status: missionStatus };
-      setMission(updatedMission);
-      updateMissionFromPage(updatedMission);
-      refreshMissions();
-      showNotification(t("map.changesSaved"));
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.data?.detail) {
-        const detail = err.response?.data?.detail;
-        showNotification(typeof detail === "string" ? detail : t("mission.config.trajectoryError"));
-      } else {
-        showNotification(t("mission.config.trajectoryError"));
+      if (id) {
+        getMission(id).then((fresh) => {
+          setMission(fresh);
+          updateMissionFromPage(fresh);
+          refreshMissions();
+        });
       }
-    } finally {
-      setComputing(false);
     }
-  }, [id, mission, clearHistory, t, refreshMissions, updateMissionFromPage]);
+    prevComputationStatus.current = computation.status;
+  }, [computation.status, computation.lastResult, id, clearHistory, refreshMissions, updateMissionFromPage]);
 
   // compute button state
   const computeLabel = useMemo(() => {
@@ -323,9 +319,9 @@ export default function MissionMapPage() {
   // wire compute context to tab bar - "Compute / Recompute Trajectory" button
   useEffect(() => {
     setComputeContext({
-      onCompute: handleCompute,
-      canCompute: canCompute && !computing,
-      isComputing: computing,
+      onCompute: id ? () => computation.startComputation(id) : null,
+      canCompute: canCompute && !computation.isComputing,
+      isComputing: computation.isComputing,
       label: computeLabel,
       ...(!hasCoordinates ? { tooltip: t("mission.config.setCoordinatesTooltip") } : {}),
     });
@@ -336,7 +332,7 @@ export default function MissionMapPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext, handleCompute, canCompute, computing, computeLabel, hasCoordinates, t]);
+  }, [setComputeContext, computation, canCompute, computeLabel, hasCoordinates, t, id]);
 
   // handle map click based on active tool
   const handleMapClick = useCallback(

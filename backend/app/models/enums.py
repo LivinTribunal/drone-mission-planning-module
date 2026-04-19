@@ -1,6 +1,7 @@
 from app.core.enums import (  # noqa: F401
     METHOD_AGL_COMPAT,
     CameraAction,
+    ComputationStatus,
     ConstraintType,
     ExportFormat,
     FlightPlanScope,

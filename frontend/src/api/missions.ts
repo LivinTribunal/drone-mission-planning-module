@@ -8,6 +8,7 @@ import type {
   InspectionCreate,
   InspectionUpdate,
   ReorderRequest,
+  ComputationStatusResponse,
 } from "@/types/mission";
 import type { MissionStatus } from "@/types/enums";
 import type {
@@ -172,6 +173,13 @@ export async function generateTrajectory(
   missionId: string,
 ): Promise<GenerateTrajectoryResponse> {
   const res = await client.post(`/missions/${missionId}/generate-trajectory`);
+  return res.data;
+}
+
+export async function getComputationStatus(
+  missionId: string,
+): Promise<ComputationStatusResponse> {
+  const res = await client.get(`/missions/${missionId}/computation-status`);
   return res.data;
 }
 
