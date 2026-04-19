@@ -125,10 +125,7 @@ export default function InspectionConfigForm({
 
   // papi observation angle derived from max setting angle + offset
   const { computedObservationAngle, missingSettingAngleUnits } = useMemo(() => {
-    if (
-      inspection.method !== "PAPI_HORIZONTAL_RANGE" &&
-      inspection.method !== "VERTICAL_PROFILE"
-    ) {
+    if (inspection.method !== "PAPI_HORIZONTAL_RANGE") {
       return { computedObservationAngle: null, missingSettingAngleUnits: [] as string[] };
     }
     const relevantLhas = targetAgls.flatMap((a) =>
@@ -426,8 +423,7 @@ export default function InspectionConfigForm({
       </div>
 
       {/* missing setting angle warning */}
-      {(inspection.method === "PAPI_HORIZONTAL_RANGE" ||
-        inspection.method === "VERTICAL_PROFILE") &&
+      {inspection.method === "PAPI_HORIZONTAL_RANGE" &&
         missingSettingAngleUnits.length > 0 && (
         <div
           className="flex items-center gap-2 p-3 rounded-2xl border border-tv-warning bg-tv-warning/10"

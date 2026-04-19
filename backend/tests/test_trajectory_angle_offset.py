@@ -5,8 +5,10 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app.models.enums import WaypointType
+from app.schemas.mission import InspectionConfigOverride
 from app.services.trajectory.helpers import (
     check_missing_setting_angles,
     derive_observation_angle,
@@ -93,6 +95,30 @@ class TestDeriveObservationAngle:
         """empty list raises ValueError from max()."""
         with pytest.raises(ValueError):
             derive_observation_angle([], 0.5)
+
+
+class TestAngleOffsetValidation:
+    """tests for angle_offset upper bound on InspectionConfigOverride."""
+
+    def test_angle_offset_at_upper_bound(self):
+        """angle_offset=10 is accepted."""
+        cfg = InspectionConfigOverride(angle_offset=10)
+        assert cfg.angle_offset == 10
+
+    def test_angle_offset_above_upper_bound_rejected(self):
+        """angle_offset=10.1 is rejected by le=10 constraint."""
+        with pytest.raises(ValidationError):
+            InspectionConfigOverride(angle_offset=10.1)
+
+    def test_angle_offset_extreme_value_rejected(self):
+        """angle_offset=90 is rejected - prevents unsafe tan() blowup."""
+        with pytest.raises(ValidationError):
+            InspectionConfigOverride(angle_offset=90)
+
+    def test_angle_offset_negative_rejected(self):
+        """negative angle_offset is rejected by ge=0 constraint."""
+        with pytest.raises(ValidationError):
+            InspectionConfigOverride(angle_offset=-1)
 
 
 class TestCheckMissingSettingAngles:

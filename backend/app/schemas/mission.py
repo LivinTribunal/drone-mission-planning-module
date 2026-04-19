@@ -44,7 +44,7 @@ class InspectionConfigOverride(BaseModel):
     """config overrides for an inspection within a mission"""
 
     altitude_offset: float | None = None
-    angle_offset: float | None = Field(default=None, ge=0)
+    angle_offset: float | None = Field(default=None, ge=0, le=10)
     measurement_speed_override: float | None = Field(default=None, gt=0)
     measurement_density: int | None = Field(default=None, ge=1)
     custom_tolerances: dict[str, float] | None = None
