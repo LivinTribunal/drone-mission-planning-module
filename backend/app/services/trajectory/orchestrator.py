@@ -207,10 +207,10 @@ def _format_soft_warnings(
     warnings: list[tuple[str, list[str]]],
     wp_offset: int = 0,
 ) -> None:
-    """group soft violations by message and append formatted warnings.
+    """group soft violations by message and append formatted warning tuples.
 
     wp_offset is added to each waypoint_index to convert pass-local indices
-    to global all_waypoints indices for later UUID resolution.
+    to global all_waypoints indices for later uuid resolution.
     """
     groups: dict[str, list[int]] = {}
     for v in violations:
