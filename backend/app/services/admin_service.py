@@ -169,73 +169,91 @@ def list_airports_admin(
     country: str | None = None,
 ) -> list[dict]:
     """list airports with user/mission/drone counts for admin overview."""
-    airports = db.query(Airport).all()
-    result = []
+    from app.models.mission import Mission
 
-    for airport in airports:
-        # count users assigned to this airport
-        total_users = (
-            db.query(func.count())
-            .select_from(user_airports)
-            .filter(user_airports.c.airport_id == airport.id)
-            .scalar()
+    # subquery aggregates - single round-trip instead of 4N+1
+    user_counts = (
+        db.query(
+            user_airports.c.airport_id,
+            func.count().label("user_count"),
+        )
+        .group_by(user_airports.c.airport_id)
+        .subquery()
+    )
+
+    coordinator_counts = (
+        db.query(
+            user_airports.c.airport_id,
+            func.count().label("coordinator_count"),
+        )
+        .join(User, User.id == user_airports.c.user_id)
+        .filter(User.role == UserRole.COORDINATOR.value)
+        .group_by(user_airports.c.airport_id)
+        .subquery()
+    )
+
+    mission_counts = (
+        db.query(
+            Mission.airport_id,
+            func.count().label("mission_count"),
+        )
+        .group_by(Mission.airport_id)
+        .subquery()
+    )
+
+    drone_counts = (
+        db.query(
+            Mission.airport_id,
+            func.count(func.distinct(Mission.drone_profile_id)).label("drone_count"),
+        )
+        .filter(Mission.drone_profile_id.isnot(None))
+        .group_by(Mission.airport_id)
+        .subquery()
+    )
+
+    query = (
+        db.query(
+            Airport,
+            func.coalesce(user_counts.c.user_count, 0).label("user_count"),
+            func.coalesce(coordinator_counts.c.coordinator_count, 0).label("coordinator_count"),
+            func.coalesce(mission_counts.c.mission_count, 0).label("mission_count"),
+            func.coalesce(drone_counts.c.drone_count, 0).label("drone_count"),
+        )
+        .outerjoin(user_counts, Airport.id == user_counts.c.airport_id)
+        .outerjoin(coordinator_counts, Airport.id == coordinator_counts.c.airport_id)
+        .outerjoin(mission_counts, Airport.id == mission_counts.c.airport_id)
+        .outerjoin(drone_counts, Airport.id == drone_counts.c.airport_id)
+    )
+
+    if search:
+        pattern = f"%{search.lower()}%"
+        query = query.filter(
+            func.lower(Airport.name).like(pattern)
+            | func.lower(Airport.icao_code).like(pattern)
+            | func.lower(Airport.city).like(pattern)
         )
 
-        coordinator_count = (
-            db.query(func.count())
-            .select_from(User)
-            .join(user_airports, User.id == user_airports.c.user_id)
-            .filter(
-                user_airports.c.airport_id == airport.id,
-                User.role == UserRole.COORDINATOR.value,
-            )
-            .scalar()
-        )
+    if country:
+        query = query.filter(func.lower(Airport.country) == country.lower())
 
-        from app.models.mission import Mission
+    rows = query.all()
 
-        mission_count = (
-            db.query(func.count())
-            .select_from(Mission)
-            .filter(Mission.airport_id == airport.id)
-            .scalar()
-        )
-
-        drone_count = (
-            db.query(func.count(func.distinct(Mission.drone_profile_id)))
-            .filter(Mission.airport_id == airport.id, Mission.drone_profile_id.isnot(None))
-            .scalar()
-        )
-
-        if search:
-            pattern = search.lower()
-            if not (
-                pattern in (airport.name or "").lower()
-                or pattern in (airport.icao_code or "").lower()
-                or pattern in (airport.city or "").lower()
-            ):
-                continue
-
-        if country and (airport.country or "").lower() != country.lower():
-            continue
-
-        result.append(
-            {
-                "id": airport.id,
-                "icao_code": airport.icao_code,
-                "name": airport.name,
-                "city": airport.city,
-                "country": airport.country,
-                "user_count": total_users,
-                "coordinator_count": coordinator_count,
-                "mission_count": mission_count,
-                "drone_count": drone_count,
-                "terrain_source": airport.terrain_source,
-                "created_at": None,
-            }
-        )
-
-    return result
+    return [
+        {
+            "id": airport.id,
+            "icao_code": airport.icao_code,
+            "name": airport.name,
+            "city": airport.city,
+            "country": airport.country,
+            "user_count": uc,
+            "coordinator_count": cc,
+            "mission_count": mc,
+            "drone_count": dc,
+            "terrain_source": airport.terrain_source,
+            "created_at": None,
+        }
+        for airport, uc, cc, mc, dc in rows
+    ]
 
 
 # system settings

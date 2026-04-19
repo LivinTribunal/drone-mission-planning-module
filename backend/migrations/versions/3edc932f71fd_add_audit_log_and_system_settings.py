@@ -1,7 +1,7 @@
 """add audit_log and system_settings tables
 
-Revision ID: a1b2c3d4e5f6
-Revises: f2cea25e628a
+Revision ID: 3edc932f71fd
+Revises: 909c64f14df1
 Create Date: 2026-04-18 12:00:00.000000
 
 """
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-revision = "a1b2c3d4e5f6"
-down_revision = "f2cea25e628a"
+revision = "3edc932f71fd"
+down_revision = "909c64f14df1"
 branch_labels = None
 depends_on = None
 

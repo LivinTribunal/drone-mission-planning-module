@@ -57,8 +57,8 @@ export default function InviteUserDialog({
       });
       setInvitationLink(result.invitation_link);
       onSuccess();
-    } catch {
-      setError(t("admin.invitationSent", { email: "" }).includes("error") ? "Failed" : "Failed to send invitation");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }

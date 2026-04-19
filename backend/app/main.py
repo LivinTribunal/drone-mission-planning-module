@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -79,55 +80,71 @@ _static_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 
-# maintenance mode middleware - env var placeholder until system settings table exists
+# maintenance mode cache - avoids a db query on every request
+_maintenance_cache: dict[str, object] = {"value": False, "checked_at": 0.0}
+_MAINTENANCE_TTL = 30
+
+
+def _is_maintenance_on() -> bool:
+    """check maintenance mode with 30s ttl cache."""
+    if os.environ.get("MAINTENANCE_MODE", "").lower() == "true":
+        return True
+
+    now = time.monotonic()
+    if now - _maintenance_cache["checked_at"] < _MAINTENANCE_TTL:  # type: ignore[operator]
+        return bool(_maintenance_cache["value"])
+
+    db = None
+    try:
+        db = SessionLocal()
+        from app.services.admin_service import is_maintenance_mode
+
+        result = is_maintenance_mode(db)
+    except Exception:
+        result = False
+    finally:
+        if db:
+            db.close()
+
+    _maintenance_cache["value"] = result
+    _maintenance_cache["checked_at"] = now
+    return result
+
+
 @app.middleware("http")
 async def maintenance_mode_middleware(request: Request, call_next):
-    """return 503 for non-admin users when maintenance mode is on.
+    """return 503 for non-admin users when maintenance mode is on."""
+    if not _is_maintenance_on():
+        return await call_next(request)
 
-    note: this middleware parses JWT tokens directly via auth_service.decode_token
-    rather than through the FastAPI dependency system (get_current_user), because
-    middleware runs before route-level dependency injection. keep this in sync with
-    the token format used by auth_service.create_access_token.
-    """
-    # check env var first, then fall back to system_settings table
-    maintenance_on = os.environ.get("MAINTENANCE_MODE", "").lower() == "true"
-    if not maintenance_on:
-        db = None
+    # always let cors preflights through so browsers get proper headers
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    path = request.url.path
+    if (
+        path.startswith("/api/v1/auth")
+        or path.startswith("/api/v1/admin")
+        or path == "/api/v1/health"
+        or path.startswith("/api/docs")
+        or path.startswith("/api/openapi")
+    ):
+        return await call_next(request)
+
+    auth_header = request.headers.get("authorization", "")
+    token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
+    if token:
         try:
-            db = SessionLocal()
-            from app.services.admin_service import is_maintenance_mode
-
-            maintenance_on = is_maintenance_mode(db)
-        except Exception:
+            payload = auth_service.decode_token(token)
+            if payload.get("type") == "access" and payload.get("role") == "SUPER_ADMIN":
+                return await call_next(request)
+        except DomainError:
             pass
-        finally:
-            if db:
-                db.close()
 
-    if maintenance_on:
-        # allow auth endpoints and health check through
-        path = request.url.path
-        if not (
-            path.startswith("/api/v1/auth")
-            or path.startswith("/api/v1/admin")
-            or path == "/api/v1/health"
-            or path.startswith("/api/docs")
-            or path.startswith("/api/openapi")
-        ):
-            auth_header = request.headers.get("authorization", "")
-            token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
-            if token:
-                try:
-                    payload = auth_service.decode_token(token)
-                    if payload.get("type") == "access" and payload.get("role") == "SUPER_ADMIN":
-                        return await call_next(request)
-                except DomainError:
-                    pass
-            return JSONResponse(
-                status_code=503,
-                content={"detail": "system is under maintenance"},
-            )
-    return await call_next(request)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "system is under maintenance"},
+    )
 
 
 @app.get("/api/v1/health")
