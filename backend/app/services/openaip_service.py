@@ -377,6 +377,7 @@ def _parse_runway_from_dual_thresholds(
 def _parse_runs(
     rw: dict,
     fallback_elevation: float,
+    airport_center: tuple[float, float] | None = None,
 ) -> list[RunwaySuggestion]:
     """parse openaip runway with a `runs` array - one physical strip, two directions.
 
@@ -426,7 +427,9 @@ def _parse_runs(
     else:
         # fall back to single-run parsing for each run that has enough data
         for run in runs:
-            parsed = _parse_single_run(run, fallback_elevation, width_override=width)
+            parsed = _parse_single_run(
+                run, fallback_elevation, airport_center=airport_center, width_override=width
+            )
             if parsed is not None:
                 results.append(parsed)
 
@@ -508,7 +511,7 @@ def _parse_runway(
     returns a list (possibly empty) of suggestions.
     """
     # try dual-threshold parsing via runs array first
-    runs_results = _parse_runs(rw, fallback_elevation)
+    runs_results = _parse_runs(rw, fallback_elevation, airport_center=airport_center)
     if runs_results:
         return runs_results
 
@@ -608,6 +611,9 @@ def lookup_airport_by_icao(icao_code: str, radius_km: float = 3.0) -> AirportLoo
     raises DomainError(503) when api key is missing / auth fails.
     raises DomainError(502) on upstream failures.
     """
+    if not (0 < radius_km <= 50):
+        raise DomainError("radius_km must be between 0 and 50", status_code=400)
+
     icao = (icao_code or "").strip().upper()
     if not _ICAO_PATTERN.match(icao):
         raise DomainError(

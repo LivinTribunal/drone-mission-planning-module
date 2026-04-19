@@ -495,13 +495,13 @@ def test_lookup_airport_passes_radius_to_fetch(monkeypatch):
 
 
 def test_lookup_airport_invalid_radius_raises(monkeypatch):
-    """radius_km out of bounds raises DomainError."""
+    """radius_km out of bounds raises DomainError from bounds validation."""
     monkeypatch.setattr(settings, "openaip_api_key", "testkey")
 
-    with pytest.raises(DomainError):
+    with pytest.raises(DomainError, match="radius_km must be between 0 and 50"):
         openaip_service.lookup_airport_by_icao("LZIB", radius_km=0)
 
-    with pytest.raises(DomainError):
+    with pytest.raises(DomainError, match="radius_km must be between 0 and 50"):
         openaip_service.lookup_airport_by_icao("LZIB", radius_km=51)
 
 

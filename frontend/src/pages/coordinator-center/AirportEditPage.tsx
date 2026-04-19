@@ -1527,9 +1527,15 @@ export default function AirportEditPage() {
           isOpen={showDeleteAirportDialog}
           name={airport.name}
           warnings={[
-            t("coordinator.detail.deleteAirportWarnSurfaces", { count: airport.surfaces.length }),
-            t("coordinator.detail.deleteAirportWarnObstacles", { count: airport.obstacles.length }),
-            t("coordinator.detail.deleteAirportWarnZones", { count: airport.safety_zones.length }),
+            ...(airport.surfaces.length > 0
+              ? [t("coordinator.detail.deleteAirportWarnSurfaces", { count: airport.surfaces.length })]
+              : []),
+            ...(airport.obstacles.length > 0
+              ? [t("coordinator.detail.deleteAirportWarnObstacles", { count: airport.obstacles.length })]
+              : []),
+            ...(airport.safety_zones.length > 0
+              ? [t("coordinator.detail.deleteAirportWarnZones", { count: airport.safety_zones.length })]
+              : []),
             t("coordinator.detail.deleteAirportWarnMissions"),
           ]}
           error={deleteAirportError}
