@@ -793,7 +793,7 @@ export default function AirportEditPage() {
     try {
       await deleteAirport(id);
       clearAirport();
-      navigate("/coordinator/airports");
+      navigate("/coordinator-center/airports");
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err));
       setDeleteAirportError(t("coordinator.detail.deleteAirportError"));

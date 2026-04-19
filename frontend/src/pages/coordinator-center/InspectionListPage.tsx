@@ -100,8 +100,26 @@ export default function InspectionListPage() {
   }, [airportDetail, t]);
 
   useEffect(() => {
-    if (airportDetail) fetchTemplates();
-  }, [fetchTemplates, airportDetail]);
+    let cancelled = false;
+    if (airportDetail) {
+      setLoading(true);
+      setError(null);
+      listInspectionTemplates({ airport_id: airportDetail.id })
+        .then((res) => {
+          if (!cancelled) setTemplates(res.data);
+        })
+        .catch((err) => {
+          if (!cancelled)
+            setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [airportDetail, t]);
 
   // filtered templates
   const filtered = useMemo(() => {
