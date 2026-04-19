@@ -455,7 +455,7 @@ describe("InspectionList", () => {
       mission_id: "m-1",
       template_id: "t-1",
       config_id: null,
-      method: "ANGULAR_SWEEP",
+      method: "PAPI_HORIZONTAL_RANGE",
       sequence_order: 1,
       lha_ids: null,
       config: null,
@@ -571,7 +571,7 @@ describe("InspectionList", () => {
       mission_id: "m-1",
       template_id: "t-1",
       config_id: null,
-      method: "ANGULAR_SWEEP",
+      method: "PAPI_HORIZONTAL_RANGE",
       sequence_order: i + 1,
       lha_ids: null,
       config: null,
@@ -619,7 +619,7 @@ describe("TemplatePicker", () => {
       id: "t-1",
       name: "PAPI",
       description: "PAPI check",
-      methods: ["ANGULAR_SWEEP"],
+      methods: ["PAPI_HORIZONTAL_RANGE"],
       target_agl_ids: [],
       default_config: null,
       angular_tolerances: null,
@@ -630,7 +630,7 @@ describe("TemplatePicker", () => {
       id: "t-2",
       name: "Approach",
       description: null,
-      methods: ["ANGULAR_SWEEP", "VERTICAL_PROFILE"],
+      methods: ["PAPI_HORIZONTAL_RANGE", "VERTICAL_PROFILE"],
       target_agl_ids: [],
       default_config: null,
       angular_tolerances: null,
@@ -671,7 +671,7 @@ describe("TemplatePicker", () => {
     /** verify selecting a template triggers callbacks. */
     const { props } = renderPicker();
     fireEvent.click(screen.getByTestId("template-option-t-1"));
-    expect(props.onSelect).toHaveBeenCalledWith("t-1", "ANGULAR_SWEEP");
+    expect(props.onSelect).toHaveBeenCalledWith("t-1", "PAPI_HORIZONTAL_RANGE");
     expect(props.onClose).toHaveBeenCalled();
   });
 
@@ -753,7 +753,7 @@ describe("TemplatePicker", () => {
         id: "t-papi",
         name: "PAPI Angular",
         description: null,
-        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP"],
+        methods: ["VERTICAL_PROFILE", "PAPI_HORIZONTAL_RANGE"],
         target_agl_ids: ["agl-papi"],
         default_config: null,
         angular_tolerances: null,
@@ -834,7 +834,7 @@ describe("TemplatePicker", () => {
           id: "t-papi",
           name: "PAPI Angular",
           description: null,
-          methods: ["ANGULAR_SWEEP"],
+          methods: ["PAPI_HORIZONTAL_RANGE"],
           target_agl_ids: ["agl-papi"],
           default_config: null,
           angular_tolerances: null,
@@ -1110,7 +1110,7 @@ describe("InspectionList method dropdown", () => {
     // AGL-agnostic and PAPI-only methods must NOT appear
     expect(values).not.toContain("HOVER_POINT_LOCK");
     expect(values).not.toContain("VERTICAL_PROFILE");
-    expect(values).not.toContain("ANGULAR_SWEEP");
+    expect(values).not.toContain("PAPI_HORIZONTAL_RANGE");
   });
 
   it("calls onChangeMethod when selection changes", () => {
@@ -1190,7 +1190,7 @@ describe("BulkCreateTemplatesDialog", () => {
   it("shows all valid combinations when no existing templates", () => {
     /** verify all compatible AGL x method combos plus hover point lock are listed. */
     renderDialog();
-    // PAPI: VERTICAL_PROFILE, ANGULAR_SWEEP = 2
+    // PAPI: VERTICAL_PROFILE, PAPI_HORIZONTAL_RANGE = 2
     // RUNWAY_EDGE_LIGHTS: FLY_OVER, PARALLEL_SIDE_SWEEP = 2
     // + 1 AGL-agnostic HOVER_POINT_LOCK = 5 total
     expect(screen.getByText("coordinator.inspections.bulkCreateCount")).toBeInTheDocument();
@@ -1206,7 +1206,7 @@ describe("BulkCreateTemplatesDialog", () => {
         id: "t-1",
         name: "Existing",
         description: null,
-        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP"],
+        methods: ["VERTICAL_PROFILE", "PAPI_HORIZONTAL_RANGE"],
         target_agl_ids: ["agl-papi"],
         default_config: null,
         angular_tolerances: null,
@@ -1255,7 +1255,7 @@ describe("BulkCreateTemplatesDialog", () => {
         id: "t-1",
         name: "All covered",
         description: null,
-        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP"],
+        methods: ["VERTICAL_PROFILE", "PAPI_HORIZONTAL_RANGE"],
         target_agl_ids: ["agl-papi"],
         default_config: null,
         angular_tolerances: null,

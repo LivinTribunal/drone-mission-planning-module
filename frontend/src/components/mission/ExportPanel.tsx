@@ -14,8 +14,8 @@ export interface ExportPanelProps {
   onDelete: () => void;
   isExporting: boolean;
   statsSlot?: ReactNode;
-  onDownloadBrief?: () => void;
-  isDownloadingBrief?: boolean;
+  onDownloadReport?: () => void;
+  isDownloadingReport?: boolean;
   hasFlightPlan?: boolean;
 }
 
@@ -48,8 +48,8 @@ export default function ExportPanel({
   onDelete,
   isExporting,
   statsSlot,
-  onDownloadBrief,
-  isDownloadingBrief = false,
+  onDownloadReport,
+  isDownloadingReport = false,
   hasFlightPlan = false,
 }: ExportPanelProps) {
   const { t } = useTranslation();
@@ -219,32 +219,32 @@ export default function ExportPanel({
         )}
       </div>
 
-      {/* flight brief */}
-      <div className="bg-tv-surface border border-tv-border rounded-2xl p-4" data-testid="flight-brief-section">
+      {/* mission technical report */}
+      <div className="bg-tv-surface border border-tv-border rounded-2xl p-4" data-testid="mission-report-section">
         <div className="flex items-center gap-2 mb-3">
           <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border text-sm font-semibold text-tv-text-primary">
-            {t("mission.flightBrief.title")}
+            {t("mission.missionReport.title")}
           </span>
         </div>
         <p className="text-xs text-tv-text-muted mb-3">
-          {t("mission.flightBrief.description")}
+          {t("mission.missionReport.description")}
         </p>
         <Button
           variant="secondary"
-          onClick={() => onDownloadBrief?.()}
-          disabled={!hasFlightPlan || isDownloadingBrief || !onDownloadBrief}
-          title={!hasFlightPlan ? t("mission.flightBrief.noFlightPlan") : undefined}
+          onClick={() => onDownloadReport?.()}
+          disabled={!hasFlightPlan || isDownloadingReport || !onDownloadReport}
+          title={!hasFlightPlan ? t("mission.missionReport.noFlightPlan") : undefined}
           className="w-full flex items-center justify-center gap-2"
-          data-testid="download-brief-btn"
+          data-testid="download-report-btn"
         >
-          {isDownloadingBrief ? (
+          {isDownloadingReport ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <FileText className="h-4 w-4" />
           )}
-          {isDownloadingBrief
-            ? t("mission.flightBrief.generating")
-            : t("mission.flightBrief.download")}
+          {isDownloadingReport
+            ? t("mission.missionReport.generating")
+            : t("mission.missionReport.download")}
         </Button>
       </div>
 

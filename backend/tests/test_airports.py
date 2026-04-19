@@ -137,7 +137,7 @@ def test_create_agl_and_lha(client):
         json=LHA_PAYLOAD,
     )
     assert r.status_code == 201
-    assert r.json()["unit_number"] == 1
+    assert r.json()["unit_designator"] == "A"
 
 
 def test_surface_response_excludes_taxiway_width(client):
@@ -477,7 +477,7 @@ def test_lha_crud(client):
     r = client.post(base, json=LHA_PAYLOAD)
     assert r.status_code == 201
     lha = r.json()
-    assert lha["unit_number"] == 1
+    assert lha["unit_designator"] == "A"
 
     # list
     r = client.get(base)

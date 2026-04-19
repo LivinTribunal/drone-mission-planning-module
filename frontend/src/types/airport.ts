@@ -92,7 +92,7 @@ export interface AGLResponse {
 export interface LHAResponse {
   id: string;
   agl_id: string;
-  unit_number: number;
+  unit_designator: string;
   // null for PAPI lhas before coordinator fills the angle in manually
   setting_angle: number | null;
   transition_sector_width: number | null;
@@ -242,7 +242,7 @@ export interface AGLUpdate {
 }
 
 export interface LHACreate {
-  unit_number: number;
+  unit_designator: string;
   setting_angle: number | null;
   transition_sector_width?: number | null;
   lamp_type: LampType;
@@ -251,7 +251,7 @@ export interface LHACreate {
 }
 
 export interface LHAUpdate {
-  unit_number?: number;
+  unit_designator?: string;
   setting_angle?: number | null;
   transition_sector_width?: number | null;
   lamp_type?: LampType;

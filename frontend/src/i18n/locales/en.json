@@ -165,7 +165,7 @@
     "poiActive": "Active",
     "poiFloor": "Altitude Floor",
     "poiCeiling": "Altitude Ceiling",
-    "poiUnitNumber": "Unit Number",
+    "poiUnitDesignator": "Unit",
     "poiLampType": "Lamp Type",
     "poiSettingAngle": "Setting Angle",
     "poiTolerance": "Tolerance",
@@ -319,14 +319,14 @@
     "draftMoveRestriction": "Compute trajectory first",
     "inspectionMethod": {
       "VERTICAL_PROFILE": "Vertical Profile",
-      "ANGULAR_SWEEP": "Angular Sweep",
+      "PAPI_HORIZONTAL_RANGE": "PAPI Horizontal Range",
       "FLY_OVER": "Fly Over",
       "PARALLEL_SIDE_SWEEP": "Parallel Side Sweep",
       "HOVER_POINT_LOCK": "Hover Point Lock"
     },
     "inspectionMethodShort": {
       "VERTICAL_PROFILE": "Vertical",
-      "ANGULAR_SWEEP": "Angular",
+      "PAPI_HORIZONTAL_RANGE": "PAPI H-Range",
       "FLY_OVER": "Fly Over",
       "PARALLEL_SIDE_SWEEP": "Side Sweep",
       "HOVER_POINT_LOCK": "Hover Lock"
@@ -558,7 +558,8 @@
       "trajectoryError": "Failed to generate trajectory",
       "addError": "Failed to add inspection",
       "removeError": "Failed to remove inspection",
-      "unitNumber": "Unit",
+      "unitDesignator": "Unit",
+      "allPapiSlotsUsed": "All PAPI slots (A–D) are in use",
       "settingAngle": "Angle",
       "selectMission": "Select a mission",
       "recomputeTooltip": "Modify configuration to recompute",
@@ -724,13 +725,13 @@
         "measurementsOnly": "Export includes measurement waypoints only - no takeoff, landing, or transit"
       }
     },
-    "flightBrief": {
-      "title": "Flight Brief",
-      "download": "Download Flight Brief (PDF)",
-      "description": "ATC coordination document with maps, altitude profile, and timeline",
-      "generating": "Generating Flight Brief...",
+    "missionReport": {
+      "title": "Mission Technical Report",
+      "download": "Download Mission Report (PDF)",
+      "description": "Technical report with maps, altitude profile, and timeline",
+      "generating": "Generating Mission Report...",
       "noFlightPlan": "Generate a flight plan first",
-      "error": "Failed to generate Flight Brief"
+      "error": "Failed to generate Mission Report"
     }
   },
   "missionList": {
@@ -958,7 +959,7 @@
       "aglSide": "Side",
       "aglGlideAngle": "Glide Slope Angle",
       "aglDistance": "Distance from Threshold (m)",
-      "lhaUnitNumber": "Unit Number",
+      "lhaUnitDesignator": "Unit",
       "lhaSettingAngle": "Setting Angle",
       "lhaTolerance": "Tolerance (°)",
       "lhaLampType": "Lamp Type",
@@ -1063,7 +1064,7 @@
       "namePlaceholderLha": "e.g. LHA Unit 1",
       "parentAgl": "Parent AGL System",
       "selectAgl": "Select an AGL system",
-      "unitNumber": "Unit number",
+      "unitDesignator": "Unit",
       "heading": "Heading (°)",
       "length": "Length (m)",
       "width": "Width (m)",
@@ -1114,11 +1115,11 @@
       "loadError": "Failed to load inspection templates",
       "createTitle": "Create New Inspection Template",
       "templateName": "Inspection Template Name",
-      "templateNamePlaceholder": "e.g. PAPI RWY 24 Angular Sweep",
-      "namePlaceholder": "e.g. PAPI RWY 24 Angular Sweep",
+      "templateNamePlaceholder": "e.g. PAPI RWY 24 Horizontal Range",
+      "namePlaceholder": "e.g. PAPI RWY 24 Horizontal Range",
       "selectAgl": "Select AGL System",
       "selectMethod": "Select Method",
-      "angularSweep": "Angular Sweep",
+      "papiHorizontalRange": "PAPI Horizontal Range",
       "verticalProfile": "Vertical Profile",
       "nameRequired": "Inspection template name is required",
       "aglRequired": "AGL system is required",
@@ -1139,7 +1140,7 @@
       "aglSection": "AGL System",
       "selectAglSystem": "AGL System",
       "selectAglFirst": "Select an AGL system first",
-      "lhaUnit": "LHA {{number}}",
+      "lhaUnit": "LHA {{designator}}",
       "lhaUnits": "LHA Units",
       "sideLabel": "{{side}} side",
       "selectAll": "Select all",
@@ -1276,7 +1277,7 @@
     "inactive": "Inactive",
     "runway": "Runway",
     "taxiway": "Taxiway",
-    "lhaUnit": "LHA {{number}}",
+    "lhaUnit": "LHA {{designator}}",
     "zoneType": {
       "CTR": "CTR",
       "RESTRICTED": "Restricted",

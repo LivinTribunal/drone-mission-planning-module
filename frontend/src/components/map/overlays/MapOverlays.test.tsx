@@ -15,7 +15,7 @@ const mockInspections: InspectionResponse[] = [
     mission_id: "m-1",
     template_id: "t-1",
     config_id: null,
-    method: "ANGULAR_SWEEP",
+    method: "PAPI_HORIZONTAL_RANGE",
     sequence_order: 1,
     lha_ids: null,
     config: null,

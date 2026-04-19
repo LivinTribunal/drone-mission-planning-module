@@ -87,7 +87,7 @@ export function addAglLayers(
           type: "Feature" as const,
           properties: {
             id: l.id,
-            unitNumber: l.unit_number,
+            unitDesignator: l.unit_designator,
             settingAngle: l.setting_angle ?? 0,
             hasSettingAngle: l.setting_angle != null,
             lampType: l.lamp_type,
@@ -130,7 +130,7 @@ export function addAglLayers(
         "text-field": [
           "concat",
           "LHA ",
-          ["to-string", ["get", "unitNumber"]],
+          ["get", "unitDesignator"],
           [
             "case",
             ["get", "hasSettingAngle"],
@@ -163,7 +163,11 @@ export function addAglLayers(
     .filter((a) => a.agl_type === "RUNWAY_EDGE_LIGHTS" && a.lhas.length >= 2)
     .filter((a) => a.lhas.every((l) => l.position?.coordinates?.length >= 2))
     .map((a) => {
-      const ordered = [...a.lhas].sort((x, y) => x.unit_number - y.unit_number);
+      const ordered = [...a.lhas].sort((x, y) => {
+        const xn = parseInt(x.unit_designator, 10);
+        const yn = parseInt(y.unit_designator, 10);
+        return !isNaN(xn) && !isNaN(yn) ? xn - yn : x.unit_designator.localeCompare(y.unit_designator);
+      });
       const first = ordered[0].position.coordinates;
       const last = ordered[ordered.length - 1].position.coordinates;
       return {

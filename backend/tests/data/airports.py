@@ -66,7 +66,7 @@ AGL_PAYLOAD = {
 }
 
 LHA_PAYLOAD = {
-    "unit_number": 1,
+    "unit_designator": "A",
     "setting_angle": 3.0,
     "lamp_type": "HALOGEN",
     "position": {"type": "Point", "coordinates": [14.2743, 50.0978, 380]},

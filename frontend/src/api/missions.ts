@@ -102,11 +102,11 @@ function parseContentDispositionFilename(
   return plain?.[1] ?? null;
 }
 
-/** fetch flight brief pdf blob from the backend. */
-export async function downloadFlightBrief(
+/** fetch mission technical report pdf blob from the backend. */
+export async function downloadMissionReport(
   id: string,
 ): Promise<{ blob: Blob; filename: string | null }> {
-  const res = await client.get(`/missions/${id}/flight-brief`, {
+  const res = await client.get(`/missions/${id}/mission-report`, {
     responseType: "blob",
   });
   return { blob: res.data, filename: parseContentDispositionFilename(res.headers) };

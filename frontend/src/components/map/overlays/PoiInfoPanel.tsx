@@ -116,7 +116,7 @@ export default function PoiInfoPanel({
         const l = feature.data;
         return (
           <>
-            <InfoRow label={t("dashboard.poiUnitNumber")} value={String(l.unit_number)} />
+            <InfoRow label={t("dashboard.poiUnitDesignator")} value={l.unit_designator} />
             <InfoRow label={t("dashboard.poiLampType")} value={l.lamp_type} />
             <InfoRow
               label={t("dashboard.poiSettingAngle")}

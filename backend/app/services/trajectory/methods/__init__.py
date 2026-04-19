@@ -25,22 +25,22 @@ from ..types import (
     ResolvedConfig,
     WaypointData,
 )
-from .angular_sweep import calculate_arc_path
 from .fly_over import calculate_fly_over_path
 from .hover_point_lock import calculate_hover_point_lock_path
+from .papi_horizontal_range import calculate_arc_path
 from .parallel_side_sweep import calculate_parallel_side_sweep_path
 from .vertical_profile import calculate_vertical_path
 
 # methods that need terrain delta applied before video wrapper
 _TERRAIN_DELTA_METHODS = frozenset(
-    {InspectionMethod.ANGULAR_SWEEP, InspectionMethod.VERTICAL_PROFILE}
+    {InspectionMethod.PAPI_HORIZONTAL_RANGE, InspectionMethod.VERTICAL_PROFILE}
 )
 
 
-def _prepare_angular_sweep(
+def _prepare_papi_horizontal_range(
     inspection, config, center, rwy_heading, glide_slope, ordered_lhas, default_speed, **_kw
 ) -> MethodPrep:
-    """pre-computation for angular sweep."""
+    """pre-computation for papi horizontal range."""
     start = determine_start_position(center, config, inspection.method, rwy_heading, glide_slope)
     end = determine_end_position(center, config, inspection.method, rwy_heading, glide_slope)
     path_dist = distance_between(start.lon, start.lat, end.lon, end.lat)
@@ -164,7 +164,7 @@ def _prepare_hover_point_lock(
 
 
 PREPARE_REGISTRY: dict[InspectionMethod, Callable[..., MethodPrep]] = {
-    InspectionMethod.ANGULAR_SWEEP: _prepare_angular_sweep,
+    InspectionMethod.PAPI_HORIZONTAL_RANGE: _prepare_papi_horizontal_range,
     InspectionMethod.VERTICAL_PROFILE: _prepare_vertical_profile,
     InspectionMethod.FLY_OVER: _prepare_fly_over,
     InspectionMethod.PARALLEL_SIDE_SWEEP: _prepare_parallel_side_sweep,
@@ -217,10 +217,10 @@ def compute_measurement_trajectory(
     return waypoints
 
 
-def _angular_sweep_handler(
+def _papi_horizontal_range_handler(
     inspection, config, center, runway_heading, glide_slope, speed, **_kw
 ) -> list[WaypointData]:
-    """handler for ANGULAR_SWEEP method."""
+    """handler for PAPI_HORIZONTAL_RANGE method."""
     return calculate_arc_path(center, runway_heading, glide_slope, config, inspection.id, speed)
 
 
@@ -277,7 +277,7 @@ def _hover_point_lock_handler(
 
 
 METHOD_REGISTRY: dict[InspectionMethod, Callable] = {
-    InspectionMethod.ANGULAR_SWEEP: _angular_sweep_handler,
+    InspectionMethod.PAPI_HORIZONTAL_RANGE: _papi_horizontal_range_handler,
     InspectionMethod.VERTICAL_PROFILE: _vertical_profile_handler,
     InspectionMethod.FLY_OVER: _fly_over_handler,
     InspectionMethod.PARALLEL_SIDE_SWEEP: _parallel_side_sweep_handler,

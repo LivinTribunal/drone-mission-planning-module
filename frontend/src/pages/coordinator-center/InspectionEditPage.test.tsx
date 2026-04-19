@@ -46,7 +46,7 @@ const mockAirportDetail = {
             {
               id: "lha-1",
               agl_id: "agl-1",
-              unit_number: 1,
+              unit_designator: "A",
               setting_angle: 2.5,
               transition_sector_width: null,
               lamp_type: "LED",
@@ -76,7 +76,7 @@ vi.mock("@/contexts/AirportContext", () => ({
 vi.mock("@/api/inspectionTemplates", () => ({
   getInspectionTemplate: vi.fn().mockResolvedValue({
     id: "tpl-1",
-    name: "PAPI RWY 22 - Angular Sweep",
+    name: "PAPI RWY 22 - Horizontal Range",
     description: null,
     angular_tolerances: null,
     created_by: null,
@@ -94,14 +94,14 @@ vi.mock("@/api/inspectionTemplates", () => ({
       lha_ids: ["lha-1"],
     },
     target_agl_ids: ["agl-1"],
-    methods: ["ANGULAR_SWEEP"],
+    methods: ["PAPI_HORIZONTAL_RANGE"],
     mission_count: 0,
   }),
   listInspectionTemplates: vi.fn().mockResolvedValue({
     data: [
       {
         id: "tpl-1",
-        name: "PAPI RWY 22 - Angular Sweep",
+        name: "PAPI RWY 22 - Horizontal Range",
         description: null,
         angular_tolerances: null,
         created_by: null,
@@ -109,7 +109,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
         updated_at: "2026-03-15T10:00:00Z",
         default_config: null,
         target_agl_ids: ["agl-1"],
-        methods: ["ANGULAR_SWEEP"],
+        methods: ["PAPI_HORIZONTAL_RANGE"],
         mission_count: 0,
       },
     ],
@@ -117,7 +117,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
   }),
   updateInspectionTemplate: vi.fn().mockResolvedValue({
     id: "tpl-1",
-    name: "PAPI RWY 22 - Angular Sweep",
+    name: "PAPI RWY 22 - Horizontal Range",
     description: null,
     angular_tolerances: null,
     created_by: null,
@@ -125,14 +125,14 @@ vi.mock("@/api/inspectionTemplates", () => ({
     updated_at: "2026-03-15T10:00:00Z",
     default_config: null,
     target_agl_ids: ["agl-1"],
-    methods: ["ANGULAR_SWEEP"],
+    methods: ["PAPI_HORIZONTAL_RANGE"],
     mission_count: 0,
   }),
   deleteInspectionTemplate: vi.fn().mockResolvedValue({ deleted: true }),
   createInspectionTemplate: vi.fn().mockResolvedValue({
     id: "tpl-new",
-    name: "PAPI RWY 22 - Angular Sweep (Copy)",
-    methods: ["ANGULAR_SWEEP"],
+    name: "PAPI RWY 22 - Horizontal Range (Copy)",
+    methods: ["PAPI_HORIZONTAL_RANGE"],
     target_agl_ids: ["agl-1"],
     mission_count: 0,
   }),
@@ -171,7 +171,7 @@ describe("InspectionEditPage", () => {
     /** verify template data appears. */
     renderPage();
     await waitFor(() => {
-      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
+      const matches = screen.getAllByText("PAPI RWY 22 - Horizontal Range");
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
   });
@@ -193,7 +193,7 @@ describe("InspectionEditPage", () => {
     const { updateInspectionTemplate } = await import("@/api/inspectionTemplates");
     renderPage();
     await waitFor(() => {
-      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
+      const matches = screen.getAllByText("PAPI RWY 22 - Horizontal Range");
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -213,7 +213,7 @@ describe("InspectionEditPage", () => {
     const { deleteInspectionTemplate } = await import("@/api/inspectionTemplates");
     renderPage();
     await waitFor(() => {
-      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
+      const matches = screen.getAllByText("PAPI RWY 22 - Horizontal Range");
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -236,7 +236,7 @@ describe("InspectionEditPage", () => {
     const { createInspectionTemplate } = await import("@/api/inspectionTemplates");
     renderPage();
     await waitFor(() => {
-      const matches = screen.getAllByText("PAPI RWY 22 - Angular Sweep");
+      const matches = screen.getAllByText("PAPI RWY 22 - Horizontal Range");
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
 

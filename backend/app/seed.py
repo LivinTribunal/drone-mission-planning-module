@@ -252,10 +252,10 @@ def seed_drone_profiles() -> None:
 
 
 def seed_inspection_templates() -> None:
-    """seed inspection templates for angular sweep and vertical profile methods."""
+    """seed inspection templates for papi horizontal range and vertical profile methods."""
     db = SessionLocal()
     try:
-        existing = db.query(InspectionTemplate).filter_by(name="PAPI Angular Sweep").first()
+        existing = db.query(InspectionTemplate).filter_by(name="PAPI Horizontal Range").first()
         if existing:
             print("inspection templates already seeded")
             return
@@ -268,8 +268,8 @@ def seed_inspection_templates() -> None:
         db.flush()
 
         sweep = InspectionTemplate(
-            name="PAPI Angular Sweep",
-            description="angular sweep inspection for PAPI systems",
+            name="PAPI Horizontal Range",
+            description="papi horizontal range inspection for PAPI systems",
             default_config_id=sweep_config.id,
             created_by="system",
         )
@@ -277,7 +277,9 @@ def seed_inspection_templates() -> None:
         db.flush()
 
         db.execute(
-            insp_template_methods.insert().values(template_id=sweep.id, method="ANGULAR_SWEEP")
+            insp_template_methods.insert().values(
+                template_id=sweep.id, method="PAPI_HORIZONTAL_RANGE"
+            )
         )
 
         vp_config = InspectionConfiguration(
@@ -301,7 +303,7 @@ def seed_inspection_templates() -> None:
         )
 
         db.commit()
-        print("inspection templates seeded (angular sweep + vertical profile)")
+        print("inspection templates seeded (papi horizontal range + vertical profile)")
     finally:
         db.close()
 

@@ -1,4 +1,4 @@
-"""flight brief pdf generator for atc coordination."""
+"""mission technical report pdf generator."""
 
 import io
 import re
@@ -53,7 +53,7 @@ SEGMENT_COLORS = [
 
 METHOD_LABELS = {
     "VERTICAL_PROFILE": "Vertical Profile",
-    "ANGULAR_SWEEP": "Angular Sweep",
+    "PAPI_HORIZONTAL_RANGE": "PAPI Horizontal Range",
     "FLY_OVER": "Fly Over",
     "PARALLEL_SIDE_SWEEP": "Parallel Side Sweep",
     "HOVER_POINT_LOCK": "Hover Point Lock",
@@ -61,7 +61,7 @@ METHOD_LABELS = {
 
 
 @dataclass
-class BriefData:
+class ReportData:
     """internal data container for pdf generation."""
 
     mission: Mission
@@ -131,9 +131,9 @@ def _format_distance(meters: float | None) -> str:
     return f"{meters:.1f} m"
 
 
-def generate_flight_brief(db: Session, mission_id: UUID) -> tuple[bytes, str]:
-    """generate a flight brief pdf for atc coordination."""
-    data = _load_brief_data(db, mission_id)
+def generate_mission_report(db: Session, mission_id: UUID) -> tuple[bytes, str]:
+    """generate a mission technical report pdf."""
+    data = _load_report_data(db, mission_id)
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
@@ -141,7 +141,7 @@ def generate_flight_brief(db: Session, mission_id: UUID) -> tuple[bytes, str]:
     icao = data.airport.icao_code or "XXXX"
     mission_name = _sanitize_filename(data.mission.name or "Mission")
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    pdf_title = f"FlightBrief_{icao}_{mission_name}_{date_str}"
+    pdf_title = f"MissionReport_{icao}_{mission_name}_{date_str}"
     c.setTitle(pdf_title)
 
     page = 1
@@ -162,8 +162,8 @@ def generate_flight_brief(db: Session, mission_id: UUID) -> tuple[bytes, str]:
     return buf.getvalue(), filename
 
 
-def _load_brief_data(db: Session, mission_id: UUID) -> BriefData:
-    """load all data needed for the flight brief."""
+def _load_report_data(db: Session, mission_id: UUID) -> ReportData:
+    """load all data needed for the mission report."""
     mission = (
         db.query(Mission)
         .options(
@@ -213,7 +213,7 @@ def _load_brief_data(db: Session, mission_id: UUID) -> BriefData:
     violations = validation_result.violations if validation_result else []
     constraints = flight_plan.constraints or []
 
-    return BriefData(
+    return ReportData(
         mission=mission,
         flight_plan=flight_plan,
         airport=airport,
@@ -244,7 +244,7 @@ def _draw_footer(c: canvas.Canvas):
     """draw page footer."""
     c.setFont("Helvetica", 7)
     c.setFillColor(colors.HexColor("#999999"))
-    c.drawString(MARGIN, 10 * mm, "TarmacView Flight Brief - Generated for ATC Coordination")
+    c.drawString(MARGIN, 10 * mm, "TarmacView Mission Technical Report")
     c.drawRightString(
         PAGE_W - MARGIN,
         10 * mm,
@@ -252,18 +252,18 @@ def _draw_footer(c: canvas.Canvas):
     )
 
 
-def _build_cover_page(c: canvas.Canvas, data: BriefData):
+def _build_cover_page(c: canvas.Canvas, data: ReportData):
     """page 1 - cover/summary."""
     y = PAGE_H - 40 * mm
 
     # title
     c.setFont("Helvetica-Bold", 24)
     c.setFillColor(colors.HexColor("#1a1a1a"))
-    c.drawCentredString(PAGE_W / 2, y, "Flight Brief")
+    c.drawCentredString(PAGE_W / 2, y, "Mission Technical Report")
     y -= 8 * mm
     c.setFont("Helvetica", 12)
     c.setFillColor(colors.HexColor("#666666"))
-    c.drawCentredString(PAGE_W / 2, y, "ATC Coordination Document")
+    c.drawCentredString(PAGE_W / 2, y, "Airport Lighting Inspection")
     y -= 15 * mm
 
     c.setStrokeColor(colors.HexColor("#3bbb3b"))
@@ -353,7 +353,7 @@ def _build_cover_page(c: canvas.Canvas, data: BriefData):
         _build_inspection_summary_page(c, data)
 
 
-def _build_inspection_summary_page(c: canvas.Canvas, data: BriefData):
+def _build_inspection_summary_page(c: canvas.Canvas, data: ReportData):
     """inspection summary page - list of all inspections with method and template."""
     y = PAGE_H - 40 * mm
 
@@ -407,7 +407,7 @@ def _build_inspection_summary_page(c: canvas.Canvas, data: BriefData):
     c.showPage()
 
 
-def _build_inspection_detail_pages(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+def _build_inspection_detail_pages(c: canvas.Canvas, data: ReportData, page_num: int) -> int:
     """inspection detail pages - one section per inspection."""
     if not data.inspections:
         _draw_header(c, "Inspection Procedures Detail", page_num)
@@ -574,7 +574,7 @@ def _build_inspection_detail_pages(c: canvas.Canvas, data: BriefData, page_num: 
     return page_num
 
 
-def _build_2d_map_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+def _build_2d_map_page(c: canvas.Canvas, data: ReportData, page_num: int) -> int:
     """2d top-down map rendered with matplotlib."""
     _draw_header(c, "2D Top-Down Map", page_num)
 
@@ -844,7 +844,7 @@ def _build_2d_map_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
     return page_num
 
 
-def _build_altitude_profile_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+def _build_altitude_profile_page(c: canvas.Canvas, data: ReportData, page_num: int) -> int:
     """vertical altitude profile chart."""
     _draw_header(c, "Vertical Altitude Profile", page_num)
 
@@ -951,7 +951,7 @@ def _build_altitude_profile_page(c: canvas.Canvas, data: BriefData, page_num: in
     return page_num
 
 
-def _build_timeline_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+def _build_timeline_page(c: canvas.Canvas, data: ReportData, page_num: int) -> int:
     """gantt-style timeline and time-based flight plan table."""
     _draw_header(c, "Time-Based Flight Plan", page_num)
 
@@ -1047,7 +1047,7 @@ def _build_timeline_page(c: canvas.Canvas, data: BriefData, page_num: int) -> in
     return page_num
 
 
-def _build_activities(data: BriefData) -> list[dict]:
+def _build_activities(data: ReportData) -> list[dict]:
     """build activity list from waypoints for the timeline gantt chart."""
     activities = []
     current_time = 0.0
@@ -1115,7 +1115,7 @@ def _build_activities(data: BriefData) -> list[dict]:
     return [a for a in activities if a["duration"] > 0]
 
 
-def _build_waypoint_table_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+def _build_waypoint_table_page(c: canvas.Canvas, data: ReportData, page_num: int) -> int:
     """full waypoint table."""
     _draw_header(c, "Waypoint Table", page_num)
     airport_elev = data.airport.elevation if data.airport and data.airport.elevation else 0
@@ -1216,7 +1216,7 @@ def _build_waypoint_table_page(c: canvas.Canvas, data: BriefData, page_num: int)
     return page_num
 
 
-def _build_crossing_analysis_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+def _build_crossing_analysis_page(c: canvas.Canvas, data: ReportData, page_num: int) -> int:
     """runway crossing and safety zone conflict analysis."""
     _draw_header(c, "Crossing & Conflict Analysis", page_num)
     y = PAGE_H - 25 * mm
@@ -1397,7 +1397,7 @@ def _build_crossing_analysis_page(c: canvas.Canvas, data: BriefData, page_num: i
     return page_num
 
 
-def _build_validation_summary_page(c: canvas.Canvas, data: BriefData, page_num: int) -> int:
+def _build_validation_summary_page(c: canvas.Canvas, data: ReportData, page_num: int) -> int:
     """validation summary with constraint results and battery analysis."""
     _draw_header(c, "Validation Summary", page_num)
     y = PAGE_H - 25 * mm

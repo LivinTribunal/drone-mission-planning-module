@@ -452,7 +452,7 @@ export default function CesiumInfrastructure({
           entities.push(
             <Entity
               key={`lha-${lha.id}`}
-              name={t("map.lhaName", { unit: lha.unit_number ?? "" })}
+              name={t("map.lhaName", { unit: lha.unit_designator ?? "" })}
               position={Cartesian3.fromDegrees(lhaLng, lhaLat, 0)}
               point={{
                 pixelSize: isLhaSelected ? 15 : 10,
@@ -463,7 +463,7 @@ export default function CesiumInfrastructure({
               }}
               label={{
                 text: t("map.lhaLabelWithAngle", {
-                  unit: lha.unit_number ?? "",
+                  unit: lha.unit_designator ?? "",
                   angle: lha.setting_angle ?? 0,
                 }),
                 font: "10px sans-serif",

@@ -46,51 +46,51 @@ function renderPanel(overrides: Partial<ExportPanelProps> = {}) {
     onDelete: vi.fn(),
     isExporting: false,
     hasFlightPlan: true,
-    onDownloadBrief: vi.fn(),
-    isDownloadingBrief: false,
+    onDownloadReport: vi.fn(),
+    isDownloadingReport: false,
     ...overrides,
   };
   return { ...render(<ExportPanel {...defaults} />), props: defaults };
 }
 
-describe("ExportPanel - flight brief section", () => {
-  it("renders the flight brief download button when mission has a flight plan", () => {
+describe("ExportPanel - mission report section", () => {
+  it("renders the mission report download button when mission has a flight plan", () => {
     renderPanel({ hasFlightPlan: true });
 
-    const btn = screen.getByTestId("download-brief-btn");
+    const btn = screen.getByTestId("download-report-btn");
     expect(btn).toBeInTheDocument();
     expect(btn).not.toBeDisabled();
   });
 
-  it("disables the flight brief button when there is no flight plan", () => {
+  it("disables the mission report button when there is no flight plan", () => {
     renderPanel({ hasFlightPlan: false });
 
-    const btn = screen.getByTestId("download-brief-btn");
+    const btn = screen.getByTestId("download-report-btn");
     expect(btn).toBeDisabled();
   });
 
-  it("calls onDownloadBrief when the button is clicked", () => {
-    const onDownloadBrief = vi.fn();
-    renderPanel({ onDownloadBrief, hasFlightPlan: true });
+  it("calls onDownloadReport when the button is clicked", () => {
+    const onDownloadReport = vi.fn();
+    renderPanel({ onDownloadReport, hasFlightPlan: true });
 
-    fireEvent.click(screen.getByTestId("download-brief-btn"));
-    expect(onDownloadBrief).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("download-report-btn"));
+    expect(onDownloadReport).toHaveBeenCalledTimes(1);
   });
 
-  it("shows loading state when isDownloadingBrief is true", () => {
-    renderPanel({ isDownloadingBrief: true, hasFlightPlan: true });
+  it("shows loading state when isDownloadingReport is true", () => {
+    renderPanel({ isDownloadingReport: true, hasFlightPlan: true });
 
-    const btn = screen.getByTestId("download-brief-btn");
+    const btn = screen.getByTestId("download-report-btn");
     expect(btn).toBeDisabled();
-    expect(btn.textContent).toContain("mission.flightBrief.generating");
+    expect(btn.textContent).toContain("mission.missionReport.generating");
   });
 
-  it("renders brief section for DRAFT status missions", () => {
+  it("renders report section for DRAFT status missions", () => {
     renderPanel({
       mission: makeMission({ status: "DRAFT" }),
       hasFlightPlan: true,
     });
 
-    expect(screen.getByTestId("flight-brief-section")).toBeInTheDocument();
+    expect(screen.getByTestId("mission-report-section")).toBeInTheDocument();
   });
 });

@@ -86,7 +86,7 @@ export default function TemplateAglSection({
                   className="rounded accent-tv-accent"
                 />
                 <span className="text-tv-text-primary">
-                  {t("coordinator.inspections.lhaUnit", { number: lha.unit_number })}
+                  {t("coordinator.inspections.lhaUnit", { designator: lha.unit_designator })}
                 </span>
                 <span className="text-tv-text-muted text-xs">
                   {lha.setting_angle?.toFixed(2) ?? "—"}&deg;

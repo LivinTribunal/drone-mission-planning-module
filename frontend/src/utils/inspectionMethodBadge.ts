@@ -2,9 +2,9 @@ import type { CSSProperties } from "react";
 import type { InspectionMethod } from "@/types/enums";
 
 const METHOD_BADGE_VARS: Record<InspectionMethod, { bg: string; text: string }> = {
-  ANGULAR_SWEEP: {
-    bg: "var(--tv-method-angular-sweep-bg)",
-    text: "var(--tv-method-angular-sweep-text)",
+  PAPI_HORIZONTAL_RANGE: {
+    bg: "var(--tv-method-papi-horizontal-range-bg)",
+    text: "var(--tv-method-papi-horizontal-range-text)",
   },
   VERTICAL_PROFILE: {
     bg: "var(--tv-method-vertical-profile-bg)",

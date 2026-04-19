@@ -146,7 +146,7 @@ export default function TemplateConfigSection({
                     className="rounded accent-tv-accent"
                   />
                   <span className="text-tv-text-primary">
-                    {t("coordinator.inspections.lhaUnit", { number: lha.unit_number })}
+                    {t("coordinator.inspections.lhaUnit", { designator: lha.unit_designator })}
                   </span>
                   <span className="text-tv-text-muted text-xs">
                     {lha.setting_angle?.toFixed(2) ?? "-"}&deg;
@@ -215,7 +215,7 @@ export default function TemplateConfigSection({
         step="1"
       />
 
-      {method === "ANGULAR_SWEEP" && (
+      {method === "PAPI_HORIZONTAL_RANGE" && (
         <Input
           label={t("mission.config.sweepAngle")}
           type="number"

@@ -848,12 +848,6 @@ def delete_lha(db: Session, airport_id: UUID, surface_id: UUID, agl_id: UUID, lh
     db.delete(lha)
     db.flush()
 
-    # renumber remaining LHAs to keep unit_number contiguous
-    remaining = db.query(LHA).filter(LHA.agl_id == agl_id).order_by(LHA.unit_number.asc()).all()
-    for idx, item in enumerate(remaining, start=1):
-        if item.unit_number != idx:
-            item.unit_number = idx
-
     # drop deleted id from any inspection configs that reference it.
     # scoped by jsonb containment so we only touch configs that actually hold this id -
     # avoids the full-table scan we'd get from loading every config with non-null lha_ids.
@@ -904,10 +898,24 @@ def bulk_generate_lhas(
     if total_distance <= 0:
         raise DomainError("first and last positions must differ", status_code=422)
 
-    # start numbering after any existing LHAs - append-only semantics: calling
-    # this twice on the same AGL extends numbering past existing units and
-    # counts toward the cumulative 200-cap
-    existing_count = db.query(LHA).filter(LHA.agl_id == agl_id).count()
+    # assign designators
+    existing = db.query(LHA).filter(LHA.agl_id == agl_id).all()
+    existing_count = len(existing)
+    is_papi = agl.agl_type == "PAPI"
+
+    if is_papi:
+        used_designators = {lha.unit_designator for lha in existing}
+        all_designators = ["A", "B", "C", "D"]
+        available_designators = [d for d in all_designators if d not in used_designators]
+        if not available_designators:
+            raise DomainError(
+                "all 4 designator slots (A-D) are occupied for this agl",
+                status_code=422,
+            )
+    else:
+        nums = [int(d) for lha in existing if (d := lha.unit_designator).isdigit()]
+        next_num = max(nums, default=0) + 1
+        available_designators = [str(i) for i in range(next_num, next_num + 200)]
 
     # number of LHAs, bounded to avoid runaway generation, enforcing cumulative cap
     count = max(2, int(round(total_distance / schema.spacing_m)) + 1)
@@ -917,7 +925,7 @@ def bulk_generate_lhas(
             "agl already has 200 lha units - delete some before generating more",
             status_code=422,
         )
-    count = min(count, remaining_slots)
+    count = min(count, remaining_slots, len(available_designators))
 
     # default angle: RUNWAY_EDGE_LIGHTS uses 0, PAPI stays null for coordinator fill-in
     is_edge_lights = agl.agl_type == "RUNWAY_EDGE_LIGHTS"
@@ -942,9 +950,10 @@ def bulk_generate_lhas(
             ground = provider.get_elevation(lat, lon)
 
             wkt = f"SRID=4326;POINTZ({lon} {lat} {ground})"
+            designator = available_designators[i]
             lha = LHA(
                 agl_id=agl_id,
-                unit_number=existing_count + i + 1,
+                unit_designator=designator,
                 setting_angle=setting_angle,
                 lamp_type=schema.lamp_type,
                 position=WKTElement(wkt, srid=4326),
