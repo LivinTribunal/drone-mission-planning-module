@@ -17,6 +17,12 @@ export const TAXIWAY_LABEL_LAYER = "taxiways-label";
 export const TOUCHPOINT_SOURCE = "runway-touchpoints";
 export const TOUCHPOINT_MARKER_LAYER = "runway-touchpoints-marker";
 export const TOUCHPOINT_LABEL_LAYER = "runway-touchpoints-label";
+export const THRESHOLD_SOURCE = "runway-thresholds";
+export const THRESHOLD_MARKER_LAYER = "runway-thresholds-marker";
+export const THRESHOLD_LABEL_LAYER = "runway-thresholds-label";
+export const END_POSITION_SOURCE = "runway-end-positions";
+export const END_POSITION_MARKER_LAYER = "runway-end-positions-marker";
+export const END_POSITION_LABEL_LAYER = "runway-end-positions-label";
 
 // keep old names as aliases for backwards compat in layerGroupMap
 export const RUNWAY_LAYER = RUNWAY_FILL_LAYER;
@@ -346,6 +352,104 @@ export function addSurfaceLayers(
     });
   }
 
+  // runway threshold markers
+  const thresholds = runways.filter((r) => r.threshold_position != null);
+  if (thresholds.length > 0) {
+    map.addSource(THRESHOLD_SOURCE, {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: thresholds.map((r) => ({
+          type: "Feature" as const,
+          properties: {
+            id: r.id,
+            identifier: r.identifier,
+            entityType: "threshold",
+          },
+          geometry: r.threshold_position!,
+        })),
+      },
+    });
+
+    map.addLayer({
+      id: THRESHOLD_MARKER_LAYER,
+      type: "symbol",
+      source: THRESHOLD_SOURCE,
+      layout: {
+        "icon-image": "threshold-marker",
+        "icon-size": 0.9,
+        "icon-allow-overlap": true,
+      },
+    });
+
+    map.addLayer({
+      id: THRESHOLD_LABEL_LAYER,
+      type: "symbol",
+      source: THRESHOLD_SOURCE,
+      layout: {
+        "text-field": "THR",
+        "text-size": 10,
+        "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+        "text-offset": [0, 1.2],
+        "text-anchor": "top",
+      },
+      paint: {
+        "text-color": "#4595e5",
+        "text-halo-color": "#000000",
+        "text-halo-width": 1.5,
+      },
+    });
+  }
+
+  // runway end position markers
+  const endPositions = runways.filter((r) => r.end_position != null);
+  if (endPositions.length > 0) {
+    map.addSource(END_POSITION_SOURCE, {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: endPositions.map((r) => ({
+          type: "Feature" as const,
+          properties: {
+            id: r.id,
+            identifier: r.identifier,
+            entityType: "end_position",
+          },
+          geometry: r.end_position!,
+        })),
+      },
+    });
+
+    map.addLayer({
+      id: END_POSITION_MARKER_LAYER,
+      type: "symbol",
+      source: END_POSITION_SOURCE,
+      layout: {
+        "icon-image": "end-position-marker",
+        "icon-size": 0.9,
+        "icon-allow-overlap": true,
+      },
+    });
+
+    map.addLayer({
+      id: END_POSITION_LABEL_LAYER,
+      type: "symbol",
+      source: END_POSITION_SOURCE,
+      layout: {
+        "text-field": "END",
+        "text-size": 10,
+        "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+        "text-offset": [0, 1.2],
+        "text-anchor": "top",
+      },
+      paint: {
+        "text-color": "#e54545",
+        "text-halo-color": "#000000",
+        "text-halo-width": 1.5,
+      },
+    });
+  }
+
   const layers = [
     RUNWAY_STROKE_LAYER,
     RUNWAY_FILL_LAYER,
@@ -358,6 +462,12 @@ export function addSurfaceLayers(
   ];
   if (touchpoints.length > 0) {
     layers.push(TOUCHPOINT_MARKER_LAYER, TOUCHPOINT_LABEL_LAYER);
+  }
+  if (thresholds.length > 0) {
+    layers.push(THRESHOLD_MARKER_LAYER, THRESHOLD_LABEL_LAYER);
+  }
+  if (endPositions.length > 0) {
+    layers.push(END_POSITION_MARKER_LAYER, END_POSITION_LABEL_LAYER);
   }
   return layers;
 }

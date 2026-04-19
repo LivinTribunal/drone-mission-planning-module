@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Trash2, RotateCcw, Plus, Calculator, MapPin } from "lucide-react";
+import { Trash2, RotateCcw, Plus, Calculator, MapPin, AlertTriangle } from "lucide-react";
 import Input from "@/components/common/Input";
 import FeatureInfoPanel from "@/components/common/FeatureInfoPanel";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
@@ -13,6 +13,7 @@ import type {
 } from "@/types/airport";
 import type { PointZ } from "@/types/common";
 import { recalculateSurface, recalculateObstacle, bulkCreateLHAs } from "@/api/airports";
+import { distanceFromCenterline } from "@/utils/centerlineDistance";
 
 interface EditableFeatureInfoProps {
   feature: MapFeature;
@@ -32,6 +33,14 @@ interface EditableFeatureInfoProps {
   onPickLhaToggle?: (which: "first" | "last") => void;
   pickedLhaCoord?: { which: "first" | "last"; lat: number; lon: number; alt: number } | null;
   onPickedLhaConsumed?: () => void;
+  pickingThreshold?: boolean;
+  onPickThresholdToggle?: () => void;
+  pickedThresholdCoord?: { lat: number; lon: number; alt: number } | null;
+  onPickedThresholdConsumed?: () => void;
+  pickingEnd?: boolean;
+  onPickEndToggle?: () => void;
+  pickedEndCoord?: { lat: number; lon: number; alt: number } | null;
+  onPickedEndConsumed?: () => void;
 }
 
 type RecalcPreview =
@@ -56,6 +65,14 @@ export default function EditableFeatureInfo({
   onPickLhaToggle,
   pickedLhaCoord,
   onPickedLhaConsumed,
+  pickingThreshold,
+  onPickThresholdToggle,
+  pickedThresholdCoord,
+  onPickedThresholdConsumed,
+  pickingEnd,
+  onPickEndToggle,
+  pickedEndCoord,
+  onPickedEndConsumed,
 }: EditableFeatureInfoProps) {
   /** editable feature info panel for selected map features. */
   const { t } = useTranslation();
@@ -90,6 +107,30 @@ export default function EditableFeatureInfo({
     onUpdate(update);
     onPickedTouchpointConsumed?.();
   }, [pickedTouchpointCoord, onUpdate, onPickedTouchpointConsumed]);
+
+  // apply picked threshold coord
+  useEffect(() => {
+    if (!pickedThresholdCoord) return;
+    const pos: PointZ = {
+      type: "Point",
+      coordinates: [pickedThresholdCoord.lon, pickedThresholdCoord.lat, pickedThresholdCoord.alt],
+    };
+    setFormData((prev) => ({ ...prev, threshold_position: pos }));
+    onUpdate({ threshold_position: pos });
+    onPickedThresholdConsumed?.();
+  }, [pickedThresholdCoord, onUpdate, onPickedThresholdConsumed]);
+
+  // apply picked end position coord
+  useEffect(() => {
+    if (!pickedEndCoord) return;
+    const pos: PointZ = {
+      type: "Point",
+      coordinates: [pickedEndCoord.lon, pickedEndCoord.lat, pickedEndCoord.alt],
+    };
+    setFormData((prev) => ({ ...prev, end_position: pos }));
+    onUpdate({ end_position: pos });
+    onPickedEndConsumed?.();
+  }, [pickedEndCoord, onUpdate, onPickedEndConsumed]);
 
   async function handleRecalculate() {
     /** call backend to recompute dimensions and show side-by-side preview. */
@@ -296,6 +337,18 @@ export default function EditableFeatureInfo({
                   )}
                 />
               </div>
+            )}
+            {val("surface_type") === "RUNWAY" && (
+              <ThresholdEndSection
+                formData={formData}
+                setFormData={setFormData}
+                onUpdate={onUpdate}
+                centerline={(formData.geometry as { coordinates?: number[][] } | undefined)?.coordinates}
+                pickingThreshold={pickingThreshold}
+                onPickThresholdToggle={onPickThresholdToggle}
+                pickingEnd={pickingEnd}
+                onPickEndToggle={onPickEndToggle}
+              />
             )}
             {airportId && (
               <RecalculateBlock
@@ -665,6 +718,181 @@ function PointCoordEditor({
         onChange={(e) => commit("alt", e.target.value)}
       />
     </div>
+  );
+}
+
+function PositionBlock({
+  id,
+  label,
+  position,
+  picking,
+  onPickToggle,
+  onChange,
+  centerlineWarningDist,
+}: {
+  id: string;
+  label: string;
+  position: PointZ | null;
+  picking?: boolean;
+  onPickToggle?: () => void;
+  onChange: (pos: PointZ) => void;
+  centerlineWarningDist: number | null;
+}) {
+  /** coordinate editor for a single threshold or end position. */
+  const { t } = useTranslation();
+  const coords = position?.coordinates ?? [0, 0, 0];
+  const [lon, lat, alt] = coords;
+
+  function commit(field: "lat" | "lon" | "alt", value: string) {
+    /** parse and push coordinate update. */
+    const v = parseFloat(value);
+    if (isNaN(v)) return;
+    if (field === "lat" && (v < -90 || v > 90)) return;
+    if (field === "lon" && (v < -180 || v > 180)) return;
+    const newCoords: [number, number, number] = [
+      field === "lon" ? v : lon,
+      field === "lat" ? v : lat,
+      field === "alt" ? v : alt,
+    ];
+    onChange({ type: "Point", coordinates: newCoords });
+  }
+
+  return (
+    <div
+      className="mt-1 rounded-lg border border-tv-border bg-tv-bg p-2 space-y-1.5"
+      data-testid={`surface-${id}-section`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold text-tv-text-secondary uppercase tracking-wide">
+          {label}
+        </p>
+        {onPickToggle && (
+          <button
+            type="button"
+            onClick={onPickToggle}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors border ${
+              picking
+                ? "border-tv-accent bg-tv-accent text-tv-accent-text"
+                : "border-tv-accent text-tv-accent hover:bg-tv-accent hover:text-tv-accent-text"
+            }`}
+            data-testid={`surface-${id}-pick-map`}
+          >
+            <MapPin className="h-3 w-3" />
+            {t("mission.config.pickOnMap")}
+          </button>
+        )}
+      </div>
+      {position ? (
+        <>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Input
+              id={`feat-${id}-lat`}
+              label={t("map.coordinates.lat")}
+              type="number"
+              step="0.000001"
+              value={String(lat)}
+              onChange={(e) => commit("lat", e.target.value)}
+            />
+            <Input
+              id={`feat-${id}-lon`}
+              label={t("map.coordinates.lon")}
+              type="number"
+              step="0.000001"
+              value={String(lon)}
+              onChange={(e) => commit("lon", e.target.value)}
+            />
+          </div>
+          <Input
+            id={`feat-${id}-alt`}
+            label={t("map.coordinates.alt")}
+            type="number"
+            step="0.01"
+            value={String(alt)}
+            onChange={(e) => commit("alt", e.target.value)}
+          />
+          {centerlineWarningDist != null && centerlineWarningDist > 50 && (
+            <div className="flex items-center gap-1 text-[10px] text-tv-warning">
+              <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+              <span>{t("coordinator.detail.centerlineWarning", { distance: Math.round(centerlineWarningDist) })}</span>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="text-[10px] text-tv-text-muted italic">
+          {t("coordinator.detail.noPosition")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ThresholdEndSection({
+  formData,
+  setFormData,
+  onUpdate,
+  centerline,
+  pickingThreshold,
+  onPickThresholdToggle,
+  pickingEnd,
+  onPickEndToggle,
+}: {
+  formData: Record<string, unknown>;
+  setFormData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
+  onUpdate: (data: Record<string, unknown>) => void;
+  centerline?: number[][];
+  pickingThreshold?: boolean;
+  onPickThresholdToggle?: () => void;
+  pickingEnd?: boolean;
+  onPickEndToggle?: () => void;
+}) {
+  /** threshold and end position editors for a runway surface. */
+  const { t } = useTranslation();
+  const thrPos = formData.threshold_position as PointZ | null | undefined;
+  const endPos = formData.end_position as PointZ | null | undefined;
+
+  const thrDist = useMemo(() => {
+    if (!thrPos?.coordinates || !centerline || centerline.length < 2) return null;
+    return distanceFromCenterline(
+      [thrPos.coordinates[0], thrPos.coordinates[1]],
+      centerline,
+    );
+  }, [thrPos, centerline]);
+
+  const endDist = useMemo(() => {
+    if (!endPos?.coordinates || !centerline || centerline.length < 2) return null;
+    return distanceFromCenterline(
+      [endPos.coordinates[0], endPos.coordinates[1]],
+      centerline,
+    );
+  }, [endPos, centerline]);
+
+  return (
+    <>
+      <PositionBlock
+        id="threshold"
+        label={t("coordinator.detail.thresholdPosition")}
+        position={thrPos ?? null}
+        picking={pickingThreshold}
+        onPickToggle={onPickThresholdToggle}
+        centerlineWarningDist={thrDist}
+        onChange={(pos) => {
+          setFormData((prev) => ({ ...prev, threshold_position: pos }));
+          onUpdate({ threshold_position: pos });
+        }}
+      />
+      <PositionBlock
+        id="end-position"
+        label={t("coordinator.detail.endPosition")}
+        position={endPos ?? null}
+        picking={pickingEnd}
+        onPickToggle={onPickEndToggle}
+        centerlineWarningDist={endDist}
+        onChange={(pos) => {
+          setFormData((prev) => ({ ...prev, end_position: pos }));
+          onUpdate({ end_position: pos });
+        }}
+      />
+    </>
   );
 }
 
