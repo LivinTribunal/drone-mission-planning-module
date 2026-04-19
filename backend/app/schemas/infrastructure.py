@@ -215,7 +215,7 @@ class SafetyZoneResponse(BaseModel):
 class LHACreate(BaseModel):
     """lha create schema"""
 
-    unit_designator: str
+    unit_designator: str = Field(min_length=1, max_length=4)
     setting_angle: float | None = None
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr
@@ -226,7 +226,7 @@ class LHACreate(BaseModel):
 class LHAUpdate(BaseModel):
     """lha update schema"""
 
-    unit_designator: str | None = None
+    unit_designator: str | None = Field(default=None, min_length=1, max_length=4)
     setting_angle: float | None = None
     transition_sector_width: float | None = None
     lamp_type: LampTypeStr | None = None

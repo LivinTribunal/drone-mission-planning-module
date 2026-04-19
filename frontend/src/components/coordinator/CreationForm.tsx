@@ -177,11 +177,12 @@ export default function CreationForm({
     if (!selectedAgl) return "A";
     if (isPapiAgl) {
       const used = new Set(selectedAgl.lhas.map((l) => l.unit_designator));
-      return ["A", "B", "C", "D"].find((d) => !used.has(d)) ?? "A";
+      return ["A", "B", "C", "D"].find((d) => !used.has(d)) ?? null;
     }
     const nums = selectedAgl.lhas.map((l) => parseInt(l.unit_designator, 10)).filter((n) => !isNaN(n));
     return String(nums.length > 0 ? Math.max(...nums) + 1 : 1);
   }, [selectedAgl, isPapiAgl]);
+  const papiSlotsExhausted = isPapiAgl && nextDesignator === null;
 
   // manual coordinate entry for AGL/LHA - altitude is always airport elevation (set by handleCreate on page)
   const [manualLat, setManualLat] = useState(pointPosition ? String(pointPosition[1]) : "");
@@ -239,7 +240,7 @@ export default function CreationForm({
 
   // auto-prefill LHA name
   useEffect(() => {
-    if (category !== "lha" || !lhaAglId) return;
+    if (category !== "lha" || !lhaAglId || nextDesignator === null) return;
     setName(`LHA Unit ${nextDesignator}`);
   }, [lhaAglId, category, nextDesignator]);
 
@@ -421,7 +422,8 @@ export default function CreationForm({
   const canSubmit = effectiveEntityType && name.trim()
     && (effectiveEntityType !== "lha" || lhaAglId)
     && (effectiveEntityType !== "agl" || surfaceId)
-    && ((effectiveEntityType !== "agl" && effectiveEntityType !== "lha") || hasValidCoords);
+    && ((effectiveEntityType !== "agl" && effectiveEntityType !== "lha") || hasValidCoords)
+    && !papiSlotsExhausted;
 
   return (
     <div
@@ -829,8 +831,10 @@ export default function CreationForm({
                   </select>
                 </div>
                 {lhaAglId && (
-                  <p className="text-[10px] text-tv-text-muted">
-                    {t("coordinator.creation.unitDesignator")}: {nextDesignator}
+                  <p className={`text-[10px] ${papiSlotsExhausted ? "text-tv-error" : "text-tv-text-muted"}`}>
+                    {papiSlotsExhausted
+                      ? t("coordinator.creation.allPapiSlotsUsed")
+                      : `${t("coordinator.creation.unitDesignator")}: ${nextDesignator}`}
                   </p>
                 )}
                 <Input

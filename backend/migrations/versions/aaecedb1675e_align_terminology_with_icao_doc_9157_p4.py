@@ -10,6 +10,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import text
 
 revision: str = "aaecedb1675e"
 down_revision: Union[str, None] = ("8e1cc0628ef4", "b1c2d3e4f5a6")
@@ -38,9 +39,11 @@ def upgrade() -> None:
     # papi lhas: map 1->D, 2->C, 3->B, 4->A per icao
     for num, letter in UNIT_NUMBER_TO_DESIGNATOR.items():
         op.execute(
-            f"UPDATE lha SET unit_designator = '{letter}' "
-            f"FROM agl WHERE lha.agl_id = agl.id "
-            f"AND agl.agl_type = 'PAPI' AND lha.unit_number = {num}"
+            text(
+                "UPDATE lha SET unit_designator = :designator "
+                "FROM agl WHERE lha.agl_id = agl.id "
+                "AND agl.agl_type = 'PAPI' AND lha.unit_number = :num"
+            ).bindparams(designator=letter, num=num)
         )
 
     # non-papi lhas: keep numeric designator as string
@@ -77,9 +80,11 @@ def downgrade() -> None:
     designator_to_number = {"A": 4, "B": 3, "C": 2, "D": 1}
     for letter, num in designator_to_number.items():
         op.execute(
-            f"UPDATE lha SET unit_number = {num} "
-            f"FROM agl WHERE lha.agl_id = agl.id "
-            f"AND agl.agl_type = 'PAPI' AND lha.unit_designator = '{letter}'"
+            text(
+                "UPDATE lha SET unit_number = :num "
+                "FROM agl WHERE lha.agl_id = agl.id "
+                "AND agl.agl_type = 'PAPI' AND lha.unit_designator = :designator"
+            ).bindparams(num=num, designator=letter)
         )
 
     # non-papi lhas: cast string back to integer only when designator is numeric
