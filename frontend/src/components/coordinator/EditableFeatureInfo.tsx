@@ -768,19 +768,25 @@ function PositionBlock({
 }) {
   /** coordinate editor for a single threshold or end position. */
   const { t } = useTranslation();
-  const coords = position?.coordinates ?? [0, 0, 0];
-  const [lon, lat, alt] = coords;
+  const coords = position?.coordinates;
+  const lon = coords?.[0] ?? "";
+  const lat = coords?.[1] ?? "";
+  const alt = coords?.[2] ?? "";
 
   function commit(field: "lat" | "lon" | "alt", value: string) {
     /** parse and push coordinate update. */
+    if (value === "") return;
     const v = parseFloat(value);
     if (isNaN(v)) return;
     if (field === "lat" && (v < -90 || v > 90)) return;
     if (field === "lon" && (v < -180 || v > 180)) return;
+    const curLon = coords?.[0] ?? 0;
+    const curLat = coords?.[1] ?? 0;
+    const curAlt = coords?.[2] ?? 0;
     const newCoords: [number, number, number] = [
-      field === "lon" ? v : lon,
-      field === "lat" ? v : lat,
-      field === "alt" ? v : alt,
+      field === "lon" ? v : curLon,
+      field === "lat" ? v : curLat,
+      field === "alt" ? v : curAlt,
     ];
     onChange({ type: "Point", coordinates: newCoords });
   }
@@ -810,45 +816,37 @@ function PositionBlock({
           </button>
         )}
       </div>
-      {position ? (
-        <>
-          <div className="grid grid-cols-2 gap-1.5">
-            <Input
-              id={`feat-${id}-lat`}
-              label={t("map.coordinates.lat")}
-              type="number"
-              step="0.000001"
-              value={String(lat)}
-              onChange={(e) => commit("lat", e.target.value)}
-            />
-            <Input
-              id={`feat-${id}-lon`}
-              label={t("map.coordinates.lon")}
-              type="number"
-              step="0.000001"
-              value={String(lon)}
-              onChange={(e) => commit("lon", e.target.value)}
-            />
-          </div>
-          <Input
-            id={`feat-${id}-alt`}
-            label={t("map.coordinates.alt")}
-            type="number"
-            step="0.01"
-            value={String(alt)}
-            onChange={(e) => commit("alt", e.target.value)}
-          />
-          {centerlineWarningDist != null && centerlineWarningDist > 50 && (
-            <div className="flex items-center gap-1 text-[10px] text-tv-warning">
-              <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-              <span>{t("coordinator.detail.centerlineWarning", { distance: Math.round(centerlineWarningDist) })}</span>
-            </div>
-          )}
-        </>
-      ) : (
-        <p className="text-[10px] text-tv-text-muted italic">
-          {t("coordinator.detail.noPosition")}
-        </p>
+      <div className="grid grid-cols-2 gap-1.5">
+        <Input
+          id={`feat-${id}-lat`}
+          label={t("map.coordinates.lat")}
+          type="number"
+          step="0.000001"
+          value={String(lat)}
+          onChange={(e) => commit("lat", e.target.value)}
+        />
+        <Input
+          id={`feat-${id}-lon`}
+          label={t("map.coordinates.lon")}
+          type="number"
+          step="0.000001"
+          value={String(lon)}
+          onChange={(e) => commit("lon", e.target.value)}
+        />
+      </div>
+      <Input
+        id={`feat-${id}-alt`}
+        label={t("map.coordinates.alt")}
+        type="number"
+        step="0.01"
+        value={String(alt)}
+        onChange={(e) => commit("alt", e.target.value)}
+      />
+      {centerlineWarningDist != null && centerlineWarningDist > 50 && (
+        <div className="flex items-center gap-1 text-[10px] text-tv-warning">
+          <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+          <span>{t("coordinator.detail.centerlineWarning", { distance: Math.round(centerlineWarningDist) })}</span>
+        </div>
       )}
     </div>
   );
