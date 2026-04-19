@@ -30,6 +30,7 @@ import { listDroneProfiles } from "@/api/droneProfiles";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
 });
 
 /* ------------------------------------------------------------------ */

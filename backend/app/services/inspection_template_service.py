@@ -5,12 +5,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
 from app.models.agl import AGL
+from app.models.enums import METHOD_AGL_COMPAT
 from app.models.inspection import (
     Inspection,
     InspectionConfiguration,
     InspectionTemplate,
     insp_template_methods,
 )
+from app.models.airport import AirfieldSurface
 from app.schemas.inspection_template import InspectionTemplateCreate, InspectionTemplateUpdate
 from app.services.geometry_converter import apply_dict_update
 
@@ -205,3 +207,52 @@ def delete_template(db: Session, template_id: UUID):
         db.delete(config)
 
     db.commit()
+
+
+def bulk_create_templates(db: Session, airport_id: UUID) -> tuple[list[InspectionTemplate], int]:
+    """create templates for all valid agl x method combinations at an airport."""
+    agls = (
+        db.query(AGL)
+        .join(AirfieldSurface, AGL.surface_id == AirfieldSurface.id)
+        .filter(AirfieldSurface.airport_id == airport_id)
+        .all()
+    )
+    if not agls:
+        raise NotFoundError("no AGL systems found for this airport")
+
+    # collect existing templates for deduplication
+    existing = list_templates(db, airport_id=airport_id)
+    existing_keys: set[tuple[str, str]] = set()
+    for tpl in existing:
+        for method in tpl.methods:
+            for agl_id in tpl.target_agl_ids:
+                existing_keys.add((str(agl_id), method))
+
+    created: list[InspectionTemplate] = []
+    skipped = 0
+
+    for agl in agls:
+        for method, compat_types in METHOD_AGL_COMPAT.items():
+            if agl.agl_type not in compat_types:
+                continue
+
+            if (str(agl.id), method.value) in existing_keys:
+                skipped += 1
+                continue
+
+            side_part = f" {agl.side}" if agl.side else ""
+            template_name = f"{agl.name}{side_part} - {method.value.replace('_', ' ').title()}"
+
+            template = InspectionTemplate(name=template_name)
+            template.targets = [agl]
+            db.add(template)
+            db.flush()
+
+            db.execute(
+                insp_template_methods.insert().values(template_id=template.id, method=method.value)
+            )
+            created.append(template)
+
+    db.commit()
+
+    return [_load_template(db, t.id) for t in created], skipped

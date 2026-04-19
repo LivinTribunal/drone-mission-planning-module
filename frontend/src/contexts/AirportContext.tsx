@@ -41,6 +41,13 @@ export function AirportProvider({ children }: { children: ReactNode }) {
       .then((detail) => {
         if (fetchCounterRef.current !== requestId) return;
         setAirportDetail(detail);
+        setSelectedAirport((prev) => {
+          if (!prev || prev.id !== detail.id) return prev;
+          if (prev.default_drone_profile_id === detail.default_drone_profile_id) return prev;
+          const updated = { ...prev, default_drone_profile_id: detail.default_drone_profile_id };
+          localStorage.setItem(AIRPORT_KEY, JSON.stringify(updated));
+          return updated;
+        });
         setAirportDetailError(false);
       })
       .catch(() => {

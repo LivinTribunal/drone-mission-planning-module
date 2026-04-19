@@ -586,11 +586,13 @@ function DroneProfilesSection({
   loading,
   error,
   missions,
+  defaultDroneProfileId,
 }: {
   profiles: DroneProfileResponse[];
   loading: boolean;
   error: boolean;
   missions: MissionResponse[];
+  defaultDroneProfileId?: string | null;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -618,8 +620,15 @@ function DroneProfilesSection({
     return topId;
   }, [missionCounts]);
 
+  const defaultDrone = defaultDroneProfileId
+    ? profiles.find((dp) => dp.id === defaultDroneProfileId) ?? null
+    : null;
   const mostUsed = profiles.find((dp) => dp.id === mostUsedId) ?? profiles[0] ?? null;
-  const rest = profiles.filter((dp) => dp.id !== mostUsed?.id);
+  const featured = defaultDrone ?? mostUsed;
+  const featuredLabel = defaultDrone
+    ? t("operatorDrones.defaultDrone")
+    : t("dashboard.mostUsedDrone");
+  const rest = profiles.filter((dp) => dp.id !== featured?.id);
 
   return (
     <div className="bg-tv-surface border border-tv-border rounded-3xl">
@@ -666,13 +675,12 @@ function DroneProfilesSection({
         </div>
       ) : (
         <>
-          {/* always-visible: most used drone preview */}
-          {mostUsed && (
+          {featured && (
             <div className="border-t border-tv-border">
               <p className="px-3 pt-2 text-[10px] font-medium uppercase text-tv-text-muted">
-                {t("dashboard.mostUsedDrone")}
+                {featuredLabel}
               </p>
-              <DroneProfileRow dp={mostUsed} missionCount={missionCounts[mostUsed.id] || 0} />
+              <DroneProfileRow dp={featured} missionCount={missionCounts[featured.id] || 0} />
             </div>
           )}
 
@@ -756,7 +764,7 @@ function DashboardView() {
           />
 
           <StatisticsSection missions={missions} />
-          <DroneProfilesSection profiles={droneProfiles} loading={droneProfilesLoading} error={droneProfilesError} missions={missions} />
+          <DroneProfilesSection profiles={droneProfiles} loading={droneProfilesLoading} error={droneProfilesError} missions={missions} defaultDroneProfileId={selectedAirport?.default_drone_profile_id} />
         </div>
         <div className="w-2.5 flex-shrink-0" />
       </div>
