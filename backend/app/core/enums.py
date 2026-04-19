@@ -59,7 +59,6 @@ class InspectionMethod(str, enum.Enum):
 METHOD_AGL_COMPAT: dict[InspectionMethod, set[str]] = {
     InspectionMethod.VERTICAL_PROFILE: {"PAPI"},
     InspectionMethod.ANGULAR_SWEEP: {"PAPI"},
-    InspectionMethod.HOVER_POINT_LOCK: {"PAPI", "RUNWAY_EDGE_LIGHTS"},
     InspectionMethod.FLY_OVER: {"RUNWAY_EDGE_LIGHTS"},
     InspectionMethod.PARALLEL_SIDE_SWEEP: {"RUNWAY_EDGE_LIGHTS"},
 }
