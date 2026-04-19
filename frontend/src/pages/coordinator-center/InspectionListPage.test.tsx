@@ -236,11 +236,11 @@ describe("InspectionListPage", () => {
   });
 
   it("re-fetches templates when airport changes", async () => {
-    /** verify templates reload after airport switch. */
+    /** verify templates reload after airport switch on a live component. */
     const { listInspectionTemplates } = await import("@/api/inspectionTemplates");
     const mockList = vi.mocked(listInspectionTemplates);
 
-    renderPage();
+    const { rerender } = renderPage();
     await waitFor(() => {
       expect(screen.getByText("PAPI RWY 22 - Angular Sweep")).toBeInTheDocument();
     });
@@ -266,11 +266,14 @@ describe("InspectionListPage", () => {
 
     currentAirportDetail = mockAirportDetail2;
 
-    const { unmount } = renderPage();
+    rerender(
+      <MemoryRouter>
+        <InspectionListPage />
+      </MemoryRouter>,
+    );
     await waitFor(() => {
       expect(screen.getByText("Kosice Template")).toBeInTheDocument();
     });
-    unmount();
   });
 
   it("shows select-airport guard when airport is null", () => {
