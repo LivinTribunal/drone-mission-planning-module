@@ -131,6 +131,7 @@ def delete_mission(
         ip_address=request.client.host if request.client else None,
     )
     mission_service.delete_mission(db, mission_id)
+    db.commit()
 
     return DeleteResponse(deleted=True)
 

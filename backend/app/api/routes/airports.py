@@ -169,6 +169,7 @@ def delete_airport(
         ip_address=request.client.host if request.client else None,
     )
     airport_service.delete_airport(db, airport_id)
+    db.commit()
 
     return DeleteResponse(deleted=True)
 

@@ -185,7 +185,8 @@ def delete_user(
 ):
     """hard delete inactive user."""
     user = admin_service.get_user(db, user_id)
-    email = user.email
+
+    admin_service.delete_user(db, user)
 
     log_audit(
         db,
@@ -193,11 +194,11 @@ def delete_user(
         AuditAction.DELETE,
         entity_type="User",
         entity_id=user_id,
-        entity_name=email,
+        entity_name=user.email,
         ip_address=request.client.host if request.client else None,
     )
+    db.commit()
 
-    admin_service.delete_user(db, user_id)
     return {"deleted": True}
 
 

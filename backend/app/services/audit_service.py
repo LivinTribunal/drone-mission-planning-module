@@ -57,7 +57,9 @@ def list_audit_logs(
 
     total = query.count()
 
-    col = SORTABLE_COLUMNS.get(sort_by, AuditLog.timestamp)
+    col = SORTABLE_COLUMNS.get(sort_by)
+    if col is None:
+        raise DomainError(f"invalid sort column: {sort_by}")
     order = col.asc() if sort_dir == "asc" else col.desc()
     entries = query.order_by(order).offset(offset).limit(limit).all()
     return entries, total

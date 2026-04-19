@@ -101,6 +101,7 @@ def _is_maintenance_on() -> bool:
 
         result = is_maintenance_mode(db)
     except Exception:
+        logger.warning("maintenance mode check failed, defaulting to off", exc_info=True)
         result = False
     finally:
         if db:

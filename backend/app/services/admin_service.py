@@ -92,7 +92,7 @@ def invite_user(
         user.airports = airports
 
     db.add(user)
-    db.commit()
+    db.flush()
     db.refresh(user)
     return user, token
 
@@ -118,7 +118,7 @@ def update_user(
             raise DomainError(f"invalid role: {role}")
         user.role = role
 
-    db.commit()
+    db.flush()
     db.refresh(user)
     return user
 
@@ -127,7 +127,7 @@ def deactivate_user(db: Session, user_id: UUID) -> User:
     """soft deactivate user."""
     user = get_user(db, user_id)
     user.is_active = False
-    db.commit()
+    db.flush()
     db.refresh(user)
     return user
 
@@ -136,18 +136,17 @@ def activate_user(db: Session, user_id: UUID) -> User:
     """reactivate user."""
     user = get_user(db, user_id)
     user.is_active = True
-    db.commit()
+    db.flush()
     db.refresh(user)
     return user
 
 
-def delete_user(db: Session, user_id: UUID) -> None:
+def delete_user(db: Session, user: User) -> None:
     """hard delete - only allowed for inactive users."""
-    user = get_user(db, user_id)
     if user.is_active:
         raise DomainError("can only delete inactive users")
     db.delete(user)
-    db.commit()
+    db.flush()
 
 
 def reset_password(db: Session, user_id: UUID) -> str:
@@ -156,7 +155,7 @@ def reset_password(db: Session, user_id: UUID) -> str:
     token = str(uuid4())
     user.invitation_token = token
     user.invitation_expires_at = datetime.now(timezone.utc) + timedelta(hours=72)
-    db.commit()
+    db.flush()
     return token
 
 
@@ -165,7 +164,7 @@ def update_airport_assignments(db: Session, user_id: UUID, airport_ids: list[UUI
     user = get_user(db, user_id)
     airports = db.query(Airport).filter(Airport.id.in_(airport_ids)).all() if airport_ids else []
     user.airports = airports
-    db.commit()
+    db.flush()
     db.refresh(user)
     return user
 
@@ -308,7 +307,7 @@ def update_system_settings(
             row = SystemSettings(key=key, value=value, updated_by=user_id)
             db.add(row)
 
-    db.commit()
+    db.flush()
     return get_system_settings(db)
 
 
