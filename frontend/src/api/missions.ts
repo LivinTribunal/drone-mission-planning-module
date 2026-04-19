@@ -171,8 +171,11 @@ export async function reorderInspections(
 
 export async function generateTrajectory(
   missionId: string,
+  signal?: AbortSignal,
 ): Promise<GenerateTrajectoryResponse> {
-  const res = await client.post(`/missions/${missionId}/generate-trajectory`);
+  const res = await client.post(`/missions/${missionId}/generate-trajectory`, undefined, {
+    signal,
+  });
   return res.data;
 }
 

@@ -50,11 +50,16 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
 
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const computingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
     };
   }, []);
 
@@ -105,7 +110,14 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
         lastResult: null,
       });
 
-      generateTrajectory(missionId)
+      // abort any previous in-flight request
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      generateTrajectory(missionId, controller.signal)
         .then((result) => {
           if (!mountedRef.current) return;
           setState({

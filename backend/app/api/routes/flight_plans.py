@@ -57,7 +57,7 @@ def generate(
     try:
         flight_plan, _warnings = generate_trajectory(db, mission_id)
     except TrajectoryGenerationError as error:
-        # reload mission after trajectory call (it may have been modified)
+        db.rollback()
         db.refresh(mission)
         mission.mark_computation_failed(error.message)
         db.commit()
@@ -70,6 +70,7 @@ def generate(
 
         raise HTTPException(status_code=error.status_code, detail=detail)
     except DomainError as error:
+        db.rollback()
         db.refresh(mission)
         mission.mark_computation_failed(error.message)
         db.commit()
