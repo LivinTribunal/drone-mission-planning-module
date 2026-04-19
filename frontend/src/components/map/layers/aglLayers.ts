@@ -163,7 +163,11 @@ export function addAglLayers(
     .filter((a) => a.agl_type === "RUNWAY_EDGE_LIGHTS" && a.lhas.length >= 2)
     .filter((a) => a.lhas.every((l) => l.position?.coordinates?.length >= 2))
     .map((a) => {
-      const ordered = [...a.lhas].sort((x, y) => x.unit_designator.localeCompare(y.unit_designator));
+      const ordered = [...a.lhas].sort((x, y) => {
+        const xn = parseInt(x.unit_designator, 10);
+        const yn = parseInt(y.unit_designator, 10);
+        return !isNaN(xn) && !isNaN(yn) ? xn - yn : x.unit_designator.localeCompare(y.unit_designator);
+      });
       const first = ordered[0].position.coordinates;
       const last = ordered[ordered.length - 1].position.coordinates;
       return {

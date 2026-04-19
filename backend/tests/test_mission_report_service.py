@@ -118,13 +118,13 @@ def _make_violation(category="violation", message="test violation", constraint_i
     return v
 
 
-def _make_brief_data(
+def _make_report_data(
     num_waypoints=5,
     num_inspections=1,
     with_validation=True,
     with_drone=True,
 ):
-    """build a complete BriefData object for testing."""
+    """build a complete ReportData object for testing."""
     mission = MagicMock()
     mission.id = uuid4()
     mission.name = "Test Mission"
@@ -218,7 +218,7 @@ def _make_brief_data(
 
     constraints = [_make_constraint()]
 
-    return mission_report_service.BriefData(
+    return mission_report_service.ReportData(
         mission=mission,
         flight_plan=flight_plan,
         airport=airport,
@@ -231,13 +231,13 @@ def _make_brief_data(
     )
 
 
-class TestGenerateFlightBrief:
+class TestGenerateMissionReport:
     """tests for the mission report pdf generation."""
 
-    @patch.object(mission_report_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_report_data")
     def test_generates_valid_pdf(self, mock_load):
         """generated output is a valid pdf."""
-        data = _make_brief_data()
+        data = _make_report_data()
         mock_load.return_value = data
 
         pdf_bytes, filename = mission_report_service.generate_mission_report(MagicMock(), uuid4())
@@ -245,10 +245,10 @@ class TestGenerateFlightBrief:
         assert pdf_bytes[:5] == b"%PDF-"
         assert len(pdf_bytes) > 1000
 
-    @patch.object(mission_report_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_report_data")
     def test_filename_format(self, mock_load):
         """filename follows the required pattern."""
-        data = _make_brief_data()
+        data = _make_report_data()
         mock_load.return_value = data
 
         _, filename = mission_report_service.generate_mission_report(MagicMock(), uuid4())
@@ -256,40 +256,40 @@ class TestGenerateFlightBrief:
         assert filename.startswith("MissionReport_LZTT_Test_Mission_")
         assert filename.endswith(".pdf")
 
-    @patch.object(mission_report_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_report_data")
     def test_multiple_inspections(self, mock_load):
         """pdf generates successfully with multiple inspections."""
-        data = _make_brief_data(num_inspections=3, num_waypoints=10)
+        data = _make_report_data(num_inspections=3, num_waypoints=10)
         mock_load.return_value = data
 
         pdf_bytes, _ = mission_report_service.generate_mission_report(MagicMock(), uuid4())
 
         assert pdf_bytes[:5] == b"%PDF-"
 
-    @patch.object(mission_report_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_report_data")
     def test_no_inspections(self, mock_load):
         """pdf generates with zero inspections."""
-        data = _make_brief_data(num_inspections=0, num_waypoints=3)
+        data = _make_report_data(num_inspections=0, num_waypoints=3)
         mock_load.return_value = data
 
         pdf_bytes, _ = mission_report_service.generate_mission_report(MagicMock(), uuid4())
 
         assert pdf_bytes[:5] == b"%PDF-"
 
-    @patch.object(mission_report_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_report_data")
     def test_no_drone_profile(self, mock_load):
         """pdf generates without drone profile."""
-        data = _make_brief_data(with_drone=False)
+        data = _make_report_data(with_drone=False)
         mock_load.return_value = data
 
         pdf_bytes, _ = mission_report_service.generate_mission_report(MagicMock(), uuid4())
 
         assert pdf_bytes[:5] == b"%PDF-"
 
-    @patch.object(mission_report_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_report_data")
     def test_with_violations(self, mock_load):
         """pdf generates with validation violations."""
-        data = _make_brief_data()
+        data = _make_report_data()
         data.validation_result.passed = False
         v1 = _make_violation("violation", "altitude exceeded")
         v2 = _make_violation("warning", "speed close to limit")
@@ -301,10 +301,10 @@ class TestGenerateFlightBrief:
 
         assert pdf_bytes[:5] == b"%PDF-"
 
-    @patch.object(mission_report_service, "_load_brief_data")
+    @patch.object(mission_report_service, "_load_report_data")
     def test_no_validation(self, mock_load):
         """pdf generates without validation results."""
-        data = _make_brief_data(with_validation=False)
+        data = _make_report_data(with_validation=False)
         mock_load.return_value = data
 
         pdf_bytes, _ = mission_report_service.generate_mission_report(MagicMock(), uuid4())
@@ -312,7 +312,7 @@ class TestGenerateFlightBrief:
         assert pdf_bytes[:5] == b"%PDF-"
 
 
-class TestLoadBriefData:
+class TestLoadReportData:
     """tests for data loading and error handling."""
 
     def test_mission_not_found_raises_404(self):
@@ -321,7 +321,7 @@ class TestLoadBriefData:
         db.query.return_value.options.return_value.filter.return_value.first.return_value = None
 
         with pytest.raises(NotFoundError, match="mission not found"):
-            mission_report_service._load_brief_data(db, uuid4())
+            mission_report_service._load_report_data(db, uuid4())
 
     def test_no_flight_plan_raises_409(self):
         """raises ConflictError when no flight plan exists."""
@@ -342,7 +342,7 @@ class TestLoadBriefData:
         query_mock.options.return_value.filter.return_value.first.side_effect = results
 
         with pytest.raises(ConflictError, match="no flight plan"):
-            mission_report_service._load_brief_data(db, uuid4())
+            mission_report_service._load_report_data(db, uuid4())
 
 
 class TestHelpers:
@@ -418,7 +418,7 @@ class TestBuildActivities:
 
     def test_basic_activity_sequence(self):
         """activities are built with correct names and colors."""
-        data = _make_brief_data(num_waypoints=5, num_inspections=1)
+        data = _make_report_data(num_waypoints=5, num_inspections=1)
         activities = mission_report_service._build_activities(data)
 
         names = [a["name"] for a in activities]
@@ -427,7 +427,7 @@ class TestBuildActivities:
 
     def test_activity_colors_match_type(self):
         """each activity gets the correct color for its type."""
-        data = _make_brief_data(num_waypoints=5, num_inspections=1)
+        data = _make_report_data(num_waypoints=5, num_inspections=1)
         activities = mission_report_service._build_activities(data)
 
         for act in activities:
@@ -440,7 +440,7 @@ class TestBuildActivities:
 
     def test_no_zero_duration_activities(self):
         """all returned activities have positive duration."""
-        data = _make_brief_data(num_waypoints=10, num_inspections=2)
+        data = _make_report_data(num_waypoints=10, num_inspections=2)
         activities = mission_report_service._build_activities(data)
 
         for act in activities:
@@ -448,7 +448,7 @@ class TestBuildActivities:
 
     def test_empty_waypoints(self):
         """empty waypoint list produces no activities."""
-        data = _make_brief_data(num_waypoints=0, num_inspections=0)
+        data = _make_report_data(num_waypoints=0, num_inspections=0)
         data.waypoints = []
         activities = mission_report_service._build_activities(data)
 

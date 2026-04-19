@@ -249,7 +249,11 @@ export default function CreationForm({
     if (category !== "lha" || !lhaAglId) return;
     const agl = allAgls.find((a) => a.id === lhaAglId);
     if (!agl) return;
-    const sorted = [...agl.lhas].sort((a, b) => a.unit_designator.localeCompare(b.unit_designator));
+    const sorted = [...agl.lhas].sort((a, b) => {
+      const an = parseInt(a.unit_designator, 10);
+      const bn = parseInt(b.unit_designator, 10);
+      return !isNaN(an) && !isNaN(bn) ? an - bn : a.unit_designator.localeCompare(b.unit_designator);
+    });
     const recent = sorted[sorted.length - 1];
     if (recent) {
       setLhaTolerance(recent.tolerance != null ? String(recent.tolerance) : "0.2");

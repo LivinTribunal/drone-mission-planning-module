@@ -191,7 +191,7 @@ describe("InspectionConfigForm method variants", () => {
   });
 
   it("renders geometry-override fields for VERTICAL_PROFILE and PAPI_HORIZONTAL_RANGE", () => {
-    // angular sweep shows horizontal_distance + sweep_angle;
+    // papi horizontal range shows horizontal_distance + sweep_angle;
     // vertical profile shows horizontal_distance + vertical_profile_height.
     const cases: Array<{ method: "VERTICAL_PROFILE" | "PAPI_HORIZONTAL_RANGE"; secondField: string }> = [
       { method: "PAPI_HORIZONTAL_RANGE", secondField: "inspection-sweep-angle" },

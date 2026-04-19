@@ -61,9 +61,7 @@ def test_delete_edge_lights_agl(client):
 
     lhas = []
     for i in range(1, 4):
-        r = client.post(
-            base, json={**LHA_PAYLOAD, "unit_designator": str(i), "setting_angle": 0.0}
-        )
+        r = client.post(base, json={**LHA_PAYLOAD, "unit_designator": str(i), "setting_angle": 0.0})
         lhas.append(r.json())
 
     # delete the middle LHA

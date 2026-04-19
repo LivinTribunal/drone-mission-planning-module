@@ -24,6 +24,15 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+def _designator_sort_key(designator: str | None) -> tuple:
+    """sort key that orders numeric designators numerically and alpha ones lexically."""
+    d = designator or ""
+    try:
+        return (0, int(d), "")
+    except (ValueError, TypeError):
+        return (1, 0, d)
+
+
 def _opposite_bearing(heading: Degrees) -> Degrees:
     """bearing 180 degrees opposite of given heading, wrapped to [0, 360)."""
     return (heading + 180) % 360
@@ -37,7 +46,7 @@ def get_ordered_lha_positions(template, lha_ids: list | None = None) -> list[Poi
     for agl in template.targets:
         ordered = sorted(
             (lha for lha in agl.lhas if lha.position),
-            key=lambda lha: lha.unit_designator if lha.unit_designator is not None else "",
+            key=lambda lha: _designator_sort_key(lha.unit_designator),
         )
         for lha in ordered:
             if lha_id_set and str(lha.id) not in lha_id_set:
