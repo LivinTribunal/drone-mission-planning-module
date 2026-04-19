@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, computed_field, field_validator
 
-from app.models.enums import MissionStatus
+from app.core.enums import MissionStatus
 from app.schemas.geometry import PointZ
 
 
