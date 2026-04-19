@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.flight_plan import FlightPlan
@@ -672,14 +673,14 @@ class TestCameraSettingsSchemaValidation:
         """iso=0 must be rejected."""
         from app.schemas.mission import InspectionConfigOverride
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             InspectionConfigOverride(iso=0)
 
     def test_iso_rejects_negative(self):
         """negative iso must be rejected."""
         from app.schemas.mission import InspectionConfigOverride
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             InspectionConfigOverride(iso=-100)
 
     def test_iso_accepts_valid(self):
@@ -693,21 +694,21 @@ class TestCameraSettingsSchemaValidation:
         """focus_distance_m=0 must be rejected."""
         from app.schemas.mission import InspectionConfigOverride
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             InspectionConfigOverride(focus_distance_m=0)
 
     def test_optical_zoom_rejects_zero(self):
         """optical_zoom=0 must be rejected."""
         from app.schemas.mission import InspectionConfigOverride
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             InspectionConfigOverride(optical_zoom=0)
 
     def test_white_balance_max_length(self):
         """white_balance over 20 chars must be rejected."""
         from app.schemas.mission import InspectionConfigOverride
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             InspectionConfigOverride(white_balance="A" * 21)
 
     def test_all_camera_fields_none_accepted(self):

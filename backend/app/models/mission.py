@@ -106,6 +106,13 @@ class Mission(Base):
     landing_coordinate = Column(Geometry("POINTZ", srid=4326))
     default_capture_mode = Column(String(20), nullable=True, default="VIDEO_CAPTURE")
     default_buffer_distance = Column(Float, nullable=True)
+
+    # mission-level camera defaults - inspection overrides take precedence
+    default_white_balance = Column(String(20), nullable=True)
+    default_iso = Column(Integer, nullable=True)
+    default_shutter_speed = Column(String(20), nullable=True)
+    default_focus_mode = Column(String(20), nullable=True)
+
     transit_agl = Column(Float, nullable=True)
     require_perpendicular_runway_crossing = Column(
         Boolean, nullable=False, default=True, server_default="true"

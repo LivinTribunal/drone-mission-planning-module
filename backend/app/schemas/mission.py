@@ -170,6 +170,10 @@ class MissionCreate(BaseModel):
     landing_coordinate: PointZ | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
+    default_white_balance: str | None = Field(default=None, max_length=20)
+    default_iso: int | None = Field(default=None, gt=0)
+    default_shutter_speed: str | None = Field(default=None, max_length=20)
+    default_focus_mode: str | None = Field(default=None, max_length=20)
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool = True
     flight_plan_scope: FlightPlanScopeStr = "FULL"
@@ -195,6 +199,10 @@ class MissionUpdate(BaseModel):
     date_time: datetime | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
+    default_white_balance: str | None = Field(default=None, max_length=20)
+    default_iso: int | None = Field(default=None, gt=0)
+    default_shutter_speed: str | None = Field(default=None, max_length=20)
+    default_focus_mode: str | None = Field(default=None, max_length=20)
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool | None = None
     flight_plan_scope: FlightPlanScopeStr | None = None
@@ -225,6 +233,10 @@ class MissionResponse(BaseModel):
     landing_coordinate: PointZ | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = None
+    default_white_balance: str | None = None
+    default_iso: int | None = None
+    default_shutter_speed: str | None = None
+    default_focus_mode: str | None = None
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool = True
     flight_plan_scope: FlightPlanScopeStr = "FULL"

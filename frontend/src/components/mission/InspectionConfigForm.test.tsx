@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import InspectionConfigForm from "./InspectionConfigForm";
-import type { InspectionResponse } from "@/types/mission";
+import type { InspectionResponse, MissionDetailResponse } from "@/types/mission";
 
 // minimal template/inspection stubs
 const baseInspection = (
@@ -63,6 +63,39 @@ const runwayAgl = {
   ],
 };
 
+const baseMission: MissionDetailResponse = {
+  id: "m-1",
+  name: "Test Mission",
+  status: "DRAFT",
+  airport_id: "a-1",
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+  operator_notes: null,
+  drone_profile_id: null,
+  date_time: null,
+  default_speed: null,
+  measurement_speed_override: null,
+  default_altitude_offset: null,
+  takeoff_coordinate: null,
+  landing_coordinate: null,
+  default_capture_mode: null,
+  default_buffer_distance: null,
+  default_white_balance: null,
+  default_iso: null,
+  default_shutter_speed: null,
+  default_focus_mode: null,
+  transit_agl: null,
+  require_perpendicular_runway_crossing: true,
+  flight_plan_scope: "FULL",
+  has_unsaved_map_changes: false,
+  computation_status: "IDLE",
+  computation_error: null,
+  computation_started_at: null,
+  inspection_count: 0,
+  estimated_duration: null,
+  inspections: [],
+};
+
 function renderForm(
   overrides: Partial<Parameters<typeof InspectionConfigForm>[0]> = {},
 ) {
@@ -71,6 +104,7 @@ function renderForm(
     template: runwayTemplate as never,
     agls: [runwayAgl] as never,
     droneProfile: null,
+    mission: baseMission,
     configOverride: {},
     onChange: vi.fn(),
     selectedLhaIds: new Set<string>(),

@@ -690,6 +690,7 @@ export default function MissionConfigPage() {
                 template={selectedTemplate}
                 agls={allAgls}
                 droneProfile={selectedDroneProfile}
+                mission={mission}
                 configOverride={currentInspectionConfig}
                 onChange={handleInspectionConfigChange}
                 selectedLhaIds={inspectionLhas}

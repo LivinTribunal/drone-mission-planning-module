@@ -24,7 +24,9 @@
           "manual": "Manuálne",
           "autoCenter": "Auto stred",
           "autoArea": "Auto oblasť"
-        }
+        },
+        "missionDefault": "Predvolené",
+        "computed": "Vypočítané"
       }
     }
   }

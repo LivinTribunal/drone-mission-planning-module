@@ -650,7 +650,9 @@
           "manual": "Manual",
           "autoCenter": "Auto Center",
           "autoArea": "Auto Area"
-        }
+        },
+        "missionDefault": "Mission default",
+        "computed": "Computed"
       },
       "flightPlanScope": {
         "label": "Flight plan scope",

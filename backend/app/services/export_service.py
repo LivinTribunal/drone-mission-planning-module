@@ -1170,7 +1170,7 @@ def export_mission(
 
     # eager-load inspections + configs for JSON camera settings export
     if "JSON" in formats:
-        _ = (
+        mission = (
             db.query(Mission)
             .options(
                 joinedload(Mission.inspections).joinedload(Inspection.config),

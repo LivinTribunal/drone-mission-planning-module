@@ -200,6 +200,22 @@ export default function MissionConfigForm({
     values.default_buffer_distance !== undefined
       ? values.default_buffer_distance
       : mission.default_buffer_distance;
+  const defaultWhiteBalance =
+    values.default_white_balance !== undefined
+      ? values.default_white_balance
+      : mission.default_white_balance;
+  const defaultIso =
+    values.default_iso !== undefined
+      ? values.default_iso
+      : mission.default_iso;
+  const defaultShutterSpeed =
+    values.default_shutter_speed !== undefined
+      ? values.default_shutter_speed
+      : mission.default_shutter_speed;
+  const defaultFocusMode =
+    values.default_focus_mode !== undefined
+      ? values.default_focus_mode
+      : mission.default_focus_mode;
   const transitAgl =
     values.transit_agl !== undefined
       ? values.transit_agl
@@ -347,6 +363,84 @@ export default function MissionConfigForm({
             className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
             data-testid="default-buffer-distance-input"
           />
+        </div>
+      </div>
+
+      {/* camera setting defaults */}
+      <div data-testid="mission-camera-settings">
+        <label className="block text-xs font-semibold mb-2 text-tv-text-secondary">
+          {t("mission.config.cameraSettings.title")}
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.whiteBalance")}
+            </label>
+            <select
+              value={defaultWhiteBalance ?? ""}
+              onChange={(e) =>
+                onChange({ default_white_balance: e.target.value || null })
+              }
+              className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+              data-testid="default-white-balance-select"
+            >
+              <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+              <option value="DAYLIGHT">{t("mission.config.cameraSettings.wb.daylight")}</option>
+              <option value="CLOUDY">{t("mission.config.cameraSettings.wb.cloudy")}</option>
+              <option value="TUNGSTEN">{t("mission.config.cameraSettings.wb.tungsten")}</option>
+              <option value="MANUAL_4000K">{t("mission.config.cameraSettings.wb.manual4000k")}</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.iso")}
+            </label>
+            <input
+              type="number"
+              step="100"
+              min="50"
+              value={defaultIso ?? ""}
+              onChange={(e) =>
+                onChange({ default_iso: e.target.value ? parseInt(e.target.value) : null })
+              }
+              placeholder={t("mission.config.cameraSettings.isoHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="default-iso-input"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.shutterSpeed")}
+            </label>
+            <input
+              type="text"
+              value={defaultShutterSpeed ?? ""}
+              onChange={(e) =>
+                onChange({ default_shutter_speed: e.target.value || null })
+              }
+              placeholder={t("mission.config.cameraSettings.shutterSpeedHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="default-shutter-speed-input"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.focusMode")}
+            </label>
+            <select
+              value={defaultFocusMode ?? ""}
+              onChange={(e) =>
+                onChange({ default_focus_mode: e.target.value || null })
+              }
+              className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+              data-testid="default-focus-mode-select"
+            >
+              <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+              <option value="MANUAL">{t("mission.config.cameraSettings.fm.manual")}</option>
+              <option value="AUTO_CENTER">{t("mission.config.cameraSettings.fm.autoCenter")}</option>
+              <option value="AUTO_AREA">{t("mission.config.cameraSettings.fm.autoArea")}</option>
+            </select>
+          </div>
         </div>
       </div>
 
