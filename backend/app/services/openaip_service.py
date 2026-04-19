@@ -615,12 +615,6 @@ def lookup_airport_by_icao(icao_code: str, radius_km: float = 3.0) -> AirportLoo
             status_code=400,
         )
 
-    if radius_km <= 0 or radius_km > 50:
-        raise DomainError(
-            "radius_km must be between 0 and 50",
-            status_code=400,
-        )
-
     with _client() as client:
         # search airports by icao
         search = _get(

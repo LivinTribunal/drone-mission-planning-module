@@ -794,7 +794,8 @@ export default function AirportEditPage() {
       await deleteAirport(id);
       clearAirport();
       navigate("/coordinator/airports");
-    } catch {
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
       setDeleteAirportError(t("coordinator.detail.deleteAirportError"));
     }
   }, [id, clearAirport, navigate, t]);
