@@ -533,7 +533,7 @@ export default function MissionConfigPage() {
   }
 
   async function handleComputeTrajectory() {
-    if (!id) return;
+    if (!id || !mission) return;
     setComputing(true);
     try {
       const { flightPlan, missionStatus } = await generateAndFetchTrajectory(id);
@@ -542,7 +542,7 @@ export default function MissionConfigPage() {
       const violations = flightPlan.validation_result?.violations ?? [];
       setWarnings(violations.length > 0 ? violations : null);
 
-      updateMissionState({ ...mission!, status: missionStatus });
+      updateMissionState({ ...mission, status: missionStatus });
     } catch (err) {
       if (isAxiosError(err) && err.response?.status && [400, 409, 422].includes(err.response.status)) {
         const detail = err.response?.data?.detail;
