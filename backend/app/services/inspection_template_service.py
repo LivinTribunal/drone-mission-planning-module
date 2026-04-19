@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
 from app.models.agl import AGL
+from app.models.airport import AirfieldSurface
 from app.models.enums import METHOD_AGL_COMPAT
 from app.models.inspection import (
     Inspection,
@@ -12,7 +13,6 @@ from app.models.inspection import (
     InspectionTemplate,
     insp_template_methods,
 )
-from app.models.airport import AirfieldSurface
 from app.schemas.inspection_template import InspectionTemplateCreate, InspectionTemplateUpdate
 from app.services.geometry_converter import apply_dict_update
 
@@ -225,8 +225,9 @@ def bulk_create_templates(db: Session, airport_id: UUID) -> tuple[list[Inspectio
     existing_keys: set[tuple[str, str]] = set()
     for tpl in existing:
         for method in tpl.methods:
+            method_val = method.value if hasattr(method, "value") else method
             for agl_id in tpl.target_agl_ids:
-                existing_keys.add((str(agl_id), method))
+                existing_keys.add((str(agl_id), method_val))
 
     created: list[InspectionTemplate] = []
     skipped = 0

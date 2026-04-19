@@ -66,7 +66,8 @@ export default function BulkCreateTemplatesDialog({
     try {
       await onSubmit();
       onClose();
-    } catch {
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
       setApiError(t("coordinator.inspections.createError"));
     } finally {
       setSubmitting(false);
