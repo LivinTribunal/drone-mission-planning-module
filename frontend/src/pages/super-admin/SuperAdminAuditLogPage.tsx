@@ -64,8 +64,8 @@ export default function SuperAdminAuditLogPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [actionFilter, setActionFilter] = useState<Set<string>>(new Set());
-  const [entityTypeFilter, setEntityTypeFilter] = useState<Set<string>>(new Set());
+  const [actionFilter, setActionFilter] = useState<string | null>(null);
+  const [entityTypeFilter, setEntityTypeFilter] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(0);
@@ -80,6 +80,8 @@ export default function SuperAdminAuditLogPage() {
     try {
       const res = await listAuditLogs({
         search: search || undefined,
+        action: actionFilter || undefined,
+        entity_type: entityTypeFilter || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         sort_by: sortKey,
@@ -94,7 +96,7 @@ export default function SuperAdminAuditLogPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, dateFrom, dateTo, sortKey, sortDir, page, pageSize]);
+  }, [search, actionFilter, entityTypeFilter, dateFrom, dateTo, sortKey, sortDir, page, pageSize]);
 
   useEffect(() => {
     fetchLogs();
@@ -128,33 +130,14 @@ export default function SuperAdminAuditLogPage() {
   }
 
   function toggleAction(action: string) {
-    /**toggle an action filter pill.*/
-    setActionFilter((prev) => {
-      const next = new Set(prev);
-      if (next.has(action)) next.delete(action);
-      else next.add(action);
-      return next;
-    });
+    setActionFilter((prev) => (prev === action ? null : action));
     setPage(0);
   }
 
   function toggleEntityType(type: string) {
-    /**toggle an entity type filter pill.*/
-    setEntityTypeFilter((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
-      return next;
-    });
+    setEntityTypeFilter((prev) => (prev === type ? null : type));
     setPage(0);
   }
-
-  const filteredEntries = entries.filter((e) => {
-    if (actionFilter.size > 0 && !actionFilter.has(e.action)) return false;
-    if (entityTypeFilter.size > 0 && e.entity_type && !entityTypeFilter.has(e.entity_type)) return false;
-    if (entityTypeFilter.size > 0 && !e.entity_type) return false;
-    return true;
-  });
 
   function formatTimestamp(ts: string) {
     return new Date(ts).toLocaleString();
@@ -191,7 +174,7 @@ export default function SuperAdminAuditLogPage() {
                 onClick={() => toggleAction(action)}
                 style={ACTION_BADGE[action]}
                 className={`rounded-full px-3 py-1 text-xs font-semibold transition-opacity ${
-                  actionFilter.size > 0 && !actionFilter.has(action) ? "opacity-40" : ""
+                  actionFilter && actionFilter !== action ? "opacity-40" : ""
                 }`}
                 data-testid={`action-pill-${action}`}
               >
@@ -210,7 +193,7 @@ export default function SuperAdminAuditLogPage() {
                 onClick={() => toggleEntityType(type)}
                 style={ENTITY_TYPE_BADGE[type]}
                 className={`rounded-full px-3 py-1 text-xs font-semibold transition-opacity ${
-                  entityTypeFilter.size > 0 && !entityTypeFilter.has(type) ? "opacity-40" : ""
+                  entityTypeFilter && entityTypeFilter !== type ? "opacity-40" : ""
                 }`}
                 data-testid={`entity-type-pill-${type}`}
               >
@@ -247,7 +230,7 @@ export default function SuperAdminAuditLogPage() {
         <div className="rounded-2xl border border-tv-border bg-tv-surface overflow-hidden">
           {loading ? (
             <p className="text-center text-tv-text-muted py-8">{t("common.loading")}</p>
-          ) : filteredEntries.length === 0 ? (
+          ) : entries.length === 0 ? (
             <p className="text-center text-tv-text-muted py-8">{t("admin.noAuditLogs")}</p>
           ) : (
             <div className="w-full overflow-x-auto">
@@ -275,7 +258,7 @@ export default function SuperAdminAuditLogPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEntries.map((entry) => (
+                  {entries.map((entry) => (
                     <tr
                       key={entry.id}
                       className="border-b border-tv-border hover:bg-tv-surface-hover transition-colors"
@@ -323,7 +306,7 @@ export default function SuperAdminAuditLogPage() {
         <Pagination
           page={page}
           pageSize={pageSize}
-          totalItems={actionFilter.size > 0 || entityTypeFilter.size > 0 ? filteredEntries.length : total}
+          totalItems={total}
           onPageChange={setPage}
           onPageSizeChange={(size) => {
             setPageSize(size);

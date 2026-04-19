@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -85,7 +86,23 @@ _maintenance_cache: dict[str, object] = {"value": False, "checked_at": 0.0}
 _MAINTENANCE_TTL = 30
 
 
-def _is_maintenance_on() -> bool:
+def _check_maintenance_sync() -> bool:
+    """synchronous db check for maintenance mode."""
+    db = None
+    try:
+        db = SessionLocal()
+        from app.services.admin_service import is_maintenance_mode
+
+        return is_maintenance_mode(db)
+    except Exception:
+        logger.warning("maintenance mode check failed, defaulting to off", exc_info=True)
+        return False
+    finally:
+        if db:
+            db.close()
+
+
+async def _is_maintenance_on() -> bool:
     """check maintenance mode with 30s ttl cache."""
     if os.environ.get("MAINTENANCE_MODE", "").lower() == "true":
         return True
@@ -94,18 +111,8 @@ def _is_maintenance_on() -> bool:
     if now - _maintenance_cache["checked_at"] < _MAINTENANCE_TTL:  # type: ignore[operator]
         return bool(_maintenance_cache["value"])
 
-    db = None
-    try:
-        db = SessionLocal()
-        from app.services.admin_service import is_maintenance_mode
-
-        result = is_maintenance_mode(db)
-    except Exception:
-        logger.warning("maintenance mode check failed, defaulting to off", exc_info=True)
-        result = False
-    finally:
-        if db:
-            db.close()
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, _check_maintenance_sync)
 
     _maintenance_cache["value"] = result
     _maintenance_cache["checked_at"] = now
@@ -115,7 +122,7 @@ def _is_maintenance_on() -> bool:
 @app.middleware("http")
 async def maintenance_mode_middleware(request: Request, call_next):
     """return 503 for non-admin users when maintenance mode is on."""
-    if not _is_maintenance_on():
+    if not await _is_maintenance_on():
         return await call_next(request)
 
     # always let cors preflights through so browsers get proper headers
