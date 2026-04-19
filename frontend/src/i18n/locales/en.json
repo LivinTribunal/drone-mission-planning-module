@@ -627,6 +627,31 @@
       "hoverBearingCompassHint": "0 = true north, 90 = east",
       "hoverBearingRunwayHelp": "0° = drone faces approach side (180° from runway heading). Positive values rotate clockwise around the LHA.",
       "hoverBearingCompassHelp": "Absolute compass heading from LHA to drone. 0° = N, 90° = E, 180° = S, 270° = W.",
+      "cameraSettings": {
+        "title": "Night Camera Settings",
+        "whiteBalance": "White Balance",
+        "iso": "ISO",
+        "isoHint": "e.g. 100, 400, 800",
+        "shutterSpeed": "Shutter Speed",
+        "shutterSpeedHint": "e.g. 1/500, 1/1000",
+        "focusMode": "Focus Mode",
+        "focusDistance": "Focus Distance (m)",
+        "focusDistanceHint": "Set to PAPI distance",
+        "opticalZoom": "Optical Zoom (x)",
+        "opticalZoomHint": "e.g. 2.0, 5.0",
+        "notSet": "Not set",
+        "wb": {
+          "daylight": "Daylight",
+          "cloudy": "Cloudy",
+          "tungsten": "Tungsten",
+          "manual4000k": "Manual 4000K"
+        },
+        "fm": {
+          "manual": "Manual",
+          "autoCenter": "Auto Center",
+          "autoArea": "Auto Area"
+        }
+      },
       "flightPlanScope": {
         "label": "Flight plan scope",
         "full": "Full",
@@ -1430,7 +1455,8 @@
     }
   },
   "languages": {
-    "en": "English"
+    "en": "English",
+    "sk": "Slovenčina"
   },
   "computation": {
     "computing": "Computing trajectory...",

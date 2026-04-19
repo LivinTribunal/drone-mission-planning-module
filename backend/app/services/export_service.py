@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.airport import Airport
 from app.models.flight_plan import FlightPlan
+from app.models.inspection import Inspection, InspectionTemplate
 from app.models.mission import DroneProfile, Mission
 from app.schemas.geometry import parse_ewkb
 
@@ -118,6 +119,8 @@ def generate_json(
     flight_plan: FlightPlan,
     mission_name: str = "",
     airport_elevation: float = 0,
+    *,
+    mission=None,
 ) -> bytes:
     """serialize flight plan to structured json."""
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
@@ -162,6 +165,35 @@ def generate_json(
         "estimated_duration": flight_plan.estimated_duration,
         "waypoints": wp_list,
     }
+
+    # per-inspection camera settings when mission is available
+    if mission and hasattr(mission, "inspections") and mission.inspections:
+        _cam_keys = (
+            "white_balance",
+            "iso",
+            "shutter_speed",
+            "focus_mode",
+            "focus_distance_m",
+            "optical_zoom",
+        )
+        inspections_out = []
+        for insp in sorted(mission.inspections, key=lambda i: i.sequence_order):
+            resolved = {}
+            if insp.config:
+                template_cfg = insp.template.default_config if insp.template else None
+                resolved = insp.config.resolve_with_defaults(template_cfg)
+            cam = {k: resolved.get(k) for k in _cam_keys}
+            if any(v is not None for v in cam.values()):
+                inspections_out.append(
+                    {
+                        "id": insp.id,
+                        "method": insp.method,
+                        "sequence_order": insp.sequence_order,
+                        "camera_settings": cam,
+                    }
+                )
+        if inspections_out:
+            data["inspections"] = inspections_out
 
     return json.dumps(data, indent=2, cls=_UUIDEncoder).encode("utf-8")
 
@@ -1136,6 +1168,20 @@ def export_mission(
             db.query(DroneProfile).filter(DroneProfile.id == mission.drone_profile_id).first()
         )
 
+    # eager-load inspections + configs for JSON camera settings export
+    if "JSON" in formats:
+        _ = (
+            db.query(Mission)
+            .options(
+                joinedload(Mission.inspections).joinedload(Inspection.config),
+                joinedload(Mission.inspections)
+                .joinedload(Inspection.template)
+                .joinedload(InspectionTemplate.default_config),
+            )
+            .filter(Mission.id == mission_id)
+            .first()
+        )
+
     files: dict[str, tuple[bytes, str]] = {}
     for fmt in formats:
         generator = _EXPORT_GENERATORS[fmt]
@@ -1148,6 +1194,13 @@ def export_mission(
                 airport_elevation,
                 mission=mission,
                 drone_profile=drone_profile,
+            )
+        elif fmt == "JSON":
+            content = generator(
+                flight_plan,
+                mission.name,
+                airport_elevation,
+                mission=mission,
             )
         else:
             content = generator(flight_plan, mission.name, airport_elevation)
