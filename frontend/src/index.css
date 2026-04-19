@@ -44,8 +44,8 @@
   --tv-inspection-5: #e54545;
 
   /* inspection method colors */
-  --tv-method-papi-horizontal-range-bg: rgba(69, 149, 229, 0.15);
-  --tv-method-papi-horizontal-range-text: #4595e5;
+  --tv-method-horizontal-range-bg: rgba(69, 149, 229, 0.15);
+  --tv-method-horizontal-range-text: #4595e5;
   --tv-method-vertical-profile-bg: rgba(155, 89, 182, 0.15);
   --tv-method-vertical-profile-text: #9b59b6;
   --tv-method-fly-over-bg: rgba(59, 187, 59, 0.15);
@@ -104,8 +104,8 @@
   --tv-status-cancelled-text: #f87171;
 
   /* inspection method colors - dark */
-  --tv-method-papi-horizontal-range-bg: rgba(69, 149, 229, 0.2);
-  --tv-method-papi-horizontal-range-text: #60a5fa;
+  --tv-method-horizontal-range-bg: rgba(69, 149, 229, 0.2);
+  --tv-method-horizontal-range-text: #60a5fa;
   --tv-method-vertical-profile-bg: rgba(155, 89, 182, 0.2);
   --tv-method-vertical-profile-text: #c084fc;
   --tv-method-fly-over-bg: rgba(59, 187, 59, 0.2);

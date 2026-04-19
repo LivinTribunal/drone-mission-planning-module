@@ -860,7 +860,7 @@ export function waypointsToSimplifiedCornersGeoJSON(
       continue;
     }
 
-    // inside a measurement sequence (e.g. papi horizontal range arc) the simplified view
+    // inside a measurement sequence (e.g. horizontal range arc) the simplified view
     // should stay a clean line - skip corner detection for measurement waypoints.
     if (type === "MEASUREMENT" || type === "HOVER") continue;
 

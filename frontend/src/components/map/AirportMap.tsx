@@ -34,6 +34,8 @@ import {
   TAXIWAY_LABEL_LAYER,
   TAXIWAY_POLYGON_SOURCE,
   TOUCHPOINT_SOURCE,
+  THRESHOLD_SOURCE,
+  END_POSITION_SOURCE,
 } from "./layers/surfaceLayers";
 import {
   addObstacleLayers,
@@ -1199,7 +1201,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     AGL_SOURCE, LHA_SOURCE,
     // edge-light connector line + runway touchpoints - conditionally added by their
     // layer modules, but still must be torn down so the next addSource() doesn't collide
-    EDGE_LIGHTS_LINE_SOURCE, TOUCHPOINT_SOURCE,
+    EDGE_LIGHTS_LINE_SOURCE, TOUCHPOINT_SOURCE, THRESHOLD_SOURCE, END_POSITION_SOURCE,
   ];
 
   function removeInfraLayers(map: maplibregl.Map) {

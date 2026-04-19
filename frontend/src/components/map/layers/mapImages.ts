@@ -407,6 +407,66 @@ function createPathArrowIcon(size: number): ImageData {
   return ctx.getImageData(0, 0, size, size);
 }
 
+/** creates a t-bar icon for runway threshold markers. */
+function createThresholdIcon(size: number, color: string): ImageData {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+
+  const cx = size / 2;
+  const pad = size * 0.15;
+
+  // white outline pass then colored fill
+  for (let pass = 0; pass < 2; pass++) {
+    const isOutline = pass === 0;
+    ctx.strokeStyle = isOutline ? "#ffffff" : color;
+    ctx.lineCap = "round";
+    const extra = isOutline ? size * 0.04 : 0;
+
+    // horizontal bar
+    ctx.lineWidth = size * 0.1 + extra;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad + size * 0.05);
+    ctx.lineTo(size - pad, pad + size * 0.05);
+    ctx.stroke();
+
+    // vertical stem
+    ctx.lineWidth = size * 0.09 + extra;
+    ctx.beginPath();
+    ctx.moveTo(cx, pad + size * 0.05);
+    ctx.lineTo(cx, size - pad);
+    ctx.stroke();
+  }
+
+  return ctx.getImageData(0, 0, size, size);
+}
+
+/** creates a diamond icon for runway end position markers. */
+function createEndPositionIcon(size: number, color: string): ImageData {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+
+  const cx = size / 2;
+  const pad = size * 0.15;
+
+  ctx.beginPath();
+  ctx.moveTo(cx, pad);
+  ctx.lineTo(size - pad, cx);
+  ctx.lineTo(cx, size - pad);
+  ctx.lineTo(pad, cx);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = size * 0.07;
+  ctx.stroke();
+
+  return ctx.getImageData(0, 0, size, size);
+}
+
 /** safely adds an image, skipping if it already exists. */
 function safeAddImage(
   map: MaplibreMap,
@@ -441,4 +501,6 @@ export function registerAllMapImages(map: MaplibreMap): void {
   safeAddImage(map, "recording-stop-icon", createRecordingStopIcon(iconSize, "#e54545"), { pixelRatio: 2 });
   safeAddImage(map, "agl-square", createAglSquareIcon(iconSize, "#e91e90"), { pixelRatio: 2 });
   safeAddImage(map, "path-arrow", createPathArrowIcon(iconSize), { pixelRatio: 2 });
+  safeAddImage(map, "threshold-marker", createThresholdIcon(iconSize, "#4595e5"), { pixelRatio: 2 });
+  safeAddImage(map, "end-position-marker", createEndPositionIcon(iconSize, "#e54545"), { pixelRatio: 2 });
 }

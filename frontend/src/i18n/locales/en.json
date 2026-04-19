@@ -319,14 +319,14 @@
     "draftMoveRestriction": "Compute trajectory first",
     "inspectionMethod": {
       "VERTICAL_PROFILE": "Vertical Profile",
-      "PAPI_HORIZONTAL_RANGE": "PAPI Horizontal Range",
+      "HORIZONTAL_RANGE": "Horizontal Range",
       "FLY_OVER": "Fly Over",
       "PARALLEL_SIDE_SWEEP": "Parallel Side Sweep",
       "HOVER_POINT_LOCK": "Hover Point Lock"
     },
     "inspectionMethodShort": {
       "VERTICAL_PROFILE": "Vertical",
-      "PAPI_HORIZONTAL_RANGE": "PAPI H-Range",
+      "HORIZONTAL_RANGE": "H-Range",
       "FLY_OVER": "Fly Over",
       "PARALLEL_SIDE_SWEEP": "Side Sweep",
       "HOVER_POINT_LOCK": "Hover Lock"
@@ -947,6 +947,17 @@
       "surfaceLength": "Length (m)",
       "surfaceWidth": "Width (m)",
       "touchpoint": "Touchpoint (TDP)",
+      "thresholdPosition": "Threshold Position",
+      "endPosition": "End Position",
+      "centerlineWarning": "Position is {{distance}}m from runway centerline",
+      "noPosition": "Not set - use Pick on Map to place",
+      "markers": {
+        "firstLha": "First LHA",
+        "lastLha": "Last LHA",
+        "touchpoint": "Touchpoint",
+        "threshold": "Threshold",
+        "endPosition": "End Position"
+      },
       "obstacleName": "Name",
       "obstacleType": "Type",
       "obstacleHeight": "Height (m)",
@@ -1123,7 +1134,7 @@
       "namePlaceholder": "e.g. PAPI RWY 24 Horizontal Range",
       "selectAgl": "Select AGL System",
       "selectMethod": "Select Method",
-      "papiHorizontalRange": "PAPI Horizontal Range",
+      "horizontalRange": "Horizontal Range",
       "verticalProfile": "Vertical Profile",
       "nameRequired": "Inspection template name is required",
       "aglRequired": "AGL system is required",

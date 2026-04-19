@@ -173,6 +173,16 @@ export default function AirportEditPage() {
     first: [number, number] | null;
     last: [number, number] | null;
   }>({ first: null, last: null });
+  const [pickingThreshold, setPickingThreshold] = useState(false);
+  const [pickedThresholdCoord, setPickedThresholdCoord] = useState<
+    { lat: number; lon: number; alt: number } | null
+  >(null);
+  const [thresholdPickedMarker, setThresholdPickedMarker] = useState<[number, number] | null>(null);
+  const [pickingEnd, setPickingEnd] = useState(false);
+  const [pickedEndCoord, setPickedEndCoord] = useState<
+    { lat: number; lon: number; alt: number } | null
+  >(null);
+  const [endPickedMarker, setEndPickedMarker] = useState<[number, number] | null>(null);
 
   // fetch airport data - declared early so drawing hooks can reference it
   const initialLoadDone = useRef(false);
@@ -353,6 +363,32 @@ export default function AirportEditPage() {
         return;
       }
 
+      if (pickingThreshold && selectedFeature?.type === "surface") {
+        const surface = selectedFeature.data as { surface_type: string; threshold_position?: { coordinates: number[] } | null };
+        if (surface.surface_type === "RUNWAY") {
+          const lat = Math.round(lngLat.lat * 1e6) / 1e6;
+          const lon = Math.round(lngLat.lng * 1e6) / 1e6;
+          const alt = surface.threshold_position?.coordinates?.[2] ?? airport?.elevation ?? 0;
+          setPickedThresholdCoord({ lat, lon, alt });
+          setThresholdPickedMarker([lon, lat]);
+          setPickingThreshold(false);
+        }
+        return;
+      }
+
+      if (pickingEnd && selectedFeature?.type === "surface") {
+        const surface = selectedFeature.data as { surface_type: string; end_position?: { coordinates: number[] } | null };
+        if (surface.surface_type === "RUNWAY") {
+          const lat = Math.round(lngLat.lat * 1e6) / 1e6;
+          const lon = Math.round(lngLat.lng * 1e6) / 1e6;
+          const alt = surface.end_position?.coordinates?.[2] ?? airport?.elevation ?? 0;
+          setPickedEndCoord({ lat, lon, alt });
+          setEndPickedMarker([lon, lat]);
+          setPickingEnd(false);
+        }
+        return;
+      }
+
       if (pickingTouchpoint && selectedFeature?.type === "surface") {
         const surface = selectedFeature.data as { surface_type: string; touchpoint_altitude?: number | null };
         if (surface.surface_type === "RUNWAY") {
@@ -385,10 +421,10 @@ export default function AirportEditPage() {
         h.addPoint(lngLat.lng, lngLat.lat);
       }
     },
-    [mapTool, pickingTouchpoint, pickingLha, selectedFeature, airport],
+    [mapTool, pickingTouchpoint, pickingLha, pickingThreshold, pickingEnd, selectedFeature, airport],
   );
 
-  // cancel touchpoint picking when selection changes or panel closes
+  // cancel touchpoint/threshold/end picking when selection changes or panel closes
   useEffect(() => {
     if (!selectedFeature || selectedFeature.type !== "surface") {
       // don't cancel if creation form is open (no selected feature but pending geometry)
@@ -396,15 +432,27 @@ export default function AirportEditPage() {
       setPickingTouchpoint(false);
       setPickedTouchpointCoord(null);
       setTouchpointPickedMarker(null);
+      setPickingThreshold(false);
+      setPickedThresholdCoord(null);
+      setThresholdPickedMarker(null);
+      setPickingEnd(false);
+      setPickedEndCoord(null);
+      setEndPickedMarker(null);
     }
   }, [selectedFeature, pendingGeometry, pendingPointPosition]);
 
-  // cancel touchpoint picking when creation form closes
+  // cancel touchpoint/threshold/end picking when creation form closes
   useEffect(() => {
     if (!pendingGeometry && !pendingPointPosition) {
       setPickingTouchpoint(false);
       setPickedTouchpointCoord(null);
       setTouchpointPickedMarker(null);
+      setPickingThreshold(false);
+      setPickedThresholdCoord(null);
+      setThresholdPickedMarker(null);
+      setPickingEnd(false);
+      setPickedEndCoord(null);
+      setEndPickedMarker(null);
     }
   }, [pendingGeometry, pendingPointPosition]);
 
@@ -440,17 +488,25 @@ export default function AirportEditPage() {
     (["first", "last"] as const).forEach((which) => {
       const pos = lhaPickedMarkers[which];
       if (!pos) return;
-      makeDot("var(--tv-accent)", which === "first" ? "First LHA" : "Last LHA", pos);
+      makeDot("var(--tv-accent)", which === "first" ? t("coordinator.detail.markers.firstLha") : t("coordinator.detail.markers.lastLha"), pos);
     });
 
     if (touchpointPickedMarker) {
-      makeDot("#ffd166", "Touchpoint", touchpointPickedMarker);
+      makeDot("#ffd166", t("coordinator.detail.markers.touchpoint"), touchpointPickedMarker);
+    }
+
+    if (thresholdPickedMarker) {
+      makeDot("#4595e5", t("coordinator.detail.markers.threshold"), thresholdPickedMarker);
+    }
+
+    if (endPickedMarker) {
+      makeDot("#e54545", t("coordinator.detail.markers.endPosition"), endPickedMarker);
     }
 
     return () => {
       markers.forEach((mk) => mk.remove());
     };
-  }, [lhaPickedMarkers, touchpointPickedMarker, getMap]);
+  }, [lhaPickedMarkers, touchpointPickedMarker, thresholdPickedMarker, endPickedMarker, getMap, t]);
 
   // cancel pending creation when user picks another drawing tool, clear tools on switch
   const SAFE_TOOLS: DrawingTool[] = ["select", "pan", "zoom", "zoomReset", "measurement", "heading"];
@@ -743,9 +799,9 @@ export default function AirportEditPage() {
   const handleFeatureClick = useCallback((feature: MapFeature | null) => {
     /** set selected feature when clicked on map or list panel - skip during drawing or picking. */
     if (isDrawingActive) return;
-    if (pickingTouchpoint || pickingLha) return;
+    if (pickingTouchpoint || pickingLha || pickingThreshold || pickingEnd) return;
     setSelectedFeature(feature);
-  }, [isDrawingActive, pickingTouchpoint, pickingLha]);
+  }, [isDrawingActive, pickingTouchpoint, pickingLha, pickingThreshold, pickingEnd]);
 
   const handleLayerChange = useCallback((layers: MapLayerConfig) => {
     /** sync layer config from map component. */
@@ -1117,7 +1173,7 @@ export default function AirportEditPage() {
   return (
     <div className="relative w-full h-full" data-testid="airport-edit-page">
       {/* map */}
-      <div className={`w-full h-full px-4 py-3 ${pickingTouchpoint || pickingLha ? "cursor-crosshair" : ""}`}>
+      <div className={`w-full h-full px-4 py-3 ${pickingTouchpoint || pickingLha || pickingThreshold || pickingEnd ? "cursor-crosshair" : ""}`}>
         <AirportMap
           ref={mapHandleRef}
           airport={airport}
@@ -1140,7 +1196,7 @@ export default function AirportEditPage() {
           is3D={is3D}
           onToggle3D={setIs3D}
           activeTool={mapTool}
-          onMapClick={mapTool === MapTool.MEASURE || mapTool === MapTool.HEADING || pickingTouchpoint || pickingLha ? handleMapClick : undefined}
+          onMapClick={mapTool === MapTool.MEASURE || mapTool === MapTool.HEADING || pickingTouchpoint || pickingLha || pickingThreshold || pickingEnd ? handleMapClick : undefined}
           measureData={{
             points: measure.pointsGeoJSON,
             lines: measure.linesGeoJSON,
@@ -1445,6 +1501,22 @@ export default function AirportEditPage() {
                 }
                 pickedLhaCoord={selectedFeature.type === "agl" ? pickedLhaCoord : null}
                 onPickedLhaConsumed={() => setPickedLhaCoord(null)}
+                pickingThreshold={selectedFeature.type === "surface" ? pickingThreshold : false}
+                onPickThresholdToggle={
+                  selectedFeature.type === "surface"
+                    ? () => setPickingThreshold((v) => !v)
+                    : undefined
+                }
+                pickedThresholdCoord={selectedFeature.type === "surface" ? pickedThresholdCoord : null}
+                onPickedThresholdConsumed={() => setPickedThresholdCoord(null)}
+                pickingEnd={selectedFeature.type === "surface" ? pickingEnd : false}
+                onPickEndToggle={
+                  selectedFeature.type === "surface"
+                    ? () => setPickingEnd((v) => !v)
+                    : undefined
+                }
+                pickedEndCoord={selectedFeature.type === "surface" ? pickedEndCoord : null}
+                onPickedEndConsumed={() => setPickedEndCoord(null)}
               />
             ) : null}
           </div>

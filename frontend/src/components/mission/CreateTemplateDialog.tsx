@@ -19,7 +19,7 @@ interface CreateTemplateDialogProps {
 const AGL_AGNOSTIC_METHODS: InspectionMethod[] = ["HOVER_POINT_LOCK"];
 const ALL_METHODS: InspectionMethod[] = [
   "VERTICAL_PROFILE",
-  "PAPI_HORIZONTAL_RANGE",
+  "HORIZONTAL_RANGE",
   "HOVER_POINT_LOCK",
   "FLY_OVER",
   "PARALLEL_SIDE_SWEEP",

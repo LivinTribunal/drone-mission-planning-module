@@ -49,7 +49,7 @@ class ExportFormat(str, enum.Enum):
 
 class InspectionMethod(str, enum.Enum):
     VERTICAL_PROFILE = "VERTICAL_PROFILE"
-    PAPI_HORIZONTAL_RANGE = "PAPI_HORIZONTAL_RANGE"
+    HORIZONTAL_RANGE = "HORIZONTAL_RANGE"
     FLY_OVER = "FLY_OVER"
     PARALLEL_SIDE_SWEEP = "PARALLEL_SIDE_SWEEP"
     HOVER_POINT_LOCK = "HOVER_POINT_LOCK"
@@ -58,7 +58,7 @@ class InspectionMethod(str, enum.Enum):
 # method <-> AGL type compatibility per ZEPHYR spec
 METHOD_AGL_COMPAT: dict[InspectionMethod, set[str]] = {
     InspectionMethod.VERTICAL_PROFILE: {"PAPI"},
-    InspectionMethod.PAPI_HORIZONTAL_RANGE: {"PAPI"},
+    InspectionMethod.HORIZONTAL_RANGE: {"PAPI"},
     InspectionMethod.FLY_OVER: {"RUNWAY_EDGE_LIGHTS"},
     InspectionMethod.PARALLEL_SIDE_SWEEP: {"RUNWAY_EDGE_LIGHTS"},
 }

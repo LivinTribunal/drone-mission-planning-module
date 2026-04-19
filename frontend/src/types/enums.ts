@@ -36,7 +36,7 @@ export type ExportFormat =
 
 export type InspectionMethod =
   | "VERTICAL_PROFILE"
-  | "PAPI_HORIZONTAL_RANGE"
+  | "HORIZONTAL_RANGE"
   | "FLY_OVER"
   | "PARALLEL_SIDE_SWEEP"
   | "HOVER_POINT_LOCK";
