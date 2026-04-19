@@ -7,6 +7,7 @@ import {
   ListPageContent,
   SearchBar,
   SortableHeader,
+  Pagination,
 } from "@/components/common/ListPageLayout";
 import RowActionButtons from "@/components/common/RowActionButtons";
 import ManageUsersPanel from "@/components/admin/ManageUsersPanel";
@@ -41,6 +42,8 @@ export default function SuperAdminAirportsPage() {
   const [countryFilter, setCountryFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
 
   const [managePanel, setManagePanel] = useState<{
     airportId: string;
@@ -88,6 +91,8 @@ export default function SuperAdminAirportsPage() {
     return 0;
   });
 
+  const paginatedAirports = sorted.slice(page * pageSize, (page + 1) * pageSize);
+
   return (
     <ListPageContainer data-testid="admin-airports-page">
       <ListPageContent>
@@ -112,13 +117,14 @@ export default function SuperAdminAirportsPage() {
           </div>
         </SearchBar>
 
-        {loading ? (
-          <p className="text-center text-tv-text-muted py-8">{t("common.loading")}</p>
-        ) : airports.length === 0 ? (
-          <p className="text-center text-tv-text-muted py-8">{t("common.noResults")}</p>
-        ) : (
-          <div className="w-full overflow-x-auto">
-            <table className="w-full" data-testid="airports-table">
+        <div className="rounded-2xl border border-tv-border bg-tv-surface overflow-hidden">
+          {loading ? (
+            <p className="text-center text-tv-text-muted py-8">{t("common.loading")}</p>
+          ) : airports.length === 0 ? (
+            <p className="text-center text-tv-text-muted py-8">{t("common.noResults")}</p>
+          ) : (
+            <div className="w-full overflow-x-auto">
+              <table className="w-full" data-testid="airports-table">
               <thead>
                 <tr className="border-b border-tv-border">
                   <SortableHeader sortKey="icao_code" currentSort={sortKey} currentDir={sortDir} onSort={handleSort}>
@@ -152,7 +158,7 @@ export default function SuperAdminAirportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((airport) => (
+                {paginatedAirports.map((airport) => (
                   <tr
                     key={airport.id}
                     onClick={() =>
@@ -206,9 +212,19 @@ export default function SuperAdminAirportsPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
-        )}
+              </table>
+            </div>
+          )}
+        </div>
+
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={sorted.length}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(0); }}
+          showingKey="admin.pagination"
+        />
       </ListPageContent>
 
       {managePanel && (

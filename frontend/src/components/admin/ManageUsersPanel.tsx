@@ -14,10 +14,10 @@ interface ManageUsersPanelProps {
   onUpdated: () => void;
 }
 
-const ROLE_COLORS: Record<string, string> = {
-  OPERATOR: "bg-[var(--tv-accent)]/15 text-[var(--tv-accent)]",
-  COORDINATOR: "bg-[var(--tv-warning)]/15 text-[var(--tv-warning)]",
-  SUPER_ADMIN: "bg-[var(--tv-error)]/15 text-[var(--tv-error)]",
+const ROLE_BADGE: Record<string, React.CSSProperties> = {
+  OPERATOR: { backgroundColor: "color-mix(in srgb, var(--tv-success) 20%, transparent)", color: "var(--tv-success)" },
+  COORDINATOR: { backgroundColor: "color-mix(in srgb, var(--tv-warning) 20%, transparent)", color: "var(--tv-warning)" },
+  SUPER_ADMIN: { backgroundColor: "color-mix(in srgb, var(--tv-error) 20%, transparent)", color: "var(--tv-error)" },
 };
 
 export default function ManageUsersPanel({
@@ -105,7 +105,8 @@ export default function ManageUsersPanel({
             </div>
             <div className="flex items-center gap-2">
               <span
-                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[user.role] || ""}`}
+                className="rounded-full px-2 py-0.5 text-xs font-semibold"
+                style={ROLE_BADGE[user.role]}
               >
                 {t(`admin.role.${user.role === "SUPER_ADMIN" ? "superAdmin" : user.role.toLowerCase()}`)}
               </span>
