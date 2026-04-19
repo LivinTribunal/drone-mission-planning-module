@@ -33,8 +33,8 @@ describe("isMethodCompatibleWithAgl", () => {
 });
 
 describe("methodsForAgl / aglTypesForMethod", () => {
-  it("methodsForAgl returns two AGL-specific methods per type", () => {
-    expect(methodsForAgl("PAPI")).toHaveLength(2);
+  it("methodsForAgl returns expected method count per type", () => {
+    expect(methodsForAgl("PAPI")).toHaveLength(3);
     expect(methodsForAgl("RUNWAY_EDGE_LIGHTS")).toHaveLength(2);
   });
 

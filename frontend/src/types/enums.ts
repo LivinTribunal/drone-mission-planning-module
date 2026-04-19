@@ -39,7 +39,8 @@ export type InspectionMethod =
   | "ANGULAR_SWEEP"
   | "FLY_OVER"
   | "PARALLEL_SIDE_SWEEP"
-  | "HOVER_POINT_LOCK";
+  | "HOVER_POINT_LOCK"
+  | "PAPI_HORIZONTAL_RANGE";
 
 export type SafetyZoneType =
   | "CTR"

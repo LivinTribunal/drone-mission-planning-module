@@ -19,9 +19,10 @@ class TestMethodAglHelper:
     """tests for is_method_compatible_with_agl helper."""
 
     def test_papi_compat(self):
-        """PAPI compatible with VERTICAL_PROFILE, ANGULAR_SWEEP."""
+        """PAPI compatible with VERTICAL_PROFILE, ANGULAR_SWEEP, PAPI_HORIZONTAL_RANGE."""
         assert is_method_compatible_with_agl("VERTICAL_PROFILE", "PAPI")
         assert is_method_compatible_with_agl("ANGULAR_SWEEP", "PAPI")
+        assert is_method_compatible_with_agl("PAPI_HORIZONTAL_RANGE", "PAPI")
 
     def test_runway_compat(self):
         """RUNWAY_EDGE_LIGHTS compatible with FLY_OVER, PARALLEL_SIDE_SWEEP."""
@@ -40,9 +41,10 @@ class TestMethodAglHelper:
         assert not is_method_compatible_with_agl("HOVER_POINT_LOCK", "PAPI")
 
     def test_runway_incompat(self):
-        """RUNWAY_EDGE_LIGHTS rejects VERTICAL_PROFILE, ANGULAR_SWEEP, and HOVER_POINT_LOCK."""
+        """RUNWAY_EDGE_LIGHTS rejects VERTICAL_PROFILE, ANGULAR_SWEEP, PAPI_HORIZONTAL_RANGE, and HOVER_POINT_LOCK."""
         assert not is_method_compatible_with_agl("VERTICAL_PROFILE", "RUNWAY_EDGE_LIGHTS")
         assert not is_method_compatible_with_agl("ANGULAR_SWEEP", "RUNWAY_EDGE_LIGHTS")
+        assert not is_method_compatible_with_agl("PAPI_HORIZONTAL_RANGE", "RUNWAY_EDGE_LIGHTS")
         assert not is_method_compatible_with_agl("HOVER_POINT_LOCK", "RUNWAY_EDGE_LIGHTS")
 
     def test_unknown_method(self):

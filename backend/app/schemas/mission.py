@@ -20,6 +20,7 @@ InspectionMethodStr = Literal[
     "FLY_OVER",
     "PARALLEL_SIDE_SWEEP",
     "HOVER_POINT_LOCK",
+    "PAPI_HORIZONTAL_RANGE",
 ]
 # capture mode values - used by trajectory_computation to choose camera_action
 CaptureModeStr = Literal["VIDEO_CAPTURE", "PHOTO_CAPTURE"]
