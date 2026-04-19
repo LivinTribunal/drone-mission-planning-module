@@ -19,26 +19,31 @@ class TestMethodAglHelper:
     """tests for is_method_compatible_with_agl helper."""
 
     def test_papi_compat(self):
-        """PAPI compatible with VERTICAL_PROFILE, ANGULAR_SWEEP, HOVER_POINT_LOCK."""
+        """PAPI compatible with VERTICAL_PROFILE, ANGULAR_SWEEP."""
         assert is_method_compatible_with_agl("VERTICAL_PROFILE", "PAPI")
         assert is_method_compatible_with_agl("ANGULAR_SWEEP", "PAPI")
-        assert is_method_compatible_with_agl("HOVER_POINT_LOCK", "PAPI")
 
     def test_runway_compat(self):
-        """RUNWAY_EDGE_LIGHTS compatible with FLY_OVER, PARALLEL_SIDE_SWEEP, HOVER_POINT_LOCK."""
+        """RUNWAY_EDGE_LIGHTS compatible with FLY_OVER, PARALLEL_SIDE_SWEEP."""
         assert is_method_compatible_with_agl("FLY_OVER", "RUNWAY_EDGE_LIGHTS")
         assert is_method_compatible_with_agl("PARALLEL_SIDE_SWEEP", "RUNWAY_EDGE_LIGHTS")
-        assert is_method_compatible_with_agl("HOVER_POINT_LOCK", "RUNWAY_EDGE_LIGHTS")
+
+    def test_hover_point_lock_is_agl_agnostic(self):
+        """HOVER_POINT_LOCK is not compatible with any specific AGL type."""
+        assert not is_method_compatible_with_agl("HOVER_POINT_LOCK", "PAPI")
+        assert not is_method_compatible_with_agl("HOVER_POINT_LOCK", "RUNWAY_EDGE_LIGHTS")
 
     def test_papi_incompat(self):
-        """PAPI rejects FLY_OVER and PARALLEL_SIDE_SWEEP."""
+        """PAPI rejects FLY_OVER, PARALLEL_SIDE_SWEEP, and HOVER_POINT_LOCK."""
         assert not is_method_compatible_with_agl("FLY_OVER", "PAPI")
         assert not is_method_compatible_with_agl("PARALLEL_SIDE_SWEEP", "PAPI")
+        assert not is_method_compatible_with_agl("HOVER_POINT_LOCK", "PAPI")
 
     def test_runway_incompat(self):
-        """RUNWAY_EDGE_LIGHTS rejects VERTICAL_PROFILE and ANGULAR_SWEEP."""
+        """RUNWAY_EDGE_LIGHTS rejects VERTICAL_PROFILE, ANGULAR_SWEEP, and HOVER_POINT_LOCK."""
         assert not is_method_compatible_with_agl("VERTICAL_PROFILE", "RUNWAY_EDGE_LIGHTS")
         assert not is_method_compatible_with_agl("ANGULAR_SWEEP", "RUNWAY_EDGE_LIGHTS")
+        assert not is_method_compatible_with_agl("HOVER_POINT_LOCK", "RUNWAY_EDGE_LIGHTS")
 
     def test_unknown_method(self):
         """unknown method returns False."""
@@ -64,12 +69,19 @@ class TestTemplateValidator:
         t = self._make(["RUNWAY_EDGE_LIGHTS"])
         t.validate_method_agl_compat(["FLY_OVER"])
 
-    def test_hover_point_lock_matches_both(self):
-        """HOVER_POINT_LOCK is valid for PAPI and RUNWAY_EDGE_LIGHTS."""
+    def test_hover_point_lock_without_targets_passes(self):
+        """HOVER_POINT_LOCK with no AGL targets passes (AGL-agnostic)."""
+        t = self._make([])
+        t.validate_method_agl_compat(["HOVER_POINT_LOCK"])
+
+    def test_hover_point_lock_with_agl_rejected(self):
+        """HOVER_POINT_LOCK with AGL targets raises."""
         t_papi = self._make(["PAPI"])
         t_runway = self._make(["RUNWAY_EDGE_LIGHTS"])
-        t_papi.validate_method_agl_compat(["HOVER_POINT_LOCK"])
-        t_runway.validate_method_agl_compat(["HOVER_POINT_LOCK"])
+        with pytest.raises(ValueError, match="HOVER_POINT_LOCK"):
+            t_papi.validate_method_agl_compat(["HOVER_POINT_LOCK"])
+        with pytest.raises(ValueError, match="HOVER_POINT_LOCK"):
+            t_runway.validate_method_agl_compat(["HOVER_POINT_LOCK"])
 
     def test_fly_over_on_papi_rejected(self):
         """FLY_OVER on PAPI raises."""

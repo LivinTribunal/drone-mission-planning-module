@@ -232,6 +232,7 @@ def bulk_create_templates(db: Session, airport_id: UUID) -> tuple[list[Inspectio
     created: list[InspectionTemplate] = []
     skipped = 0
 
+    # agl-specific methods (everything except hover point lock)
     for agl in agls:
         for method, compat_types in METHOD_AGL_COMPAT.items():
             if agl.agl_type not in compat_types:
@@ -259,6 +260,23 @@ def bulk_create_templates(db: Session, airport_id: UUID) -> tuple[list[Inspectio
                 insp_template_methods.insert().values(template_id=template.id, method=method.value)
             )
             created.append(template)
+
+    # hover point lock - AGL-agnostic, one per airport (no AGL targets)
+    hover_method = InspectionMethod.HOVER_POINT_LOCK
+    has_hover = any(
+        hover_method.value in [m.value if hasattr(m, "value") else m for m in tpl.methods]
+        for tpl in existing
+    )
+    if not has_hover:
+        template = InspectionTemplate(name="Hover Point Lock")
+        db.add(template)
+        db.flush()
+        db.execute(
+            insp_template_methods.insert().values(template_id=template.id, method=hover_method.value)
+        )
+        created.append(template)
+    else:
+        skipped += 1
 
     db.commit()
 

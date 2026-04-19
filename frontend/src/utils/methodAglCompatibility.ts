@@ -2,18 +2,19 @@ import type { AglType } from "@/types/airport";
 import type { InspectionMethod } from "@/types/enums";
 
 // inspection method -> set of compatible AGL types
+// hover point lock is AGL-agnostic (targets LHA center, not a specific AGL system)
 export const METHOD_AGL_COMPAT: Record<InspectionMethod, AglType[]> = {
   VERTICAL_PROFILE: ["PAPI"],
   ANGULAR_SWEEP: ["PAPI"],
-  HOVER_POINT_LOCK: ["PAPI", "RUNWAY_EDGE_LIGHTS"],
+  HOVER_POINT_LOCK: [],
   FLY_OVER: ["RUNWAY_EDGE_LIGHTS"],
   PARALLEL_SIDE_SWEEP: ["RUNWAY_EDGE_LIGHTS"],
 };
 
 // all methods by AGL type (useful for the 2-step picker)
 export const METHODS_BY_AGL: Record<AglType, InspectionMethod[]> = {
-  PAPI: ["VERTICAL_PROFILE", "ANGULAR_SWEEP", "HOVER_POINT_LOCK"],
-  RUNWAY_EDGE_LIGHTS: ["FLY_OVER", "PARALLEL_SIDE_SWEEP", "HOVER_POINT_LOCK"],
+  PAPI: ["VERTICAL_PROFILE", "ANGULAR_SWEEP"],
+  RUNWAY_EDGE_LIGHTS: ["FLY_OVER", "PARALLEL_SIDE_SWEEP"],
 };
 
 export function isMethodCompatibleWithAgl(

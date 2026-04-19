@@ -753,7 +753,7 @@ describe("TemplatePicker", () => {
         id: "t-papi",
         name: "PAPI Angular",
         description: null,
-        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP", "HOVER_POINT_LOCK"],
+        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP"],
         target_agl_ids: ["agl-papi"],
         default_config: null,
         angular_tolerances: null,
@@ -764,7 +764,7 @@ describe("TemplatePicker", () => {
         id: "t-runway",
         name: "Runway Fly-over",
         description: null,
-        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP", "HOVER_POINT_LOCK"],
+        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP"],
         target_agl_ids: ["agl-runway"],
         default_config: null,
         angular_tolerances: null,
@@ -1051,7 +1051,7 @@ describe("InspectionList method dropdown", () => {
         id: "t-1",
         name: "Runway Inspection",
         description: null,
-        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP", "HOVER_POINT_LOCK"],
+        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP"],
         target_agl_ids: ["agl-runway"],
         default_config: null,
         angular_tolerances: null,
@@ -1107,8 +1107,8 @@ describe("InspectionList method dropdown", () => {
     const values = Array.from(select.options).map((o) => o.value);
     expect(values).toContain("FLY_OVER");
     expect(values).toContain("PARALLEL_SIDE_SWEEP");
-    expect(values).toContain("HOVER_POINT_LOCK");
-    // PAPI-only methods must NOT appear
+    // AGL-agnostic and PAPI-only methods must NOT appear
+    expect(values).not.toContain("HOVER_POINT_LOCK");
     expect(values).not.toContain("VERTICAL_PROFILE");
     expect(values).not.toContain("ANGULAR_SWEEP");
   });
@@ -1188,14 +1188,15 @@ describe("BulkCreateTemplatesDialog", () => {
   }
 
   it("shows all valid combinations when no existing templates", () => {
-    /** verify all compatible AGL x method combos are listed. */
+    /** verify all compatible AGL x method combos plus hover point lock are listed. */
     renderDialog();
-    // PAPI: VERTICAL_PROFILE, ANGULAR_SWEEP, HOVER_POINT_LOCK = 3
-    // RUNWAY_EDGE_LIGHTS: FLY_OVER, PARALLEL_SIDE_SWEEP, HOVER_POINT_LOCK = 3
-    // total = 6
+    // PAPI: VERTICAL_PROFILE, ANGULAR_SWEEP = 2
+    // RUNWAY_EDGE_LIGHTS: FLY_OVER, PARALLEL_SIDE_SWEEP = 2
+    // + 1 AGL-agnostic HOVER_POINT_LOCK = 5 total
     expect(screen.getByText("coordinator.inspections.bulkCreateCount")).toBeInTheDocument();
-    expect(screen.getAllByText("PAPI RWY 09")).toHaveLength(3);
-    expect(screen.getAllByText("RWY EDGE 09")).toHaveLength(3);
+    expect(screen.getAllByText("PAPI RWY 09")).toHaveLength(2);
+    expect(screen.getAllByText("RWY EDGE 09")).toHaveLength(2);
+    expect(screen.getByText("Hover Point Lock")).toBeInTheDocument();
   });
 
   it("shows all-skipped empty state when every combination exists", () => {
@@ -1205,7 +1206,7 @@ describe("BulkCreateTemplatesDialog", () => {
         id: "t-1",
         name: "Existing",
         description: null,
-        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP", "HOVER_POINT_LOCK"],
+        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP"],
         target_agl_ids: ["agl-papi"],
         default_config: null,
         angular_tolerances: null,
@@ -1218,8 +1219,21 @@ describe("BulkCreateTemplatesDialog", () => {
         id: "t-2",
         name: "Existing 2",
         description: null,
-        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP", "HOVER_POINT_LOCK"],
+        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP"],
         target_agl_ids: ["agl-runway"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+        updated_at: null,
+        mission_count: 0,
+      },
+      {
+        id: "t-3",
+        name: "Existing Hover",
+        description: null,
+        methods: ["HOVER_POINT_LOCK"],
+        target_agl_ids: [],
         default_config: null,
         angular_tolerances: null,
         created_by: null,
@@ -1241,7 +1255,7 @@ describe("BulkCreateTemplatesDialog", () => {
         id: "t-1",
         name: "All covered",
         description: null,
-        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP", "HOVER_POINT_LOCK"],
+        methods: ["VERTICAL_PROFILE", "ANGULAR_SWEEP"],
         target_agl_ids: ["agl-papi"],
         default_config: null,
         angular_tolerances: null,
@@ -1254,8 +1268,21 @@ describe("BulkCreateTemplatesDialog", () => {
         id: "t-2",
         name: "All covered 2",
         description: null,
-        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP", "HOVER_POINT_LOCK"],
+        methods: ["FLY_OVER", "PARALLEL_SIDE_SWEEP"],
         target_agl_ids: ["agl-runway"],
+        default_config: null,
+        angular_tolerances: null,
+        created_by: null,
+        created_at: null,
+        updated_at: null,
+        mission_count: 0,
+      },
+      {
+        id: "t-3",
+        name: "All covered hover",
+        description: null,
+        methods: ["HOVER_POINT_LOCK"],
+        target_agl_ids: [],
         default_config: null,
         angular_tolerances: null,
         created_by: null,

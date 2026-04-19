@@ -72,7 +72,9 @@ function sortByRunway(
     const kb = sortKey(b);
     if (ka === "" && kb !== "") return 1;
     if (ka !== "" && kb === "") return -1;
-    return compareRunway(ka, kb);
+    const cmp = compareRunway(ka, kb);
+    if (cmp !== 0) return cmp;
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
   });
   return copy;
 }

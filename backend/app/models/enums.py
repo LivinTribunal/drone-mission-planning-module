@@ -55,11 +55,10 @@ class InspectionMethod(str, enum.Enum):
     HOVER_POINT_LOCK = "HOVER_POINT_LOCK"
 
 
-# method <-> AGL type compatibility per ZEPHYR spec
+# method <-> AGL type compatibility - hover point lock is AGL-agnostic (targets LHA center)
 METHOD_AGL_COMPAT: dict[InspectionMethod, set[str]] = {
     InspectionMethod.VERTICAL_PROFILE: {"PAPI"},
     InspectionMethod.ANGULAR_SWEEP: {"PAPI"},
-    InspectionMethod.HOVER_POINT_LOCK: {"PAPI", "RUNWAY_EDGE_LIGHTS"},
     InspectionMethod.FLY_OVER: {"RUNWAY_EDGE_LIGHTS"},
     InspectionMethod.PARALLEL_SIDE_SWEEP: {"RUNWAY_EDGE_LIGHTS"},
 }
