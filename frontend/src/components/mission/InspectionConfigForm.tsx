@@ -397,7 +397,7 @@ export default function InspectionConfigForm({
 
       {/* geometry overrides - only methods that consume them */}
       {(inspection.method === "VERTICAL_PROFILE" ||
-        inspection.method === "PAPI_HORIZONTAL_RANGE") && (
+        inspection.method === "HORIZONTAL_RANGE") && (
         <div
           className="grid grid-cols-2 gap-3"
           data-testid="geometry-override-fields"
@@ -419,7 +419,7 @@ export default function InspectionConfigForm({
               data-testid="inspection-horizontal-distance"
             />
           </div>
-          {inspection.method === "PAPI_HORIZONTAL_RANGE" && (
+          {inspection.method === "HORIZONTAL_RANGE" && (
             <div>
               <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
                 {t("mission.config.sweepAngle")}

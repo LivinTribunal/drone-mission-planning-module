@@ -103,7 +103,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
         updated_at: "2026-03-01T00:00:00Z",
         default_config: null,
         target_agl_ids: ["agl-1"],
-        methods: ["PAPI_HORIZONTAL_RANGE"],
+        methods: ["HORIZONTAL_RANGE"],
         mission_count: 0,
       },
       {
@@ -125,7 +125,7 @@ vi.mock("@/api/inspectionTemplates", () => ({
   createInspectionTemplate: vi.fn().mockResolvedValue({
     id: "tpl-new",
     name: "New Template",
-    methods: ["PAPI_HORIZONTAL_RANGE"],
+    methods: ["HORIZONTAL_RANGE"],
     target_agl_ids: ["agl-1"],
     mission_count: 0,
   }),
@@ -213,7 +213,7 @@ describe("InspectionListPage", () => {
     /** verify all inspection method pills are present. */
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId("method-pill-PAPI_HORIZONTAL_RANGE")).toBeInTheDocument();
+      expect(screen.getByTestId("method-pill-HORIZONTAL_RANGE")).toBeInTheDocument();
     });
     expect(screen.getByTestId("method-pill-VERTICAL_PROFILE")).toBeInTheDocument();
     expect(screen.getByTestId("method-pill-FLY_OVER")).toBeInTheDocument();
@@ -231,7 +231,7 @@ describe("InspectionListPage", () => {
     fireEvent.click(flyOverPill);
     expect(flyOverPill.className).not.toContain("opacity-40");
 
-    const angularPill = screen.getByTestId("method-pill-PAPI_HORIZONTAL_RANGE");
+    const angularPill = screen.getByTestId("method-pill-HORIZONTAL_RANGE");
     expect(angularPill.className).toContain("opacity-40");
   });
 

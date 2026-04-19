@@ -238,7 +238,7 @@ def determine_start_position(
     approach = _opposite_bearing(runway_heading)
 
     match method:
-        case InspectionMethod.PAPI_HORIZONTAL_RANGE:
+        case InspectionMethod.HORIZONTAL_RANGE:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
             half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             angle = approach - half_sweep
@@ -284,7 +284,7 @@ def determine_end_position(
     approach = _opposite_bearing(runway_heading)
 
     match method:
-        case InspectionMethod.PAPI_HORIZONTAL_RANGE:
+        case InspectionMethod.HORIZONTAL_RANGE:
             radius = config.horizontal_distance or MIN_ARC_RADIUS
             half_sweep = DEFAULT_SWEEP_ANGLE if config.sweep_angle is None else config.sweep_angle
             angle = approach + half_sweep

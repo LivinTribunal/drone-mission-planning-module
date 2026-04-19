@@ -8,9 +8,9 @@ Issues are ordered by priority within each section.
 
 ---
 
-### Z2. Derive PAPI Horizontal Range altitude from LHA setting angles
+### Z2. Derive Horizontal Range altitude from LHA setting angles
 
-The PAPI Horizontal Range inspection altitude must place the drone in the all-white zone (above all PAPI transition sectors). Currently, the trajectory uses `AGL.glide_slope_angle` directly which could put the drone at the transition boundary instead of safely in the all-white zone.
+The Horizontal Range inspection altitude must place the drone in the all-white zone (above all PAPI transition sectors). Currently, the trajectory uses `AGL.glide_slope_angle` directly which could put the drone at the transition boundary instead of safely in the all-white zone.
 
 We trust the coordinator's LHA data. The altitude is derived from actual LHA setting angles, not a generic glide slope value.
 

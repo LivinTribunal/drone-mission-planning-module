@@ -215,7 +215,7 @@ export default function TemplateConfigSection({
         step="1"
       />
 
-      {method === "PAPI_HORIZONTAL_RANGE" && (
+      {method === "HORIZONTAL_RANGE" && (
         <Input
           label={t("mission.config.sweepAngle")}
           type="number"

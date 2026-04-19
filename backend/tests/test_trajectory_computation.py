@@ -18,7 +18,7 @@ from app.services.trajectory.config_resolver import (
 )
 from app.services.trajectory.methods import compute_measurement_trajectory
 from app.services.trajectory.methods.fly_over import calculate_fly_over_path
-from app.services.trajectory.methods.papi_horizontal_range import calculate_arc_path
+from app.services.trajectory.methods.horizontal_range import calculate_arc_path
 from app.services.trajectory.methods.parallel_side_sweep import (
     calculate_parallel_side_sweep_path,
 )
@@ -49,7 +49,7 @@ class FakeInspection:
     """minimal inspection stub."""
 
     id: object = None
-    method: InspectionMethod = InspectionMethod.PAPI_HORIZONTAL_RANGE
+    method: InspectionMethod = InspectionMethod.HORIZONTAL_RANGE
     config: object = None
 
     def __post_init__(self):
@@ -116,17 +116,17 @@ class TestComputeOptimalDensity:
         result = compute_optimal_density(InspectionMethod.VERTICAL_PROFILE, [], config)
         assert result is None
 
-    def test_papi_horizontal_range(self):
-        """papi horizontal range needs at least one point per degree of sweep."""
+    def test_horizontal_range(self):
+        """horizontal range needs at least one point per degree of sweep."""
         config = ResolvedConfig(sweep_angle=15.0)
-        result = compute_optimal_density(InspectionMethod.PAPI_HORIZONTAL_RANGE, [], config)
+        result = compute_optimal_density(InspectionMethod.HORIZONTAL_RANGE, [], config)
         assert result is not None
         assert result == math.ceil(2 * 15.0) + 1
 
-    def test_papi_horizontal_range_default_angle(self):
+    def test_horizontal_range_default_angle(self):
         """uses DEFAULT_SWEEP_ANGLE when config has None."""
         config = ResolvedConfig(sweep_angle=None)
-        result = compute_optimal_density(InspectionMethod.PAPI_HORIZONTAL_RANGE, [], config)
+        result = compute_optimal_density(InspectionMethod.HORIZONTAL_RANGE, [], config)
         assert result == math.ceil(2 * DEFAULT_SWEEP_ANGLE) + 1
 
 
@@ -178,7 +178,7 @@ class TestResolveDensity:
     def test_suggests_when_below_optimal(self):
         """suggests higher density without overriding user's value."""
         config = ResolvedConfig(measurement_density=3, sweep_angle=15.0)
-        density, suggestion = resolve_density(InspectionMethod.PAPI_HORIZONTAL_RANGE, [], config)
+        density, suggestion = resolve_density(InspectionMethod.HORIZONTAL_RANGE, [], config)
         assert density == 3
         assert suggestion is not None
         assert "recommended" in suggestion
@@ -186,7 +186,7 @@ class TestResolveDensity:
     def test_no_increase_when_sufficient(self):
         """density stays as configured when >= optimal."""
         config = ResolvedConfig(measurement_density=100, sweep_angle=15.0)
-        density, warning = resolve_density(InspectionMethod.PAPI_HORIZONTAL_RANGE, [], config)
+        density, warning = resolve_density(InspectionMethod.HORIZONTAL_RANGE, [], config)
         assert density == 100
         assert warning is None
 
@@ -285,7 +285,7 @@ class TestCheckSensorFov:
 
 
 class TestCalculateArcPath:
-    """tests for papi horizontal range path generation."""
+    """tests for horizontal range path generation."""
 
     def _default_config(self, **overrides):
         """create config with sensible defaults."""
@@ -474,7 +474,7 @@ class TestComputeMeasurementTrajectory:
     """tests for the dispatch function."""
 
     def test_arc_dispatch(self):
-        """dispatches to arc path for PAPI_HORIZONTAL_RANGE."""
+        """dispatches to arc path for HORIZONTAL_RANGE."""
         config = ResolvedConfig(
             measurement_density=6,
             horizontal_distance=400.0,
@@ -482,7 +482,7 @@ class TestComputeMeasurementTrajectory:
             capture_mode="PHOTO_CAPTURE",
         )
         center = Point3D(lon=14.26, lat=50.1, alt=300.0)
-        insp = FakeInspection(method=InspectionMethod.PAPI_HORIZONTAL_RANGE)
+        insp = FakeInspection(method=InspectionMethod.HORIZONTAL_RANGE)
         wps = compute_measurement_trajectory(insp, config, center, 60.0, 3.0, 5.0, [])
         assert len(wps) == 6
         assert all(wp.waypoint_type == WaypointType.MEASUREMENT for wp in wps)
@@ -510,7 +510,7 @@ class TestComputeMeasurementTrajectory:
             recording_setup_duration=5.0,
         )
         center = Point3D(lon=14.26, lat=50.1, alt=300.0)
-        insp = FakeInspection(method=InspectionMethod.PAPI_HORIZONTAL_RANGE)
+        insp = FakeInspection(method=InspectionMethod.HORIZONTAL_RANGE)
         wps = compute_measurement_trajectory(insp, config, center, 60.0, 3.0, 5.0, [])
         # 6 measurement + 2 hover bookends
         assert len(wps) == 8
@@ -534,7 +534,7 @@ class TestComputeMeasurementTrajectory:
             capture_mode="PHOTO_CAPTURE",
         )
         center = Point3D(lon=14.26, lat=50.1, alt=300.0)
-        insp = FakeInspection(method=InspectionMethod.PAPI_HORIZONTAL_RANGE)
+        insp = FakeInspection(method=InspectionMethod.HORIZONTAL_RANGE)
 
         # flat provider - all elevations same as center, so no delta
         from app.services.elevation_provider import FlatElevationProvider

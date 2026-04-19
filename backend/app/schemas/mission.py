@@ -16,7 +16,7 @@ FlightPlanScopeStr = Literal["FULL", "NO_TAKEOFF_LANDING", "MEASUREMENTS_ONLY"]
 # inspection method values - mirrors InspectionMethod enum
 InspectionMethodStr = Literal[
     "VERTICAL_PROFILE",
-    "PAPI_HORIZONTAL_RANGE",
+    "HORIZONTAL_RANGE",
     "FLY_OVER",
     "PARALLEL_SIDE_SWEEP",
     "HOVER_POINT_LOCK",
