@@ -181,6 +181,9 @@ class Inspection(Base):
         """lha ids from associated config, or none."""
         if self.config and self.config.lha_ids:
             return [PyUUID(s) if isinstance(s, str) else s for s in self.config.lha_ids]
+        if self.config and self.config.selected_lha_id:
+            sid = self.config.selected_lha_id
+            return [PyUUID(sid) if isinstance(sid, str) else sid]
         return None
 
     def is_speed_compatible_with_frame_rate(

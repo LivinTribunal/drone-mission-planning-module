@@ -805,14 +805,17 @@ def _setup_airport_template_for_method(
         ).json()
         lha_ids.append(lha["id"])
 
+    template_payload: dict = {
+        "name": f"Template {icao_code}",
+        "methods": [method],
+        "default_config": {"measurement_density": 4},
+    }
+    if method != "HOVER_POINT_LOCK":
+        template_payload["target_agl_ids"] = [agl_id]
+
     template = client.post(
         "/api/v1/inspection-templates",
-        json={
-            "name": f"Template {icao_code}",
-            "methods": [method],
-            "target_agl_ids": [agl_id],
-            "default_config": {"measurement_density": 4},
-        },
+        json=template_payload,
     ).json()
 
     return airport_id, agl_id, template["id"], lha_ids
@@ -1090,7 +1093,6 @@ def test_hover_point_lock_missing_selected_lha_raises(client, db_engine):
         json={
             "name": "Hover Template",
             "methods": ["HOVER_POINT_LOCK"],
-            "target_agl_ids": [agl_id],
             "default_config": {"measurement_density": 4},
         },
     ).json()

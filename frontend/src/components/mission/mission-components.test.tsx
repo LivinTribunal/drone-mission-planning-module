@@ -1196,7 +1196,7 @@ describe("BulkCreateTemplatesDialog", () => {
     expect(screen.getByText("coordinator.inspections.bulkCreateCount")).toBeInTheDocument();
     expect(screen.getAllByText("PAPI RWY 09")).toHaveLength(2);
     expect(screen.getAllByText("RWY EDGE 09")).toHaveLength(2);
-    expect(screen.getByText("Hover Point Lock")).toBeInTheDocument();
+    expect(screen.getAllByText("map.inspectionMethodShort.HOVER_POINT_LOCK").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows all-skipped empty state when every combination exists", () => {
@@ -1354,7 +1354,7 @@ describe("BulkCreateTemplatesDialog", () => {
       agls: [papiAgl] as never,
       existingTemplates: existingTemplates as never,
     });
-    // PAPI has 3 methods, 1 already exists -> 2 combos
+    // PAPI has 2 methods, 1 already exists -> 1 combo
     expect(screen.getByText("coordinator.inspections.bulkCreateCount")).toBeInTheDocument();
   });
 

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
 from app.models.agl import AGL
 from app.models.airport import AirfieldSurface
-from app.models.enums import METHOD_AGL_COMPAT
+from app.models.enums import METHOD_AGL_COMPAT, InspectionMethod
 from app.models.inspection import (
     Inspection,
     InspectionConfiguration,
@@ -250,12 +250,6 @@ def bulk_create_templates(db: Session, airport_id: UUID) -> tuple[list[Inspectio
             db.add(template)
             db.flush()
 
-            try:
-                template.validate_method_agl_compat([method.value])
-            except ValueError as e:
-                db.rollback()
-                raise DomainError(str(e), status_code=400) from e
-
             db.execute(
                 insp_template_methods.insert().values(template_id=template.id, method=method.value)
             )
@@ -272,7 +266,9 @@ def bulk_create_templates(db: Session, airport_id: UUID) -> tuple[list[Inspectio
         db.add(template)
         db.flush()
         db.execute(
-            insp_template_methods.insert().values(template_id=template.id, method=hover_method.value)
+            insp_template_methods.insert().values(
+                template_id=template.id, method=hover_method.value
+            )
         )
         created.append(template)
     else:

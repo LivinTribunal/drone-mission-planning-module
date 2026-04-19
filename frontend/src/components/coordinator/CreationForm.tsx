@@ -77,6 +77,14 @@ const SAFETY_ZONE_SUBTYPES: { value: EntityType; labelKey: string }[] = [
   },
 ];
 
+const SAFETY_ZONE_TYPE_MAP: Record<string, string> = {
+  safety_zone_ctr: "CTR",
+  safety_zone_restricted: "RESTRICTED",
+  safety_zone_prohibited: "PROHIBITED",
+  safety_zone_no_fly: "TEMPORARY_NO_FLY",
+  safety_zone_airport_boundary: "AIRPORT_BOUNDARY",
+};
+
 const OBSTACLE_SUBTYPES: { value: string; labelKey: string }[] = [
   { value: "BUILDING", labelKey: "coordinator.detail.obstacleTypes.building" },
   { value: "ANTENNA", labelKey: "coordinator.detail.obstacleTypes.antenna" },
@@ -369,7 +377,7 @@ export default function CreationForm({
   // auto-prefill safety zone name based on zone type + count
   useEffect(() => {
     if (!isSafetyZone || isAirportBoundary) return;
-    const zoneType = effectiveEntityType.replace("safety_zone_", "").toUpperCase().replace("NO_FLY", "TEMPORARY_NO_FLY");
+    const zoneType = SAFETY_ZONE_TYPE_MAP[effectiveEntityType] ?? effectiveEntityType;
     const sub = SAFETY_ZONE_SUBTYPES.find((s) => s.value === effectiveEntityType);
     const label = sub ? t(sub.labelKey) : zoneType;
     const count = safetyZones.filter((z) => z.type === zoneType).length;
@@ -396,7 +404,7 @@ export default function CreationForm({
   }
 
   const safetyZoneTypeLabel = isSafetyZone
-    ? effectiveEntityType.replace("safety_zone_", "").toUpperCase().replace("NO_FLY", "TEMPORARY_NO_FLY")
+    ? (SAFETY_ZONE_TYPE_MAP[effectiveEntityType] ?? effectiveEntityType)
     : "";
 
   const hasValidCoords = !isNaN(parseFloat(manualLat)) && !isNaN(parseFloat(manualLon));

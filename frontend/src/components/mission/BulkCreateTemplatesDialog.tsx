@@ -117,7 +117,7 @@ export default function BulkCreateTemplatesDialog({
                 className="flex items-center justify-between p-2.5 rounded-xl border border-tv-border bg-tv-bg"
               >
                 <span className="text-sm text-tv-text-primary truncate">
-                  Hover Point Lock
+                  {t("map.inspectionMethodShort.HOVER_POINT_LOCK", "HOVER_POINT_LOCK")}
                 </span>
                 <span
                   className="px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ml-2"
