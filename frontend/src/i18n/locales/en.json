@@ -518,6 +518,10 @@
       "sweepAngleHint": "Default: 15°",
       "verticalProfileHeight": "Vertical Profile Height (m)",
       "verticalProfileHeightHint": "Default: ~45m",
+      "angleOffset": "Angle Offset (°)",
+      "angleOffsetHint": "Default: 0.5°",
+      "computedObservationAngle": "Observation Angle (°)",
+      "missingSettingAngleWarning": "LHA unit(s) {{units}} missing setting angle - observation angle may be inaccurate",
       "bufferDistanceOverride": "Buffer Distance Override (m)",
       "bufferDistanceOverrideHint": "Leave empty to use mission-level value",
       "speedFramerateWarning": "Speed exceeds camera frame rate capability for the selected drone",
@@ -1430,7 +1434,8 @@
     }
   },
   "languages": {
-    "en": "English"
+    "en": "English",
+    "sk": "Sloven\u010dina"
   },
   "computation": {
     "computing": "Computing trajectory...",

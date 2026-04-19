@@ -64,6 +64,8 @@ export default function InspectionConfigForm({
       : savedCfg?.capture_mode ?? defaultCfg?.capture_mode ?? null;
   const recordingSetupDuration = resolveNumber("recording_setup_duration");
 
+  const angleOffset = resolveNumber("angle_offset");
+
   // method-specific fields
   const heightAboveLights = resolveNumber("height_above_lights");
   const lateralOffset = resolveNumber("lateral_offset");
@@ -120,6 +122,32 @@ export default function InspectionConfigForm({
     if (!template?.target_agl_ids?.length) return agls;
     return agls.filter((a) => template.target_agl_ids.includes(a.id));
   }, [agls, template]);
+
+  // papi observation angle derived from max setting angle + offset
+  const { computedObservationAngle, missingSettingAngleUnits } = useMemo(() => {
+    if (inspection.method !== "PAPI_HORIZONTAL_RANGE") {
+      return { computedObservationAngle: null, missingSettingAngleUnits: [] as string[] };
+    }
+    const relevantLhas = targetAgls.flatMap((a) =>
+      a.lhas.filter((l) => selectedLhaIds.size === 0 || selectedLhaIds.has(l.id)),
+    );
+    const missing = relevantLhas
+      .filter((l) => l.setting_angle == null)
+      .map((l) => l.unit_designator);
+    const angles = relevantLhas
+      .filter((l) => l.setting_angle != null)
+      .map((l) => l.setting_angle as number);
+    if (angles.length === 0) {
+      return { computedObservationAngle: null, missingSettingAngleUnits: missing };
+    }
+    // must match DEFAULT_ANGLE_OFFSET in backend inspection_configuration.py
+    const effectiveOffset = typeof angleOffset === "number" ? angleOffset : 0.5;
+    const maxAngle = Math.max(...angles);
+    return {
+      computedObservationAngle: Math.round((maxAngle + effectiveOffset) * 100) / 100,
+      missingSettingAngleUnits: missing,
+    };
+  }, [inspection.method, targetAgls, selectedLhaIds, angleOffset]);
 
   function handleNumberChange(
     field: keyof InspectionConfigOverride,
@@ -395,6 +423,22 @@ export default function InspectionConfigForm({
         )}
       </div>
 
+      {/* missing setting angle warning */}
+      {inspection.method === "PAPI_HORIZONTAL_RANGE" &&
+        missingSettingAngleUnits.length > 0 && (
+        <div
+          className="flex items-center gap-2 p-3 rounded-2xl border border-tv-warning bg-tv-warning/10"
+          data-testid="missing-setting-angle-warning"
+        >
+          <AlertTriangle className="h-4 w-4 text-tv-warning flex-shrink-0" />
+          <p className="text-xs text-tv-warning">
+            {t("mission.config.missingSettingAngleWarning", {
+              units: missingSettingAngleUnits.join(", "),
+            })}
+          </p>
+        </div>
+      )}
+
       {/* geometry overrides - only methods that consume them */}
       {(inspection.method === "VERTICAL_PROFILE" ||
         inspection.method === "PAPI_HORIZONTAL_RANGE") && (
@@ -437,6 +481,40 @@ export default function InspectionConfigForm({
                 className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
                 data-testid="inspection-sweep-angle"
               />
+            </div>
+          )}
+          {inspection.method === "PAPI_HORIZONTAL_RANGE" && (
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("mission.config.angleOffset")}
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="10"
+                value={angleOffset}
+                onChange={(e) =>
+                  handleNumberChange("angle_offset", e.target.value)
+                }
+                placeholder={t("mission.config.angleOffsetHint")}
+                className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                data-testid="inspection-angle-offset"
+              />
+            </div>
+          )}
+          {inspection.method === "PAPI_HORIZONTAL_RANGE" &&
+            computedObservationAngle != null && (
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("mission.config.computedObservationAngle")}
+              </label>
+              <p
+                className="px-3 py-2 text-sm text-tv-text-primary"
+                data-testid="computed-observation-angle"
+              >
+                {computedObservationAngle}°
+              </p>
             </div>
           )}
           {inspection.method === "VERTICAL_PROFILE" && (
