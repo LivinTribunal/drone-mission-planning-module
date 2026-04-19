@@ -33,6 +33,7 @@ insp_template_targets = Table(
 # kept at module scope so it can be imported without touching the ORM.
 CONFIG_FIELDS: tuple[str, ...] = (
     "altitude_offset",
+    "angle_offset",
     "measurement_speed_override",
     "measurement_density",
     "custom_tolerances",
@@ -74,6 +75,7 @@ class InspectionConfiguration(Base):
 
     id = Column(UUID, primary_key=True, default=uuid4)
     altitude_offset = Column(Float)
+    angle_offset = Column(Float, nullable=True)
     measurement_speed_override = Column(Float, nullable=True)
     measurement_density = Column(Integer)
     custom_tolerances = Column(JSONB)

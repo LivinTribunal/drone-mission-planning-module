@@ -27,6 +27,8 @@ from .config_resolver import (
 )
 from .helpers import (
     _apply_camera_actions,
+    check_missing_setting_angles,
+    derive_observation_angle,
     get_glide_slope_angle,
     get_lha_positions,
     get_lha_positions_from_surfaces,
@@ -47,6 +49,7 @@ from .safety_validator import (
 )
 from .types import (
     DEFAULT_ACCELERATION,
+    DEFAULT_ANGLE_OFFSET,
     DEFAULT_DECELERATION,
     DEFAULT_RESERVE_MARGIN,
     DEFAULT_SPEED,
@@ -421,6 +424,33 @@ def _generate_trajectory_inner(
         glide_slope = get_glide_slope_angle(template)
         rwy_heading = get_runway_heading(template, data.surfaces)
         setting_angles = get_lha_setting_angles(template, lha_ids)
+
+        # derive observation angle from lha setting angles for papi methods
+        if inspection.method == InspectionMethod.PAPI_HORIZONTAL_RANGE:
+            missing_units = check_missing_setting_angles(template, lha_ids)
+            if missing_units:
+                units_str = ", ".join(missing_units)
+                warnings.append(
+                    (
+                        f"{label}: LHA unit(s) {units_str} missing setting angle "
+                        "- computed observation angle may be inaccurate",
+                        [],
+                    )
+                )
+
+            if setting_angles:
+                offset = (
+                    config.angle_offset if config.angle_offset is not None else DEFAULT_ANGLE_OFFSET
+                )
+                glide_slope = derive_observation_angle(setting_angles, offset)
+            else:
+                warnings.append(
+                    (
+                        f"{label}: no setting angles available - "
+                        "falling back to AGL glide slope angle",
+                        [],
+                    )
+                )
 
         # ordered LHA positions are used by fly-over and parallel-side-sweep
         ordered_lhas = get_ordered_lha_positions(template, lha_ids)

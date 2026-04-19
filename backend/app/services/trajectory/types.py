@@ -36,6 +36,7 @@ DEFAULT_RESERVE_MARGIN = 0.15
 HOVER_ANGLE_TOLERANCE: Degrees = 0.05  # 3 arc minutes per ZEPHYR spec
 DEFAULT_SPEED: MetersPerSecond = 5.0
 DEFAULT_GLIDE_SLOPE: Degrees = 3.0
+DEFAULT_ANGLE_OFFSET: Degrees = 0.5
 DEFAULT_HEADING: Degrees = 0.0
 
 # fly-over defaults
@@ -154,6 +155,7 @@ class ResolvedConfig:
     """merged inspection config: operator override > template default > hardcoded"""
 
     altitude_offset: Meters = 0.0
+    angle_offset: Degrees | None = None
     measurement_speed_override: MetersPerSecond | None = None
     measurement_density: int = 8
     custom_tolerances: dict | None = None
