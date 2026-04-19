@@ -20,7 +20,6 @@ import {
   removeInspection,
   reorderInspections,
   getFlightPlan,
-  generateAndFetchTrajectory,
 } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import { listInspectionTemplates } from "@/api/inspectionTemplates";

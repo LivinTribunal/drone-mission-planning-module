@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -16,6 +17,8 @@ from app.schemas.flight_plan import (
 from app.schemas.mission import ComputationStatusResponse
 from app.services import flight_plan_service
 from app.services.trajectory.orchestrator import generate_trajectory
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
 
@@ -72,7 +75,9 @@ def generate(
         db.commit()
 
         raise HTTPException(status_code=error.status_code, detail=error.message)
-    except Exception:
+    except Exception as exc:
+        logger.exception("unexpected error in generate", exc_info=exc)
+        db.rollback()
         db.refresh(mission)
         mission.mark_computation_failed("unexpected error during trajectory computation")
         db.commit()
