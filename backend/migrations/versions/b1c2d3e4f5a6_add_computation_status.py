@@ -20,6 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """add computation_status, computation_error, computation_started_at to mission."""
+    # NOT NULL + server_default takes ACCESS EXCLUSIVE lock for table rewrite - schedule during maintenance
     op.add_column(
         "mission",
         sa.Column(

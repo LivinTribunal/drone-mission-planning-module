@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID as PyUUID
 from uuid import uuid4
 
@@ -180,6 +181,7 @@ class Mission(Base):
         ):
             self.status = MissionStatus.DRAFT
             self.flight_plan = None
+        self.reset_computation_status()
 
     def add_inspection(self, inspection):
         """add inspection - invalidates trajectory, blocked after export."""
@@ -217,7 +219,7 @@ class Mission(Base):
         """set computation status to COMPUTING with timestamp."""
         self.computation_status = ComputationStatus.COMPUTING
         self.computation_error = None
-        self.computation_started_at = func.now()
+        self.computation_started_at = datetime.now(timezone.utc)
 
     def mark_computation_completed(self):
         """set computation status to COMPLETED after successful generation."""

@@ -143,7 +143,7 @@ def test_computation_status_in_mission_response(client, cs_airport_id):
 
 
 def test_computation_status_staleness_detection(client, db_session, cs_airport_id):
-    """computation-status endpoint detects stale COMPUTING status and reports FAILED."""
+    """computation-status endpoint detects stale COMPUTING status, persists FAILED to db."""
     r = client.post(
         "/api/v1/missions",
         json={"name": "stale test", "airport_id": cs_airport_id},
@@ -161,6 +161,57 @@ def test_computation_status_staleness_detection(client, db_session, cs_airport_i
     data = r.json()
     assert data["computation_status"] == "FAILED"
     assert data["computation_error"] == "computation timed out"
+
+    # verify failure was persisted to db - no split-brain
+    db_session.expire(mission)
+    assert mission.computation_status == "FAILED"
+    assert mission.computation_error == "computation timed out"
+    assert mission.computation_started_at is None
+
+
+def test_invalidate_trajectory_resets_computation_status(db_session, cs_airport_id):
+    """invalidate_trajectory resets computation_status so UI does not show stale badge."""
+    mission = Mission(
+        id=uuid4(), name="test invalidate", airport_id=cs_airport_id, status="PLANNED"
+    )
+    db_session.add(mission)
+    db_session.flush()
+
+    # simulate completed computation
+    mission.mark_computation_completed()
+    db_session.flush()
+    assert mission.computation_status == ComputationStatus.COMPLETED
+
+    # trajectory-affecting change triggers invalidation
+    mission.invalidate_trajectory()
+    db_session.flush()
+
+    assert mission.status == "DRAFT"
+    assert mission.computation_status == ComputationStatus.IDLE
+    assert mission.computation_error is None
+    assert mission.computation_started_at is None
+
+    db_session.rollback()
+
+
+def test_invalidate_trajectory_resets_computing_status(db_session, cs_airport_id):
+    """invalidate_trajectory resets COMPUTING computation_status too."""
+    mission = Mission(
+        id=uuid4(), name="test invalidate computing", airport_id=cs_airport_id, status="DRAFT"
+    )
+    db_session.add(mission)
+    db_session.flush()
+
+    mission.mark_computing()
+    db_session.flush()
+    assert mission.computation_status == ComputationStatus.COMPUTING
+
+    mission.invalidate_trajectory()
+    db_session.flush()
+
+    assert mission.computation_status == ComputationStatus.IDLE
+
+    db_session.rollback()
 
 
 def test_generate_trajectory_sets_computation_status(client, cs_airport_id):

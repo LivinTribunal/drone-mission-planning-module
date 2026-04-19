@@ -49,9 +49,14 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
   });
 
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const computingRef = useRef(false);
-  const pollingActiveRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const clearDismissTimer = useCallback(() => {
     if (dismissTimer.current) {
@@ -60,19 +65,11 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const clearPollTimer = useCallback(() => {
-    if (pollTimer.current) {
-      clearInterval(pollTimer.current);
-      pollTimer.current = null;
-    }
-  }, []);
-
   useEffect(() => {
     return () => {
       clearDismissTimer();
-      clearPollTimer();
     };
-  }, [clearDismissTimer, clearPollTimer]);
+  }, [clearDismissTimer]);
 
   const dismiss = useCallback(() => {
     clearDismissTimer();
@@ -110,6 +107,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
 
       generateTrajectory(missionId)
         .then((result) => {
+          if (!mountedRef.current) return;
           setState({
             status: "COMPLETED",
             missionId,
@@ -122,6 +120,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
           scheduleDismiss(AUTO_DISMISS_SUCCESS_MS);
         })
         .catch((err) => {
+          if (!mountedRef.current) return;
           let errorMsg = "trajectory computation failed";
           if (err?.response?.data?.detail) {
             const detail = err.response.data.detail;
@@ -151,11 +150,8 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (
       selectedMission?.computation_status === "COMPUTING" &&
-      !pollingActiveRef.current &&
       !computingRef.current
     ) {
-      pollingActiveRef.current = true;
-
       setState({
         status: "COMPUTING",
         missionId: selectedMission.id,
@@ -164,13 +160,13 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
         lastResult: null,
       });
 
-      clearPollTimer();
-      pollTimer.current = setInterval(async () => {
+      let cancelled = false;
+      const id = setInterval(async () => {
         try {
           const res = await getComputationStatus(selectedMission.id);
+          if (cancelled) return;
           if (res.computation_status === "COMPLETED") {
-            clearPollTimer();
-            pollingActiveRef.current = false;
+            clearInterval(id);
             setState((prev) => ({
               ...prev,
               status: "COMPLETED",
@@ -180,8 +176,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
             refreshSelectedMission();
             scheduleDismiss(AUTO_DISMISS_SUCCESS_MS);
           } else if (res.computation_status === "FAILED") {
-            clearPollTimer();
-            pollingActiveRef.current = false;
+            clearInterval(id);
             setState((prev) => ({
               ...prev,
               status: "FAILED",
@@ -191,8 +186,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
             refreshSelectedMission();
             scheduleDismiss(AUTO_DISMISS_FAILURE_MS);
           } else if (res.computation_status === "IDLE") {
-            clearPollTimer();
-            pollingActiveRef.current = false;
+            clearInterval(id);
             setState((prev) => ({
               ...prev,
               status: "IDLE",
@@ -200,8 +194,8 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
             }));
           }
         } catch (err) {
-          clearPollTimer();
-          pollingActiveRef.current = false;
+          if (cancelled) return;
+          clearInterval(id);
           setState((prev) => ({
             ...prev,
             status: "FAILED",
@@ -210,17 +204,18 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
           scheduleDismiss(AUTO_DISMISS_FAILURE_MS);
         }
       }, POLL_INTERVAL_MS);
+
+      return () => {
+        cancelled = true;
+        clearInterval(id);
+      };
     }
 
-    return () => {
-      clearPollTimer();
-      pollingActiveRef.current = false;
-    };
+    return undefined;
   }, [
     selectedMission?.id,
     selectedMission?.computation_status,
     selectedMission?.name,
-    clearPollTimer,
     refreshMissions,
     refreshSelectedMission,
     scheduleDismiss,
