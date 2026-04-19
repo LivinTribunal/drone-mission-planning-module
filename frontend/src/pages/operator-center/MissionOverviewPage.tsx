@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { isAxiosError } from "@/api/client";
 import { useAirport } from "@/contexts/AirportContext";
-import { getMission, getFlightPlan, generateTrajectory } from "@/api/missions";
+import { getMission, getFlightPlan, generateAndFetchTrajectory } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -59,19 +59,10 @@ export default function MissionOverviewPage() {
     if (!id || !mission) return;
     setComputing(true);
     try {
-      const result = await generateTrajectory(id);
-      setFlightPlan(result.flight_plan);
+      const { flightPlan, missionStatus } = await generateAndFetchTrajectory(id);
+      setFlightPlan(flightPlan);
 
-      // re-fetch flight plan to ensure complete waypoint geometry data
-      try {
-        const freshFp = await getFlightPlan(id);
-        setFlightPlan(freshFp);
-      } catch {
-        /* keep generate response if re-fetch fails */
-      }
-
-      const fresh = await getMission(id);
-      setMission(fresh);
+      setMission({ ...mission, status: missionStatus });
       refreshMissions();
       showNotification(t("map.changesSaved"));
     } catch (err) {

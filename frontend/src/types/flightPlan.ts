@@ -1,5 +1,5 @@
 import type { PointZ } from "./common";
-import type { CameraAction, WaypointType } from "./enums";
+import type { CameraAction, MissionStatus, WaypointType } from "./enums";
 
 export interface WaypointResponse {
   id: string;
@@ -53,7 +53,7 @@ export interface FlightPlanResponse {
 
 export interface GenerateTrajectoryResponse {
   flight_plan: FlightPlanResponse;
-  mission_status: string;
+  mission_status: MissionStatus;
 }
 
 export interface WaypointPositionUpdate {

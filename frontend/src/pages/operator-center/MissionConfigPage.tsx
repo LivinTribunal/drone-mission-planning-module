@@ -18,8 +18,8 @@ import {
   updateInspection,
   removeInspection,
   reorderInspections,
-  generateTrajectory,
   getFlightPlan,
+  generateAndFetchTrajectory,
 } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import { listInspectionTemplates } from "@/api/inspectionTemplates";
@@ -536,23 +536,13 @@ export default function MissionConfigPage() {
     if (!id) return;
     setComputing(true);
     try {
-      const result = await generateTrajectory(id);
-      setFlightPlan(result.flight_plan);
+      const { flightPlan, missionStatus } = await generateAndFetchTrajectory(id);
+      setFlightPlan(flightPlan);
 
-      // re-fetch flight plan to ensure complete waypoint geometry data
-      try {
-        const freshFp = await getFlightPlan(id);
-        setFlightPlan(freshFp);
-      } catch {
-        /* keep generate response if re-fetch fails */
-      }
-
-      // warnings are now persisted as violations in the flight plan
-      const violations = result.flight_plan.validation_result?.violations ?? [];
+      const violations = flightPlan.validation_result?.violations ?? [];
       setWarnings(violations.length > 0 ? violations : null);
 
-      const fresh = await getMission(id);
-      updateMissionState(fresh);
+      updateMissionState({ ...mission!, status: missionStatus });
     } catch (err) {
       if (isAxiosError(err) && err.response?.status && [400, 409, 422].includes(err.response.status)) {
         const detail = err.response?.data?.detail;

@@ -15,7 +15,7 @@ import {
   updateMission,
   getFlightPlan,
   batchUpdateWaypoints,
-  generateTrajectory,
+  generateAndFetchTrajectory,
   insertTransitWaypoint,
   deleteTransitWaypoint,
 } from "@/api/missions";
@@ -283,22 +283,14 @@ export default function MissionMapPage() {
     if (!id || !mission) return;
     setComputing(true);
     try {
-      const result = await generateTrajectory(id);
-      setFlightPlan(result.flight_plan);
+      const { flightPlan, missionStatus } = await generateAndFetchTrajectory(id);
+      setFlightPlan(flightPlan);
       setDirtyWaypoints({});
       clearHistory();
 
-      // re-fetch flight plan to ensure complete waypoint geometry data
-      try {
-        const freshFp = await getFlightPlan(id);
-        setFlightPlan(freshFp);
-      } catch {
-        /* keep generate response if re-fetch fails */
-      }
-
-      const fresh = await getMission(id);
-      setMission(fresh);
-      updateMissionFromPage(fresh);
+      const updatedMission = { ...mission, status: missionStatus };
+      setMission(updatedMission);
+      updateMissionFromPage(updatedMission);
       refreshMissions();
       showNotification(t("map.changesSaved"));
     } catch (err) {

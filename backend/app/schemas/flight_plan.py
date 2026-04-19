@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, computed_field, field_validator
 
+from app.models.enums import MissionStatus
 from app.schemas.geometry import PointZ
 
 
@@ -182,4 +183,4 @@ class GenerateTrajectoryResponse(BaseModel):
     """response from trajectory generation"""
 
     flight_plan: FlightPlanResponse
-    mission_status: str
+    mission_status: MissionStatus
