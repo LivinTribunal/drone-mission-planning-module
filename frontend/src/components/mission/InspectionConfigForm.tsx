@@ -140,6 +140,7 @@ export default function InspectionConfigForm({
     if (angles.length === 0) {
       return { computedObservationAngle: null, missingSettingAngleUnits: missing };
     }
+    // must match DEFAULT_ANGLE_OFFSET in backend inspection_configuration.py
     const effectiveOffset = typeof angleOffset === "number" ? angleOffset : 0.5;
     const maxAngle = Math.max(...angles);
     return {
@@ -491,6 +492,7 @@ export default function InspectionConfigForm({
                 type="number"
                 step="0.1"
                 min="0"
+                max="10"
                 value={angleOffset}
                 onChange={(e) =>
                   handleNumberChange("angle_offset", e.target.value)
