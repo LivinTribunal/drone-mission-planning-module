@@ -4,10 +4,7 @@ function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
 
-/**
- * computes the perpendicular distance in meters from a point to
- * the nearest segment of a linestring centerline.
- */
+/** returns nearest distance in meters from point to centerline linestring. */
 export function distanceFromCenterline(
   point: [number, number],
   centerline: number[][],
@@ -31,6 +28,7 @@ function pointToSegmentDistance(
   a: [number, number],
   b: [number, number],
 ): number {
+  // equirectangular approximation - accurate within ~50 m at airport scale
   const latRef = toRad((a[1] + b[1]) / 2);
   const mPerDegLon = (Math.PI / 180) * EARTH_RADIUS * Math.cos(latRef);
   const mPerDegLat = (Math.PI / 180) * EARTH_RADIUS;
