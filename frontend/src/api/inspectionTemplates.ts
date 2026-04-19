@@ -47,3 +47,12 @@ export async function deleteInspectionTemplate(
   const res = await client.delete(`/inspection-templates/${id}`);
   return res.data;
 }
+
+export async function bulkCreateInspectionTemplates(
+  airportId: string,
+): Promise<{ created: InspectionTemplateResponse[]; skipped: number }> {
+  const res = await client.post("/inspection-templates/bulk", {
+    airport_id: airportId,
+  });
+  return res.data;
+}

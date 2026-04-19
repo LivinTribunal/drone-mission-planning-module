@@ -403,6 +403,11 @@ def _generate_trajectory_inner(
             lha_positions = get_lha_positions_from_surfaces(data.surfaces, lha_ids)
 
         if not lha_positions:
+            if inspection.method == InspectionMethod.HOVER_POINT_LOCK:
+                raise TrajectoryGenerationError(
+                    f"{template.name} #{inspection.sequence_order}: "
+                    "hover-point-lock requires a selected LHA"
+                )
             warnings.append(
                 (
                     f"{template.name} #{inspection.sequence_order}: no LHA positions",
@@ -410,8 +415,8 @@ def _generate_trajectory_inner(
                 )
             )
             continue
-
-        center = Point3D.center(lha_positions)
+        else:
+            center = Point3D.center(lha_positions)
 
         glide_slope = get_glide_slope_angle(template)
         rwy_heading = get_runway_heading(template, data.surfaces)

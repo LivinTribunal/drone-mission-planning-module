@@ -1394,6 +1394,7 @@ export default function AirportEditPage() {
                 prefilledHeading={prefilledGeometry.heading}
                 prefilledArea={prefilledGeometry.area}
                 obstacles={obstacles}
+                safetyZones={safetyZones}
                 airportElevation={airport?.elevation}
                 prefilledEntityType={boundaryEntityOverride ?? undefined}
                 pickingTouchpoint={pickingTouchpoint}

@@ -106,3 +106,16 @@ class InspectionTemplateListResponse(BaseModel):
 
     data: list[InspectionTemplateResponse]
     meta: ListMeta
+
+
+class BulkCreateTemplatesRequest(BaseModel):
+    """bulk create inspection templates request schema"""
+
+    airport_id: UUID
+
+
+class BulkCreateTemplatesResponse(BaseModel):
+    """bulk create inspection templates response schema"""
+
+    created: list[InspectionTemplateResponse]
+    skipped: int

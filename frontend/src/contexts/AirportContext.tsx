@@ -32,6 +32,7 @@ export function AirportProvider({ children }: { children: ReactNode }) {
   const [airportDetailLoading, setAirportDetailLoading] = useState(false);
   const [airportDetailError, setAirportDetailError] = useState(false);
   const fetchCounterRef = useRef(0);
+  const hasHydrated = useRef(false);
 
   const fetchDetail = useCallback((airportId: string) => {
     const requestId = ++fetchCounterRef.current;
@@ -41,6 +42,11 @@ export function AirportProvider({ children }: { children: ReactNode }) {
       .then((detail) => {
         if (fetchCounterRef.current !== requestId) return;
         setAirportDetail(detail);
+        setSelectedAirport((prev) => {
+          if (!prev || prev.id !== detail.id) return prev;
+          if (prev.default_drone_profile_id === detail.default_drone_profile_id) return prev;
+          return { ...prev, default_drone_profile_id: detail.default_drone_profile_id };
+        });
         setAirportDetailError(false);
       })
       .catch(() => {
@@ -53,6 +59,16 @@ export function AirportProvider({ children }: { children: ReactNode }) {
         setAirportDetailLoading(false);
       });
   }, []);
+
+  // persist selected airport to localStorage
+  useEffect(() => {
+    if (!hasHydrated.current) return;
+    if (selectedAirport) {
+      localStorage.setItem(AIRPORT_KEY, JSON.stringify(selectedAirport));
+    } else {
+      localStorage.removeItem(AIRPORT_KEY);
+    }
+  }, [selectedAirport]);
 
   // rehydrate from localStorage
   useEffect(() => {
@@ -79,6 +95,7 @@ export function AirportProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(AIRPORT_KEY);
       }
     }
+    hasHydrated.current = true;
   }, [fetchDetail]);
 
   const selectAirport = useCallback(

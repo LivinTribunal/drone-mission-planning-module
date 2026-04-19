@@ -239,6 +239,14 @@ export default function MissionOverviewPage() {
               showTerrainToggle={false}
               showWaypointList={false}
               showPoiInfo={false}
+              leftPanelChildren={
+                selectedFeature ? (
+                  <PoiInfoPanel
+                    feature={selectedFeature}
+                    onClose={() => setSelectedFeature(null)}
+                  />
+                ) : undefined
+              }
               simplifiedTrajectory
               is3D={is3D}
               onToggle3D={setIs3D}
@@ -265,16 +273,8 @@ export default function MissionOverviewPage() {
               highlightSeverity={selectedWarning?.severity}
               selectedWarning={selectedWarning}
               onWarningClose={() => setSelectedWarning(null)}
-            >
-              {selectedFeature && (
-                <div className="absolute top-3 right-3 z-10 w-56">
-                  <PoiInfoPanel
-                    feature={selectedFeature}
-                    onClose={() => setSelectedFeature(null)}
-                  />
-                </div>
-              )}
-            </AirportMap>
+            />
+
 
             {/* bottom bar */}
             <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">

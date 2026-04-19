@@ -11,7 +11,7 @@ export default function Input({
   ...props
 }: InputProps) {
   return (
-    <div>
+    <div className="flex flex-col justify-end h-full">
       {label && (
         <label
           htmlFor={id}
