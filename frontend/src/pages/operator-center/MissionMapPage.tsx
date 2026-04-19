@@ -291,11 +291,13 @@ export default function MissionMapPage() {
       clearHistory();
 
       if (id) {
-        getMission(id).then((fresh) => {
-          setMission(fresh);
-          updateMissionFromPage(fresh);
-          refreshMissions();
-        });
+        getMission(id)
+          .then((fresh) => {
+            setMission(fresh);
+            updateMissionFromPage(fresh);
+            refreshMissions();
+          })
+          .catch(() => {});
       }
     }
     prevComputationStatus.current = computation.status;
@@ -332,7 +334,7 @@ export default function MissionMapPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext, computation, canCompute, computeLabel, hasCoordinates, t, id]);
+  }, [setComputeContext, computation.isComputing, computation.startComputation, canCompute, computeLabel, hasCoordinates, t, id]);
 
   // handle map click based on active tool
   const handleMapClick = useCallback(

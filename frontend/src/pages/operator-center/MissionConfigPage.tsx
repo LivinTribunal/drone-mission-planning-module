@@ -354,7 +354,7 @@ export default function MissionConfigPage() {
         isComputing: false,
       });
     };
-  }, [setComputeContext, isDraft, computation, hasCoordinates, t, id]);
+  }, [setComputeContext, isDraft, computation.isComputing, computation.startComputation, hasCoordinates, t, id]);
 
   // unsaved changes on beforeunload
   useEffect(() => {
@@ -542,7 +542,9 @@ export default function MissionConfigPage() {
       setWarnings(violations.length > 0 ? violations : null);
 
       if (id) {
-        getMission(id).then((fresh) => updateMissionState(fresh));
+        getMission(id)
+          .then((fresh) => updateMissionState(fresh))
+          .catch(() => {});
       }
     }
     prevComputationStatus.current = computation.status;

@@ -189,12 +189,9 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
             clearPollTimer();
             setState((prev) => ({
               ...prev,
-              status: "COMPLETED",
+              status: "IDLE",
               error: null,
             }));
-            refreshMissions();
-            refreshSelectedMission();
-            scheduleDismiss(AUTO_DISMISS_SUCCESS_MS);
           }
         } catch {
           clearPollTimer();
@@ -207,6 +204,10 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
         }
       }, POLL_INTERVAL_MS);
     }
+
+    return () => {
+      clearPollTimer();
+    };
   }, [
     selectedMission?.id,
     selectedMission?.computation_status,

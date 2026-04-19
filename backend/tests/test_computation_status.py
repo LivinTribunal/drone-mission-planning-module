@@ -141,37 +141,25 @@ def test_computation_status_in_mission_response(client, cs_airport_id):
     assert data["computation_started_at"] is None
 
 
-def test_computation_status_staleness_detection(db_session, cs_airport_id):
-    """computation-status endpoint detects stale COMPUTING status and resets to FAILED."""
-    mission = Mission(
-        id=uuid4(),
-        name="stale test",
-        airport_id=cs_airport_id,
-        status="DRAFT",
+def test_computation_status_staleness_detection(client, db_session, cs_airport_id):
+    """computation-status endpoint detects stale COMPUTING status and reports FAILED."""
+    r = client.post(
+        "/api/v1/missions",
+        json={"name": "stale test", "airport_id": cs_airport_id},
     )
-    db_session.add(mission)
-    db_session.flush()
+    mission_id = r.json()["id"]
 
+    # seed a stale COMPUTING state directly in db
+    mission = db_session.query(Mission).filter_by(id=mission_id).one()
     mission.computation_status = "COMPUTING"
     mission.computation_started_at = datetime.now(timezone.utc) - timedelta(minutes=10)
-    db_session.flush()
+    db_session.commit()
 
-    # simulate what the endpoint does
-    from app.api.routes.flight_plans import _COMPUTATION_TIMEOUT_MINUTES
-
-    started = mission.computation_started_at
-    if started.tzinfo is None:
-        started = started.replace(tzinfo=timezone.utc)
-    elapsed = (datetime.now(timezone.utc) - started).total_seconds()
-
-    assert elapsed > _COMPUTATION_TIMEOUT_MINUTES * 60
-    mission.mark_computation_failed("computation timed out")
-    db_session.flush()
-
-    assert mission.computation_status == ComputationStatus.FAILED
-    assert mission.computation_error == "computation timed out"
-
-    db_session.rollback()
+    r = client.get(f"/api/v1/missions/{mission_id}/computation-status")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["computation_status"] == "FAILED"
+    assert data["computation_error"] == "computation timed out"
 
 
 def test_generate_trajectory_sets_computation_status(client, cs_airport_id):

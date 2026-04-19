@@ -60,10 +60,12 @@ export default function MissionOverviewPage() {
       setWarnings(violations.length > 0 ? violations : null);
 
       if (id) {
-        getMission(id).then((fresh) => {
-          setMission(fresh);
-          refreshMissions();
-        });
+        getMission(id)
+          .then((fresh) => {
+            setMission(fresh);
+            refreshMissions();
+          })
+          .catch(() => {});
       }
     }
     prevComputationStatus.current = computation.status;
@@ -98,7 +100,7 @@ export default function MissionOverviewPage() {
     return () => {
       setComputeContext({ onCompute: null, canCompute: false, isComputing: false });
     };
-  }, [setComputeContext, computation, hasCoordinates, computeLabel, id]);
+  }, [setComputeContext, computation.isComputing, computation.startComputation, hasCoordinates, computeLabel, id]);
 
   const fetchData = useCallback(async () => {
     /** load mission, drone profiles, and flight plan. */
