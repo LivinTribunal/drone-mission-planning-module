@@ -291,8 +291,8 @@ def _generate_trajectory_inner(
         db.delete(existing_fp)
         db.flush()
 
-    # auto-regress VALIDATED so regeneration works without manual step
-    if mission.status == MissionStatus.VALIDATED:
+    # auto-regress VALIDATED/EXPORTED so regeneration works without manual step
+    if mission.status in (MissionStatus.VALIDATED, MissionStatus.EXPORTED):
         mission.invalidate_trajectory()
 
     # only DRAFT or PLANNED can generate - terminal states are blocked

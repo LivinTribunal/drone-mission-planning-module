@@ -539,6 +539,14 @@ export default function MissionConfigPage() {
       const result = await generateTrajectory(id);
       setFlightPlan(result.flight_plan);
 
+      // re-fetch flight plan to ensure complete waypoint geometry data
+      try {
+        const freshFp = await getFlightPlan(id);
+        setFlightPlan(freshFp);
+      } catch {
+        /* keep generate response if re-fetch fails */
+      }
+
       // warnings are now persisted as violations in the flight plan
       const violations = result.flight_plan.validation_result?.violations ?? [];
       setWarnings(violations.length > 0 ? violations : null);

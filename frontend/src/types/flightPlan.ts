@@ -53,6 +53,7 @@ export interface FlightPlanResponse {
 
 export interface GenerateTrajectoryResponse {
   flight_plan: FlightPlanResponse;
+  mission_status: string;
 }
 
 export interface WaypointPositionUpdate {

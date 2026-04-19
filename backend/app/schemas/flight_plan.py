@@ -182,3 +182,4 @@ class GenerateTrajectoryResponse(BaseModel):
     """response from trajectory generation"""
 
     flight_plan: FlightPlanResponse
+    mission_status: str

@@ -61,6 +61,15 @@ export default function MissionOverviewPage() {
     try {
       const result = await generateTrajectory(id);
       setFlightPlan(result.flight_plan);
+
+      // re-fetch flight plan to ensure complete waypoint geometry data
+      try {
+        const freshFp = await getFlightPlan(id);
+        setFlightPlan(freshFp);
+      } catch {
+        /* keep generate response if re-fetch fails */
+      }
+
       const fresh = await getMission(id);
       setMission(fresh);
       refreshMissions();

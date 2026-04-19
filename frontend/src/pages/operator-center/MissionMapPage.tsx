@@ -288,6 +288,14 @@ export default function MissionMapPage() {
       setDirtyWaypoints({});
       clearHistory();
 
+      // re-fetch flight plan to ensure complete waypoint geometry data
+      try {
+        const freshFp = await getFlightPlan(id);
+        setFlightPlan(freshFp);
+      } catch {
+        /* keep generate response if re-fetch fails */
+      }
+
       const fresh = await getMission(id);
       setMission(fresh);
       updateMissionFromPage(fresh);
