@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID as PyUUID
 from uuid import uuid4
 
@@ -17,7 +18,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.models.enums import MissionStatus
+from app.models.enums import ComputationStatus, MissionStatus
 
 # max inspections per mission
 MAX_INSPECTIONS = 10
@@ -112,6 +113,11 @@ class Mission(Base):
     flight_plan_scope = Column(String(25), nullable=False, default="FULL", server_default="FULL")
     has_unsaved_map_changes = Column(Boolean, nullable=False, default=False, server_default="false")
 
+    # trajectory computation lifecycle
+    computation_status = Column(String(20), nullable=False, default="IDLE", server_default="IDLE")
+    computation_error = Column(String, nullable=True)
+    computation_started_at = Column(DateTime(timezone=True), nullable=True)
+
     airport = relationship("Airport")
     drone_profile = relationship("DroneProfile")
     inspections = relationship("Inspection", back_populates="mission", cascade="all, delete-orphan")
@@ -125,6 +131,10 @@ class Mission(Base):
         CheckConstraint(
             "flight_plan_scope IN ('FULL', 'NO_TAKEOFF_LANDING', 'MEASUREMENTS_ONLY')",
             name="ck_mission_flight_plan_scope",
+        ),
+        CheckConstraint(
+            "computation_status IN ('IDLE', 'COMPUTING', 'COMPLETED', 'FAILED')",
+            name="ck_mission_computation_status",
         ),
     )
 
@@ -171,6 +181,7 @@ class Mission(Base):
         ):
             self.status = MissionStatus.DRAFT
             self.flight_plan = None
+        self.reset_computation_status()
 
     def add_inspection(self, inspection):
         """add inspection - invalidates trajectory, blocked after export."""
@@ -203,6 +214,49 @@ class Mission(Base):
         """
         self.invalidate_trajectory()
         self.drone_profile_id = drone_profile_id
+
+    def mark_computing(self):
+        """set computation status to COMPUTING with timestamp."""
+        self.computation_status = ComputationStatus.COMPUTING
+        self.computation_error = None
+        self.computation_started_at = datetime.now(timezone.utc)
+
+    def mark_computation_completed(self):
+        """set computation status to COMPLETED after successful generation."""
+        self.computation_status = ComputationStatus.COMPLETED
+        self.computation_error = None
+        self.computation_started_at = None
+
+    def mark_computation_failed(self, error: str):
+        """set computation status to FAILED with error message."""
+        self.computation_status = ComputationStatus.FAILED
+        self.computation_error = error
+        self.computation_started_at = None
+
+    def resolve_staleness(self, timeout_minutes: int = 5) -> bool:
+        """check if a COMPUTING state is stale and mark as failed if so.
+
+        returns true if status was stale and changed to FAILED.
+        """
+        if self.computation_status != ComputationStatus.COMPUTING:
+            return False
+        if self.computation_started_at is None:
+            return False
+
+        started = self.computation_started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+        if elapsed > timeout_minutes * 60:
+            self.mark_computation_failed("computation timed out")
+            return True
+        return False
+
+    def reset_computation_status(self):
+        """reset computation status to IDLE."""
+        self.computation_status = ComputationStatus.IDLE
+        self.computation_error = None
+        self.computation_started_at = None
 
     def validate_transit_altitude(self, drone: "DroneProfile | None" = None):
         """enforce transit altitude business rules.

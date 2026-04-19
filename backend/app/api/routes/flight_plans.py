@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,8 +13,11 @@ from app.schemas.flight_plan import (
     TransitWaypointInsertRequest,
     WaypointBatchUpdateRequest,
 )
+from app.schemas.mission import ComputationStatusResponse
 from app.services import flight_plan_service
 from app.services.trajectory.orchestrator import generate_trajectory
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/missions", tags=["flight-plans"])
 
@@ -42,9 +46,18 @@ def generate(
             detail="Takeoff/landing coordinates must be set.",
         )
 
+    # mark computing before the heavy work
+    mission.mark_computing()
+    db.commit()
+
     try:
         flight_plan, _warnings = generate_trajectory(db, mission_id)
     except TrajectoryGenerationError as error:
+        db.rollback()
+        db.refresh(mission)
+        mission.mark_computation_failed(error.message)
+        db.commit()
+
         detail = (
             {"error": error.message, "violations": error.violations}
             if error.violations is not None
@@ -53,7 +66,27 @@ def generate(
 
         raise HTTPException(status_code=error.status_code, detail=detail)
     except DomainError as error:
+        db.rollback()
+        db.refresh(mission)
+        mission.mark_computation_failed(error.message)
+        db.commit()
+
         raise HTTPException(status_code=error.status_code, detail=error.message)
+    except Exception as exc:
+        logger.exception("unexpected error in generate", exc_info=exc)
+        db.rollback()
+        db.refresh(mission)
+        mission.mark_computation_failed("unexpected error during trajectory computation")
+        db.commit()
+        raise HTTPException(
+            status_code=500,
+            detail="unexpected error during trajectory computation",
+        )
+
+    # mark completed
+    db.refresh(mission)
+    mission.mark_computation_completed()
+    db.commit()
 
     # reload with eager-loaded waypoints
     try:
@@ -63,6 +96,31 @@ def generate(
 
     db.refresh(mission)
     return GenerateTrajectoryResponse(flight_plan=fp, mission_status=mission.status)
+
+
+@router.get(
+    "/{mission_id}/computation-status",
+    response_model=ComputationStatusResponse,
+)
+def get_computation_status(
+    mission_id: UUID,
+    current_user: OperatorUser,
+    db: Session = Depends(get_db),
+):
+    """lightweight polling endpoint for trajectory computation status."""
+    try:
+        mission = check_mission_access(db, current_user, mission_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    if mission.resolve_staleness():
+        db.commit()
+
+    return ComputationStatusResponse(
+        computation_status=mission.computation_status,
+        computation_error=mission.computation_error,
+        computation_started_at=mission.computation_started_at,
+    )
 
 
 @router.get("/{mission_id}/flight-plan", response_model=FlightPlanResponse)

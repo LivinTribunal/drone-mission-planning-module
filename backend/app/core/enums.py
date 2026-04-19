@@ -136,3 +136,12 @@ class AuditAction(str, enum.Enum):
     DEACTIVATE_USER = "DEACTIVATE_USER"
     ASSIGN_AIRPORT = "ASSIGN_AIRPORT"
     SYSTEM_SETTING_CHANGE = "SYSTEM_SETTING_CHANGE"
+
+
+class ComputationStatus(str, enum.Enum):
+    """trajectory computation lifecycle status."""
+
+    IDLE = "IDLE"
+    COMPUTING = "COMPUTING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"

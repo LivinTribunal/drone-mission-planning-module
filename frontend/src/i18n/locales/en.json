@@ -1423,5 +1423,11 @@
   },
   "languages": {
     "en": "English"
+  },
+  "computation": {
+    "computing": "Computing trajectory...",
+    "computingNamed": "Computing trajectory for {{name}}...",
+    "success": "Trajectory computed successfully",
+    "failed": "Trajectory computation failed"
   }
 }

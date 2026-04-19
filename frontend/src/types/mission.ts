@@ -1,5 +1,5 @@
 import type { PointZ } from "./common";
-import type { CaptureMode, FlightPlanScope, InspectionMethod, MissionStatus } from "./enums";
+import type { CaptureMode, ComputationStatus, FlightPlanScope, InspectionMethod, MissionStatus } from "./enums";
 
 export interface MissionResponse {
   id: string;
@@ -22,6 +22,9 @@ export interface MissionResponse {
   require_perpendicular_runway_crossing: boolean;
   flight_plan_scope: FlightPlanScope;
   has_unsaved_map_changes: boolean;
+  computation_status: ComputationStatus;
+  computation_error: string | null;
+  computation_started_at: string | null;
   inspection_count: number;
   estimated_duration: number | null;
 }
@@ -136,4 +139,10 @@ export interface InspectionUpdate {
 
 export interface ReorderRequest {
   inspection_ids: string[];
+}
+
+export interface ComputationStatusResponse {
+  computation_status: ComputationStatus;
+  computation_error: string | null;
+  computation_started_at: string | null;
 }
