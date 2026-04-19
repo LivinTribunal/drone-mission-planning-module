@@ -27,10 +27,11 @@ def test_mark_computing(db_session, cs_airport_id):
 
     mission.mark_computing()
     db_session.flush()
+    db_session.expire(mission)
 
     assert mission.computation_status == ComputationStatus.COMPUTING
     assert mission.computation_error is None
-    assert mission.computation_started_at is not None
+    assert isinstance(mission.computation_started_at, datetime)
 
     db_session.rollback()
 
