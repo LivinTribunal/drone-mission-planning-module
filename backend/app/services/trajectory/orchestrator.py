@@ -403,17 +403,18 @@ def _generate_trajectory_inner(
             lha_positions = get_lha_positions_from_surfaces(data.surfaces, lha_ids)
 
         if not lha_positions:
-            if inspection.method == InspectionMethod.HOVER_POINT_LOCK:
-                # let the prepare function raise a specific error
-                center = Point3D(0, 0, 0)
-            else:
-                warnings.append(
-                    (
-                        f"{template.name} #{inspection.sequence_order}: no LHA positions",
-                        [],
-                    )
+            warnings.append(
+                (
+                    f"{template.name} #{inspection.sequence_order}: "
+                    + (
+                        "HOVER_POINT_LOCK requires a selected LHA"
+                        if inspection.method == InspectionMethod.HOVER_POINT_LOCK
+                        else "no LHA positions"
+                    ),
+                    [],
                 )
-                continue
+            )
+            continue
         else:
             center = Point3D.center(lha_positions)
 

@@ -63,6 +63,8 @@ export function AirportProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (selectedAirport) {
       localStorage.setItem(AIRPORT_KEY, JSON.stringify(selectedAirport));
+    } else {
+      localStorage.removeItem(AIRPORT_KEY);
     }
   }, [selectedAirport]);
 

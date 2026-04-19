@@ -23,6 +23,15 @@ export default function CoordinatorLayout() {
   useEffect(() => {
     if (!mountedRef.current) return;
     const onAirportsSection = location.pathname.startsWith("/coordinator-center/airports");
+    const onInspectionDetail = /^\/coordinator-center\/inspections\/[^/]+/.test(
+      location.pathname,
+    );
+
+    if (onInspectionDetail) {
+      navigate("/coordinator-center/inspections");
+      return;
+    }
+
     if (!onAirportsSection) return;
 
     if (selectedAirport && location.pathname === "/coordinator-center/airports") {

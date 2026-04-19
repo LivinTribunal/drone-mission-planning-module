@@ -6,12 +6,16 @@ import type {
 } from "@/types/inspectionTemplate";
 import client from "./client";
 
-export async function listInspectionTemplates(params?: {
-  limit?: number;
-  offset?: number;
-  airport_id?: string;
-}): Promise<{ data: InspectionTemplateResponse[]; meta: ListMeta }> {
-  const res = await client.get("/inspection-templates", { params });
+export async function listInspectionTemplates(
+  params?: {
+    limit?: number;
+    offset?: number;
+    airport_id?: string;
+  },
+  signal?: AbortSignal,
+): Promise<{ data: InspectionTemplateResponse[]; meta: ListMeta }> {
+  /**fetch inspection templates with optional abort signal.*/
+  const res = await client.get("/inspection-templates", { params, signal });
   return res.data;
 }
 
