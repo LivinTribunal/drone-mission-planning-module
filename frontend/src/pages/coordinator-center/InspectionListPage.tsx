@@ -83,43 +83,45 @@ export default function InspectionListPage() {
     [allAgls],
   );
 
-  const fetchTemplates = useCallback(async () => {
+  // clear stale templates when airport changes
+  const prevAirportIdRef = useRef<string | undefined>(airportDetail?.id);
+  useEffect(() => {
+    const prevId = prevAirportIdRef.current;
+    const newId = airportDetail?.id;
+    prevAirportIdRef.current = newId;
+    if (prevId && prevId !== newId) {
+      setTemplates([]);
+      setPage(0);
+      setSearch("");
+      setMethodFilter(new Set());
+      setAglFilter("");
+    }
+  }, [airportDetail?.id]);
+
+  const fetchTemplates = useCallback(async (signal?: AbortSignal) => {
     /**fetch templates for the selected airport.*/
     setLoading(true);
     setError(null);
     try {
       const res = await listInspectionTemplates(
         airportDetail ? { airport_id: airportDetail.id } : undefined,
+        signal,
       );
-      setTemplates(res.data);
+      if (!signal?.aborted) setTemplates(res.data);
     } catch (err) {
+      if (signal?.aborted) return;
       setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [airportDetail, t]);
 
   useEffect(() => {
-    let cancelled = false;
-    if (airportDetail) {
-      setLoading(true);
-      setError(null);
-      listInspectionTemplates({ airport_id: airportDetail.id })
-        .then((res) => {
-          if (!cancelled) setTemplates(res.data);
-        })
-        .catch((err) => {
-          if (!cancelled)
-            setError(err instanceof Error ? err.message : t("coordinator.inspections.loadError"));
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [airportDetail, t]);
+    if (!airportDetail) return;
+    const controller = new AbortController();
+    fetchTemplates(controller.signal);
+    return () => controller.abort();
+  }, [fetchTemplates, airportDetail]);
 
   // filtered templates
   const filtered = useMemo(() => {
@@ -280,7 +282,7 @@ export default function InspectionListPage() {
         ) : error ? (
           <div className="px-6 py-16 text-center text-sm text-tv-error">
             {error}
-            <button onClick={fetchTemplates} className="ml-2 underline hover:no-underline">
+            <button onClick={() => fetchTemplates()} className="ml-2 underline hover:no-underline">
               {t("common.retry")}
             </button>
           </div>

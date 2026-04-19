@@ -79,6 +79,54 @@ describe("CoordinatorLayout", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/coordinator-center/airports/apt-1");
   });
 
+  it("navigates to new airport detail when airport changes on airports detail page", () => {
+    /** verify switching airport on detail page navigates to new airport detail. */
+    mockSelectedAirport = { id: "apt-1", name: "Bratislava" };
+
+    const { rerender } = render(
+      <MemoryRouter initialEntries={["/coordinator-center/airports/apt-1"]}>
+        <CoordinatorLayout />
+      </MemoryRouter>,
+    );
+
+    mockNavigate.mockClear();
+    mockSelectedAirport = { id: "apt-2", name: "Kosice" };
+
+    act(() => {
+      rerender(
+        <MemoryRouter initialEntries={["/coordinator-center/airports/apt-1"]}>
+          <CoordinatorLayout />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith("/coordinator-center/airports/apt-2");
+  });
+
+  it("redirects inspection detail to list when airport changes", () => {
+    /** verify airport change on inspection detail redirects to inspection list. */
+    mockSelectedAirport = { id: "apt-1", name: "Bratislava" };
+
+    const { rerender } = render(
+      <MemoryRouter initialEntries={["/coordinator-center/inspections/tpl-1"]}>
+        <CoordinatorLayout />
+      </MemoryRouter>,
+    );
+
+    mockNavigate.mockClear();
+    mockSelectedAirport = { id: "apt-2", name: "Kosice" };
+
+    act(() => {
+      rerender(
+        <MemoryRouter initialEntries={["/coordinator-center/inspections/tpl-1"]}>
+          <CoordinatorLayout />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith("/coordinator-center/inspections");
+  });
+
   it("does not navigate away from drones page on airport change", () => {
     /** verify drones page is unaffected by airport changes. */
     mockSelectedAirport = { id: "apt-1", name: "Bratislava" };

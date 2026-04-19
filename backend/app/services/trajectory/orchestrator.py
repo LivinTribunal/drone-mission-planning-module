@@ -207,10 +207,10 @@ def _format_soft_warnings(
     warnings: list[tuple[str, list[str]]],
     wp_offset: int = 0,
 ) -> None:
-    """group soft violations by message and append formatted warnings.
+    """group soft violations by message and append formatted warning tuples.
 
     wp_offset is added to each waypoint_index to convert pass-local indices
-    to global all_waypoints indices for later UUID resolution.
+    to global all_waypoints indices for later uuid resolution.
     """
     groups: dict[str, list[int]] = {}
     for v in violations:
@@ -291,8 +291,8 @@ def _generate_trajectory_inner(
         db.delete(existing_fp)
         db.flush()
 
-    # auto-regress VALIDATED so regeneration works without manual step
-    if mission.status == MissionStatus.VALIDATED:
+    # auto-regress VALIDATED/EXPORTED so regeneration works without manual step
+    if mission.status in (MissionStatus.VALIDATED, MissionStatus.EXPORTED):
         mission.invalidate_trajectory()
 
     # only DRAFT or PLANNED can generate - terminal states are blocked

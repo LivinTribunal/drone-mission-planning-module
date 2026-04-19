@@ -884,6 +884,7 @@
       "icaoConflict": "An airport with this ICAO code already exists",
       "importRadius": "Import Radius (km)",
       "importRadiusHint": "Only obstacles and airspaces within this radius are imported",
+      "importRadiusInvalid": "Radius must be between 0.5 and 50 km",
       "lookup": {
         "button": "Lookup",
         "looking": "Looking up...",

@@ -137,12 +137,17 @@ export default function CreateAirportDialog({
       return;
     }
 
+    const radius = parseFloat(importRadius);
+    if (!isNaN(radius) && (radius < 0.5 || radius > 50)) {
+      setErrors({ importRadius: t("coordinator.createAirport.importRadiusInvalid") });
+      return;
+    }
+
     setLooking(true);
     setLookupError(null);
     setLookupEmpty(false);
     setSuggestions(null);
     try {
-      const radius = parseFloat(importRadius);
       const result = await lookupAirport(
         icaoCode,
         !isNaN(radius) && radius > 0 ? radius : undefined,
@@ -386,6 +391,9 @@ export default function CreateAirportDialog({
             <p className="text-[10px] text-tv-text-muted mt-0.5">
               {t("coordinator.createAirport.importRadiusHint")}
             </p>
+            {errors.importRadius && (
+              <p className="text-xs text-tv-error mt-0.5" data-testid="radius-error">{errors.importRadius}</p>
+            )}
           </div>
           {errors.icaoCode && (
             <p className="text-xs text-tv-error -mt-2" data-testid="icao-error">{errors.icaoCode}</p>
