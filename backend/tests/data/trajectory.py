@@ -40,7 +40,7 @@ DEFAULT_TAKEOFF = {"type": "Point", "coordinates": [14.26, 50.105, 300]}
 DEFAULT_LANDING = {"type": "Point", "coordinates": [14.26, 50.105, 300]}
 
 
-DESIGNATOR_MAP = {1: "A", 2: "B", 3: "C", 4: "D"}
+DESIGNATOR_MAP = {1: "D", 2: "C", 3: "B", 4: "A"}
 
 
 def make_lha_payload(i: int) -> dict:

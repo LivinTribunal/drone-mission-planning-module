@@ -8,9 +8,8 @@ Create Date: 2026-04-19 12:00:00.000000
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision: str = "aaecedb1675e"
 down_revision: Union[str, None] = ("8e1cc0628ef4", "b1c2d3e4f5a6")
@@ -78,12 +77,14 @@ def downgrade() -> None:
             f"AND agl.agl_type = 'PAPI' AND lha.unit_designator = '{letter}'"
         )
 
-    # non-papi lhas: cast string back to integer
+    # non-papi lhas: cast string back to integer only when designator is numeric
     op.execute(
         "UPDATE lha SET unit_number = CAST(unit_designator AS INTEGER) "
-        "FROM agl WHERE lha.agl_id = agl.id AND agl.agl_type != 'PAPI'"
+        "FROM agl WHERE lha.agl_id = agl.id AND agl.agl_type != 'PAPI' "
+        "AND lha.unit_designator ~ '^[0-9]+$'"
     )
 
+    # fallback for any remaining nulls (non-numeric designators or unmatched rows)
     op.execute("UPDATE lha SET unit_number = 1 WHERE unit_number IS NULL")
 
     op.alter_column("lha", "unit_number", nullable=False)
