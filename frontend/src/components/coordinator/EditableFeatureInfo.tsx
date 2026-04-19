@@ -526,15 +526,28 @@ export default function EditableFeatureInfo({
               <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
                 {t("coordinator.detail.lhaUnitDesignator")}
               </label>
-              <select
-                value={val("unit_designator")}
-                onChange={(e) => handleChange("unit_designator", e.target.value)}
-                className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
-              >
-                {["A", "B", "C", "D"].map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
+              {(() => {
+                const parentAgl = surfaces?.flatMap(s => s.agls).find(a => a.id === formData.agl_id);
+                const isPapi = parentAgl?.agl_type === "PAPI";
+                return isPapi ? (
+                  <select
+                    value={val("unit_designator")}
+                    onChange={(e) => handleChange("unit_designator", e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                  >
+                    {["A", "B", "C", "D"].map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    id="feat-unit-designator"
+                    label=""
+                    value={val("unit_designator")}
+                    onChange={(e) => handleChange("unit_designator", e.target.value)}
+                  />
+                );
+              })()}
             </div>
             <Input
               id="feat-angle"

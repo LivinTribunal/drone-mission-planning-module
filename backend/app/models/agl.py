@@ -74,7 +74,7 @@ class LHA(Base):
 
     id = Column(UUID, primary_key=True, default=uuid4)
     agl_id = Column(UUID, ForeignKey("agl.id", ondelete="CASCADE"), nullable=False)
-    unit_designator = Column(String(1), nullable=False)
+    unit_designator = Column(String(4), nullable=False)
     # nullable: PAPI bulk generation leaves this blank for coordinator fill-in per lha
     setting_angle = Column(Float, nullable=True)
     transition_sector_width = Column(Float)
@@ -94,7 +94,7 @@ class LHA(Base):
             name="ck_lha_lamp_type",
         ),
         CheckConstraint(
-            "unit_designator IN ('A', 'B', 'C', 'D')",
+            "length(unit_designator) > 0",
             name="ck_lha_unit_designator",
         ),
     )

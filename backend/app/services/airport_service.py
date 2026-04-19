@@ -898,18 +898,23 @@ def bulk_generate_lhas(
     if total_distance <= 0:
         raise DomainError("first and last positions must differ", status_code=422)
 
-    # assign designators from available letters
+    # assign designators
     existing = db.query(LHA).filter(LHA.agl_id == agl_id).all()
     existing_count = len(existing)
-    used_designators = {lha.unit_designator for lha in existing}
-    all_designators = ["A", "B", "C", "D"]
-    available_designators = [d for d in all_designators if d not in used_designators]
+    is_papi = agl.agl_type == "PAPI"
 
-    if not available_designators:
-        raise DomainError(
-            "all 4 designator slots (A-D) are occupied for this agl",
-            status_code=422,
-        )
+    if is_papi:
+        used_designators = {lha.unit_designator for lha in existing}
+        all_designators = ["A", "B", "C", "D"]
+        available_designators = [d for d in all_designators if d not in used_designators]
+        if not available_designators:
+            raise DomainError(
+                "all 4 designator slots (A-D) are occupied for this agl",
+                status_code=422,
+            )
+    else:
+        next_num = max((int(lha.unit_designator) for lha in existing), default=0) + 1
+        available_designators = [str(i) for i in range(next_num, next_num + 200)]
 
     # number of LHAs, bounded to avoid runaway generation, enforcing cumulative cap
     count = max(2, int(round(total_distance / schema.spacing_m)) + 1)

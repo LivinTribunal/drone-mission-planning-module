@@ -36,14 +36,14 @@ def test_bulk_generate_edge_lights_lhas(client):
     for lha in generated:
         assert lha["setting_angle"] == 0.0
         assert lha["lamp_type"] == "HALOGEN"
-    # designators are assigned from available letters
-    for lha in generated:
-        assert lha["unit_designator"] in ("A", "B", "C", "D")
+    # edge lights get numeric designators
+    for i, lha in enumerate(generated, start=1):
+        assert lha["unit_designator"] == str(i)
 
 
-def test_bulk_generate_caps_at_available_designators(client):
-    """bulk-generate is capped at 4 (available designator slots A-D)."""
-    apt_id, surface_id, agl_id = _setup(client, "LZBM")
+def test_bulk_generate_papi_caps_at_available_designators(client):
+    """papi bulk-generate is capped at 4 (available designator slots A-D)."""
+    apt_id, surface_id, agl_id = _setup(client, "LZBM", agl_type="PAPI")
 
     body = {
         "first_position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
@@ -56,7 +56,6 @@ def test_bulk_generate_caps_at_available_designators(client):
     )
     assert r.status_code == 201
     generated = r.json()["generated"]
-    # capped by 4 available designators even though distance would produce more
     assert len(generated) == 4
     designators = {lha["unit_designator"] for lha in generated}
     assert designators == {"A", "B", "C", "D"}
@@ -118,11 +117,11 @@ def test_bulk_generate_edge_lights_setting_angle_is_zero_not_null(client):
         assert lha["setting_angle"] == 0.0
 
 
-def test_bulk_generate_caps_at_designators_not_200(client):
-    """designator limit (4) is tighter than the 200 cap."""
+def test_bulk_generate_edge_lights_caps_at_200(client):
+    """edge lights cap at 200 lhas per agl."""
     apt_id, surface_id, agl_id = _setup(client, "LZCP")
 
-    # ~2200m at 1m spacing - would exceed 200 cap, but designators cap at 4
+    # ~2200m at 1m spacing - would exceed 200 cap
     body = {
         "first_position": {"type": "Point", "coordinates": [14.2700, 50.1000, 380.0]},
         "last_position": {"type": "Point", "coordinates": [14.3000, 50.1000, 380.0]},
@@ -134,12 +133,12 @@ def test_bulk_generate_caps_at_designators_not_200(client):
     )
     assert r.status_code == 201
     generated = r.json()["generated"]
-    assert len(generated) == 4
+    assert len(generated) == 200
 
 
 def test_bulk_generate_rejects_when_all_designators_occupied(client):
-    """bulk-generate rejects when all 4 designator slots are occupied."""
-    apt_id, surface_id, agl_id = _setup(client, "LZDO")
+    """bulk-generate rejects when all 4 papi designator slots are occupied."""
+    apt_id, surface_id, agl_id = _setup(client, "LZDO", agl_type="PAPI")
 
     # create 4 individual LHAs to occupy all designator slots
     for designator in ("A", "B", "C", "D"):
@@ -166,8 +165,8 @@ def test_bulk_generate_rejects_when_all_designators_occupied(client):
 
 
 def test_bulk_generate_cumulative_cap_across_calls(client):
-    """second call rejected after first call exhausts all designators."""
-    apt_id, surface_id, agl_id = _setup(client, "LZCC")
+    """second call rejected after first call exhausts all papi designators."""
+    apt_id, surface_id, agl_id = _setup(client, "LZCC", agl_type="PAPI")
 
     # first call uses all 4 designators
     first_body = {

@@ -60,9 +60,9 @@ def test_delete_edge_lights_agl(client):
     base = f"/api/v1/airports/{apt['id']}/surfaces/{surface['id']}/agls/{agl['id']}/lhas"
 
     lhas = []
-    for i in range(3):
+    for i in range(1, 4):
         r = client.post(
-            base, json={**LHA_PAYLOAD, "unit_designator": DESIGNATORS[i], "setting_angle": 0.0}
+            base, json={**LHA_PAYLOAD, "unit_designator": str(i), "setting_angle": 0.0}
         )
         lhas.append(r.json())
 
@@ -73,7 +73,7 @@ def test_delete_edge_lights_agl(client):
     remaining = client.get(base).json()["data"]
     assert len(remaining) == 2
     designators = sorted(lha["unit_designator"] for lha in remaining)
-    assert designators == ["A", "C"]
+    assert designators == ["1", "3"]
     for lha in remaining:
         assert lha["setting_angle"] == 0.0
 

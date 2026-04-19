@@ -170,14 +170,18 @@ export default function CreationForm({
     return agls;
   }, [surfaces]);
 
-  // next available designator letter based on selected agl
+  // next available designator based on selected agl
+  const selectedAgl = useMemo(() => allAgls.find((a) => a.id === lhaAglId), [lhaAglId, allAgls]);
+  const isPapiAgl = selectedAgl?.agl_type === "PAPI";
   const nextDesignator = useMemo(() => {
-    if (!lhaAglId) return "A";
-    const agl = allAgls.find((a) => a.id === lhaAglId);
-    if (!agl) return "A";
-    const used = new Set(agl.lhas.map((l) => l.unit_designator));
-    return ["A", "B", "C", "D"].find((d) => !used.has(d)) ?? "A";
-  }, [lhaAglId, allAgls]);
+    if (!selectedAgl) return "A";
+    if (isPapiAgl) {
+      const used = new Set(selectedAgl.lhas.map((l) => l.unit_designator));
+      return ["A", "B", "C", "D"].find((d) => !used.has(d)) ?? "A";
+    }
+    const nums = selectedAgl.lhas.map((l) => parseInt(l.unit_designator, 10)).filter((n) => !isNaN(n));
+    return String(nums.length > 0 ? Math.max(...nums) + 1 : 1);
+  }, [selectedAgl, isPapiAgl]);
 
   // manual coordinate entry for AGL/LHA - altitude is always airport elevation (set by handleCreate on page)
   const [manualLat, setManualLat] = useState(pointPosition ? String(pointPosition[1]) : "");
