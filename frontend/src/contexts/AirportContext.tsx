@@ -32,6 +32,7 @@ export function AirportProvider({ children }: { children: ReactNode }) {
   const [airportDetailLoading, setAirportDetailLoading] = useState(false);
   const [airportDetailError, setAirportDetailError] = useState(false);
   const fetchCounterRef = useRef(0);
+  const hasHydrated = useRef(false);
 
   const fetchDetail = useCallback((airportId: string) => {
     const requestId = ++fetchCounterRef.current;
@@ -61,6 +62,7 @@ export function AirportProvider({ children }: { children: ReactNode }) {
 
   // persist selected airport to localStorage
   useEffect(() => {
+    if (!hasHydrated.current) return;
     if (selectedAirport) {
       localStorage.setItem(AIRPORT_KEY, JSON.stringify(selectedAirport));
     } else {
@@ -93,6 +95,7 @@ export function AirportProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(AIRPORT_KEY);
       }
     }
+    hasHydrated.current = true;
   }, [fetchDetail]);
 
   const selectAirport = useCallback(

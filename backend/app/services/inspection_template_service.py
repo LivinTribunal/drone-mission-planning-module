@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
@@ -60,7 +60,18 @@ def list_templates(db: Session, airport_id: UUID | None = None) -> list[Inspecti
     )
 
     if airport_id:
-        query = query.filter(InspectionTemplate.targets.any(AGL.surface.has(airport_id=airport_id)))
+        # include agl-targeted templates for this airport, plus global
+        # hover_point_lock templates (which have no agl targets)
+        query = query.filter(
+            or_(
+                InspectionTemplate.targets.any(AGL.surface.has(airport_id=airport_id)),
+                InspectionTemplate.id.in_(
+                    select(insp_template_methods.c.template_id).where(
+                        insp_template_methods.c.method == InspectionMethod.HOVER_POINT_LOCK.value
+                    )
+                ),
+            )
+        )
 
     templates = query.all()
 
