@@ -50,9 +50,11 @@ export default function SuperAdminAuditLogPage() {
   const [pageSize, setPageSize] = useState(20);
   const [sortKey, setSortKey] = useState<SortKey>("timestamp");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [error, setError] = useState<string | null>(null);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await listAuditLogs({
         search: search || undefined,
@@ -60,17 +62,19 @@ export default function SuperAdminAuditLogPage() {
         entity_type: entityTypeFilter || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
+        sort_by: sortKey,
+        sort_dir: sortDir,
         limit: pageSize,
         offset: page * pageSize,
       });
       setEntries(res.data);
       setTotal(res.meta.total);
     } catch {
-      /* ignore */
+      setError("Failed to load audit logs");
     } finally {
       setLoading(false);
     }
-  }, [search, actionFilter, entityTypeFilter, dateFrom, dateTo, page, pageSize]);
+  }, [search, actionFilter, entityTypeFilter, dateFrom, dateTo, sortKey, sortDir, page, pageSize]);
 
   useEffect(() => {
     fetchLogs();
@@ -83,16 +87,8 @@ export default function SuperAdminAuditLogPage() {
       setSortKey(key);
       setSortDir("asc");
     }
+    setPage(0);
   }
-
-  const sorted = [...entries].sort((a, b) => {
-    const dir = sortDir === "asc" ? 1 : -1;
-    const av = a[sortKey];
-    const bv = b[sortKey];
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    return dir * String(av).localeCompare(String(bv));
-  });
 
   async function handleExport() {
     try {
@@ -107,7 +103,7 @@ export default function SuperAdminAuditLogPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      /* ignore */
+      setError("Failed to export audit log");
     }
   }
 
@@ -197,6 +193,10 @@ export default function SuperAdminAuditLogPage() {
           </div>
         </SearchBar>
 
+        {error && (
+          <p className="text-center text-[var(--tv-error)] py-4">{error}</p>
+        )}
+
         {loading ? (
           <p className="text-center text-tv-text-muted py-8">{t("common.loading")}</p>
         ) : entries.length === 0 ? (
@@ -227,7 +227,7 @@ export default function SuperAdminAuditLogPage() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((entry) => (
+                {entries.map((entry) => (
                   <tr
                     key={entry.id}
                     className="border-b border-tv-border hover:bg-tv-surface-hover transition-colors"

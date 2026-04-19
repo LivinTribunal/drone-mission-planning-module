@@ -92,14 +92,17 @@ async def maintenance_mode_middleware(request: Request, call_next):
     # check env var first, then fall back to system_settings table
     maintenance_on = os.environ.get("MAINTENANCE_MODE", "").lower() == "true"
     if not maintenance_on:
+        db = None
         try:
             db = SessionLocal()
             from app.services.admin_service import is_maintenance_mode
 
             maintenance_on = is_maintenance_mode(db)
-            db.close()
         except Exception:
             pass
+        finally:
+            if db:
+                db.close()
 
     if maintenance_on:
         # allow auth endpoints and health check through

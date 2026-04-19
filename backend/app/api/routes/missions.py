@@ -179,6 +179,7 @@ def export_mission(
 ):
     """generate export files and transition VALIDATED -> EXPORTED."""
     check_mission_access(db, current_user, mission_id)
+    files, safe_name = export_service.export_mission(db, mission_id, body.formats)
     log_audit(
         db,
         current_user,
@@ -189,7 +190,6 @@ def export_mission(
         ip_address=request.client.host if request.client else None,
     )
     db.commit()
-    files, safe_name = export_service.export_mission(db, mission_id, body.formats)
 
     # single file - return directly
     if len(files) == 1:

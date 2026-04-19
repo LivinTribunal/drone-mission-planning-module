@@ -433,6 +433,38 @@ class TestAuditLog:
         )
         assert resp.status_code == 403
 
+    def test_system_settings_audit_redacts_token(self, seeded_admin_client):
+        """cesium_ion_token is redacted in audit log details."""
+        token = _get_admin_token(seeded_admin_client)
+        seeded_admin_client.put(
+            "/api/v1/admin/system-settings",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"cesium_ion_token": "secret-token-value"},
+        )
+        resp = seeded_admin_client.get(
+            "/api/v1/admin/audit-log?action=SYSTEM_SETTING_CHANGE",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+        entries = resp.json()["data"]
+        assert len(entries) >= 1
+        details = entries[0]["details"]
+        assert details.get("cesium_ion_token") == "***"
+        assert "secret-token-value" not in str(details)
+
+    def test_audit_log_server_side_sort(self, seeded_admin_client):
+        """audit log supports server-side sorting."""
+        token = _get_admin_token(seeded_admin_client)
+        resp = seeded_admin_client.get(
+            "/api/v1/admin/audit-log?sort_by=action&sort_dir=asc",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        if len(data) >= 2:
+            actions = [e["action"] for e in data]
+            assert actions == sorted(actions)
+
 
 class TestAdminAirports:
     """test admin airport overview endpoints."""
@@ -446,3 +478,48 @@ class TestAdminAirports:
         )
         assert resp.status_code == 200
         assert "data" in resp.json()
+
+    def test_drone_count_is_per_airport(self, seeded_admin_client, admin_session_factory):
+        """drone_count reflects distinct drones used at each airport, not global total."""
+        from app.models.mission import DroneProfile, Mission
+
+        db = admin_session_factory()
+        try:
+            airport_a = Airport(
+                icao_code="AAAA",
+                name="Airport A",
+                elevation=50.0,
+                location="SRID=4326;POINTZ(10.0 40.0 50)",
+            )
+            airport_b = Airport(
+                icao_code="BBBB",
+                name="Airport B",
+                elevation=60.0,
+                location="SRID=4326;POINTZ(11.0 41.0 60)",
+            )
+            drone1 = DroneProfile(name="Drone 1")
+            drone2 = DroneProfile(name="Drone 2")
+            db.add_all([airport_a, airport_b, drone1, drone2])
+            db.flush()
+
+            # airport A gets two missions with different drones
+            db.add(Mission(name="M1", airport_id=airport_a.id, drone_profile_id=drone1.id))
+            db.add(Mission(name="M2", airport_id=airport_a.id, drone_profile_id=drone2.id))
+            # airport B gets one mission with one drone
+            db.add(Mission(name="M3", airport_id=airport_b.id, drone_profile_id=drone1.id))
+            db.commit()
+
+            aid_a = str(airport_a.id)
+            aid_b = str(airport_b.id)
+        finally:
+            db.close()
+
+        token = _get_admin_token(seeded_admin_client)
+        resp = seeded_admin_client.get(
+            "/api/v1/admin/airports",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+        airports = {a["icao_code"]: a for a in resp.json()["data"]}
+        assert airports["AAAA"]["drone_count"] == 2
+        assert airports["BBBB"]["drone_count"] == 1

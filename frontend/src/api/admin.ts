@@ -107,6 +107,8 @@ export async function listAuditLogs(params?: {
   entity_type?: string;
   date_from?: string;
   date_to?: string;
+  sort_by?: string;
+  sort_dir?: string;
   limit?: number;
   offset?: number;
 }): Promise<{ data: AuditLogEntry[]; meta: ListMeta }> {

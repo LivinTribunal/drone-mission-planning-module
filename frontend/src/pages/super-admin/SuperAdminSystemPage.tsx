@@ -15,6 +15,7 @@ export default function SuperAdminSystemPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<"success" | "failed" | null>(null);
 
   useEffect(() => {
@@ -23,7 +24,7 @@ export default function SuperAdminSystemPage() {
         const data = await getSystemSettings();
         setSettings(data);
       } catch {
-        /* ignore */
+        setError("Failed to load system settings");
       } finally {
         setLoading(false);
       }
@@ -35,6 +36,7 @@ export default function SuperAdminSystemPage() {
     if (!settings) return;
     setSaving(true);
     setSaved(false);
+    setError(null);
     try {
       const update: SystemSettingsUpdate = {
         maintenance_mode: settings.maintenance_mode,
@@ -46,7 +48,7 @@ export default function SuperAdminSystemPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
-      /* ignore */
+      setError("Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -185,6 +187,10 @@ export default function SuperAdminSystemPage() {
             )}
           </div>
         </section>
+
+        {error && (
+          <p className="text-center text-[var(--tv-error)] py-2">{error}</p>
+        )}
 
         {/* save */}
         <div className="flex justify-end">

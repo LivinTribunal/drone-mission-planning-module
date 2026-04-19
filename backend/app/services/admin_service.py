@@ -201,9 +201,11 @@ def list_airports_admin(
             .scalar()
         )
 
-        from app.models.mission import DroneProfile
-
-        drone_count = db.query(func.count()).select_from(DroneProfile).scalar()
+        drone_count = (
+            db.query(func.count(func.distinct(Mission.drone_profile_id)))
+            .filter(Mission.airport_id == airport.id, Mission.drone_profile_id.isnot(None))
+            .scalar()
+        )
 
         if search:
             pattern = search.lower()

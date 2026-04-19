@@ -9,6 +9,14 @@ from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditLog
 
+SORTABLE_COLUMNS = {
+    "timestamp": AuditLog.timestamp,
+    "user_email": AuditLog.user_email,
+    "action": AuditLog.action,
+    "entity_type": AuditLog.entity_type,
+    "entity_name": AuditLog.entity_name,
+}
+
 
 def list_audit_logs(
     db: Session,
@@ -18,10 +26,12 @@ def list_audit_logs(
     entity_type: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    sort_by: str = "timestamp",
+    sort_dir: str = "desc",
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[AuditLog], int]:
-    """list audit log entries with optional filters."""
+    """list audit log entries with optional filters and server-side sort."""
     query = db.query(AuditLog)
 
     if search:
@@ -43,7 +53,10 @@ def list_audit_logs(
         query = query.filter(AuditLog.timestamp <= date_to)
 
     total = query.count()
-    entries = query.order_by(AuditLog.timestamp.desc()).offset(offset).limit(limit).all()
+
+    col = SORTABLE_COLUMNS.get(sort_by, AuditLog.timestamp)
+    order = col.asc() if sort_dir == "asc" else col.desc()
+    entries = query.order_by(order).offset(offset).limit(limit).all()
     return entries, total
 
 

@@ -294,12 +294,16 @@ def update_system_settings(
         elevation_api_url=body.elevation_api_url,
     )
 
+    safe_details = {
+        k: "***" if k == "cesium_ion_token" else v
+        for k, v in body.model_dump(exclude_none=True).items()
+    }
     log_audit(
         db,
         current_user,
         "SYSTEM_SETTING_CHANGE",
         entity_type="SystemSettings",
-        details=body.model_dump(exclude_none=True),
+        details=safe_details,
         ip_address=request.client.host if request.client else None,
     )
     db.commit()
@@ -320,6 +324,8 @@ def list_audit_logs(
     entity_type: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    sort_by: str = Query(default="timestamp"),
+    sort_dir: str = Query(default="desc"),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
 ):
@@ -332,6 +338,8 @@ def list_audit_logs(
         entity_type=entity_type,
         date_from=date_from,
         date_to=date_to,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         limit=limit,
         offset=offset,
     )
