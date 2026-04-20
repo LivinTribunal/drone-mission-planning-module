@@ -70,7 +70,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
 
   const [state, setState] = useState<ComputationState>(() => {
     const saved = loadSessionState();
-    if (saved?.status === "COMPUTING" && saved.missionId) {
+    if (saved?.status === "COMPUTING" && typeof saved.missionId === "string") {
       return {
         status: "COMPUTING",
         missionId: saved.missionId,
@@ -200,13 +200,13 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
 
   // reconcile restored session state with actual backend status
   useEffect(() => {
-    if (
-      state.status === "COMPUTING" &&
-      !computingRef.current &&
-      state.missionId &&
-      selectedMission?.id === state.missionId &&
-      selectedMission.computation_status !== "COMPUTING"
-    ) {
+    if (state.status !== "COMPUTING" || computingRef.current || !state.missionId) {
+      return;
+    }
+
+    if (selectedMission?.id === state.missionId) {
+      if (selectedMission.computation_status === "COMPUTING") return;
+
       const bs = selectedMission.computation_status;
       if (bs === "COMPLETED") {
         setState((prev) => ({ ...prev, status: "COMPLETED", error: null }));
@@ -225,6 +225,9 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
       } else {
         setState((prev) => ({ ...prev, status: "IDLE", error: null }));
       }
+    } else if (selectedMission !== undefined) {
+      // mission changed or loaded with a different id - stale session state
+      setState((prev) => ({ ...prev, status: "IDLE", missionId: null, error: null }));
     }
   }, [
     state.status,
