@@ -154,6 +154,13 @@ describe("MapStatsPanel", () => {
     generated_at: "2026-01-01T00:00:00Z",
     waypoints: [],
     validation_result: null,
+    min_altitude_agl: null,
+    max_altitude_agl: null,
+    min_altitude_msl: null,
+    max_altitude_msl: null,
+    transit_speed: null,
+    average_speed: null,
+    inspection_stats: [],
   };
 
   it("renders stats panel with flight plan data", () => {

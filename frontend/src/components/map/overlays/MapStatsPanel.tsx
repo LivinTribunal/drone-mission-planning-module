@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Route, Clock, MapPin, Battery, Layers } from "lucide-react";
+import { Route, Clock, MapPin, Battery, Layers, ArrowUpDown, Gauge } from "lucide-react";
 import type { FlightPlanResponse } from "@/types/flightPlan";
+import { getValidationDisplay } from "@/utils/validationDisplay";
 
 interface MapStatsPanelProps {
   flightPlan: FlightPlanResponse;
@@ -40,6 +41,29 @@ export default function MapStatsPanel({
     batteryPct = `${Math.max(0, Math.round(100 - consumption))}%`;
   }
 
+  const altitudeRange =
+    flightPlan.min_altitude_agl != null && flightPlan.max_altitude_agl != null
+      ? `${flightPlan.min_altitude_agl.toFixed(1)} \u2013 ${flightPlan.max_altitude_agl.toFixed(1)} ${t("common.units.m")} AGL`
+      : "\u2014";
+
+  const transitSpeed =
+    flightPlan.transit_speed != null
+      ? `${flightPlan.transit_speed} ${t("common.units.ms")}`
+      : "\u2014";
+
+  const averageSpeed =
+    flightPlan.average_speed != null
+      ? `${flightPlan.average_speed} ${t("common.units.ms")}`
+      : "\u2014";
+
+  const validation = getValidationDisplay(flightPlan.validation_result, {
+    passed: t("map.validationPassed"),
+    notPassed: t("map.validationNotPassed"),
+    notRun: t("map.validationNotRun"),
+    violation: (count) => t("common.violation", { count }),
+    warning: (count) => t("common.warning", { count }),
+  });
+
   const stats = [
     { label: t("map.totalDistance"), value: `${distanceKm} km`, icon: Route },
     { label: t("map.duration"), value: duration, icon: Clock },
@@ -58,6 +82,27 @@ export default function MapStatsPanel({
       value: batteryPct,
       icon: Battery,
     },
+    {
+      label: t("map.altitudeRange"),
+      value: altitudeRange,
+      icon: ArrowUpDown,
+    },
+    {
+      label: t("map.transitSpeed"),
+      value: transitSpeed,
+      icon: Gauge,
+    },
+    {
+      label: t("map.averageSpeed"),
+      value: averageSpeed,
+      icon: Gauge,
+    },
+    {
+      label: t("map.validation"),
+      value: validation.value,
+      icon: validation.icon,
+      colorClass: validation.colorClass,
+    },
   ];
 
   return (
@@ -70,7 +115,7 @@ export default function MapStatsPanel({
         className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-tv-text-primary"
       >
         <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border">
-          {t("map.estimatedStats")}
+          {t("map.statistics")}
         </span>
         <svg
           className={`h-3 w-3 text-tv-text-secondary transition-transform ${collapsed ? "" : "rotate-180"}`}
@@ -89,14 +134,15 @@ export default function MapStatsPanel({
         <div className="border-t border-tv-border px-2 py-2 space-y-1 max-h-48 overflow-y-auto">
           {stats.map((stat) => {
             const Icon = stat.icon;
+            const textColor = stat.colorClass?.split(" ").find((c) => c.startsWith("text-")) ?? "text-tv-text-secondary";
             return (
               <div
                 key={stat.label}
                 className="flex items-center gap-2 px-2 py-1 text-xs"
               >
-                <Icon className="h-3 w-3 text-tv-text-secondary flex-shrink-0" />
+                <Icon className={`h-3 w-3 flex-shrink-0 ${textColor}`} />
                 <span className="text-tv-text-secondary flex-1">{stat.label}</span>
-                <span className="text-tv-text-primary font-medium">
+                <span className={`font-medium ${stat.colorClass ? textColor : "text-tv-text-primary"}`}>
                   {stat.value}
                 </span>
               </div>

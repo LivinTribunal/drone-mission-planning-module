@@ -142,6 +142,18 @@ class ValidationResultResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class InspectionFlightStats(BaseModel):
+    """per-inspection computed flight stats."""
+
+    inspection_id: UUID
+    min_altitude_agl: float
+    max_altitude_agl: float
+    min_altitude_msl: float
+    max_altitude_msl: float
+    waypoint_count: int
+    segment_duration: float | None = None
+
+
 class FlightPlanResponse(BaseModel):
     """flight plan response"""
 
@@ -154,6 +166,15 @@ class FlightPlanResponse(BaseModel):
     generated_at: datetime | None = None
     waypoints: list[WaypointResponse] = []
     validation_result: ValidationResultResponse | None = None
+
+    # flight statistics
+    min_altitude_agl: float | None = None
+    max_altitude_agl: float | None = None
+    min_altitude_msl: float | None = None
+    max_altitude_msl: float | None = None
+    transit_speed: float | None = None
+    average_speed: float | None = None
+    inspection_stats: list[InspectionFlightStats] = []
 
     model_config = {"from_attributes": True}
 

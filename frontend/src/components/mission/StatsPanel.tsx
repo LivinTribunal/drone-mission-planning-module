@@ -6,9 +6,12 @@ import {
   MapPin,
   Battery,
   ChevronDown,
+  ArrowUpDown,
+  Gauge,
 } from "lucide-react";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 import type { DroneProfileResponse } from "@/types/droneProfile";
+import { getValidationDisplay } from "@/utils/validationDisplay";
 
 interface StatsPanelProps {
   flightPlan: FlightPlanResponse | null;
@@ -37,7 +40,7 @@ export default function StatsPanel({
           onClick={() => setCollapsed(!collapsed)}
           className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
         >
-          <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.estimatedStats")}</span>
+          <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.statistics")}</span>
           <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`} />
         </button>
         {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
@@ -68,6 +71,29 @@ export default function StatsPanel({
     batteryPct = `${Math.max(0, Math.round(100 - consumption))}%`;
   }
 
+  const altitudeRange =
+    flightPlan?.min_altitude_agl != null && flightPlan?.max_altitude_agl != null
+      ? `${flightPlan.min_altitude_agl.toFixed(1)} \u2013 ${flightPlan.max_altitude_agl.toFixed(1)} ${t("common.units.m")} AGL`
+      : "\u2014";
+
+  const transitSpeed =
+    flightPlan?.transit_speed != null
+      ? `${flightPlan.transit_speed} ${t("common.units.ms")}`
+      : "\u2014";
+
+  const averageSpeed =
+    flightPlan?.average_speed != null
+      ? `${flightPlan.average_speed} ${t("common.units.ms")}`
+      : "\u2014";
+
+  const validation = getValidationDisplay(flightPlan?.validation_result, {
+    passed: t("mission.config.validationPassed"),
+    notPassed: t("mission.config.validationNotPassed"),
+    notRun: t("mission.config.validationNotRun"),
+    violation: (count) => t("common.violation", { count }),
+    warning: (count) => t("common.warning", { count }),
+  });
+
   const stats = [
     {
       label: t("mission.config.totalDistance"),
@@ -93,6 +119,30 @@ export default function StatsPanel({
       icon: Battery,
       colorClass: "bg-tv-error/20 text-tv-error",
     },
+    {
+      label: t("mission.config.altitudeRange"),
+      value: altitudeRange,
+      icon: ArrowUpDown,
+      colorClass: "bg-tv-info/20 text-tv-info",
+    },
+    {
+      label: t("mission.config.transitSpeed"),
+      value: transitSpeed,
+      icon: Gauge,
+      colorClass: "bg-tv-accent/20 text-tv-accent",
+    },
+    {
+      label: t("mission.config.averageSpeed"),
+      value: averageSpeed,
+      icon: Gauge,
+      colorClass: "bg-tv-info/20 text-tv-info",
+    },
+    {
+      label: t("mission.config.validation"),
+      value: validation.value,
+      icon: validation.icon,
+      colorClass: validation.colorClass,
+    },
   ];
 
   return (
@@ -101,7 +151,7 @@ export default function StatsPanel({
         onClick={() => setCollapsed(!collapsed)}
         className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
       >
-        <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.estimatedStats")}</span>
+        <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.statistics")}</span>
         <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`} />
       </button>
       {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
