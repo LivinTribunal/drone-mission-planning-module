@@ -144,6 +144,85 @@ describe("ComputationContext", () => {
     });
   });
 
+  it("isComputing resets to false after successful computation", async () => {
+    mockGenerateTrajectory.mockResolvedValueOnce({
+      flight_plan: { id: "fp-1" },
+      mission_status: "PLANNED",
+    });
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    act(() => {
+      result.current.startComputation("m-1");
+    });
+
+    expect(result.current.isComputing).toBe(true);
+
+    await waitFor(() => {
+      expect(result.current.isComputing).toBe(false);
+    });
+
+    expect(result.current.status).toBe("COMPLETED");
+  });
+
+  it("isComputing resets to false after failed computation", async () => {
+    mockGenerateTrajectory.mockRejectedValueOnce(new Error("backend error"));
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    act(() => {
+      result.current.startComputation("m-1");
+    });
+
+    expect(result.current.isComputing).toBe(true);
+
+    await waitFor(() => {
+      expect(result.current.isComputing).toBe(false);
+    });
+
+    expect(result.current.status).toBe("FAILED");
+    expect(result.current.error).toBe("backend error");
+  });
+
+  it("loading state clears on abort/cancel error", async () => {
+    const cancelError = new Error("canceled");
+    cancelError.name = "AbortError";
+    mockGenerateTrajectory.mockRejectedValueOnce(cancelError);
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    act(() => {
+      result.current.startComputation("m-1");
+    });
+
+    expect(result.current.isComputing).toBe(true);
+
+    await waitFor(() => {
+      expect(result.current.isComputing).toBe(false);
+    });
+
+    expect(result.current.status).toBe("IDLE");
+    expect(result.current.error).toBeNull();
+  });
+
+  it("loading state clears on axios CanceledError", async () => {
+    const cancelError = Object.assign(new Error("canceled"), { code: "ERR_CANCELED" });
+    mockGenerateTrajectory.mockRejectedValueOnce(cancelError);
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    act(() => {
+      result.current.startComputation("m-1");
+    });
+
+    await waitFor(() => {
+      expect(result.current.isComputing).toBe(false);
+    });
+
+    expect(result.current.status).toBe("IDLE");
+    expect(result.current.error).toBeNull();
+  });
+
   it("dismiss resets to IDLE", async () => {
     mockGenerateTrajectory.mockResolvedValueOnce({
       flight_plan: { id: "fp-1" },
