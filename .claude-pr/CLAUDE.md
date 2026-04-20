@@ -45,7 +45,7 @@ cd frontend && npm run lint
 cd frontend && npm run build
 
 # Database — start PostGIS
-docker compose up -d
+docker compose up -d postgres
 ```
 
 ## Code Style Rules
@@ -96,6 +96,7 @@ drone-mission-planning-module/
 │   │   │   ├── map/        # AirportMap + layers/ + overlays/ + cesium/
 │   │   │   ├── coordinator/ # coordinator-specific panels and dialogs
 │   │   │   ├── drone/      # DroneModelSelector, DroneModelViewer, BulkChangeDroneDialog
+│   │   │   ├── admin/      # super-admin UI (InviteUserDialog, ManageUsersPanel)
 │   │   │   ├── Layout/     # NavBar, MissionTabNav, OperatorLayout, etc.
 │   │   │   └── Auth/       # ProtectedRoute
 │   │   ├── contexts/       # AuthContext, AirportContext, MissionContext, ThemeContext
@@ -103,6 +104,7 @@ drone-mission-planning-module/
 │   │   ├── api/            # Axios client + API functions
 │   │   ├── i18n/           # i18next config + locale JSON files
 │   │   ├── types/          # TypeScript interfaces matching Pydantic schemas
+│   │   ├── auth/           # token store and auth utilities
 │   │   ├── config/         # static config (drone models, surfaces)
 │   │   ├── constants/      # shared constants (AGL, cursors, geo, violations)
 │   │   └── utils/          # shared utility helpers
@@ -217,7 +219,7 @@ Defined in `harness.config.json`:
 | Tier | Patterns | CI Checks |
 |------|----------|-----------|
 | T1 (low) | `docs/**`, `*.md` | lint |
-| T2 (medium) | `backend/app/**`, `frontend/src/**`, tests | lint, test, build, structural-tests |
+| T2 (medium) | `backend/app/**`, `frontend/src/**`, tests | lint, type-check, test, build |
 | T3 (high) | `**/trajectory*`, `**/safety_validator*`, `**/flight_plan*`, `**/migrations/versions/*` | all T2 + manual approval |
 
 ### Protected Files

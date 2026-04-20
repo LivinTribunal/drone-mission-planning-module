@@ -201,9 +201,8 @@ describe("ComputationContext", () => {
       expect(result.current.isComputing).toBe(false);
     });
 
-    // .finally() safety net transitions away from COMPUTING
-    expect(result.current.status).toBe("FAILED");
-    expect(result.current.error).toBe("computation did not complete");
+    expect(result.current.status).toBe("IDLE");
+    expect(result.current.error).toBeNull();
   });
 
   it("loading state clears on axios CanceledError", async () => {
@@ -220,7 +219,8 @@ describe("ComputationContext", () => {
       expect(result.current.isComputing).toBe(false);
     });
 
-    expect(result.current.status).toBe("FAILED");
+    expect(result.current.status).toBe("IDLE");
+    expect(result.current.error).toBeNull();
   });
 
   it("dismiss resets to IDLE", async () => {

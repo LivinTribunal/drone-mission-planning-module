@@ -173,7 +173,10 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
           scheduleDismiss(AUTO_DISMISS_SUCCESS_MS);
         })
         .catch((err) => {
-          if (err?.name === "AbortError" || err?.code === "ERR_CANCELED") return;
+          if (err?.name === "AbortError" || err?.code === "ERR_CANCELED") {
+            setState((prev) => ({ ...prev, status: "IDLE", error: null }));
+            return;
+          }
           let errorMsg = "trajectory computation failed";
           if (err?.response?.data?.detail) {
             const detail = err.response.data.detail;
