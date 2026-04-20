@@ -5,7 +5,7 @@ from typing import Callable
 
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.enums import InspectionMethod
-from app.utils.geo import distance_between
+from app.utils.geo import distance_between, point_at_distance
 
 from ..helpers import (
     _apply_terrain_delta,
@@ -198,9 +198,15 @@ def _prepare_meht_check(
         )
 
     meht_height = dist_from_threshold * math.tan(math.radians(agl_glide_slope))
+
+    # offset from threshold along reciprocal heading (pilot eye position on glide path)
+    approach_bearing = (rwy_heading + 180) % 360
+    lon, lat = point_at_distance(
+        threshold.lon, threshold.lat, approach_bearing, dist_from_threshold
+    )
     meht_point = Point3D(
-        lon=threshold.lon,
-        lat=threshold.lat,
+        lon=lon,
+        lat=lat,
         alt=threshold.alt + meht_height + config.altitude_offset,
     )
 

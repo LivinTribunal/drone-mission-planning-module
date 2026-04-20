@@ -231,22 +231,22 @@ export default function InspectionConfigForm({
     return false;
   }, [configOverride, savedCfg, defaultCfg, droneProfile]);
 
-  // meht height computed from first PAPI AGL's distance + glide slope
-  const computedMehtHeight = useMemo(() => {
-    if (inspection.method !== "MEHT_CHECK") return null;
-    const papiAgl = agls.find((a) => a.agl_type === "PAPI");
-    if (!papiAgl) return null;
-    const dist = papiAgl.distance_from_threshold;
-    if (dist == null) return null;
-    const gs = papiAgl.glide_slope_angle ?? 3.0;
-    return Math.round(computeMehtHeight(dist, gs) * 100) / 100;
-  }, [inspection.method, agls]);
-
   // find target AGLs for this template
   const targetAgls = useMemo(() => {
     if (!template?.target_agl_ids?.length) return agls;
     return agls.filter((a) => template.target_agl_ids.includes(a.id));
   }, [agls, template]);
+
+  // meht height computed from first PAPI AGL's distance + glide slope
+  const computedMehtHeight = useMemo(() => {
+    if (inspection.method !== "MEHT_CHECK") return null;
+    const papiAgl = targetAgls.find((a) => a.agl_type === "PAPI");
+    if (!papiAgl) return null;
+    const dist = papiAgl.distance_from_threshold;
+    if (dist == null) return null;
+    const gs = papiAgl.glide_slope_angle ?? 3.0;
+    return Math.round(computeMehtHeight(dist, gs) * 100) / 100;
+  }, [inspection.method, targetAgls]);
 
   // papi observation angle derived from max setting angle + offset
   const { computedObservationAngle, missingSettingAngleUnits } = useMemo(() => {

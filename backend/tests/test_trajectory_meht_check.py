@@ -1,7 +1,8 @@
 """unit tests for meht-check trajectory generation."""
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -166,3 +167,133 @@ class TestMehtCheckPath:
                 target_lha_position=None,
                 target_agl_type="PAPI",
             )
+
+
+# prepare step
+
+
+@dataclass
+class FakeAgl:
+    """minimal AGL stub for prepare tests."""
+
+    surface_id: object = None
+    distance_from_threshold: float | None = 300.0
+
+    def __post_init__(self):
+        """set default surface_id."""
+        if self.surface_id is None:
+            self.surface_id = uuid4()
+
+
+@dataclass
+class FakeSurface:
+    """minimal surface stub for prepare tests."""
+
+    id: object = None
+    heading: float | None = None
+    threshold_position: object = None
+
+    def __post_init__(self):
+        """set default id."""
+        if self.id is None:
+            self.id = uuid4()
+
+
+@dataclass
+class FakeTemplate:
+    """minimal template stub for prepare tests."""
+
+    targets: list = field(default_factory=list)
+
+
+class TestPrepareMehtCheck:
+    """tests for _prepare_meht_check horizontal position offset."""
+
+    @patch("app.services.trajectory.methods.get_threshold_position")
+    def test_meht_point_offset_from_threshold(self, mock_threshold):
+        """meht point lat/lon must differ from threshold when dist > 0."""
+        from app.services.trajectory.methods import _prepare_meht_check
+
+        threshold = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        mock_threshold.return_value = threshold
+
+        surface_id = uuid4()
+        agl = FakeAgl(surface_id=surface_id, distance_from_threshold=300.0)
+        surface = FakeSurface(id=surface_id, heading=90.0)
+        template = FakeTemplate(targets=[agl])
+
+        result = _prepare_meht_check(
+            inspection=FakeInspection(),
+            config=ResolvedConfig(),
+            center=Point3D(lon=14.26, lat=50.1, alt=380.0),
+            rwy_heading=90.0,
+            glide_slope=3.0,
+            ordered_lhas=[],
+            default_speed=5.0,
+            template=template,
+            surfaces=[surface],
+            label="test",
+        )
+
+        pos = result.target_lha_pos
+        assert pos is not None
+        assert pos.lon != threshold.lon or pos.lat != threshold.lat
+
+    @patch("app.services.trajectory.methods.get_threshold_position")
+    def test_meht_point_altitude_correct(self, mock_threshold):
+        """altitude = threshold alt + meht height + altitude offset."""
+        from app.services.trajectory.methods import _prepare_meht_check
+
+        threshold = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        mock_threshold.return_value = threshold
+
+        surface_id = uuid4()
+        agl = FakeAgl(surface_id=surface_id, distance_from_threshold=300.0)
+        template = FakeTemplate(targets=[agl])
+
+        config = ResolvedConfig(altitude_offset=5.0)
+        result = _prepare_meht_check(
+            inspection=FakeInspection(),
+            config=config,
+            center=Point3D(lon=14.26, lat=50.1, alt=380.0),
+            rwy_heading=90.0,
+            glide_slope=3.0,
+            ordered_lhas=[],
+            default_speed=5.0,
+            template=template,
+            surfaces=[FakeSurface(id=surface_id)],
+            label="test",
+        )
+
+        expected_height = 300.0 * math.tan(math.radians(3.0))
+        expected_alt = 380.0 + expected_height + 5.0
+        assert abs(result.target_lha_pos.alt - expected_alt) < 0.01
+
+    @patch("app.services.trajectory.methods.get_threshold_position")
+    def test_meht_offset_direction_reciprocal(self, mock_threshold):
+        """offset should be along reciprocal heading (approach direction)."""
+        from app.services.trajectory.methods import _prepare_meht_check
+
+        threshold = Point3D(lon=14.26, lat=50.1, alt=380.0)
+        mock_threshold.return_value = threshold
+
+        surface_id = uuid4()
+        agl = FakeAgl(surface_id=surface_id, distance_from_threshold=300.0)
+        template = FakeTemplate(targets=[agl])
+
+        # rwy heading north (0) - approach from south (180) - lat should decrease
+        result = _prepare_meht_check(
+            inspection=FakeInspection(),
+            config=ResolvedConfig(),
+            center=Point3D(lon=14.26, lat=50.1, alt=380.0),
+            rwy_heading=0.0,
+            glide_slope=3.0,
+            ordered_lhas=[],
+            default_speed=5.0,
+            template=template,
+            surfaces=[FakeSurface(id=surface_id)],
+            label="test",
+        )
+
+        pos = result.target_lha_pos
+        assert pos.lat < threshold.lat
