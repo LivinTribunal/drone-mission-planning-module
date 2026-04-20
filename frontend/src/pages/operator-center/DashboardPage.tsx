@@ -52,7 +52,6 @@ function AirportSelectionView() {
   const { selectAirport } = useAirport();
   const { t } = useTranslation();
   const { data: summariesData, isLoading: loading, isError: error, refetch } = useAirportSummaries();
-  const fetchAirports = useCallback(() => { refetch(); }, [refetch]);
   const airports = summariesData?.data ?? [];
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("icao_code");
@@ -150,7 +149,7 @@ function AirportSelectionView() {
           <div className="px-6 py-16 text-center text-sm text-tv-error">
             {t("airportSelection.loadError")}
             <button
-              onClick={fetchAirports}
+              onClick={() => refetch()}
               className="ml-2 underline hover:no-underline"
             >
               {t("common.retry")}

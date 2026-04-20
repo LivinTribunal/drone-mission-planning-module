@@ -24,6 +24,8 @@ export function getSavedViewport(
     if (
       Array.isArray(parsed.center) &&
       parsed.center.length === 2 &&
+      typeof parsed.center[0] === "number" &&
+      typeof parsed.center[1] === "number" &&
       typeof parsed.zoom === "number"
     ) {
       return {
@@ -59,8 +61,15 @@ const KNOWN_LAYER_KEYS: ReadonlyArray<keyof MapLayerConfig> = [
   "obstacles",
   "safetyZones",
   "aglSystems",
+  "bufferZones",
+  "simplifiedTrajectory",
   "trajectory",
+  "transitWaypoints",
+  "measurementWaypoints",
   "path",
+  "takeoffLanding",
+  "cameraHeading",
+  "pathHeading",
 ];
 
 export function getSavedLayers(
