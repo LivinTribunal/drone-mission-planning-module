@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from app.schemas.flight_plan import FlightPlanResponse, InspectionFlightStats
+from app.services.flight_plan_service import _extract_altitude, _extract_coords
 
 # schema tests
 
@@ -71,6 +72,19 @@ def test_inspection_flight_stats_schema():
     )
     assert stats.waypoint_count == 12
     assert stats.segment_duration is None
+
+
+# null geometry guards
+
+
+def test_extract_altitude_returns_zero_for_none():
+    """_extract_altitude returns 0.0 when geometry is None."""
+    assert _extract_altitude(None) == 0.0
+
+
+def test_extract_coords_returns_zeros_for_none():
+    """_extract_coords returns (0, 0, 0) when geometry is None."""
+    assert _extract_coords(None) == (0.0, 0.0, 0.0)
 
 
 # api-level test - verify enriched stats come back from get flight plan

@@ -55,6 +55,8 @@ def _waypoint_to_model(wp, flight_plan_id, sequence_order: int) -> Waypoint:
 
 def _extract_altitude(geom) -> float:
     """extract z-coordinate (altitude MSL) from a postgis geometry column."""
+    if geom is None:
+        return 0.0
     geojson = parse_ewkb(geom.data)
     coords = geojson.get("coordinates", [0, 0, 0])
     return coords[2] if len(coords) > 2 else 0.0
@@ -62,6 +64,8 @@ def _extract_altitude(geom) -> float:
 
 def _extract_coords(geom) -> tuple[float, float, float]:
     """extract (lon, lat, alt) from a postgis geometry column."""
+    if geom is None:
+        return (0.0, 0.0, 0.0)
     geojson = parse_ewkb(geom.data)
     coords = geojson.get("coordinates", [0, 0, 0])
     return (coords[0], coords[1], coords[2] if len(coords) > 2 else 0.0)
@@ -88,8 +92,10 @@ def build_enriched_response(db: Session, flight_plan: FlightPlan) -> FlightPlanR
 
     # transit speed from mission
     mission = db.query(Mission).filter(Mission.id == flight_plan.mission_id).first()
+    default_speed = 5.0
     if mission and mission.default_speed is not None:
         response.transit_speed = mission.default_speed
+        default_speed = mission.default_speed
 
     # per-inspection stats
     by_inspection: dict[UUID, list[Waypoint]] = defaultdict(list)
@@ -113,7 +119,7 @@ def build_enriched_response(db: Session, flight_plan: FlightPlan) -> FlightPlanR
                 coords_list[i][0],
                 coords_list[i][1],
             )
-            speed = insp_wps[i].speed or insp_wps[i - 1].speed or 5.0
+            speed = insp_wps[i].speed or insp_wps[i - 1].speed or default_speed
             seg_duration += dist / speed if speed > 0 else 0.0
 
         for wp in insp_wps:

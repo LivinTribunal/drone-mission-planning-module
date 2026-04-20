@@ -8,11 +8,10 @@ import {
   ChevronDown,
   ArrowUpDown,
   Gauge,
-  ShieldCheck,
-  ShieldAlert,
 } from "lucide-react";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 import type { DroneProfileResponse } from "@/types/droneProfile";
+import { getValidationDisplay } from "@/utils/validationDisplay";
 
 interface StatsPanelProps {
   flightPlan: FlightPlanResponse | null;
@@ -82,27 +81,13 @@ export default function StatsPanel({
       ? `${flightPlan.transit_speed} ${t("common.units.ms")}`
       : "\u2014";
 
-  const validationResult = flightPlan?.validation_result;
-  let validationValue: string;
-  let validationIcon = ShieldCheck;
-  let validationColor = "bg-tv-text-muted/20 text-tv-text-muted";
-  if (validationResult) {
-    const violations = validationResult.violations.filter((v) => v.category === "violation");
-    const warnings = validationResult.violations.filter((v) => v.category === "warning");
-    if (validationResult.passed && violations.length === 0) {
-      validationValue = t("mission.config.validationPassed");
-      validationColor = "bg-tv-success/20 text-tv-success";
-    } else {
-      const parts: string[] = [];
-      if (violations.length > 0) parts.push(`${violations.length} ${t("common.violation", { count: violations.length })}`);
-      if (warnings.length > 0) parts.push(`${warnings.length} ${t("common.warning", { count: warnings.length })}`);
-      validationValue = parts.join(", ") || t("mission.config.validationNotPassed");
-      validationIcon = ShieldAlert;
-      validationColor = "bg-tv-error/20 text-tv-error";
-    }
-  } else {
-    validationValue = t("mission.config.validationNotRun");
-  }
+  const validation = getValidationDisplay(flightPlan?.validation_result, {
+    passed: t("mission.config.validationPassed"),
+    notPassed: t("mission.config.validationNotPassed"),
+    notRun: t("mission.config.validationNotRun"),
+    violation: (count) => t("common.violation", { count }),
+    warning: (count) => t("common.warning", { count }),
+  });
 
   const stats = [
     {
@@ -143,9 +128,9 @@ export default function StatsPanel({
     },
     {
       label: t("mission.config.validation"),
-      value: validationValue,
-      icon: validationIcon,
-      colorClass: validationColor,
+      value: validation.value,
+      icon: validation.icon,
+      colorClass: validation.colorClass,
     },
   ];
 

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Route, Clock, MapPin, Battery, Layers, ArrowUpDown, Gauge, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Route, Clock, MapPin, Battery, Layers, ArrowUpDown, Gauge } from "lucide-react";
 import type { FlightPlanResponse } from "@/types/flightPlan";
+import { getValidationDisplay } from "@/utils/validationDisplay";
 
 interface MapStatsPanelProps {
   flightPlan: FlightPlanResponse;
@@ -50,25 +51,13 @@ export default function MapStatsPanel({
       ? `${flightPlan.transit_speed} ${t("common.units.ms")}`
       : "\u2014";
 
-  const validationResult = flightPlan.validation_result;
-  let validationValue: string;
-  let validationIcon = ShieldCheck;
-  if (validationResult) {
-    const violations = validationResult.violations.filter((v) => v.category === "violation");
-    const warnings = validationResult.violations.filter((v) => v.category === "warning");
-    if (validationResult.passed && violations.length === 0) {
-      validationValue = t("map.validationPassed");
-      validationIcon = ShieldCheck;
-    } else {
-      const parts: string[] = [];
-      if (violations.length > 0) parts.push(`${violations.length} ${t("common.violation", { count: violations.length })}`);
-      if (warnings.length > 0) parts.push(`${warnings.length} ${t("common.warning", { count: warnings.length })}`);
-      validationValue = parts.join(", ") || t("map.validationNotPassed");
-      validationIcon = ShieldAlert;
-    }
-  } else {
-    validationValue = t("map.validationNotRun");
-  }
+  const validation = getValidationDisplay(flightPlan.validation_result, {
+    passed: t("map.validationPassed"),
+    notPassed: t("map.validationNotPassed"),
+    notRun: t("map.validationNotRun"),
+    violation: (count) => t("common.violation", { count }),
+    warning: (count) => t("common.warning", { count }),
+  });
 
   const stats = [
     { label: t("map.totalDistance"), value: `${distanceKm} km`, icon: Route },
@@ -100,8 +89,8 @@ export default function MapStatsPanel({
     },
     {
       label: t("map.validation"),
-      value: validationValue,
-      icon: validationIcon,
+      value: validation.value,
+      icon: validation.icon,
     },
   ];
 
