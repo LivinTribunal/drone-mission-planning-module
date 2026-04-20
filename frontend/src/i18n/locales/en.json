@@ -328,14 +328,16 @@
       "HORIZONTAL_RANGE": "Horizontal Range",
       "FLY_OVER": "Fly Over",
       "PARALLEL_SIDE_SWEEP": "Parallel Side Sweep",
-      "HOVER_POINT_LOCK": "Hover Point Lock"
+      "HOVER_POINT_LOCK": "Hover Point Lock",
+      "MEHT_CHECK": "MEHT Check"
     },
     "inspectionMethodShort": {
       "VERTICAL_PROFILE": "Vertical",
       "HORIZONTAL_RANGE": "H-Range",
       "FLY_OVER": "Fly Over",
       "PARALLEL_SIDE_SWEEP": "Side Sweep",
-      "HOVER_POINT_LOCK": "Hover Lock"
+      "HOVER_POINT_LOCK": "Hover Lock",
+      "MEHT_CHECK": "MEHT"
     },
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
@@ -600,6 +602,8 @@
       "inMission": "in mission",
       "pickOnMap": "Pick on Map",
       "pickingOnMap": "Click on the map to set {{field}}",
+      "mehtHeight": "Computed MEHT Height (m)",
+      "mehtHeightHint": "Height above threshold at glide slope angle - adjustable via altitude offset",
       "staleTrajectory": "Trajectory is outdated - recompute to update",
       "lhaSaveError": "Failed to save LHA selection - re-select manually",
       "setCoordinatesFirst": "Set Takeoff & Landing First",

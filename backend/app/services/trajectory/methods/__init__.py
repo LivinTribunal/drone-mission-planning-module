@@ -1,5 +1,6 @@
 """inspection method registry - maps InspectionMethod enum to path computation."""
 
+import math
 from typing import Callable
 
 from app.core.exceptions import TrajectoryGenerationError
@@ -14,6 +15,7 @@ from ..helpers import (
     find_lha_by_id,
     find_lha_in_surfaces,
     get_runway_centerline_midpoint,
+    get_threshold_position,
 )
 from ..types import (
     DEFAULT_FLY_OVER_SPEED,
@@ -28,6 +30,7 @@ from ..types import (
 from .fly_over import calculate_fly_over_path
 from .horizontal_range import calculate_arc_path
 from .hover_point_lock import calculate_hover_point_lock_path
+from .meht_check import calculate_meht_check_path
 from .parallel_side_sweep import calculate_parallel_side_sweep_path
 from .vertical_profile import calculate_vertical_path
 
@@ -163,12 +166,70 @@ def _prepare_hover_point_lock(
     )
 
 
+def _prepare_meht_check(
+    inspection,
+    config,
+    center,
+    rwy_heading,
+    glide_slope,
+    ordered_lhas,
+    default_speed,
+    template,
+    surfaces,
+    label,
+    **_kw,
+) -> MethodPrep:
+    """pre-computation for meht-check."""
+    threshold = get_threshold_position(template, surfaces)
+    if threshold is None:
+        raise TrajectoryGenerationError(f"{label}: MEHT check requires runway threshold position")
+
+    # read glide slope and distance from threshold from the first target AGL
+    agl_glide_slope = glide_slope
+    dist_from_threshold = None
+    for agl in template.targets:
+        if agl.distance_from_threshold is not None:
+            dist_from_threshold = agl.distance_from_threshold
+            break
+
+    if dist_from_threshold is None:
+        raise TrajectoryGenerationError(
+            f"{label}: MEHT check requires distance_from_threshold on AGL"
+        )
+
+    meht_height = dist_from_threshold * math.tan(math.radians(agl_glide_slope))
+    meht_point = Point3D(
+        lon=threshold.lon,
+        lat=threshold.lat,
+        alt=threshold.alt + meht_height + config.altitude_offset,
+    )
+
+    # heading override from linked surface
+    heading_override = None
+    for agl in template.targets:
+        for surface in surfaces:
+            if surface.id == agl.surface_id and surface.heading:
+                heading_override = surface.heading
+                break
+        if heading_override is not None:
+            break
+
+    return MethodPrep(
+        path_distance=0.0,
+        default_speed=default_speed,
+        target_lha_pos=meht_point,
+        target_agl_type="PAPI",
+        rwy_heading_override=heading_override,
+    )
+
+
 PREPARE_REGISTRY: dict[InspectionMethod, Callable[..., MethodPrep]] = {
     InspectionMethod.HORIZONTAL_RANGE: _prepare_horizontal_range,
     InspectionMethod.VERTICAL_PROFILE: _prepare_vertical_profile,
     InspectionMethod.FLY_OVER: _prepare_fly_over,
     InspectionMethod.PARALLEL_SIDE_SWEEP: _prepare_parallel_side_sweep,
     InspectionMethod.HOVER_POINT_LOCK: _prepare_hover_point_lock,
+    InspectionMethod.MEHT_CHECK: _prepare_meht_check,
 }
 
 
@@ -276,10 +337,22 @@ def _hover_point_lock_handler(
     )
 
 
+def _meht_check_handler(
+    inspection, config, center, runway_heading, speed, target_lha_position, **_kw
+) -> list[WaypointData]:
+    """handler for MEHT_CHECK method."""
+    if target_lha_position is None:
+        raise ValueError("meht-check requires a computed MEHT position")
+    return calculate_meht_check_path(
+        target_lha_position, center, runway_heading, config, inspection.id, speed
+    )
+
+
 METHOD_REGISTRY: dict[InspectionMethod, Callable] = {
     InspectionMethod.HORIZONTAL_RANGE: _horizontal_range_handler,
     InspectionMethod.VERTICAL_PROFILE: _vertical_profile_handler,
     InspectionMethod.FLY_OVER: _fly_over_handler,
     InspectionMethod.PARALLEL_SIDE_SWEEP: _parallel_side_sweep_handler,
     InspectionMethod.HOVER_POINT_LOCK: _hover_point_lock_handler,
+    InspectionMethod.MEHT_CHECK: _meht_check_handler,
 }

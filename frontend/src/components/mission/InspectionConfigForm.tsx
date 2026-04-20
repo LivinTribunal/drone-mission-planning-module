@@ -22,6 +22,7 @@ import {
   isZoomOverOptical,
   maxPairwiseDistanceM,
 } from "@/utils/cameraAutoCalc";
+import { computeMehtHeight } from "@/utils/mehtHeight";
 
 interface InspectionConfigFormProps {
   inspection: InspectionResponse;
@@ -230,6 +231,17 @@ export default function InspectionConfigForm({
     return false;
   }, [configOverride, savedCfg, defaultCfg, droneProfile]);
 
+  // meht height computed from first PAPI AGL's distance + glide slope
+  const computedMehtHeight = useMemo(() => {
+    if (inspection.method !== "MEHT_CHECK") return null;
+    const papiAgl = agls.find((a) => a.agl_type === "PAPI");
+    if (!papiAgl) return null;
+    const dist = papiAgl.distance_from_threshold;
+    if (dist == null) return null;
+    const gs = papiAgl.glide_slope_angle ?? 3.0;
+    return Math.round(computeMehtHeight(dist, gs) * 100) / 100;
+  }, [inspection.method, agls]);
+
   // find target AGLs for this template
   const targetAgls = useMemo(() => {
     if (!template?.target_agl_ids?.length) return agls;
@@ -409,7 +421,7 @@ export default function InspectionConfigForm({
             {template?.name ?? "-"}
           </p>
         </div>
-        {inspection.method !== "HOVER_POINT_LOCK" && (
+        {inspection.method !== "HOVER_POINT_LOCK" && inspection.method !== "MEHT_CHECK" && (
         <div>
           <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
             {t("mission.config.method")}
@@ -472,7 +484,7 @@ export default function InspectionConfigForm({
       )}
 
       {/* agl / lha selection - hover point lock picks a single LHA above instead */}
-      {inspection.method !== "HOVER_POINT_LOCK" && targetAgls.length > 0 && (
+      {inspection.method !== "HOVER_POINT_LOCK" && inspection.method !== "MEHT_CHECK" && targetAgls.length > 0 && (
         <div>
           <label className="block text-xs font-medium mb-1.5 text-tv-text-secondary">
             {t("mission.config.lhaSelection")}
@@ -528,7 +540,7 @@ export default function InspectionConfigForm({
             data-testid="inspection-altitude-offset"
           />
         </div>
-        {inspection.method !== "HOVER_POINT_LOCK" && (
+        {inspection.method !== "HOVER_POINT_LOCK" && inspection.method !== "MEHT_CHECK" && (
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
               {t("mission.config.measurementSpeedOverride")}
@@ -549,7 +561,7 @@ export default function InspectionConfigForm({
             />
           </div>
         )}
-        {inspection.method !== "HOVER_POINT_LOCK" && (
+        {inspection.method !== "HOVER_POINT_LOCK" && inspection.method !== "MEHT_CHECK" && (
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
               {t("mission.config.measurementDensity")}
@@ -1342,6 +1354,28 @@ export default function InspectionConfigForm({
               )}
             </p>
           </div>
+        </div>
+      )}
+
+      {/* meht-check specific */}
+      {inspection.method === "MEHT_CHECK" && (
+        <div className="space-y-3" data-testid="meht-check-fields">
+          {computedMehtHeight != null && (
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("mission.config.mehtHeight")}
+              </label>
+              <p
+                className="px-3 py-2 text-sm text-tv-text-primary"
+                data-testid="computed-meht-height"
+              >
+                {computedMehtHeight} m
+              </p>
+              <p className="text-[11px] text-tv-text-muted mt-0.5">
+                {t("mission.config.mehtHeightHint")}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
