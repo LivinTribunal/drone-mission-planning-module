@@ -62,6 +62,9 @@ export default defineConfig({
       ],
     },
   },
+  build: {
+    target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
+  },
   server: {
     proxy: {
       '/api': 'http://localhost:8000',
