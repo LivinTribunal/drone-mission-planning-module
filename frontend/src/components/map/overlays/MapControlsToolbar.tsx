@@ -53,7 +53,7 @@ interface ToolDef {
 const mainTools: ToolDef[] = [
   { tool: MapTool.SELECT, icon: MousePointer, tooltipKey: "map.tools.select" },
   { tool: MapTool.PAN, icon: Hand, tooltipKey: "map.tools.pan" },
-  { tool: MapTool.MOVE_WAYPOINT, icon: Move, tooltipKey: "map.tools.moveWaypoint" },
+  { tool: MapTool.MOVE, icon: Move, tooltipKey: "map.tools.move" },
   { tool: MapTool.MEASURE, icon: Ruler, tooltipKey: "map.tools.measure" },
   { tool: MapTool.HEADING, icon: Navigation, tooltipKey: "map.tools.heading" },
 ];

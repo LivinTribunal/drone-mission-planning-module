@@ -355,7 +355,7 @@
     "tools": {
       "select": "Select and inspect map features (S)",
       "pan": "Pan the map (P)",
-      "moveWaypoint": "Drag waypoints to new positions (W)",
+      "move": "Move objects and edit vertices (W)",
       "measure": "Measure distances between points (M)",
       "heading": "Measure heading between two points (H)",
       "zoom": "Left click zoom in, right click zoom out (Z)",

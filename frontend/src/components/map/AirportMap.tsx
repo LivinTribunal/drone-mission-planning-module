@@ -236,7 +236,7 @@ const POINTER_LAYERS = [
 const TOOL_CURSORS: Record<string, string> = {
   [MapTool.SELECT]: "default",
   [MapTool.PAN]: "grab",
-  [MapTool.MOVE_WAYPOINT]: TOOL_CURSOR_MOVE,
+  [MapTool.MOVE]: TOOL_CURSOR_MOVE,
   [MapTool.MEASURE]: TOOL_CURSOR_MEASURE,
   [MapTool.HEADING]: TOOL_CURSOR_HEADING,
   [MapTool.ZOOM]: "zoom-in",
@@ -559,7 +559,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     const map = mapRef.current;
     if (!map || !interactive) return;
     const tool = activeTool ?? MapTool.SELECT;
-    if (tool === MapTool.MOVE_WAYPOINT) {
+    if (tool === MapTool.MOVE) {
       map.dragPan.disable();
     } else {
       map.dragPan.enable();
@@ -685,7 +685,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     const map = mapRef.current;
     if (!map || !interactive) return;
     const tool = activeTool ?? MapTool.SELECT;
-    if (tool !== MapTool.MOVE_WAYPOINT) return;
+    if (tool !== MapTool.MOVE) return;
 
     const dragState = { waypointId: "", originalAlt: 0, dragging: false };
     let rafId = 0;
@@ -780,7 +780,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       if (!dragState.dragging || !map) return;
       cancelAnimationFrame(rafId);
       dragState.dragging = false;
-      map.getCanvas().style.cursor = TOOL_CURSORS[MapTool.MOVE_WAYPOINT] || "crosshair";
+      map.getCanvas().style.cursor = TOOL_CURSORS[MapTool.MOVE] || "crosshair";
       map.dragPan.enable();
       onWaypointDrag?.(
         dragState.waypointId,
@@ -1769,8 +1769,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     function handleMouseMove(e: maplibregl.MapMouseEvent) {
       if (!map) return;
 
-      // transit circle hover highlight (SELECT + MOVE_WAYPOINT)
-      if (tool === MapTool.SELECT || tool === MapTool.MOVE_WAYPOINT) {
+      // transit circle hover highlight (SELECT + MOVE)
+      if (tool === MapTool.SELECT || tool === MapTool.MOVE) {
         updateWaypointHover(e);
       }
 

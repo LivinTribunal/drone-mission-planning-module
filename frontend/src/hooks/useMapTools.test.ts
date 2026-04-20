@@ -39,8 +39,8 @@ describe("useMapTools", () => {
 
   it("switching to 3d resets editing tools to SELECT", () => {
     const { result } = renderHook(() => useMapTools());
-    act(() => result.current.setTool(MapTool.MOVE_WAYPOINT));
-    expect(result.current.activeTool).toBe(MapTool.MOVE_WAYPOINT);
+    act(() => result.current.setTool(MapTool.MOVE));
+    expect(result.current.activeTool).toBe(MapTool.MOVE);
 
     act(() => result.current.setIs3D(true));
     expect(result.current.activeTool).toBe(MapTool.SELECT);
@@ -70,12 +70,12 @@ describe("useMapTools", () => {
     expect(result.current.activeTool).toBe(MapTool.SELECT);
   });
 
-  it("keyboard shortcut w sets MOVE_WAYPOINT tool", () => {
+  it("keyboard shortcut w sets MOVE tool", () => {
     const { result } = renderHook(() => useMapTools());
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "w" }));
     });
-    expect(result.current.activeTool).toBe(MapTool.MOVE_WAYPOINT);
+    expect(result.current.activeTool).toBe(MapTool.MOVE);
   });
 
   it("keyboard shortcut m sets MEASURE tool", () => {
@@ -113,7 +113,7 @@ describe("useMapTools", () => {
   });
 
   it("EDITING_TOOLS contains the expected tools", () => {
-    expect(EDITING_TOOLS.has(MapTool.MOVE_WAYPOINT)).toBe(true);
+    expect(EDITING_TOOLS.has(MapTool.MOVE)).toBe(true);
     expect(EDITING_TOOLS.has(MapTool.MEASURE)).toBe(true);
     expect(EDITING_TOOLS.has(MapTool.HEADING)).toBe(true);
     expect(EDITING_TOOLS.has(MapTool.PLACE_TAKEOFF)).toBe(true);

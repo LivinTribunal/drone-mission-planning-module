@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 export enum MapTool {
   SELECT = "SELECT",
   PAN = "PAN",
-  MOVE_WAYPOINT = "MOVE_WAYPOINT",
+  MOVE = "MOVE",
   MEASURE = "MEASURE",
   HEADING = "HEADING",
   ZOOM = "ZOOM",
@@ -22,7 +22,7 @@ interface MapToolsReturn {
 
 // editing tools that are disabled in 3d mode
 const EDITING_TOOLS = new Set([
-  MapTool.MOVE_WAYPOINT,
+  MapTool.MOVE,
   MapTool.MEASURE,
   MapTool.HEADING,
   MapTool.PLACE_TAKEOFF,
@@ -73,7 +73,7 @@ export default function useMapTools(): MapToolsReturn {
           trySet(MapTool.PAN);
           break;
         case "w":
-          trySet(MapTool.MOVE_WAYPOINT);
+          trySet(MapTool.MOVE);
           break;
         case "m":
           trySet(MapTool.MEASURE);

@@ -239,7 +239,7 @@ interface VertexEditorReturn {
 export default function useVertexEditor(
   map: maplibregl.Map | null,
   feature: MapFeature | null,
-  isSelectTool: boolean,
+  isEditingEnabled: boolean,
   onGeometryUpdate: (featureType: string, featureId: string, update: VertexGeometryUpdate) => void,
 ): VertexEditorReturn {
   /** overlay draggable vertex nodes on the selected feature. */
@@ -383,7 +383,7 @@ export default function useVertexEditor(
 
   useEffect(() => {
     const feature = featureRef.current;
-    if (!map || !feature || !isSelectTool) {
+    if (!map || !feature || !isEditingEnabled) {
       if (map) clearSources(map);
       setIsEditing(false);
       stateRef.current = null;
@@ -557,7 +557,7 @@ export default function useVertexEditor(
       clearSources(map);
       ghostRef.current = null;
     };
-  }, [map, featureKey, isSelectTool, updateOverlay, emitUpdate]);
+  }, [map, featureKey, isEditingEnabled, updateOverlay, emitUpdate]);
 
   useEffect(() => {
     return () => { if (map) removeSources(map); };

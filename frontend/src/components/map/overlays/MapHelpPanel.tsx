@@ -69,7 +69,7 @@ export default function MapHelpPanel({ variant = "full" }: MapHelpPanelProps) {
   const fullTools = [
     { name: t("map.tools.select"), desc: t("map.help.descSelect") },
     { name: t("map.tools.pan"), desc: t("map.help.descPan") },
-    { name: t("map.tools.moveWaypoint"), desc: t("map.help.descMove") },
+    { name: t("map.tools.move"), desc: t("map.help.descMove") },
     { name: t("map.tools.measure"), desc: t("map.help.descMeasure") },
     { name: t("map.tools.zoom"), desc: t("map.help.descZoom") },
   ];
