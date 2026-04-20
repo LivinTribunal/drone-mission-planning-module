@@ -31,6 +31,7 @@ DRONE_PROFILES = [
         "camera_frame_rate": 30,
         "sensor_fov": 84.0,
         "weight": 6.3,
+        "model_identifier": "dji_matrice_300",
     },
     {
         "name": "DJI Matrice 350 RTK",
@@ -45,6 +46,7 @@ DRONE_PROFILES = [
         "camera_frame_rate": 30,
         "sensor_fov": 84.0,
         "weight": 6.47,
+        "model_identifier": "dji_matrice_350",
     },
     {
         "name": "DJI Mavic 2 Pro",
@@ -59,6 +61,7 @@ DRONE_PROFILES = [
         "camera_frame_rate": 30,
         "sensor_fov": 77.0,
         "weight": 0.907,
+        "model_identifier": "dji_mavic_2",
     },
     {
         "name": "DJI Mavic 3 Enterprise",
@@ -73,6 +76,7 @@ DRONE_PROFILES = [
         "camera_frame_rate": 30,
         "sensor_fov": 84.0,
         "weight": 0.92,
+        "model_identifier": "dji_mavic_3",
     },
     {
         "name": "Autel EVO II Pro V3",
@@ -87,6 +91,7 @@ DRONE_PROFILES = [
         "camera_frame_rate": 30,
         "sensor_fov": 82.0,
         "weight": 1.25,
+        "model_identifier": "autel_evo_ii",
     },
     {
         "name": "Freefly Astro",
@@ -101,6 +106,7 @@ DRONE_PROFILES = [
         "camera_frame_rate": 30,
         "sensor_fov": 75.0,
         "weight": 5.9,
+        "model_identifier": "freefly_astro",
     },
     {
         "name": "senseFly eBee X",
@@ -115,6 +121,7 @@ DRONE_PROFILES = [
         "camera_frame_rate": 1,
         "sensor_fov": 73.0,
         "weight": 1.6,
+        "model_identifier": "sensefly_ebee_x",
     },
     {
         "name": "Skydio X10",
@@ -129,6 +136,7 @@ DRONE_PROFILES = [
         "camera_frame_rate": 60,
         "sensor_fov": 63.0,
         "weight": 2.2,
+        "model_identifier": "skydio_x10",
     },
 ]
 
@@ -239,7 +247,19 @@ def seed_drone_profiles() -> None:
     try:
         existing = db.query(DroneProfile).filter_by(name="DJI Matrice 300 RTK").first()
         if existing:
-            print("drone profiles already seeded")
+            # backfill model_identifier on existing rows
+            updated = 0
+            for profile_data in DRONE_PROFILES:
+                row = db.query(DroneProfile).filter_by(name=profile_data["name"]).first()
+                if row and not row.model_identifier:
+                    row.model_identifier = profile_data["model_identifier"]
+                    updated += 1
+
+            if updated:
+                db.commit()
+                print(f"backfilled model_identifier on {updated} existing profiles")
+            else:
+                print("drone profiles already seeded")
             return
 
         for profile in DRONE_PROFILES:

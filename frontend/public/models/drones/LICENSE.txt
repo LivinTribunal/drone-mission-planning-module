@@ -1,19 +1,21 @@
 Bundled 3D Drone Models — License Information
 
-All bundled drone models in this directory are procedurally generated
-placeholder meshes created by the TarmacView development team.
+Procedural placeholder models in this directory are created by the
+TarmacView development team and released under CC0 1.0 Universal
+(Public Domain Dedication). You may use them freely without attribution.
 
-These models are released under the CC0 1.0 Universal (Public Domain
-Dedication) license. You may use them freely without attribution.
-
-Models:
+CC0 Placeholder Models:
 - generic_quadcopter.glb — generic four-rotor drone placeholder
 - dji_matrice_300.glb — DJI Matrice 300 RTK style placeholder
 - dji_mavic_3.glb — DJI Mavic 3 Enterprise style placeholder
+- dji_mavic_2.glb — DJI Mavic 2 Pro style placeholder (TODO: replace with CC-BY asset)
+- autel_evo_ii.glb — Autel EVO II style placeholder (TODO: replace with CC-BY asset)
 - generic_hexacopter.glb — six-rotor heavy-lift drone placeholder
 - generic_fixed_wing.glb — fixed-wing VTOL survey drone placeholder
 
 Thumbnails in thumbnails/ are rendered from the above models.
+
+See ATTRIBUTION.md for planned CC-BY asset imports and their sources.
 
 Custom-uploaded models (stored in backend/static/models/custom/) remain
 the property of the uploading user and are not covered by this license.
