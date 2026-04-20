@@ -1,4 +1,3 @@
-import { useCallback, useRef } from "react";
 import type { MapLayerConfig } from "@/types/map";
 
 const VIEWPORT_PREFIX = "tarmacview_mapViewport_";
@@ -75,27 +74,3 @@ export function saveLayers(
   }
 }
 
-export function useMapViewportPersistence(airportId: string | undefined) {
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const debouncedSaveViewport = useCallback(
-    (state: MapViewportState) => {
-      if (!airportId) return;
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => {
-        saveViewport(airportId, state);
-      }, 300);
-    },
-    [airportId],
-  );
-
-  const persistLayers = useCallback(
-    (layers: MapLayerConfig) => {
-      if (!airportId) return;
-      saveLayers(airportId, layers);
-    },
-    [airportId],
-  );
-
-  return { debouncedSaveViewport, persistLayers };
-}

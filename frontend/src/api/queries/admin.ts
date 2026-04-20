@@ -24,7 +24,7 @@ export function useAdminUsers(params?: {
   offset?: number;
 }) {
   return useQuery({
-    queryKey: queryKeys.admin.users.list(params as Record<string, unknown>),
+    queryKey: queryKeys.admin.users.list(params),
     queryFn: () => listUsers(params),
     staleTime: 60_000,
   });
@@ -96,7 +96,7 @@ export function useAdminAirports(params?: {
   country?: string;
 }) {
   return useQuery({
-    queryKey: queryKeys.admin.airports(),
+    queryKey: queryKeys.admin.airports(params),
     queryFn: () => listAirportsAdmin(params),
     staleTime: 5 * 60_000,
   });
@@ -133,7 +133,7 @@ export function useAuditLogs(params?: {
   offset?: number;
 }) {
   return useQuery({
-    queryKey: queryKeys.admin.auditLog(params as Record<string, unknown>),
+    queryKey: queryKeys.admin.auditLog(params),
     queryFn: () => listAuditLogs(params),
     staleTime: 60_000,
   });

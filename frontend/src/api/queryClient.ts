@@ -41,13 +41,30 @@ export const queryKeys = {
   admin: {
     users: {
       all: ["admin", "users"] as const,
-      list: (params?: Record<string, unknown>) =>
-        ["admin", "users", "list", params] as const,
+      list: (params?: {
+        role?: string;
+        is_active?: boolean;
+        airport_id?: string;
+        search?: string;
+        limit?: number;
+        offset?: number;
+      }) => ["admin", "users", "list", params] as const,
       detail: (id: string) => ["admin", "users", "detail", id] as const,
     },
-    airports: () => ["admin", "airports"] as const,
+    airports: (params?: { search?: string; country?: string }) =>
+      ["admin", "airports", params] as const,
     systemSettings: () => ["admin", "systemSettings"] as const,
-    auditLog: (params?: Record<string, unknown>) =>
-      ["admin", "auditLog", params] as const,
+    auditLog: (params?: {
+      search?: string;
+      action?: string;
+      user_id?: string;
+      entity_type?: string;
+      date_from?: string;
+      date_to?: string;
+      sort_by?: string;
+      sort_dir?: string;
+      limit?: number;
+      offset?: number;
+    }) => ["admin", "auditLog", params] as const,
   },
 };
