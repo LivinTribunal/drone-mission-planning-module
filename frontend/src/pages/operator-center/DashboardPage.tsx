@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
@@ -16,10 +16,9 @@ import {
 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { useMission } from "@/contexts/MissionContext";
-import { listAirportSummaries } from "@/api/airports";
 import { updateMission, deleteMission, duplicateMission } from "@/api/missions";
-import { listDroneProfiles } from "@/api/droneProfiles";
-import type { AirportSummaryResponse } from "@/types/airport";
+import { useAirportSummaries } from "@/api/queries/airports";
+import { useDroneProfiles } from "@/api/queries/droneProfiles";
 import type { MissionResponse } from "@/types/mission";
 import type { DroneProfileResponse } from "@/types/droneProfile";
 import CollapsibleSection from "@/components/common/CollapsibleSection";
@@ -52,9 +51,8 @@ type SortDir = "asc" | "desc";
 function AirportSelectionView() {
   const { selectAirport } = useAirport();
   const { t } = useTranslation();
-  const [airports, setAirports] = useState<AirportSummaryResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const { data: summariesData, isLoading: loading, isError: error, refetch } = useAirportSummaries();
+  const airports = summariesData?.data ?? [];
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("icao_code");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -70,22 +68,6 @@ function AirportSelectionView() {
     { key: "agls_count", label: t("airportSelection.columns.aglSystems") },
     { key: "missions_count", label: t("airportSelection.columns.missions") },
   ];
-
-  const fetchAirports = useCallback(() => {
-    setLoading(true);
-    setError(false);
-    listAirportSummaries()
-      .then((res) => setAirports(res.data))
-      .catch((err) => {
-        console.error("airport list fetch failed:", err instanceof Error ? err.message : String(err));
-        setError(true);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    fetchAirports();
-  }, [fetchAirports]);
 
   function handleSort(key: SortKey) {
     const numeric: SortKey[] = ["surfaces_count", "agls_count", "missions_count"];
@@ -167,7 +149,7 @@ function AirportSelectionView() {
           <div className="px-6 py-16 text-center text-sm text-tv-error">
             {t("airportSelection.loadError")}
             <button
-              onClick={fetchAirports}
+              onClick={() => refetch()}
               className="ml-2 underline hover:no-underline"
             >
               {t("common.retry")}
@@ -717,9 +699,8 @@ function DashboardView() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const [missionsError, setMissionsError] = useState(false);
-  const [droneProfiles, setDroneProfiles] = useState<DroneProfileResponse[]>([]);
-  const [droneProfilesLoading, setDroneProfilesLoading] = useState(true);
-  const [droneProfilesError, setDroneProfilesError] = useState(false);
+  const { data: droneData, isLoading: droneProfilesLoading, isError: droneProfilesError } = useDroneProfiles();
+  const droneProfiles = droneData?.data ?? [];
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
   const [is3D, setIs3D] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
@@ -728,15 +709,6 @@ function DashboardView() {
     setMissionsError(false);
     refreshMissions().catch(() => setMissionsError(true));
   }, [refreshMissions]);
-
-  useEffect(() => {
-    setDroneProfilesLoading(true);
-    setDroneProfilesError(false);
-    listDroneProfiles()
-      .then((res) => setDroneProfiles(res.data))
-      .catch(() => setDroneProfilesError(true))
-      .finally(() => setDroneProfilesLoading(false));
-  }, []);
 
   if (!selectedAirport) return null;
 

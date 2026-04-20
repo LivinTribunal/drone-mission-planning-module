@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AirportProvider } from "@/contexts/AirportContext";
@@ -110,18 +111,23 @@ function renderDashboard(airport?: object) {
   if (airport) {
     localStorage.setItem("tarmacview_airport", JSON.stringify(airport));
   }
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <ThemeProvider>
-      <AuthProvider>
-        <AirportProvider>
-          <MemoryRouter>
-            <MissionProvider>
-              <DashboardPage />
-            </MissionProvider>
-          </MemoryRouter>
-        </AirportProvider>
-      </AuthProvider>
-    </ThemeProvider>,
+    <QueryClientProvider client={qc}>
+      <ThemeProvider>
+        <AuthProvider>
+          <AirportProvider>
+            <MemoryRouter>
+              <MissionProvider>
+                <DashboardPage />
+              </MissionProvider>
+            </MemoryRouter>
+          </AirportProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>,
   );
 }
 

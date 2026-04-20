@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Plus, Minus, Flag } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { getSavedViewport, saveViewport, getSavedLayers, saveLayers } from "@/hooks/useMapViewport";
+import type { MapViewportState } from "@/hooks/useMapViewport";
 
 const LazyCesiumMapViewer = lazy(() => import("./CesiumMapViewer"));
 
@@ -370,17 +372,22 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     getMap: () => mapRef.current,
   }), []);
 
-  const [layerConfig, setLayerConfig] = useState<MapLayerConfig>({
-    ...DEFAULT_LAYER_CONFIG,
-    simplifiedTrajectory,
-    ...layersProp,
+  const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(() => {
+    const saved = getSavedLayers(airport.id);
+    return {
+      ...DEFAULT_LAYER_CONFIG,
+      simplifiedTrajectory,
+      ...saved,
+      ...layersProp,
+    };
   });
   const layerConfigRef = useRef(layerConfig);
   layerConfigRef.current = layerConfig;
 
   useEffect(() => {
     onLayerChange?.(layerConfig);
-  }, [layerConfig, onLayerChange]);
+    saveLayers(airport.id, layerConfig);
+  }, [layerConfig, onLayerChange, airport.id]);
   const visibleInspectionIdsRef = useRef(visibleInspectionIds);
   visibleInspectionIdsRef.current = visibleInspectionIds;
   const [internalTerrainMode, setInternalTerrainMode] = useState<"map" | "satellite">(
@@ -845,12 +852,15 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     if (!containerRef.current) return;
 
     const [lon, lat] = airport.location.coordinates;
+    const saved = getSavedViewport(airport.id);
 
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: makeSatelliteStyle(),
-      center: [lon, lat],
-      zoom: 14.5,
+      center: saved?.center ?? [lon, lat],
+      zoom: saved?.zoom ?? 14.5,
+      bearing: saved?.bearing ?? 0,
+      pitch: saved?.pitch ?? 0,
       interactive,
       attributionControl: false,
     });
@@ -878,10 +888,29 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     map.on("zoom", handleZoom);
     map.on("zoomend", handleZoomEnd);
 
+    // persist viewport on move
+    let viewportTimer: ReturnType<typeof setTimeout> | null = null;
+    function handleMoveEnd() {
+      if (viewportTimer) clearTimeout(viewportTimer);
+      viewportTimer = setTimeout(() => {
+        const center = map.getCenter();
+        const state: MapViewportState = {
+          center: [center.lng, center.lat],
+          zoom: map.getZoom(),
+          bearing: map.getBearing(),
+          pitch: map.getPitch(),
+        };
+        saveViewport(airport.id, state);
+      }, 300);
+    }
+    map.on("moveend", handleMoveEnd);
+
     return () => {
       map.off("rotate", handleRotate);
       map.off("zoom", handleZoom);
       map.off("zoomend", handleZoomEnd);
+      map.off("moveend", handleMoveEnd);
+      if (viewportTimer) clearTimeout(viewportTimer);
       map.remove();
       mapRef.current = null;
       layersAddedRef.current = false;

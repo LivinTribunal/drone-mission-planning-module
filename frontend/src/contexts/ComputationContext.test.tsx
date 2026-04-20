@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { render, screen } from "@testing-library/react";
 import { type ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ComputationProvider, useComputation } from "./ComputationContext";
 import ComputationNotification from "@/components/common/ComputationNotification";
 
@@ -31,13 +32,26 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
+let testQueryClient: QueryClient;
+
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+}
+
 function wrapper({ children }: { children: ReactNode }) {
-  return <ComputationProvider>{children}</ComputationProvider>;
+  return (
+    <QueryClientProvider client={testQueryClient}>
+      <ComputationProvider>{children}</ComputationProvider>
+    </QueryClientProvider>
+  );
 }
 
 describe("ComputationContext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testQueryClient = createTestQueryClient();
     mockSelectedMission = { id: "m-1", name: "Test Mission", computation_status: "IDLE" };
   });
 
@@ -155,9 +169,88 @@ describe("ComputationContext", () => {
   });
 });
 
+describe("ComputationContext session reconciliation", () => {
+  const SESSION_KEY = "tarmacview_computation";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testQueryClient = createTestQueryClient();
+    sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
+  it("resets to COMPLETED when session says COMPUTING but backend shows COMPLETED", async () => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+      status: "COMPUTING",
+      missionId: "m-1",
+      missionName: "Test",
+      error: null,
+    }));
+    mockSelectedMission = {
+      id: "m-1",
+      name: "Test",
+      computation_status: "COMPLETED",
+      computation_error: null,
+    };
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("COMPLETED");
+    });
+  });
+
+  it("resets to FAILED when session says COMPUTING but backend shows FAILED", async () => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+      status: "COMPUTING",
+      missionId: "m-1",
+      missionName: "Test",
+      error: null,
+    }));
+    mockSelectedMission = {
+      id: "m-1",
+      name: "Test",
+      computation_status: "FAILED",
+      computation_error: "computation timed out",
+    };
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("FAILED");
+    });
+    expect(result.current.error).toBe("computation timed out");
+  });
+
+  it("resets to IDLE when session says COMPUTING but backend shows IDLE", async () => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+      status: "COMPUTING",
+      missionId: "m-1",
+      missionName: "Test",
+      error: null,
+    }));
+    mockSelectedMission = {
+      id: "m-1",
+      name: "Test",
+      computation_status: "IDLE",
+      computation_error: null,
+    };
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("IDLE");
+    });
+  });
+});
+
 describe("ComputationContext polling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testQueryClient = createTestQueryClient();
     vi.useFakeTimers();
   });
 
@@ -219,14 +312,17 @@ describe("ComputationContext polling", () => {
 describe("ComputationNotification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testQueryClient = createTestQueryClient();
     mockSelectedMission = { id: "m-1", name: "Test", computation_status: "IDLE" };
   });
 
   it("renders nothing when IDLE", () => {
     render(
-      <ComputationProvider>
-        <ComputationNotification />
-      </ComputationProvider>,
+      <QueryClientProvider client={testQueryClient}>
+        <ComputationProvider>
+          <ComputationNotification />
+        </ComputationProvider>
+      </QueryClientProvider>,
     );
     expect(screen.queryByTestId("computation-notification")).not.toBeInTheDocument();
   });

@@ -4,10 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { Copy, Pencil, Trash2 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
 import { listMissions, deleteMission, duplicateMission, updateMission } from "@/api/missions";
-import { listDroneProfiles } from "@/api/droneProfiles";
+import { useDroneProfiles } from "@/api/queries/droneProfiles";
 import type { MissionResponse } from "@/types/mission";
 import type { MissionStatus } from "@/types/enums";
-import type { DroneProfileResponse } from "@/types/droneProfile";
 import Badge from "@/components/common/Badge";
 import Button from "@/components/common/Button";
 import Modal from "@/components/common/Modal";
@@ -50,7 +49,8 @@ export default function MissionListPage() {
   const { selectedAirport } = useAirport();
 
   const [missions, setMissions] = useState<MissionResponse[]>([]);
-  const [droneProfiles, setDroneProfiles] = useState<DroneProfileResponse[]>([]);
+  const { data: droneData } = useDroneProfiles();
+  const droneProfiles = droneData?.data ?? [];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -100,11 +100,6 @@ export default function MissionListPage() {
     fetchMissions();
   }, [fetchMissions]);
 
-  useEffect(() => {
-    listDroneProfiles()
-      .then((res) => setDroneProfiles(res.data))
-      .catch(() => {});
-  }, []);
 
   function toggleStatus(status: MissionStatus) {
     /** toggle a status filter pill on/off. */
