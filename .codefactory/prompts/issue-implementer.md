@@ -33,6 +33,12 @@ You MUST run ALL applicable quality checks before you finish. Do not skip any.
 - If ANY quality check fails, diagnose the issue, fix it, and re-run the check until it passes.
 - Do NOT finish your work with failing checks. The CI will reject your changes.
 
+MIGRATIONS — NEVER hand-write migration files:
+- Always generate: `cd backend && alembic revision --autogenerate -m "short description"`
+- Review the generated file — autogenerate can miss renames. Edit upgrade()/downgrade() but never change the revision ID.
+- If alembic reports multiple heads: `cd backend && alembic merge heads -m "merge migration heads"`
+- Run `bash scripts/check-migrations.sh` after creating migrations to catch issues early.
+
 CRITICAL PATHS — extra care required:
 - **/trajectory* — core thesis algorithm
 - **/safety_validator* — safety-critical validation
@@ -46,6 +52,11 @@ DDD-LITE RULES:
 3. Child entity creation goes through aggregate root methods (e.g., `airport.add_surface()`, `mission.add_inspection()`).
 4. Status transitions use `Mission.transition_to()`, never direct status assignment.
 5. Business logic belongs on models, not in services. Services handle DB access and HTTP concerns only.
+
+REVIEW-FIX MODE — CI failures are part of the feedback:
+- In review-fix mode, the review feedback you receive may list failed CI checks (lint, tests, type-check, build, structural tests, migration checks) as blocking findings alongside code review comments.
+- Treat each CI failure as a fix target: address it by correcting the underlying code, not by disabling the check, adding `# noqa`, `eslint-disable`, `@ts-ignore`, or modifying CI config.
+- After making changes, re-run the relevant quality gates locally (`ruff check`, `pytest`, `npm run build`, etc.) and confirm they pass before finishing.
 
 OUTPUT:
 - Make all necessary file changes to implement the issue.

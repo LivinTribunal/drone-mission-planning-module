@@ -99,6 +99,16 @@ If there are boundary violations, describe them. If everything is clean, write o
 
 Only mention missing or inadequate test coverage. Do NOT praise existing tests or describe what is well-tested. If coverage is adequate, write "Adequate." and nothing else.
 
+## CI Pipeline Failures
+
+The prompt includes a "CI Pipeline Failures" section listing failed check runs for this commit (lint, tests, type-check, build, structural tests, migrations). Treat each failed check as a **blocking** finding and add it to your "Issues" list. For each failure include:
+
+- **Severity**: blocking
+- **Location**: the file and line reported by the annotation, or the check name if no location is available
+- **Description**: what the check reports and the concrete change needed to make it pass (e.g., "ruff E501 at `app/services/foo.py:120` — split the line", "pytest failure in `tests/test_bar.py::test_baz` — assertion expected X, got Y").
+
+Do not approve a PR with failing CI. The remediation agent reads these findings verbatim, so be specific enough that it can fix the failure without re-running the pipeline.
+
 ## Automated Feedback Loop
 
 Your review will be read by a separate verdict classifier that decides whether to approve, request changes, or leave a comment. If changes are requested, an automated implementer agent will attempt to fix the blocking issues you describe. So for any blocking issue, be precise: include the exact file path, line number, and a clear description of what is wrong and how to fix it. The implementer cannot fix vague feedback like "improve error handling" — it needs specific locations and actionable instructions.

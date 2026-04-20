@@ -59,7 +59,24 @@ jobs:
           echo "base-ref=${BASE_REF}" >> "$GITHUB_OUTPUT"
           echo "pr-number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
 
+      - name: Check blocked label
+        id: blocked
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr-number }}
+          REPO: ${{ github.repository }}
+        run: |
+          LABELS=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | join(",")')
+          echo "labels=${LABELS}" >> "$GITHUB_OUTPUT"
+          if echo ",${LABELS}," | grep -q ',blocked,'; then
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR #${PR_NUMBER} has 'blocked' label — skipping review agent."
+          else
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Determine risk tier
+        if: steps.blocked.outputs.blocked != 'true'
         id: tier
         run: |
           BASE_REF="${{ steps.pr.outputs.base-ref }}"
@@ -120,7 +137,7 @@ jobs:
         run: echo "Tier 1 change — review agent not required. Skipping."
 
       - name: SHA deduplication check
-        if: steps.tier.outputs.tier != '1'
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1'
         id: dedup
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
@@ -151,7 +168,7 @@ jobs:
             }
 
       - name: Create in-progress check run
-        if: steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
         id: check
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
@@ -175,7 +192,7 @@ jobs:
             core.info(`Created check run ${checkRun.id} for SHA ${headSha.slice(0, 12)}`);
 
       - name: Read review prompt
-        if: steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
         id: prompt-file
         run: |
           # Read from origin/main — not from the PR branch — so the prompt
@@ -191,8 +208,94 @@ jobs:
             echo "content=Review this pull request for bugs, security issues, and architectural violations." >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Fetch failed CI checks
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
+        id: ci-failures
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          HEAD_SHA: ${{ steps.pr.outputs.head-sha }}
+        with:
+          script: |
+            const headSha = process.env.HEAD_SHA;
+            core.info(`Fetching check runs for SHA ${headSha.slice(0, 12)}...`);
+
+            // exclude our own check so the review agent doesn't see its prior run as a failure
+            const SELF = new Set(['review-agent']);
+            const FAILURE_CONCLUSIONS = new Set(['failure', 'cancelled', 'timed_out', 'action_required']);
+
+            let failed = [];
+            try {
+              const { data } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: headSha,
+                per_page: 100,
+              });
+              for (const run of data.check_runs || []) {
+                if (SELF.has(run.name)) continue;
+                if (run.status !== 'completed') continue;
+                if (!FAILURE_CONCLUSIONS.has(run.conclusion)) continue;
+
+                let detail = '';
+                const title = run.output?.title || '';
+                const summary = run.output?.summary || '';
+                if (title) detail += title;
+                if (summary) detail += (detail ? '\n' : '') + summary;
+
+                // include up to 5 annotations with file:line and message
+                try {
+                  const { data: ann } = await github.rest.checks.listAnnotations({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    check_run_id: run.id,
+                    per_page: 5,
+                  });
+                  if (ann.length > 0) {
+                    const lines = ann.map((a) => {
+                      const loc = a.path ? `${a.path}:${a.start_line || '?'}` : '(no location)';
+                      return `- [${a.annotation_level || 'notice'}] ${loc} — ${a.message || ''}`;
+                    });
+                    detail += (detail ? '\n\nAnnotations:\n' : 'Annotations:\n') + lines.join('\n');
+                  }
+                } catch (e) {
+                  core.info(`annotations fetch failed for ${run.name}: ${e.message}`);
+                }
+
+                // cap per-check detail to keep prompt size sane
+                if (detail.length > 2000) detail = detail.slice(0, 2000) + '\n...[truncated]';
+
+                failed.push({
+                  name: run.name,
+                  conclusion: run.conclusion,
+                  url: run.html_url,
+                  detail: detail || '(no output captured)',
+                });
+              }
+            } catch (e) {
+              core.warning(`Failed to list check runs: ${e.message}`);
+            }
+
+            core.info(`Found ${failed.length} failed CI check(s).`);
+            if (failed.length === 0) {
+              core.setOutput('markdown', '*No failed CI checks detected for this commit.*');
+              core.setOutput('count', '0');
+              return;
+            }
+
+            const md = failed
+              .map(
+                (f, i) =>
+                  `### ${i + 1}. \`${f.name}\` — ${f.conclusion}\n\n` +
+                  `**Run**: ${f.url}\n\n` +
+                  '```\n' + f.detail + '\n```',
+              )
+              .join('\n\n');
+
+            core.setOutput('markdown', md);
+            core.setOutput('count', String(failed.length));
+
       - name: Build review prompt
-        if: steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
         id: build-prompt
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
@@ -201,6 +304,8 @@ jobs:
           CHANGED_FILES: ${{ steps.tier.outputs.changed-files }}
           PR_NUMBER: ${{ steps.pr.outputs.pr-number }}
           HEAD_SHA: ${{ steps.pr.outputs.head-sha }}
+          CI_FAILURES_MD: ${{ steps.ci-failures.outputs.markdown }}
+          CI_FAILURES_COUNT: ${{ steps.ci-failures.outputs.count }}
         with:
           script: |
             const fs = require('fs');
@@ -209,6 +314,8 @@ jobs:
             const changedFiles = process.env.CHANGED_FILES || '';
             const prNumber = process.env.PR_NUMBER || '';
             const headSha = process.env.HEAD_SHA || '';
+            const ciFailuresMd = process.env.CI_FAILURES_MD || '*No failed CI checks detected for this commit.*';
+            const ciFailuresCount = process.env.CI_FAILURES_COUNT || '0';
 
             let conventions = '';
             try { conventions = fs.readFileSync('CLAUDE.md', 'utf-8').slice(0, 6000); } catch {}
@@ -230,6 +337,12 @@ jobs:
               `**Changed Files**:`,
               changedFiles ? changedFiles.split('\n').map(f => `- ${f}`).join('\n') : '*(none detected)*',
               '',
+              '## CI Pipeline Failures',
+              '',
+              `${ciFailuresCount} failed CI check(s) for this commit. Every failure below MUST appear in your "Issues" section as a **blocking** finding so the remediation agent fixes it. Include the check name, the failing file/line when shown, and what to change.`,
+              '',
+              ciFailuresMd,
+              '',
               '## Project Conventions (from CLAUDE.md)',
               '',
               conventions || 'No CLAUDE.md found.',
@@ -246,7 +359,7 @@ jobs:
             core.info(`Review prompt built (${prompt.length} chars)`);
 
       - name: Run Claude review
-        if: steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
         id: review
         # OIDC validation requires the workflow file to match main exactly.
         # PRs that modify this workflow file will always fail the OIDC exchange —
@@ -262,7 +375,7 @@ jobs:
           allowed_bots: 'github-actions,implementer-bot'
 
       - name: Extract review from execution file
-        if: steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
         id: extract
         env:
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
@@ -307,7 +420,7 @@ jobs:
           fi
 
       - name: Post review comment
-        if: steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
         id: post-review
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
@@ -355,7 +468,7 @@ jobs:
             core.setOutput('comment-id', comment.id);
 
       - name: Run verdict classifier
-        if: steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true' && steps.extract.outputs.found == 'true'
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true' && steps.extract.outputs.found == 'true'
         id: classifier
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
@@ -379,7 +492,7 @@ jobs:
           allowed_bots: 'github-actions,implementer-bot'
 
       - name: Extract verdict
-        if: steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true'
         id: verdict
         env:
           STRUCTURED_OUTPUT: ${{ steps.classifier.outputs.structured_output || '' }}
@@ -422,7 +535,7 @@ jobs:
           echo "Verdict: ${VERDICT} — ${REASON}"
 
       - name: Update review comment with verdict
-        if: steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true' && steps.post-review.outputs.comment-id
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true' && steps.post-review.outputs.comment-id
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
           COMMENT_ID: ${{ steps.post-review.outputs.comment-id }}
@@ -497,7 +610,7 @@ jobs:
             core.info(`Check run ${checkRunId} completed: ${conclusion}`);
 
       - name: Check review-fix eligibility
-        if: steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true' && steps.verdict.outputs.verdict == 'REQUEST_CHANGES'
+        if: steps.blocked.outputs.blocked != 'true' && steps.tier.outputs.tier != '1' && steps.dedup.outputs.skip != 'true' && steps.verdict.outputs.verdict == 'REQUEST_CHANGES'
         id: review-fix
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
@@ -611,7 +724,7 @@ jobs:
           echo "✔ Dispatched issue-implementer.yml for review-fix"
 
       - name: Report skip as success
-        if: steps.tier.outputs.tier == '1' || steps.dedup.outputs.skip == 'true'
+        if: steps.blocked.outputs.blocked == 'true' || steps.tier.outputs.tier == '1' || steps.dedup.outputs.skip == 'true'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
           HEAD_SHA: ${{ steps.pr.outputs.head-sha }}
@@ -619,8 +732,13 @@ jobs:
           script: |
             const headSha = process.env.HEAD_SHA;
             const tier = '${{ steps.tier.outputs.tier }}';
+            const blocked = '${{ steps.blocked.outputs.blocked }}' === 'true';
             const skipped = '${{ steps.dedup.outputs.skip }}' === 'true';
-            const reason = tier === '1' ? 'Tier 1 — review not required' : `SHA ${headSha.slice(0, 12)} already reviewed`;
+            const reason = blocked
+              ? `'blocked' label present — review will run once label is removed`
+              : tier === '1'
+                ? 'Tier 1 — review not required'
+                : `SHA ${headSha.slice(0, 12)} already reviewed`;
 
             await github.rest.checks.create({
               owner: context.repo.owner,
