@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { render, screen } from "@testing-library/react";
 import { type ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ComputationProvider, useComputation } from "./ComputationContext";
 import ComputationNotification from "@/components/common/ComputationNotification";
 
@@ -31,13 +32,26 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
+let testQueryClient: QueryClient;
+
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+}
+
 function wrapper({ children }: { children: ReactNode }) {
-  return <ComputationProvider>{children}</ComputationProvider>;
+  return (
+    <QueryClientProvider client={testQueryClient}>
+      <ComputationProvider>{children}</ComputationProvider>
+    </QueryClientProvider>
+  );
 }
 
 describe("ComputationContext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testQueryClient = createTestQueryClient();
     mockSelectedMission = { id: "m-1", name: "Test Mission", computation_status: "IDLE" };
   });
 
@@ -130,6 +144,49 @@ describe("ComputationContext", () => {
     });
   });
 
+  it("invalidates react query mission cache on computation success", async () => {
+    mockGenerateTrajectory.mockResolvedValueOnce({
+      flight_plan: { id: "fp-1" },
+      mission_status: "PLANNED",
+    });
+
+    const invalidateSpy = vi.spyOn(testQueryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    act(() => {
+      result.current.startComputation("m-1");
+    });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("COMPLETED");
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["missions"],
+    });
+  });
+
+  it("invalidates react query mission cache on computation failure", async () => {
+    mockGenerateTrajectory.mockRejectedValueOnce(new Error("fail"));
+
+    const invalidateSpy = vi.spyOn(testQueryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    act(() => {
+      result.current.startComputation("m-1");
+    });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("FAILED");
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["missions"],
+    });
+  });
+
   it("dismiss resets to IDLE", async () => {
     mockGenerateTrajectory.mockResolvedValueOnce({
       flight_plan: { id: "fp-1" },
@@ -158,6 +215,7 @@ describe("ComputationContext", () => {
 describe("ComputationContext polling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testQueryClient = createTestQueryClient();
     vi.useFakeTimers();
   });
 
@@ -219,14 +277,17 @@ describe("ComputationContext polling", () => {
 describe("ComputationNotification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testQueryClient = createTestQueryClient();
     mockSelectedMission = { id: "m-1", name: "Test", computation_status: "IDLE" };
   });
 
   it("renders nothing when IDLE", () => {
     render(
-      <ComputationProvider>
-        <ComputationNotification />
-      </ComputationProvider>,
+      <QueryClientProvider client={testQueryClient}>
+        <ComputationProvider>
+          <ComputationNotification />
+        </ComputationProvider>
+      </QueryClientProvider>,
     );
     expect(screen.queryByTestId("computation-notification")).not.toBeInTheDocument();
   });

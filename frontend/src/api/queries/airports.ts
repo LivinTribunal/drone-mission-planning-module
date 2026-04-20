@@ -12,7 +12,7 @@ import type { AirportCreate, AirportUpdate } from "@/types/airport";
 
 export function useAirports(params?: { limit?: number; offset?: number }) {
   return useQuery({
-    queryKey: queryKeys.airports.list(),
+    queryKey: queryKeys.airports.list(params),
     queryFn: () => listAirports(params),
     staleTime: 5 * 60_000,
   });

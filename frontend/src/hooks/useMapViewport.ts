@@ -48,13 +48,32 @@ export function saveViewport(
   }
 }
 
+const KNOWN_LAYER_KEYS: ReadonlyArray<keyof MapLayerConfig> = [
+  "runways",
+  "taxiways",
+  "obstacles",
+  "safetyZones",
+  "aglSystems",
+  "trajectory",
+  "path",
+];
+
 export function getSavedLayers(
   airportId: string,
 ): Partial<MapLayerConfig> | null {
   try {
     const raw = localStorage.getItem(storageKey(LAYERS_PREFIX, airportId));
     if (!raw) return null;
-    return JSON.parse(raw) as Partial<MapLayerConfig>;
+    const parsed = JSON.parse(raw);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      KNOWN_LAYER_KEYS.some((k) => typeof parsed[k] === "boolean")
+    ) {
+      return parsed as Partial<MapLayerConfig>;
+    }
+    return null;
   } catch {
     return null;
   }

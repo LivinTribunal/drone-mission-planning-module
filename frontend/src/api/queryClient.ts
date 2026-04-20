@@ -23,7 +23,8 @@ export const queryKeys = {
   },
   airports: {
     all: ["airports"] as const,
-    list: () => ["airports", "list"] as const,
+    list: (params?: { limit?: number; offset?: number }) =>
+      ["airports", "list", params] as const,
     summaries: () => ["airports", "summaries"] as const,
     detail: (id: string) => ["airports", "detail", id] as const,
   },

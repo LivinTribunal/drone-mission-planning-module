@@ -7,8 +7,10 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMission } from "./MissionContext";
 import { generateTrajectory, getComputationStatus } from "@/api/missions";
+import { queryKeys } from "@/api/queryClient";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 import type { ComputationStatus } from "@/types/enums";
 
@@ -67,6 +69,7 @@ const ComputationContext = createContext<ComputationContextValue | null>(null);
 
 export function ComputationProvider({ children }: { children: ReactNode }) {
   const { selectedMission, refreshMissions, refreshSelectedMission } = useMission();
+  const qc = useQueryClient();
 
   const [state, setState] = useState<ComputationState>(() => {
     const saved = loadSessionState();
@@ -169,6 +172,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
           });
           refreshMissions();
           refreshSelectedMission();
+          qc.invalidateQueries({ queryKey: queryKeys.missions.all });
           scheduleDismiss(AUTO_DISMISS_SUCCESS_MS);
         })
         .catch((err) => {
@@ -189,13 +193,14 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
           });
           refreshMissions();
           refreshSelectedMission();
+          qc.invalidateQueries({ queryKey: queryKeys.missions.all });
           scheduleDismiss(AUTO_DISMISS_FAILURE_MS);
         })
         .finally(() => {
           computingRef.current = false;
         });
     },
-    [selectedMission, refreshMissions, refreshSelectedMission, clearDismissTimer, scheduleDismiss],
+    [selectedMission, refreshMissions, refreshSelectedMission, clearDismissTimer, scheduleDismiss, qc],
   );
 
   // on mount/mission change: if backend says COMPUTING, start polling
@@ -226,6 +231,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
             }));
             refreshMissions();
             refreshSelectedMission();
+            qc.invalidateQueries({ queryKey: queryKeys.missions.all });
             scheduleDismiss(AUTO_DISMISS_SUCCESS_MS);
           } else if (res.computation_status === "FAILED") {
             clearInterval(id);
@@ -236,6 +242,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
             }));
             refreshMissions();
             refreshSelectedMission();
+            qc.invalidateQueries({ queryKey: queryKeys.missions.all });
             scheduleDismiss(AUTO_DISMISS_FAILURE_MS);
           } else if (res.computation_status === "IDLE") {
             clearInterval(id);
@@ -271,6 +278,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
     refreshMissions,
     refreshSelectedMission,
     scheduleDismiss,
+    qc,
   ]);
 
   const value: ComputationContextValue = {

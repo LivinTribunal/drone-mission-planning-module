@@ -38,7 +38,6 @@ export function useFlightPlan(missionId: string | undefined) {
     queryKey: queryKeys.missions.flightPlan(missionId ?? ""),
     queryFn: () => getFlightPlan(missionId!),
     enabled: !!missionId,
-    // safe because all mission mutations invalidate queryKeys.missions.all
     staleTime: Infinity,
   });
 }
