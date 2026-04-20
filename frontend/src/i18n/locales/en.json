@@ -1489,5 +1489,9 @@
     "computingNamed": "Computing trajectory for {{name}}...",
     "success": "Trajectory computed successfully",
     "failed": "Trajectory computation failed"
+  },
+  "errors": {
+    "webglUnsupported": "WebGL is not supported",
+    "webglUnsupportedHint": "This application requires WebGL to render maps and 3D views. Please use a modern browser with hardware acceleration enabled."
   }
 }
