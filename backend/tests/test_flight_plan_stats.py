@@ -1,4 +1,4 @@
-"""tests for enriched flight plan stats (issue #176)."""
+"""tests for flight plan statistics."""
 
 from uuid import UUID
 
@@ -8,8 +8,8 @@ from app.services.flight_plan_service import _extract_altitude, _extract_coords
 # schema tests
 
 
-def test_flight_plan_response_enriched_fields_default_to_none():
-    """enriched stats fields default to none/empty when not provided."""
+def test_flight_plan_response_statistics_fields_default_to_none():
+    """statistics fields default to none/empty when not provided."""
     data = {
         "id": "00000000-0000-0000-0000-000000000001",
         "mission_id": "00000000-0000-0000-0000-000000000002",
@@ -23,11 +23,12 @@ def test_flight_plan_response_enriched_fields_default_to_none():
     assert resp.min_altitude_msl is None
     assert resp.max_altitude_msl is None
     assert resp.transit_speed is None
+    assert resp.average_speed is None
     assert resp.inspection_stats == []
 
 
-def test_flight_plan_response_accepts_enriched_fields():
-    """enriched stats fields are populated correctly."""
+def test_flight_plan_response_accepts_statistics_fields():
+    """statistics fields are populated correctly."""
     data = {
         "id": "00000000-0000-0000-0000-000000000001",
         "mission_id": "00000000-0000-0000-0000-000000000002",
@@ -39,6 +40,7 @@ def test_flight_plan_response_accepts_enriched_fields():
         "min_altitude_msl": 310.5,
         "max_altitude_msl": 345.2,
         "transit_speed": 5.0,
+        "average_speed": 3.5,
         "inspection_stats": [
             {
                 "inspection_id": "00000000-0000-0000-0000-000000000010",
@@ -55,6 +57,7 @@ def test_flight_plan_response_accepts_enriched_fields():
     assert resp.min_altitude_agl == 10.5
     assert resp.max_altitude_agl == 45.2
     assert resp.transit_speed == 5.0
+    assert resp.average_speed == 3.5
     assert len(resp.inspection_stats) == 1
     assert resp.inspection_stats[0].waypoint_count == 8
 
@@ -90,8 +93,8 @@ def test_extract_coords_returns_zeros_for_none():
 # api-level test - verify enriched stats come back from get flight plan
 
 
-def test_enriched_stats_in_get_flight_plan(client):
-    """GET /flight-plan returns enriched altitude and speed stats."""
+def test_statistics_in_get_flight_plan(client):
+    """GET /flight-plan returns flight statistics."""
     from tests.data.trajectory import (
         DEFAULT_LANDING,
         DEFAULT_TAKEOFF,
@@ -170,6 +173,8 @@ def test_enriched_stats_in_get_flight_plan(client):
     assert data["min_altitude_agl"] <= data["max_altitude_agl"]
     assert data["min_altitude_msl"] <= data["max_altitude_msl"]
     assert data["transit_speed"] == 7.5
+    assert data["average_speed"] is not None
+    assert data["average_speed"] > 0
     assert isinstance(data["inspection_stats"], list)
     assert len(data["inspection_stats"]) >= 1
 

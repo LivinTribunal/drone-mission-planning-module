@@ -51,6 +51,11 @@ export default function MapStatsPanel({
       ? `${flightPlan.transit_speed} ${t("common.units.ms")}`
       : "\u2014";
 
+  const averageSpeed =
+    flightPlan.average_speed != null
+      ? `${flightPlan.average_speed} ${t("common.units.ms")}`
+      : "\u2014";
+
   const validation = getValidationDisplay(flightPlan.validation_result, {
     passed: t("map.validationPassed"),
     notPassed: t("map.validationNotPassed"),
@@ -88,6 +93,11 @@ export default function MapStatsPanel({
       icon: Gauge,
     },
     {
+      label: t("map.averageSpeed"),
+      value: averageSpeed,
+      icon: Gauge,
+    },
+    {
       label: t("map.validation"),
       value: validation.value,
       icon: validation.icon,
@@ -104,7 +114,7 @@ export default function MapStatsPanel({
         className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-tv-text-primary"
       >
         <span className="rounded-full px-3 py-1 bg-tv-surface border border-tv-border">
-          {t("map.estimatedStats")}
+          {t("map.statistics")}
         </span>
         <svg
           className={`h-3 w-3 text-tv-text-secondary transition-transform ${collapsed ? "" : "rotate-180"}`}

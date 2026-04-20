@@ -5,7 +5,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
-from app.models.airport import Airport
 from app.models.enums import MissionStatus, WaypointType
 from app.models.flight_plan import (
     FlightPlan,
@@ -72,7 +71,7 @@ def _extract_coords(geom) -> tuple[float, float, float]:
 
 
 def build_enriched_response(db: Session, flight_plan: FlightPlan) -> FlightPlanResponse:
-    """build flight plan response with computed altitude and speed stats."""
+    """build flight plan response with computed flight statistics."""
     response = FlightPlanResponse.model_validate(flight_plan)
 
     waypoints = flight_plan.waypoints
@@ -84,18 +83,22 @@ def build_enriched_response(db: Session, flight_plan: FlightPlan) -> FlightPlanR
     response.min_altitude_msl = min(altitudes_msl)
     response.max_altitude_msl = max(altitudes_msl)
 
-    airport = db.query(Airport).filter(Airport.id == flight_plan.airport_id).first()
+    airport = flight_plan.airport
     elevation = airport.elevation if airport else 0.0
 
     response.min_altitude_agl = response.min_altitude_msl - elevation
     response.max_altitude_agl = response.max_altitude_msl - elevation
 
-    # transit speed from mission
-    mission = db.query(Mission).filter(Mission.id == flight_plan.mission_id).first()
+    # transit speed from mission (fall back to 5.0 m/s default)
+    mission = flight_plan.mission
     default_speed = 5.0
     if mission and mission.default_speed is not None:
-        response.transit_speed = mission.default_speed
         default_speed = mission.default_speed
+    response.transit_speed = default_speed
+
+    # average speed = total distance / total duration
+    if response.total_distance and response.estimated_duration and response.estimated_duration > 0:
+        response.average_speed = round(response.total_distance / response.estimated_duration, 2)
 
     # per-inspection stats
     by_inspection: dict[UUID, list[Waypoint]] = defaultdict(list)
@@ -255,12 +258,14 @@ def persist_flight_plan(
 
 
 def get_flight_plan(db: Session, mission_id: UUID) -> FlightPlanResponse:
-    """get flight plan for mission with waypoints, validation, and enriched stats."""
+    """get flight plan for mission with waypoints, validation, and flight statistics."""
     fp = (
         db.query(FlightPlan)
         .options(
             joinedload(FlightPlan.waypoints),
             joinedload(FlightPlan.validation_result).joinedload(ValidationResult.violations),
+            joinedload(FlightPlan.mission),
+            joinedload(FlightPlan.airport),
         )
         .filter(FlightPlan.mission_id == mission_id)
         .first()
@@ -273,7 +278,7 @@ def get_flight_plan(db: Session, mission_id: UUID) -> FlightPlanResponse:
 
 def batch_update_waypoints(
     db: Session, mission_id: UUID, updates: list[WaypointPositionUpdate]
-) -> FlightPlan:
+) -> FlightPlanResponse:
     """batch update waypoint positions and camera targets."""
     if len(updates) > 200:
         raise DomainError("batch too large", status_code=400)
@@ -326,7 +331,7 @@ def batch_update_waypoints(
 
 def insert_transit_waypoint(
     db: Session, mission_id: UUID, request: TransitWaypointInsertRequest
-) -> FlightPlan:
+) -> FlightPlanResponse:
     """insert a new transit waypoint after the given sequence position."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
@@ -380,7 +385,7 @@ def insert_transit_waypoint(
     return get_flight_plan(db, mission_id)
 
 
-def delete_transit_waypoint(db: Session, mission_id: UUID, waypoint_id: UUID) -> FlightPlan:
+def delete_transit_waypoint(db: Session, mission_id: UUID, waypoint_id: UUID) -> FlightPlanResponse:
     """delete a transit waypoint and resequence remaining waypoints."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:

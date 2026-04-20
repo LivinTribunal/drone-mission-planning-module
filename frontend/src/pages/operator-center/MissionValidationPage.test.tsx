@@ -103,6 +103,7 @@ function makeFlightPlan(passed: boolean = true): FlightPlanResponse {
     min_altitude_msl: null,
     max_altitude_msl: null,
     transit_speed: null,
+    average_speed: null,
     inspection_stats: [],
   };
 }

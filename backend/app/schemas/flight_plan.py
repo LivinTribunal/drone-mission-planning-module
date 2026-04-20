@@ -167,12 +167,13 @@ class FlightPlanResponse(BaseModel):
     waypoints: list[WaypointResponse] = []
     validation_result: ValidationResultResponse | None = None
 
-    # enriched stats
+    # flight statistics
     min_altitude_agl: float | None = None
     max_altitude_agl: float | None = None
     min_altitude_msl: float | None = None
     max_altitude_msl: float | None = None
     transit_speed: float | None = None
+    average_speed: float | None = None
     inspection_stats: list[InspectionFlightStats] = []
 
     model_config = {"from_attributes": True}

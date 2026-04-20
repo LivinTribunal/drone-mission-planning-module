@@ -40,7 +40,7 @@ export default function StatsPanel({
           onClick={() => setCollapsed(!collapsed)}
           className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
         >
-          <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.estimatedStats")}</span>
+          <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.statistics")}</span>
           <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`} />
         </button>
         {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}
@@ -79,6 +79,11 @@ export default function StatsPanel({
   const transitSpeed =
     flightPlan?.transit_speed != null
       ? `${flightPlan.transit_speed} ${t("common.units.ms")}`
+      : "\u2014";
+
+  const averageSpeed =
+    flightPlan?.average_speed != null
+      ? `${flightPlan.average_speed} ${t("common.units.ms")}`
       : "\u2014";
 
   const validation = getValidationDisplay(flightPlan?.validation_result, {
@@ -127,6 +132,12 @@ export default function StatsPanel({
       colorClass: "bg-tv-accent/20 text-tv-accent",
     },
     {
+      label: t("mission.config.averageSpeed"),
+      value: averageSpeed,
+      icon: Gauge,
+      colorClass: "bg-tv-info/20 text-tv-info",
+    },
+    {
       label: t("mission.config.validation"),
       value: validation.value,
       icon: validation.icon,
@@ -140,7 +151,7 @@ export default function StatsPanel({
         onClick={() => setCollapsed(!collapsed)}
         className="flex items-center justify-between w-full text-sm font-semibold text-tv-text-primary"
       >
-        <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.estimatedStats")}</span>
+        <span className="rounded-full px-3 py-1 bg-tv-bg border border-tv-border">{t("mission.config.statistics")}</span>
         <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`} />
       </button>
       {!collapsed && <div className="border-b border-tv-border -mx-4 mt-3" />}

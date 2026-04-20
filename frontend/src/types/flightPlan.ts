@@ -64,6 +64,7 @@ export interface FlightPlanResponse {
   min_altitude_msl: number | null;
   max_altitude_msl: number | null;
   transit_speed: number | null;
+  average_speed: number | null;
   inspection_stats: InspectionFlightStats[];
 }
 

@@ -1,4 +1,4 @@
-import { ShieldCheck, ShieldAlert, type LucideIcon } from "lucide-react";
+import { ShieldCheck, ShieldAlert, ShieldOff, type LucideIcon } from "lucide-react";
 import type { ValidationResultResponse } from "@/types/flightPlan";
 
 export interface ValidationDisplay {
@@ -20,7 +20,7 @@ export function getValidationDisplay(
   if (!validationResult) {
     return {
       value: labels.notRun,
-      icon: ShieldCheck,
+      icon: ShieldOff,
       colorClass: "bg-tv-text-muted/20 text-tv-text-muted",
     };
   }
