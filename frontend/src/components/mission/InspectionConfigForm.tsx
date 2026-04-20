@@ -243,6 +243,9 @@ export default function InspectionConfigForm({
         setPresetName("");
         fetchPresets();
       })
+      .catch((err) => {
+        console.error("save preset failed", err);
+      })
       .finally(() => setSavingPreset(false));
   }
 

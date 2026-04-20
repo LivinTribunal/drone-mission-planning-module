@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.common import ListMeta
+from app.schemas.common import FocusModeStr, ListMeta, WhiteBalanceStr
 from app.schemas.geometry import PointZ
 
 # computation status values - mirrors ComputationStatus enum
@@ -25,10 +25,6 @@ InspectionMethodStr = Literal[
 CaptureModeStr = Literal["VIDEO_CAPTURE", "PHOTO_CAPTURE"]
 # hover bearing reference frames - RUNWAY = 0 is approach side, COMPASS = absolute
 HoverBearingRefStr = Literal["RUNWAY", "COMPASS"]
-# white balance presets
-WhiteBalanceStr = Literal["DAYLIGHT", "CLOUDY", "TUNGSTEN", "MANUAL_4000K"]
-# focus mode values
-FocusModeStr = Literal["MANUAL", "AUTO_CENTER", "AUTO_AREA"]
 
 # minimum transit altitude (m AGL) - mirrors trajectory_types.MINIMUM_AGL_ALTITUDE.
 # duplicated here so schemas do not import from services (architectural boundary).

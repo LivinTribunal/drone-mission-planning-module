@@ -1,5 +1,18 @@
 """tests for camera preset CRUD api."""
 
+from types import SimpleNamespace
+from uuid import UUID
+
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
+
+from app.api.dependencies import get_current_user
+from app.core.database import get_db
+from app.main import app
+from app.models.user import User
+
+OPERATOR_USER_ID = UUID("00000000-0000-0000-0000-000000000088")
+
 PRESET_PAYLOAD = {
     "name": "PAPI Night - DJI M30T",
     "is_default": False,
@@ -129,3 +142,74 @@ def test_get_nonexistent_preset(client):
     """test getting a preset that does not exist."""
     r = client.get("/api/v1/camera-presets/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404
+
+
+def test_get_preset_access_control(client, db_engine):
+    """test that a non-owner operator cannot fetch another user's private preset."""
+    # create a private preset as the default super_admin test user
+    r = client.post(
+        "/api/v1/camera-presets",
+        json={"name": "Private Owner Preset", "white_balance": "DAYLIGHT"},
+    )
+    assert r.status_code == 201
+    private_preset_id = r.json()["id"]
+
+    # also create a default preset to verify those remain accessible
+    r = client.post(
+        "/api/v1/camera-presets",
+        json={"name": "Public Default Preset", "is_default": True, "white_balance": "CLOUDY"},
+    )
+    assert r.status_code == 201
+    default_preset_id = r.json()["id"]
+
+    # create a second user (operator) in the db
+    session = sessionmaker(bind=db_engine)()
+    try:
+        existing = session.query(User).filter(User.id == OPERATOR_USER_ID).first()
+        if not existing:
+            user_b = User(
+                id=OPERATOR_USER_ID,
+                email="operator@tarmacview.com",
+                name="Operator B",
+                role="OPERATOR",
+                is_active=True,
+            )
+            user_b.set_password("testpassword")
+            session.add(user_b)
+            session.commit()
+    finally:
+        session.close()
+
+    # build a client that authenticates as the operator user
+    operator_stub = SimpleNamespace(
+        id=OPERATOR_USER_ID,
+        email="operator@tarmacview.com",
+        name="Operator B",
+        role="OPERATOR",
+        is_active=True,
+        airports=[],
+    )
+    operator_stub.has_airport_access = lambda airport_id: True
+
+    TestSession = sessionmaker(bind=db_engine)
+
+    def override_db():
+        """test db override."""
+        db = TestSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: operator_stub
+    operator_client = TestClient(app)
+
+    # operator should NOT be able to fetch another user's private preset
+    r = operator_client.get(f"/api/v1/camera-presets/{private_preset_id}")
+    assert r.status_code == 404
+
+    # operator CAN fetch a default preset
+    r = operator_client.get(f"/api/v1/camera-presets/{default_preset_id}")
+    assert r.status_code == 200
+    assert r.json()["id"] == default_preset_id

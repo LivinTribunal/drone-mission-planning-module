@@ -881,8 +881,12 @@ export default function DroneEditPage() {
                         </div>
                         <button
                           onClick={async () => {
-                            await deleteCameraPreset(p.id);
-                            fetchPresets();
+                            try {
+                              await deleteCameraPreset(p.id);
+                              fetchPresets();
+                            } catch (err) {
+                              console.error("delete preset failed", err);
+                            }
                           }}
                           className="ml-2 p-1 rounded-full text-tv-text-muted hover:text-tv-error hover:bg-tv-bg transition-colors flex-shrink-0"
                           title={t("coordinator.cameraPresets.deletePreset")}
@@ -908,14 +912,18 @@ export default function DroneEditPage() {
                     <button
                       onClick={async () => {
                         if (!newPresetName.trim()) return;
-                        await createCameraPreset({
-                          name: newPresetName.trim(),
-                          drone_profile_id: id,
-                          is_default: true,
-                        });
-                        setNewPresetName("");
-                        setShowNewPresetInput(false);
-                        fetchPresets();
+                        try {
+                          await createCameraPreset({
+                            name: newPresetName.trim(),
+                            drone_profile_id: id,
+                            is_default: true,
+                          });
+                          setNewPresetName("");
+                          setShowNewPresetInput(false);
+                          fetchPresets();
+                        } catch (err) {
+                          console.error("create preset failed", err);
+                        }
                       }}
                       disabled={!newPresetName.trim()}
                       className="px-3 py-1.5 rounded-full text-xs bg-tv-accent text-tv-accent-text hover:opacity-90 transition-opacity disabled:opacity-50"

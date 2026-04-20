@@ -40,7 +40,17 @@ def get_preset(
     db: Session = Depends(get_db),
 ):
     """get camera preset by id."""
-    return camera_preset_service.get_preset(db, preset_id)
+    preset = camera_preset_service.get_preset(db, preset_id)
+
+    # visibility: default presets, own presets, or coordinator/admin
+    if (
+        not preset.is_default
+        and preset.created_by != current_user.id
+        and current_user.role not in ("COORDINATOR", "SUPER_ADMIN")
+    ):
+        raise HTTPException(status_code=404, detail="camera preset not found")
+
+    return preset
 
 
 @router.post("", status_code=201, response_model=CameraPresetResponse)

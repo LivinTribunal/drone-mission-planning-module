@@ -3,8 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.schemas.common import ListMeta
-from app.schemas.mission import FocusModeStr, WhiteBalanceStr
+from app.schemas.common import FocusModeStr, ListMeta, WhiteBalanceStr
 
 
 class CameraPresetCreate(BaseModel):
