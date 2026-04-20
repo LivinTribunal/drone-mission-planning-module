@@ -172,7 +172,7 @@ export default function InspectionEditPage() {
             iso: cfg.iso,
             shutter_speed: cfg.shutter_speed,
             focus_mode: cfg.focus_mode,
-            focus_distance_m: cfg.focus_distance_m,
+            focus_distance_mode: cfg.focus_distance_mode,
             optical_zoom: cfg.optical_zoom,
           }
         : {
@@ -200,7 +200,7 @@ export default function InspectionEditPage() {
             iso: null,
             shutter_speed: null,
             focus_mode: null,
-            focus_distance_m: null,
+            focus_distance_mode: null,
             optical_zoom: null,
           },
     );

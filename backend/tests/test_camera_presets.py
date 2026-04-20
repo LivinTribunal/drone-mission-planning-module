@@ -21,7 +21,7 @@ PRESET_PAYLOAD = {
     "iso": 800,
     "shutter_speed": "1/500",
     "focus_mode": "MANUAL",
-    "focus_distance_m": 300.0,
+    "focus_distance_mode": "INFINITY",
     "optical_zoom": 5.0,
 }
 

@@ -196,7 +196,23 @@ fi
 echo ""
 
 # ============================================================================
-# Step 4: Report results
+# Step 4: Migration integrity (duplicate IDs, cycles, unmerged heads)
+# ============================================================================
+echo "--- Migration integrity ---"
+
+MIGRATION_SCRIPT="${REPO_ROOT}/scripts/check-migrations.sh"
+if [[ -x "$MIGRATION_SCRIPT" ]]; then
+  if ! bash "$MIGRATION_SCRIPT"; then
+    ((VIOLATIONS++))
+  fi
+else
+  echo "  (check-migrations.sh not found or not executable, skipping)"
+fi
+
+echo ""
+
+# ============================================================================
+# Step 5: Report results
 # ============================================================================
 if (( VIOLATIONS > 0 )); then
   echo "Found ${VIOLATIONS} architectural boundary violation(s)"

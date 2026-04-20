@@ -32,6 +32,7 @@ class DroneProfileCreate(BaseModel):
     sensor_fov: float | None = None
     weight: float | None = None
     model_identifier: str | None = None
+    max_optical_zoom: float | None = None
 
     @field_validator("model_identifier")
     @classmethod
@@ -56,6 +57,7 @@ class DroneProfileUpdate(BaseModel):
     sensor_fov: float | None = None
     weight: float | None = None
     model_identifier: str | None = None
+    max_optical_zoom: float | None = None
 
     @field_validator("model_identifier")
     @classmethod
@@ -81,6 +83,7 @@ class DroneProfileResponse(BaseModel):
     sensor_fov: float | None = None
     weight: float | None = None
     model_identifier: str | None = None
+    max_optical_zoom: float | None = None
     created_at: datetime
     updated_at: datetime
     mission_count: int = 0

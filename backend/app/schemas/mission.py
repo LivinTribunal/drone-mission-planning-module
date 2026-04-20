@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.common import FocusModeStr, ListMeta, WhiteBalanceStr
+from app.schemas.common import FocusDistanceModeStr, FocusModeStr, ListMeta, WhiteBalanceStr
 from app.schemas.geometry import PointZ
 
 # computation status values - mirrors ComputationStatus enum
@@ -23,6 +23,8 @@ InspectionMethodStr = Literal[
 ]
 # capture mode values - used by trajectory_computation to choose camera_action
 CaptureModeStr = Literal["VIDEO_CAPTURE", "PHOTO_CAPTURE"]
+# camera_mode values - AUTO = drone-controlled, MANUAL = coordinator values applied
+CameraModeStr = Literal["AUTO", "MANUAL"]
 # hover bearing reference frames - RUNWAY = 0 is approach side, COMPASS = absolute
 HoverBearingRefStr = Literal["RUNWAY", "COMPASS"]
 
@@ -65,11 +67,12 @@ class InspectionConfigOverride(BaseModel):
     selected_lha_id: UUID | None = None
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
+    camera_mode: CameraModeStr | None = None
     white_balance: WhiteBalanceStr | None = None
     iso: int | None = Field(default=None, gt=0)
     shutter_speed: str | None = Field(default=None, max_length=20)
     focus_mode: FocusModeStr | None = None
-    focus_distance_m: float | None = Field(default=None, gt=0)
+    focus_distance_mode: FocusDistanceModeStr | None = None
     optical_zoom: float | None = Field(default=None, gt=0)
     camera_preset_id: UUID | None = None
 
@@ -122,11 +125,12 @@ class InspectionConfigResponse(BaseModel):
     selected_lha_id: UUID | None = None
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
+    camera_mode: CameraModeStr | None = None
     white_balance: WhiteBalanceStr | None = None
     iso: int | None = None
     shutter_speed: str | None = None
     focus_mode: FocusModeStr | None = None
-    focus_distance_m: float | None = None
+    focus_distance_mode: FocusDistanceModeStr | None = None
     optical_zoom: float | None = None
     camera_preset_id: UUID | None = None
 
@@ -174,6 +178,7 @@ class MissionCreate(BaseModel):
     landing_coordinate: PointZ | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
+    camera_mode: CameraModeStr = "AUTO"
     default_white_balance: WhiteBalanceStr | None = None
     default_iso: int | None = Field(default=None, gt=0)
     default_shutter_speed: str | None = Field(default=None, max_length=20)
@@ -203,6 +208,7 @@ class MissionUpdate(BaseModel):
     date_time: datetime | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
+    camera_mode: CameraModeStr | None = None
     default_white_balance: WhiteBalanceStr | None = None
     default_iso: int | None = Field(default=None, gt=0)
     default_shutter_speed: str | None = Field(default=None, max_length=20)
@@ -237,6 +243,7 @@ class MissionResponse(BaseModel):
     landing_coordinate: PointZ | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = None
+    camera_mode: CameraModeStr = "AUTO"
     default_white_balance: WhiteBalanceStr | None = None
     default_iso: int | None = None
     default_shutter_speed: str | None = None

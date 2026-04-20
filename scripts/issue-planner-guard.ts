@@ -45,7 +45,7 @@ interface IssuePayload {
 const TRIGGER_LABEL = 'agent:plan';
 
 /** Labels that block planning. */
-const BLOCKING_LABELS = ['agent:skip', 'wontfix', 'duplicate', 'invalid'];
+const BLOCKING_LABELS = ['agent:skip', 'wontfix', 'duplicate', 'invalid', 'blocked'];
 
 /** Marker comment prefix used to detect existing planner comments. */
 const PLAN_MARKER_PREFIX = '<!-- issue-planner:';

@@ -26,7 +26,7 @@ class CameraPreset(Base):
     iso = Column(Integer, nullable=True)
     shutter_speed = Column(String(20), nullable=True)
     focus_mode = Column(String(20), nullable=True)
-    focus_distance_m = Column(Float, nullable=True)
+    focus_distance_mode = Column(String(20), nullable=True)
     optical_zoom = Column(Float, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

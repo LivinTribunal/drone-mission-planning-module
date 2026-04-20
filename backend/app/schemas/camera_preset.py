@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.schemas.common import FocusModeStr, ListMeta, WhiteBalanceStr
+from app.schemas.common import FocusDistanceModeStr, FocusModeStr, ListMeta, WhiteBalanceStr
 
 
 class CameraPresetCreate(BaseModel):
@@ -16,7 +16,7 @@ class CameraPresetCreate(BaseModel):
     iso: int | None = Field(default=None, gt=0)
     shutter_speed: str | None = Field(default=None, max_length=20)
     focus_mode: FocusModeStr | None = None
-    focus_distance_m: float | None = Field(default=None, gt=0)
+    focus_distance_mode: FocusDistanceModeStr | None = None
     optical_zoom: float | None = Field(default=None, gt=0)
 
 
@@ -30,7 +30,7 @@ class CameraPresetUpdate(BaseModel):
     iso: int | None = Field(default=None, gt=0)
     shutter_speed: str | None = Field(default=None, max_length=20)
     focus_mode: FocusModeStr | None = None
-    focus_distance_m: float | None = Field(default=None, gt=0)
+    focus_distance_mode: FocusDistanceModeStr | None = None
     optical_zoom: float | None = Field(default=None, gt=0)
 
 
@@ -46,7 +46,7 @@ class CameraPresetResponse(BaseModel):
     iso: int | None = None
     shutter_speed: str | None = None
     focus_mode: FocusModeStr | None = None
-    focus_distance_m: float | None = None
+    focus_distance_mode: FocusDistanceModeStr | None = None
     optical_zoom: float | None = None
     created_at: datetime
     updated_at: datetime

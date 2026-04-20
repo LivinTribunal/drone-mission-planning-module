@@ -515,7 +515,7 @@ def _build_inspection_detail_pages(c: canvas.Canvas, data: ReportData, page_num:
             ("iso", "ISO", None),
             ("shutter_speed", "Shutter Speed", None),
             ("focus_mode", "Focus Mode", None),
-            ("focus_distance_m", "Focus Distance", " m"),
+            ("focus_distance_mode", "Focus Distance", ""),
             ("optical_zoom", "Optical Zoom", "x"),
         ]
         _has_cam = any(resolved.get(f[0]) is not None for f in _cam_fields)

@@ -84,6 +84,7 @@ const baseMission: MissionDetailResponse = {
   default_iso: null,
   default_shutter_speed: null,
   default_focus_mode: null,
+  camera_mode: "AUTO",
   transit_agl: null,
   require_perpendicular_runway_crossing: true,
   flight_plan_scope: "FULL",
@@ -286,6 +287,63 @@ describe("InspectionConfigForm method variants", () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ measurement_speed_override: 2.5 }),
     );
+  });
+
+  it("auto-fills optical_zoom clamped to max_optical_zoom", async () => {
+    const onChange = vi.fn();
+    renderForm({
+      inspection: baseInspection({ method: "HOVER_POINT_LOCK" }),
+      template: papiTemplate as never,
+      configOverride: { distance_from_lha: 500, height_above_lha: 100 },
+      droneProfile: {
+        id: "d-1",
+        name: "Test Drone",
+        sensor_fov: 84,
+        max_optical_zoom: 7,
+      } as never,
+      onChange,
+    });
+    const call = onChange.mock.calls.find(
+      (c) => typeof c[0]?.optical_zoom === "number",
+    );
+    expect(call).toBeTruthy();
+    expect(call![0].optical_zoom).toBeLessThanOrEqual(7);
+  });
+
+  it("propagates focus_distance_mode dropdown changes", () => {
+    const onChange = vi.fn();
+    renderForm({
+      inspection: baseInspection({ method: "HOVER_POINT_LOCK" }),
+      template: papiTemplate as never,
+      configOverride: { camera_mode: "MANUAL" },
+      onChange,
+    });
+    fireEvent.change(screen.getByTestId("inspection-focus-distance-mode"), {
+      target: { value: "INFINITY" },
+    });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ focus_distance_mode: "INFINITY" }),
+    );
+  });
+
+  it("renders zoom-over-optical warning when optical_zoom exceeds max_optical_zoom", () => {
+    renderForm({
+      inspection: baseInspection({ method: "HOVER_POINT_LOCK" }),
+      template: papiTemplate as never,
+      configOverride: { optical_zoom: 10, camera_mode: "MANUAL" },
+      droneProfile: {
+        id: "d-1",
+        name: "Test Drone",
+        sensor_fov: 84,
+        max_optical_zoom: 7,
+      } as never,
+    });
+    expect(
+      screen.getByTestId("zoom-over-optical-warning"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("zoom-over-optical-validation"),
+    ).toBeInTheDocument();
   });
 
   it("hover-point-lock: editing distance without lock does not recompute", () => {

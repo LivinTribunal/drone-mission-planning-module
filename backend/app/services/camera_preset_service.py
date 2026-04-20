@@ -53,6 +53,8 @@ def create_preset(db: Session, schema: CameraPresetCreate, user: User) -> Camera
     preset = CameraPreset(**data)
     db.add(preset)
     db.flush()
+    if preset.is_default:
+        _clear_other_defaults(db, preset)
     db.refresh(preset)
     return preset
 
@@ -65,8 +67,24 @@ def update_preset(
     _check_access(preset, user)
     apply_schema_update(preset, schema)
     db.flush()
+    if preset.is_default:
+        _clear_other_defaults(db, preset)
     db.refresh(preset)
     return preset
+
+
+def _clear_other_defaults(db: Session, preset: CameraPreset) -> None:
+    """ensure at most one is_default preset per drone profile."""
+    query = db.query(CameraPreset).filter(
+        CameraPreset.id != preset.id,
+        CameraPreset.is_default.is_(True),
+    )
+    if preset.drone_profile_id is None:
+        query = query.filter(CameraPreset.drone_profile_id.is_(None))
+    else:
+        query = query.filter(CameraPreset.drone_profile_id == preset.drone_profile_id)
+    query.update({"is_default": False}, synchronize_session=False)
+    db.flush()
 
 
 def delete_preset(db: Session, preset: CameraPreset, user: User) -> None:

@@ -73,6 +73,7 @@ class DroneProfile(Base):
     sensor_fov = Column(Float)
     weight = Column(Float)
     model_identifier = Column(String, nullable=True)
+    max_optical_zoom = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -108,6 +109,7 @@ class Mission(Base):
     default_buffer_distance = Column(Float, nullable=True)
 
     # mission-level camera defaults - inspection overrides take precedence
+    camera_mode = Column(String(10), nullable=False, default="AUTO", server_default="AUTO")
     default_white_balance = Column(String(20), nullable=True)
     default_iso = Column(Integer, nullable=True)
     default_shutter_speed = Column(String(20), nullable=True)

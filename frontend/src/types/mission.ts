@@ -1,6 +1,8 @@
 import type { PointZ } from "./common";
 import type { CaptureMode, ComputationStatus, FlightPlanScope, InspectionMethod, MissionStatus } from "./enums";
 
+export type CameraMode = "AUTO" | "MANUAL";
+
 export interface MissionResponse {
   id: string;
   name: string;
@@ -18,6 +20,7 @@ export interface MissionResponse {
   landing_coordinate: PointZ | null;
   default_capture_mode: CaptureMode | null;
   default_buffer_distance: number | null;
+  camera_mode: CameraMode;
   default_white_balance: string | null;
   default_iso: number | null;
   default_shutter_speed: string | null;
@@ -59,11 +62,12 @@ export interface InspectionConfigResponse {
   selected_lha_id: string | null;
   hover_bearing: number | null;
   hover_bearing_reference: "RUNWAY" | "COMPASS" | null;
+  camera_mode: CameraMode | null;
   white_balance: string | null;
   iso: number | null;
   shutter_speed: string | null;
   focus_mode: string | null;
-  focus_distance_m: number | null;
+  focus_distance_mode: "AUTO" | "INFINITY" | null;
   optical_zoom: number | null;
   camera_preset_id: string | null;
 }
@@ -101,11 +105,12 @@ export interface InspectionConfigOverride {
   selected_lha_id?: string | null;
   hover_bearing?: number | null;
   hover_bearing_reference?: "RUNWAY" | "COMPASS" | null;
+  camera_mode?: CameraMode | null;
   white_balance?: string | null;
   iso?: number | null;
   shutter_speed?: string | null;
   focus_mode?: string | null;
-  focus_distance_m?: number | null;
+  focus_distance_mode?: "AUTO" | "INFINITY" | null;
   optical_zoom?: number | null;
   camera_preset_id?: string | null;
 }
@@ -123,6 +128,7 @@ export interface MissionCreate {
   landing_coordinate?: PointZ | null;
   default_capture_mode?: CaptureMode | null;
   default_buffer_distance?: number | null;
+  camera_mode?: CameraMode;
   default_white_balance?: string | null;
   default_iso?: number | null;
   default_shutter_speed?: string | null;
@@ -144,6 +150,7 @@ export interface MissionUpdate {
   landing_coordinate?: PointZ | null;
   default_capture_mode?: CaptureMode | null;
   default_buffer_distance?: number | null;
+  camera_mode?: CameraMode;
   default_white_balance?: string | null;
   default_iso?: number | null;
   default_shutter_speed?: string | null;

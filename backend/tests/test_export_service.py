@@ -578,7 +578,7 @@ class TestGenerateJson:
             "iso": 800,
             "shutter_speed": "1/30",
             "focus_mode": "MANUAL",
-            "focus_distance_m": 50.0,
+            "focus_distance_mode": "INFINITY",
             "optical_zoom": 2.0,
         }
 
@@ -606,7 +606,7 @@ class TestGenerateJson:
         assert cam["iso"] == 800
         assert cam["shutter_speed"] == "1/30"
         assert cam["focus_mode"] == "MANUAL"
-        assert cam["focus_distance_m"] == 50.0
+        assert cam["focus_distance_mode"] == "INFINITY"
         assert cam["optical_zoom"] == 2.0
         config.resolve_with_defaults.assert_called_once_with(template_cfg)
 
@@ -620,7 +620,7 @@ class TestGenerateJson:
             "iso": None,
             "shutter_speed": None,
             "focus_mode": None,
-            "focus_distance_m": None,
+            "focus_distance_mode": None,
             "optical_zoom": None,
         }
 

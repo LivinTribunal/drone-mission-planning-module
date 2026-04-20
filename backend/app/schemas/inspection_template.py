@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.schemas.common import ListMeta
+from app.schemas.common import FocusDistanceModeStr, ListMeta
 from app.schemas.mission import (
     CaptureModeStr,
     FocusModeStr,
@@ -40,7 +40,7 @@ class InspectionConfigCreate(BaseModel):
     iso: int | None = Field(default=None, gt=0)
     shutter_speed: str | None = Field(default=None, max_length=20)
     focus_mode: FocusModeStr | None = None
-    focus_distance_m: float | None = Field(default=None, gt=0)
+    focus_distance_mode: FocusDistanceModeStr | None = None
     optical_zoom: float | None = Field(default=None, gt=0)
     camera_preset_id: UUID | None = None
 
@@ -73,7 +73,7 @@ class InspectionConfigResponse(BaseModel):
     iso: int | None = None
     shutter_speed: str | None = None
     focus_mode: FocusModeStr | None = None
-    focus_distance_m: float | None = None
+    focus_distance_mode: FocusDistanceModeStr | None = None
     optical_zoom: float | None = None
     camera_preset_id: UUID | None = None
 

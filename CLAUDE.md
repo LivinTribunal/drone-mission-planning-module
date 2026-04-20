@@ -147,6 +147,19 @@ Changes to these paths:
 - Should include browser evidence if they affect UI
 - Are classified as **Tier 3 (high risk)** per `harness.config.json`
 
+## Database Migrations
+
+- **Always use `alembic revision --autogenerate`** to create new migrations — never hand-write migration files or invent revision IDs manually. Hand-picked IDs cause collisions when multiple branches add migrations concurrently.
+  ```bash
+  cd backend && alembic revision --autogenerate -m "short description"
+  ```
+- **After creating a migration**, review the generated file — autogenerate can miss renames or produce incorrect diffs. Edit the generated `upgrade()` / `downgrade()` as needed, but never change the `revision` ID.
+- **Multiple heads**: if your branch diverges from another that also added migrations, merge heads before opening a PR:
+  ```bash
+  cd backend && alembic merge heads -m "merge migration heads"
+  ```
+- **CI validation**: `scripts/check-migrations.sh` runs in CI and blocks PRs with duplicate revision IDs, cycles, or unmerged heads.
+
 ## Testing
 
 - **Backend**: pytest + httpx for async API tests, real PostGIS via docker service container in CI
@@ -209,6 +222,7 @@ This repo uses [CodeFactory](https://github.com/yasha-dev1/codefactory) for auto
 - `agent:needs-judgment` — agent cannot proceed without human input
 - `needs-more-info` — issue needs more detail
 - `needs-human-review` — requires human review
+- `blocked` — halts all agent automation on the issue/PR (planner, implementer, review, remediation). Nothing runs while this label is present; remove it to resume.
 
 ### Risk Tiers
 

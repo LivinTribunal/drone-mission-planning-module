@@ -13,6 +13,7 @@ export interface DroneProfileResponse {
   sensor_fov: number | null;
   weight: number | null;
   model_identifier: string | null;
+  max_optical_zoom: number | null;
   created_at: string;
   updated_at: string;
   mission_count: number;
@@ -32,6 +33,7 @@ export interface DroneProfileCreate {
   sensor_fov?: number | null;
   weight?: number | null;
   model_identifier?: string | null;
+  max_optical_zoom?: number | null;
 }
 
 export interface DroneProfileUpdate {
@@ -48,4 +50,5 @@ export interface DroneProfileUpdate {
   sensor_fov?: number | null;
   weight?: number | null;
   model_identifier?: string | null;
+  max_optical_zoom?: number | null;
 }

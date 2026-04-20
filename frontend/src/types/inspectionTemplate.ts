@@ -26,7 +26,7 @@ export interface InspectionConfigResponse {
   iso: number | null;
   shutter_speed: string | null;
   focus_mode: string | null;
-  focus_distance_m: number | null;
+  focus_distance_mode: "AUTO" | "INFINITY" | null;
   optical_zoom: number | null;
 }
 

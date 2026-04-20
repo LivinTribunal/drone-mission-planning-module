@@ -1,3 +1,5 @@
+export type FocusDistanceMode = "AUTO" | "INFINITY";
+
 export interface CameraPresetResponse {
   id: string;
   name: string;
@@ -8,7 +10,7 @@ export interface CameraPresetResponse {
   iso: number | null;
   shutter_speed: string | null;
   focus_mode: string | null;
-  focus_distance_m: number | null;
+  focus_distance_mode: FocusDistanceMode | null;
   optical_zoom: number | null;
   created_at: string;
   updated_at: string;
@@ -22,7 +24,7 @@ export interface CameraPresetCreate {
   iso?: number | null;
   shutter_speed?: string | null;
   focus_mode?: string | null;
-  focus_distance_m?: number | null;
+  focus_distance_mode?: FocusDistanceMode | null;
   optical_zoom?: number | null;
 }
 
@@ -34,6 +36,6 @@ export interface CameraPresetUpdate {
   iso?: number | null;
   shutter_speed?: string | null;
   focus_mode?: string | null;
-  focus_distance_m?: number | null;
+  focus_distance_mode?: FocusDistanceMode | null;
   optical_zoom?: number | null;
 }
