@@ -426,7 +426,7 @@ def _generate_trajectory_inner(
         setting_angles = get_lha_setting_angles(template, lha_ids)
 
         # derive observation angle from lha setting angles for papi methods
-        if inspection.method == InspectionMethod.PAPI_HORIZONTAL_RANGE:
+        if inspection.method == InspectionMethod.HORIZONTAL_RANGE:
             missing_units = check_missing_setting_angles(template, lha_ids)
             if missing_units:
                 units_str = ", ".join(missing_units)

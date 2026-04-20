@@ -1,6 +1,6 @@
 """add camera settings to inspection configuration
 
-Revision ID: c1d2e3f4a5b6
+Revision ID: 6a0e063b6699
 Revises: aaecedb1675e
 Create Date: 2026-04-19 00:00:00.000000
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "c1d2e3f4a5b6"
+revision: str = "6a0e063b6699"
 down_revision: Union[str, None] = "aaecedb1675e"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None

@@ -120,7 +120,7 @@ def generate_json(
     mission_name: str = "",
     airport_elevation: float = 0,
     *,
-    mission=None,
+    mission: Mission | None = None,
 ) -> bytes:
     """serialize flight plan to structured json."""
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)

@@ -704,8 +704,8 @@ class TestCameraSettingsSchemaValidation:
         with pytest.raises(ValidationError):
             InspectionConfigOverride(optical_zoom=0)
 
-    def test_white_balance_max_length(self):
-        """white_balance over 20 chars must be rejected."""
+    def test_white_balance_rejects_unknown_value(self):
+        """white_balance not in allowed literal set must be rejected."""
         from app.schemas.mission import InspectionConfigOverride
 
         with pytest.raises(ValidationError):
