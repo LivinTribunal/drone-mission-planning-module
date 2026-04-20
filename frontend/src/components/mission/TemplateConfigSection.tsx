@@ -271,6 +271,19 @@ export default function TemplateConfigSection({
         onChange={(e) => handleNumber("buffer_distance", e.target.value)}
         step="0.5"
       />
+
+      {(method === "FLY_OVER" || method === "PARALLEL_SIDE_SWEEP") && (
+        <Input
+          label={t("mission.config.directionHeading")}
+          type="number"
+          value={config?.direction_heading ?? ""}
+          onChange={(e) => handleNumber("direction_heading", e.target.value)}
+          step="1"
+          min={0}
+          max={359}
+          placeholder={t("mission.config.directionHeadingHint")}
+        />
+      )}
     </div>
   );
 }

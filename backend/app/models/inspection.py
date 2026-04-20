@@ -53,6 +53,7 @@ CONFIG_FIELDS: tuple[str, ...] = (
     "lha_setting_angle_override_id",
     "hover_bearing",
     "hover_bearing_reference",
+    "direction_heading",
 )
 
 
@@ -101,6 +102,7 @@ class InspectionConfiguration(Base):
     )
     hover_bearing = Column(Float, nullable=True)
     hover_bearing_reference = Column(String(10), nullable=True)
+    direction_heading = Column(Float, nullable=True)
 
     # camera preset reference
     camera_preset_id = Column(

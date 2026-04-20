@@ -64,6 +64,7 @@ export interface InspectionConfigResponse {
   hover_bearing: number | null;
   hover_bearing_reference: "RUNWAY" | "COMPASS" | null;
   camera_mode: CameraMode | null;
+  direction_heading: number | null;
   white_balance: string | null;
   iso: number | null;
   shutter_speed: string | null;
@@ -107,6 +108,7 @@ export interface InspectionConfigOverride {
   hover_bearing?: number | null;
   hover_bearing_reference?: "RUNWAY" | "COMPASS" | null;
   camera_mode?: CameraMode | null;
+  direction_heading?: number | null;
   white_balance?: string | null;
   iso?: number | null;
   shutter_speed?: string | null;

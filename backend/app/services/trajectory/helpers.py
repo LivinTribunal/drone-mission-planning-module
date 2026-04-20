@@ -24,6 +24,32 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+def sort_positions_along_heading(positions: list[Point3D], heading: Degrees) -> list[Point3D]:
+    """sort positions by projection onto heading vector (0=N, 90=E)."""
+    if len(positions) <= 1:
+        return positions
+
+    heading_rad = math.radians(heading)
+    east_component = math.sin(heading_rad)
+    north_component = math.cos(heading_rad)
+
+    # centroid as origin for relative positions
+    center_lat = sum(p.lat for p in positions) / len(positions)
+    center_lon = sum(p.lon for p in positions) / len(positions)
+
+    # approximate meters per degree at this latitude
+    meters_per_deg_lat = 111320.0
+    meters_per_deg_lon = 111320.0 * math.cos(math.radians(center_lat))
+
+    def projection(p: Point3D) -> float:
+        """scalar projection onto heading vector."""
+        delta_north = (p.lat - center_lat) * meters_per_deg_lat
+        delta_east = (p.lon - center_lon) * meters_per_deg_lon
+        return delta_east * east_component + delta_north * north_component
+
+    return sorted(positions, key=projection)
+
+
 def _designator_sort_key(designator: str | None) -> tuple:
     """sort key that orders numeric designators numerically and alpha ones lexically."""
     d = designator or ""

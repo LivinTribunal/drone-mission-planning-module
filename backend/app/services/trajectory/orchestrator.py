@@ -36,6 +36,7 @@ from .helpers import (
     get_lha_setting_angles,
     get_ordered_lha_positions,
     get_runway_heading,
+    sort_positions_along_heading,
 )
 from .methods import PREPARE_REGISTRY, compute_measurement_trajectory
 from .pathfinding import (
@@ -472,6 +473,8 @@ def _generate_trajectory_inner(
 
         # ordered LHA positions are used by fly-over and parallel-side-sweep
         ordered_lhas = get_ordered_lha_positions(template, lha_ids)
+        if config.direction_heading is not None:
+            ordered_lhas = sort_positions_along_heading(ordered_lhas, config.direction_heading)
 
         # method-specific pre-computation via registry
         prepare_fn = PREPARE_REGISTRY.get(inspection.method)

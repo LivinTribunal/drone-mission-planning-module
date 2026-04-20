@@ -865,6 +865,60 @@ export default function InspectionConfigForm({
       </div>
       )}
 
+      {/* direction heading - fly-over and parallel side sweep only */}
+      {(inspection.method === "FLY_OVER" || inspection.method === "PARALLEL_SIDE_SWEEP") && (
+        <div className="rounded-2xl border border-tv-border bg-tv-bg/50 p-3 space-y-2" data-testid="direction-heading-section">
+          <label className="block text-xs font-medium text-tv-text-primary">
+            {t("mission.config.directionHeading")}
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              type="number"
+              step="1"
+              min="0"
+              max="359"
+              value={resolveNumber("direction_heading")}
+              onChange={(e) =>
+                handleNumberChange("direction_heading", e.target.value)
+              }
+              placeholder={t("mission.config.directionHeadingHint")}
+              className="w-32 px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-direction-heading"
+            />
+            <svg className="h-6 w-6 flex-shrink-0" viewBox="0 0 24 24">
+              <line
+                x1="12" y1="20" x2="12" y2="4"
+                stroke="var(--tv-accent)" strokeWidth="2" strokeLinecap="round"
+                transform={`rotate(${typeof resolveNumber("direction_heading") === "number" ? resolveNumber("direction_heading") : 0}, 12, 12)`}
+              />
+              <polygon
+                points="12,2 9,8 15,8"
+                fill="var(--tv-accent)"
+                transform={`rotate(${typeof resolveNumber("direction_heading") === "number" ? resolveNumber("direction_heading") : 0}, 12, 12)`}
+              />
+            </svg>
+            <button
+              type="button"
+              onClick={() => {
+                const current = resolveNumber("direction_heading");
+                if (typeof current === "number") {
+                  onChange({ ...configOverride, direction_heading: (current + 180) % 360 });
+                }
+              }}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-full text-[10px] border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors flex-shrink-0"
+              title={t("mission.config.oppositeDirection")}
+              data-testid="inspection-direction-heading-opposite"
+            >
+              <RotateCcw className="h-3 w-3" />
+              {t("mission.config.oppositeDirection")}
+            </button>
+          </div>
+          <p className="text-[11px] text-tv-text-muted leading-snug">
+            {t("mission.config.directionHeadingHint")}
+          </p>
+        </div>
+      )}
+
       {/* camera settings - falls back to mission defaults */}
       <div data-testid="camera-settings-section">
         <div className="flex items-center justify-between gap-2 mb-2">

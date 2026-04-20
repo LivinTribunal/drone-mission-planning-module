@@ -645,6 +645,9 @@
       "angleLockOn": "On",
       "angleLockOff": "Off",
       "angleLockHint": "On: editing any field recomputes the third so the camera always points at the LHA. Off: all three are independent.",
+      "directionHeading": "Direction Heading (°)",
+      "directionHeadingHint": "Traversal direction for measurement waypoints (0 = north, 90 = east)",
+      "oppositeDirection": "Opposite",
       "hoverBearing": "Approach bearing (°)",
       "hoverBearingRef": {
         "RUNWAY": "Relative to RWY",
