@@ -655,7 +655,14 @@
           "autoArea": "Auto Area"
         },
         "missionDefault": "Mission default",
-        "computed": "Computed"
+        "computed": "Computed",
+        "presetLabel": "Camera Preset",
+        "presetNone": "No preset selected",
+        "presetDefault": "default",
+        "saveAsPreset": "Save as preset",
+        "presetNamePlaceholder": "Preset name...",
+        "presetSave": "Save",
+        "presetCancel": "Cancel"
       },
       "flightPlanScope": {
         "label": "Flight plan scope",
@@ -845,6 +852,20 @@
     "airportEditor": "Airport Editor",
     "droneProfiles": "Drone Profiles",
     "droneProfileEditor": "Drone Profile Editor",
+    "cameraPresets": {
+      "title": "Camera Presets",
+      "addPreset": "Add Preset",
+      "editPreset": "Edit Preset",
+      "deletePreset": "Delete Preset",
+      "deleteConfirm": "Delete preset \"{{name}}\"?",
+      "noPresets": "No camera presets configured",
+      "name": "Preset Name",
+      "droneProfile": "Drone Profile",
+      "anyDrone": "Any drone (generic)",
+      "isDefault": "Default preset (visible to all operators)",
+      "saved": "Preset saved",
+      "deleted": "Preset deleted"
+    },
     "terrain": {
       "title": "Terrain Data",
       "description": "Configure ground elevation source for trajectory altitude correction",

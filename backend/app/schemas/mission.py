@@ -75,6 +75,7 @@ class InspectionConfigOverride(BaseModel):
     focus_mode: FocusModeStr | None = None
     focus_distance_m: float | None = Field(default=None, gt=0)
     optical_zoom: float | None = Field(default=None, gt=0)
+    camera_preset_id: UUID | None = None
 
     @field_validator("lha_ids", mode="before")
     @classmethod
@@ -131,6 +132,7 @@ class InspectionConfigResponse(BaseModel):
     focus_mode: FocusModeStr | None = None
     focus_distance_m: float | None = None
     optical_zoom: float | None = None
+    camera_preset_id: UUID | None = None
 
     model_config = {"from_attributes": True}
 

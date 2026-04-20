@@ -9,13 +9,19 @@ import {
   deleteDroneProfile,
   uploadDroneModel,
 } from "@/api/droneProfiles";
+import {
+  listCameraPresets,
+  createCameraPreset,
+  deleteCameraPreset,
+} from "@/api/cameraPresets";
 import { listMissions } from "@/api/missions";
 import type {
   DroneProfileResponse,
   DroneProfileUpdate,
 } from "@/types/droneProfile";
+import type { CameraPresetResponse } from "@/types/cameraPreset";
 import type { MissionResponse } from "@/types/mission";
-import { Layers, Clock, Pencil, Plus, Copy, Trash2, X, Link } from "lucide-react";
+import { Layers, Clock, Pencil, Plus, Copy, Trash2, X, Link, Camera } from "lucide-react";
 import Badge from "@/components/common/Badge";
 import Button from "@/components/common/Button";
 import Card from "@/components/common/Card";
@@ -358,6 +364,23 @@ export default function DroneEditPage() {
 
   // collapsible mission list
   const [missionsExpanded, setMissionsExpanded] = useState(true);
+
+  // camera presets
+  const [presetsExpanded, setPresetsExpanded] = useState(false);
+  const [presets, setPresets] = useState<CameraPresetResponse[]>([]);
+  const [newPresetName, setNewPresetName] = useState("");
+  const [showNewPresetInput, setShowNewPresetInput] = useState(false);
+
+  const fetchPresets = useCallback(() => {
+    if (!id) return;
+    listCameraPresets({ drone_profile_id: id, is_default: true })
+      .then((res) => setPresets(res.data))
+      .catch(() => setPresets([]));
+  }, [id]);
+
+  useEffect(() => {
+    fetchPresets();
+  }, [fetchPresets]);
 
   // filtered drones for search
   const filteredDrones = droneSearch
@@ -806,6 +829,116 @@ export default function DroneEditPage() {
                       </div>
                     ))}
                   </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* camera presets panel */}
+          <div className="bg-tv-surface border border-tv-border rounded-2xl flex flex-col min-h-0">
+            <button
+              onClick={() => setPresetsExpanded(!presetsExpanded)}
+              className="flex items-center justify-between w-full px-4 py-3 flex-shrink-0"
+              data-testid="presets-panel-toggle"
+            >
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-tv-bg px-3 py-1 text-xs font-medium text-tv-text-secondary uppercase tracking-wider">
+                  {t("coordinator.cameraPresets.title")}
+                </span>
+                <span className="rounded-full bg-tv-accent text-tv-accent-text px-2 py-0.5 text-xs font-semibold">
+                  {presets.length}
+                </span>
+              </div>
+              <ChevronIcon expanded={presetsExpanded} />
+            </button>
+
+            {presetsExpanded && (
+              <div className="px-4 pb-3 min-h-0">
+                {presets.length === 0 && !showNewPresetInput && (
+                  <p className="text-sm text-tv-text-muted py-2">
+                    {t("coordinator.cameraPresets.noPresets")}
+                  </p>
+                )}
+                {presets.length > 0 && (
+                  <div className="flex flex-col gap-1 max-h-40 overflow-y-auto mb-2">
+                    {presets.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between rounded-xl px-3 py-2 bg-tv-bg"
+                      >
+                        <div className="min-w-0">
+                          <span className="block text-sm font-medium text-tv-text-primary truncate">
+                            {p.name}
+                          </span>
+                          <span className="block text-xs text-tv-text-muted">
+                            {[
+                              p.white_balance,
+                              p.iso ? `ISO ${p.iso}` : null,
+                              p.shutter_speed,
+                              p.focus_mode,
+                            ].filter(Boolean).join(" · ") || "—"}
+                          </span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            await deleteCameraPreset(p.id);
+                            fetchPresets();
+                          }}
+                          className="ml-2 p-1 rounded-full text-tv-text-muted hover:text-tv-error hover:bg-tv-bg transition-colors flex-shrink-0"
+                          title={t("coordinator.cameraPresets.deletePreset")}
+                          data-testid={`delete-preset-${p.id}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {showNewPresetInput ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newPresetName}
+                      onChange={(e) => setNewPresetName(e.target.value)}
+                      placeholder={t("coordinator.cameraPresets.name")}
+                      className="flex-1 px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                      data-testid="new-preset-name"
+                      autoFocus
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!newPresetName.trim()) return;
+                        await createCameraPreset({
+                          name: newPresetName.trim(),
+                          drone_profile_id: id,
+                          is_default: true,
+                        });
+                        setNewPresetName("");
+                        setShowNewPresetInput(false);
+                        fetchPresets();
+                      }}
+                      disabled={!newPresetName.trim()}
+                      className="px-3 py-1.5 rounded-full text-xs bg-tv-accent text-tv-accent-text hover:opacity-90 transition-opacity disabled:opacity-50"
+                      data-testid="save-new-preset"
+                    >
+                      {t("common.save")}
+                    </button>
+                    <button
+                      onClick={() => { setShowNewPresetInput(false); setNewPresetName(""); }}
+                      className="px-3 py-1.5 rounded-full text-xs border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+                    >
+                      {t("common.cancel")}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowNewPresetInput(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+                    data-testid="add-preset-btn"
+                  >
+                    <Camera className="h-3 w-3" />
+                    {t("coordinator.cameraPresets.addPreset")}
+                  </button>
                 )}
               </div>
             )}

@@ -65,6 +65,7 @@ export interface InspectionConfigResponse {
   focus_mode: string | null;
   focus_distance_m: number | null;
   optical_zoom: number | null;
+  camera_preset_id: string | null;
 }
 
 export interface InspectionResponse {
@@ -106,6 +107,7 @@ export interface InspectionConfigOverride {
   focus_mode?: string | null;
   focus_distance_m?: number | null;
   optical_zoom?: number | null;
+  camera_preset_id?: string | null;
 }
 
 export interface MissionCreate {

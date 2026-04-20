@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info, RotateCcw } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info, RotateCcw, Save } from "lucide-react";
 import type { InspectionResponse, InspectionConfigOverride, MissionDetailResponse } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { DroneProfileResponse } from "@/types/droneProfile";
+import type { CameraPresetResponse } from "@/types/cameraPreset";
 import type { AGLResponse } from "@/types/airport";
 import type { CaptureMode } from "@/types/enums";
+import { listCameraPresets, createCameraPreset } from "@/api/cameraPresets";
 import { solveTriangle } from "@/utils/angleLock";
 import { formatAglDisplayName } from "@/utils/agl";
 
@@ -185,6 +187,64 @@ export default function InspectionConfigForm({
   }
 
   const [collapsed, setCollapsed] = useState(false);
+
+  // camera preset picker
+  const [presets, setPresets] = useState<CameraPresetResponse[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [showSavePreset, setShowSavePreset] = useState(false);
+
+  const fetchPresets = useCallback(() => {
+    const params: { drone_profile_id?: string } = {};
+    if (mission.drone_profile_id) {
+      params.drone_profile_id = mission.drone_profile_id;
+    }
+    listCameraPresets(params)
+      .then((res) => setPresets(res.data))
+      .catch(() => setPresets([]));
+  }, [mission.drone_profile_id]);
+
+  useEffect(() => {
+    fetchPresets();
+  }, [fetchPresets]);
+
+  function handlePresetSelect(presetId: string) {
+    setSelectedPresetId(presetId);
+    if (!presetId) return;
+    const preset = presets.find((p) => p.id === presetId);
+    if (!preset) return;
+    onChange({
+      ...configOverride,
+      white_balance: preset.white_balance,
+      iso: preset.iso,
+      shutter_speed: preset.shutter_speed,
+      focus_mode: preset.focus_mode,
+      focus_distance_m: preset.focus_distance_m,
+      optical_zoom: preset.optical_zoom,
+    });
+  }
+
+  function handleSaveAsPreset() {
+    if (!presetName.trim()) return;
+    setSavingPreset(true);
+    createCameraPreset({
+      name: presetName.trim(),
+      drone_profile_id: mission.drone_profile_id ?? undefined,
+      white_balance: whiteBalance,
+      iso: typeof isoValue === "number" ? isoValue : undefined,
+      shutter_speed: shutterSpeed,
+      focus_mode: focusMode,
+      focus_distance_m: typeof focusDistanceM === "number" ? focusDistanceM : undefined,
+      optical_zoom: typeof opticalZoom === "number" ? opticalZoom : undefined,
+    })
+      .then(() => {
+        setShowSavePreset(false);
+        setPresetName("");
+        fetchPresets();
+      })
+      .finally(() => setSavingPreset(false));
+  }
 
   return (
     <div data-testid="inspection-config-form">
@@ -592,6 +652,27 @@ export default function InspectionConfigForm({
         <label className="block text-xs font-semibold mb-2 text-tv-text-secondary">
           {t("mission.config.cameraSettings.title")}
         </label>
+
+        {/* preset picker */}
+        <div className="mb-3" data-testid="camera-preset-picker">
+          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+            {t("mission.config.cameraSettings.presetLabel")}
+          </label>
+          <select
+            value={selectedPresetId}
+            onChange={(e) => handlePresetSelect(e.target.value)}
+            className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+            data-testid="camera-preset-select"
+          >
+            <option value="">{t("mission.config.cameraSettings.presetNone")}</option>
+            {presets.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.is_default ? ` (${t("mission.config.cameraSettings.presetDefault")})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
@@ -708,6 +789,46 @@ export default function InspectionConfigForm({
             />
           </div>
         </div>
+
+        {/* save as preset */}
+        {!showSavePreset ? (
+          <button
+            type="button"
+            onClick={() => setShowSavePreset(true)}
+            className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+            data-testid="save-as-preset-btn"
+          >
+            <Save className="h-3 w-3" />
+            {t("mission.config.cameraSettings.saveAsPreset")}
+          </button>
+        ) : (
+          <div className="mt-2 flex items-center gap-2" data-testid="save-preset-form">
+            <input
+              type="text"
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              placeholder={t("mission.config.cameraSettings.presetNamePlaceholder")}
+              className="flex-1 px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="preset-name-input"
+            />
+            <button
+              type="button"
+              onClick={handleSaveAsPreset}
+              disabled={savingPreset || !presetName.trim()}
+              className="px-3 py-1.5 rounded-full text-xs bg-tv-accent text-tv-accent-text hover:opacity-90 transition-opacity disabled:opacity-50"
+              data-testid="preset-save-confirm"
+            >
+              {t("mission.config.cameraSettings.presetSave")}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowSavePreset(false); setPresetName(""); }}
+              className="px-3 py-1.5 rounded-full text-xs border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+            >
+              {t("mission.config.cameraSettings.presetCancel")}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* fly-over specific */}

@@ -98,6 +98,11 @@ class InspectionConfiguration(Base):
     hover_bearing = Column(Float, nullable=True)
     hover_bearing_reference = Column(String(10), nullable=True)
 
+    # camera preset reference
+    camera_preset_id = Column(
+        UUID, ForeignKey("camera_preset.id", ondelete="SET NULL"), nullable=True
+    )
+
     # camera settings for night inspections - advisory only, not consumed by trajectory
     white_balance = Column(String(20), nullable=True)
     iso = Column(Integer, nullable=True)

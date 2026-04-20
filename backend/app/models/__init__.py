@@ -8,6 +8,7 @@ from app.models.airport import (  # noqa: F401
     Taxiway,
 )
 from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.camera_preset import CameraPreset  # noqa: F401
 from app.models.enums import (  # noqa: F401
     AuditAction,
     CameraAction,
