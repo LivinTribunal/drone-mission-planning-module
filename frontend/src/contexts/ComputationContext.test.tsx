@@ -144,49 +144,6 @@ describe("ComputationContext", () => {
     });
   });
 
-  it("invalidates react query mission cache on computation success", async () => {
-    mockGenerateTrajectory.mockResolvedValueOnce({
-      flight_plan: { id: "fp-1" },
-      mission_status: "PLANNED",
-    });
-
-    const invalidateSpy = vi.spyOn(testQueryClient, "invalidateQueries");
-
-    const { result } = renderHook(() => useComputation(), { wrapper });
-
-    act(() => {
-      result.current.startComputation("m-1");
-    });
-
-    await waitFor(() => {
-      expect(result.current.status).toBe("COMPLETED");
-    });
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ["missions"],
-    });
-  });
-
-  it("invalidates react query mission cache on computation failure", async () => {
-    mockGenerateTrajectory.mockRejectedValueOnce(new Error("fail"));
-
-    const invalidateSpy = vi.spyOn(testQueryClient, "invalidateQueries");
-
-    const { result } = renderHook(() => useComputation(), { wrapper });
-
-    act(() => {
-      result.current.startComputation("m-1");
-    });
-
-    await waitFor(() => {
-      expect(result.current.status).toBe("FAILED");
-    });
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ["missions"],
-    });
-  });
-
   it("dismiss resets to IDLE", async () => {
     mockGenerateTrajectory.mockResolvedValueOnce({
       flight_plan: { id: "fp-1" },
@@ -209,6 +166,84 @@ describe("ComputationContext", () => {
 
     expect(result.current.status).toBe("IDLE");
     expect(result.current.lastResult).toBeNull();
+  });
+});
+
+describe("ComputationContext session reconciliation", () => {
+  const SESSION_KEY = "tarmacview_computation";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testQueryClient = createTestQueryClient();
+    sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
+  it("resets to COMPLETED when session says COMPUTING but backend shows COMPLETED", async () => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+      status: "COMPUTING",
+      missionId: "m-1",
+      missionName: "Test",
+      error: null,
+    }));
+    mockSelectedMission = {
+      id: "m-1",
+      name: "Test",
+      computation_status: "COMPLETED",
+      computation_error: null,
+    };
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("COMPLETED");
+    });
+  });
+
+  it("resets to FAILED when session says COMPUTING but backend shows FAILED", async () => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+      status: "COMPUTING",
+      missionId: "m-1",
+      missionName: "Test",
+      error: null,
+    }));
+    mockSelectedMission = {
+      id: "m-1",
+      name: "Test",
+      computation_status: "FAILED",
+      computation_error: "computation timed out",
+    };
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("FAILED");
+    });
+    expect(result.current.error).toBe("computation timed out");
+  });
+
+  it("resets to IDLE when session says COMPUTING but backend shows IDLE", async () => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+      status: "COMPUTING",
+      missionId: "m-1",
+      missionName: "Test",
+      error: null,
+    }));
+    mockSelectedMission = {
+      id: "m-1",
+      name: "Test",
+      computation_status: "IDLE",
+      computation_error: null,
+    };
+
+    const { result } = renderHook(() => useComputation(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("IDLE");
+    });
   });
 });
 

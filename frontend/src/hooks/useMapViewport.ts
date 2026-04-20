@@ -71,7 +71,13 @@ export function getSavedLayers(
       !Array.isArray(parsed) &&
       KNOWN_LAYER_KEYS.some((k) => typeof parsed[k] === "boolean")
     ) {
-      return parsed as Partial<MapLayerConfig>;
+      const result: Partial<MapLayerConfig> = {};
+      for (const key of KNOWN_LAYER_KEYS) {
+        if (typeof parsed[key] === "boolean") {
+          result[key] = parsed[key];
+        }
+      }
+      return result;
     }
     return null;
   } catch {
