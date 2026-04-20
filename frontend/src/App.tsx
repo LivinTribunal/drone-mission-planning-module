@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/api/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/Auth/ProtectedRoute";
 import OperatorLayout from "@/components/Layout/OperatorLayout";
@@ -27,74 +29,93 @@ import SuperAdminUsersPage from "@/pages/super-admin/SuperAdminUsersPage";
 import SuperAdminAirportsPage from "@/pages/super-admin/SuperAdminAirportsPage";
 import SuperAdminSystemPage from "@/pages/super-admin/SuperAdminSystemPage";
 import SuperAdminAuditLogPage from "@/pages/super-admin/SuperAdminAuditLogPage";
+import {
+  useLastVisitedPath,
+  getLastVisitedPath,
+  getDefaultPathForRole,
+} from "@/hooks/useLastVisitedPath";
+
+function PathTracker() {
+  useLastVisitedPath();
+  return null;
+}
 
 function CatchAllRedirect() {
-  const { isAuthenticated } = useAuth();
-  if (isAuthenticated) {
-    return <Navigate to="/operator-center/dashboard" replace />;
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (isLoading) return null;
+
+  if (isAuthenticated && user) {
+    const saved = getLastVisitedPath(user.role);
+    if (saved) return <Navigate to={saved} replace />;
+    return <Navigate to={getDefaultPathForRole(user.role)} replace />;
   }
+
   return <Navigate to="/login" replace />;
 }
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/setup-password" element={<SetupPasswordPage />} />
-        <Route path="/maintenance" element={<MaintenancePage />} />
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <PathTracker />
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/setup-password" element={<SetupPasswordPage />} />
+          <Route path="/maintenance" element={<MaintenancePage />} />
 
-        {/* operator center */}
-        <Route element={<ProtectedRoute requiredRole="OPERATOR" />}>
-          <Route path="/operator-center" element={<OperatorLayout />}>
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="missions" element={<MissionListPage />} />
-            <Route path="missions/:id" element={<MissionTabNav />}>
-              <Route path="overview" element={<MissionOverviewPage />} />
-              <Route
-                path="configuration"
-                element={<MissionConfigPage />}
-              />
-              <Route path="map" element={<MissionMapPage />} />
-              <Route
-                path="validation-export"
-                element={<MissionValidationPage />}
-              />
+          {/* operator center */}
+          <Route element={<ProtectedRoute requiredRole="OPERATOR" />}>
+            <Route path="/operator-center" element={<OperatorLayout />}>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="missions" element={<MissionListPage />} />
+              <Route path="missions/:id" element={<MissionTabNav />}>
+                <Route path="overview" element={<MissionOverviewPage />} />
+                <Route
+                  path="configuration"
+                  element={<MissionConfigPage />}
+                />
+                <Route path="map" element={<MissionMapPage />} />
+                <Route
+                  path="validation-export"
+                  element={<MissionValidationPage />}
+                />
+              </Route>
+              <Route path="airport" element={<AirportPage />} />
+              <Route path="drones" element={<OperatorDronesPage />} />
+              <Route path="drones/:id" element={<OperatorDroneDetailPage />} />
             </Route>
-            <Route path="airport" element={<AirportPage />} />
-            <Route path="drones" element={<OperatorDronesPage />} />
-            <Route path="drones/:id" element={<OperatorDroneDetailPage />} />
           </Route>
-        </Route>
 
-        {/* coordinator center */}
-        <Route element={<ProtectedRoute requiredRole="COORDINATOR" />}>
-          <Route path="/coordinator-center" element={<CoordinatorLayout />}>
-            <Route path="airports" element={<AirportListPage />} />
-            <Route path="airports/:id" element={<AirportEditPage />} />
-            <Route path="inspections" element={<InspectionListPage />} />
-            <Route path="inspections/:id" element={<InspectionEditPage />} />
-            <Route path="drones" element={<DroneListPage />} />
-            <Route path="drones/:id" element={<DroneEditPage />} />
+          {/* coordinator center */}
+          <Route element={<ProtectedRoute requiredRole="COORDINATOR" />}>
+            <Route path="/coordinator-center" element={<CoordinatorLayout />}>
+              <Route path="airports" element={<AirportListPage />} />
+              <Route path="airports/:id" element={<AirportEditPage />} />
+              <Route path="inspections" element={<InspectionListPage />} />
+              <Route path="inspections/:id" element={<InspectionEditPage />} />
+              <Route path="drones" element={<DroneListPage />} />
+              <Route path="drones/:id" element={<DroneEditPage />} />
+            </Route>
           </Route>
-        </Route>
 
-        {/* super admin */}
-        <Route element={<ProtectedRoute requiredRole="SUPER_ADMIN" />}>
-          <Route element={<SuperAdminLayout />}>
-            <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
-            <Route path="/super-admin/users/:id" element={<SuperAdminUsersPage />} />
-            <Route path="/super-admin/airports" element={<SuperAdminAirportsPage />} />
-            <Route path="/super-admin/system" element={<SuperAdminSystemPage />} />
-            <Route path="/super-admin/audit-log" element={<SuperAdminAuditLogPage />} />
+          {/* super admin */}
+          <Route element={<ProtectedRoute requiredRole="SUPER_ADMIN" />}>
+            <Route element={<SuperAdminLayout />}>
+              <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
+              <Route path="/super-admin/users/:id" element={<SuperAdminUsersPage />} />
+              <Route path="/super-admin/airports" element={<SuperAdminAirportsPage />} />
+              <Route path="/super-admin/system" element={<SuperAdminSystemPage />} />
+              <Route path="/super-admin/audit-log" element={<SuperAdminAuditLogPage />} />
+            </Route>
           </Route>
-        </Route>
 
-        {/* default redirect */}
-        <Route path="*" element={<CatchAllRedirect />} />
-      </Routes>
-    </BrowserRouter>
+          {/* default redirect */}
+          <Route path="*" element={<CatchAllRedirect />} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }
 

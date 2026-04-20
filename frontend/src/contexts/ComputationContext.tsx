@@ -15,6 +15,7 @@ import type { ComputationStatus } from "@/types/enums";
 const POLL_INTERVAL_MS = 3000;
 const AUTO_DISMISS_SUCCESS_MS = 5000;
 const AUTO_DISMISS_FAILURE_MS = 8000;
+const SESSION_KEY = "tarmacview_computation";
 
 interface ComputationState {
   status: ComputationStatus;
@@ -22,6 +23,33 @@ interface ComputationState {
   missionName: string | null;
   error: string | null;
   lastResult: FlightPlanResponse | null;
+}
+
+function loadSessionState(): Partial<ComputationState> | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveSessionState(state: ComputationState): void {
+  try {
+    if (state.status === "IDLE") {
+      sessionStorage.removeItem(SESSION_KEY);
+    } else {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+        status: state.status,
+        missionId: state.missionId,
+        missionName: state.missionName,
+        error: state.error,
+      }));
+    }
+  } catch {
+    // storage unavailable
+  }
 }
 
 interface ComputationContextValue {
@@ -40,13 +68,29 @@ const ComputationContext = createContext<ComputationContextValue | null>(null);
 export function ComputationProvider({ children }: { children: ReactNode }) {
   const { selectedMission, refreshMissions, refreshSelectedMission } = useMission();
 
-  const [state, setState] = useState<ComputationState>({
-    status: "IDLE",
-    missionId: null,
-    missionName: null,
-    error: null,
-    lastResult: null,
+  const [state, setState] = useState<ComputationState>(() => {
+    const saved = loadSessionState();
+    if (saved?.status === "COMPUTING" && saved.missionId) {
+      return {
+        status: "COMPUTING",
+        missionId: saved.missionId,
+        missionName: saved.missionName ?? null,
+        error: null,
+        lastResult: null,
+      };
+    }
+    return {
+      status: "IDLE",
+      missionId: null,
+      missionName: null,
+      error: null,
+      lastResult: null,
+    };
   });
+
+  useEffect(() => {
+    saveSessionState(state);
+  }, [state]);
 
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const computingRef = useRef(false);
