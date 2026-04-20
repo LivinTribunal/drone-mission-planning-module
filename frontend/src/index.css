@@ -54,6 +54,8 @@
   --tv-method-parallel-side-sweep-text: #c77d0c;
   --tv-method-hover-point-lock-bg: rgba(233, 30, 144, 0.15);
   --tv-method-hover-point-lock-text: #c4117a;
+  --tv-method-meht-check-bg: rgba(14, 165, 165, 0.15);
+  --tv-method-meht-check-text: #0e9a9a;
 
   /* safety zone colors */
   --tv-zone-ctr-fill: rgba(69, 149, 229, 0.2);
@@ -114,6 +116,8 @@
   --tv-method-parallel-side-sweep-text: #fbbf24;
   --tv-method-hover-point-lock-bg: rgba(233, 30, 144, 0.2);
   --tv-method-hover-point-lock-text: #f472b6;
+  --tv-method-meht-check-bg: rgba(14, 165, 165, 0.2);
+  --tv-method-meht-check-text: #2dd4bf;
 
   /* map panel - dark */
   --tv-map-bg: #0a0a0a;

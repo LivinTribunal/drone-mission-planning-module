@@ -23,8 +23,8 @@ const METHOD_BADGE_VARS: Record<InspectionMethod, { bg: string; text: string }> 
     text: "var(--tv-method-hover-point-lock-text)",
   },
   MEHT_CHECK: {
-    bg: "var(--tv-method-meht-check-bg, var(--tv-method-hover-point-lock-bg))",
-    text: "var(--tv-method-meht-check-text, var(--tv-method-hover-point-lock-text))",
+    bg: "var(--tv-method-meht-check-bg)",
+    text: "var(--tv-method-meht-check-text)",
   },
 };
 

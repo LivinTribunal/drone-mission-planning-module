@@ -604,6 +604,7 @@
       "pickingOnMap": "Click on the map to set {{field}}",
       "mehtHeight": "Computed MEHT Height (m)",
       "mehtHeightHint": "Height above threshold at glide slope angle - adjustable via altitude offset",
+      "mehtHeightUnit": "m",
       "staleTrajectory": "Trajectory is outdated - recompute to update",
       "lhaSaveError": "Failed to save LHA selection - re-select manually",
       "setCoordinatesFirst": "Set Takeoff & Landing First",

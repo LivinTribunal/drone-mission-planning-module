@@ -21,12 +21,7 @@ def calculate_meht_check_path(
     inspection_id: UUID | None,
     speed: MetersPerSecond,
 ) -> list[WaypointData]:
-    """generate a single hover waypoint at the MEHT position.
-
-    the drone hovers at the meht point (above threshold at glide slope height)
-    facing toward the PAPI bar, with the camera locked on the LHA center.
-    per ICAO Doc 9157 P4 s8.3.43.
-    """
+    """generate a single hover waypoint at the meht position per ICAO Doc 9157 P4 s8.3.43."""
     hover_dur = (
         config.hover_duration if config.hover_duration is not None else DEFAULT_MEHT_HOVER_DURATION
     )

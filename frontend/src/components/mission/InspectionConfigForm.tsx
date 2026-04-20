@@ -1369,7 +1369,7 @@ export default function InspectionConfigForm({
                 className="px-3 py-2 text-sm text-tv-text-primary"
                 data-testid="computed-meht-height"
               >
-                {computedMehtHeight} m
+                {computedMehtHeight} {t("mission.config.mehtHeightUnit")}
               </p>
               <p className="text-[11px] text-tv-text-muted mt-0.5">
                 {t("mission.config.mehtHeightHint")}

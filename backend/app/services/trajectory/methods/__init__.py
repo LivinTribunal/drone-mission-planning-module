@@ -184,8 +184,8 @@ def _prepare_meht_check(
     if threshold is None:
         raise TrajectoryGenerationError(f"{label}: MEHT check requires runway threshold position")
 
-    # read glide slope and distance from threshold from the first target AGL
-    agl_glide_slope = glide_slope
+    # glide slope angle is already resolved by the orchestrator
+    meht_glide_slope = glide_slope
     dist_from_threshold = None
     for agl in template.targets:
         if agl.distance_from_threshold is not None:
@@ -197,7 +197,7 @@ def _prepare_meht_check(
             f"{label}: MEHT check requires distance_from_threshold on AGL"
         )
 
-    meht_height = dist_from_threshold * math.tan(math.radians(agl_glide_slope))
+    meht_height = dist_from_threshold * math.tan(math.radians(meht_glide_slope))
 
     # offset from threshold along reciprocal heading (pilot eye position on glide path)
     approach_bearing = (rwy_heading + 180) % 360
