@@ -6,6 +6,10 @@ import {
   MapPin,
   Battery,
   ChevronDown,
+  ArrowUpDown,
+  Gauge,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -68,6 +72,38 @@ export default function StatsPanel({
     batteryPct = `${Math.max(0, Math.round(100 - consumption))}%`;
   }
 
+  const altitudeRange =
+    flightPlan?.min_altitude_agl != null && flightPlan?.max_altitude_agl != null
+      ? `${flightPlan.min_altitude_agl.toFixed(1)} \u2013 ${flightPlan.max_altitude_agl.toFixed(1)} ${t("common.units.m")} AGL`
+      : "\u2014";
+
+  const transitSpeed =
+    flightPlan?.transit_speed != null
+      ? `${flightPlan.transit_speed} ${t("common.units.ms")}`
+      : "\u2014";
+
+  const validationResult = flightPlan?.validation_result;
+  let validationValue: string;
+  let validationIcon = ShieldCheck;
+  let validationColor = "bg-tv-text-muted/20 text-tv-text-muted";
+  if (validationResult) {
+    const violations = validationResult.violations.filter((v) => v.category === "violation");
+    const warnings = validationResult.violations.filter((v) => v.category === "warning");
+    if (validationResult.passed && violations.length === 0) {
+      validationValue = t("mission.config.validationPassed");
+      validationColor = "bg-tv-success/20 text-tv-success";
+    } else {
+      const parts: string[] = [];
+      if (violations.length > 0) parts.push(`${violations.length} ${t("common.violation", { count: violations.length })}`);
+      if (warnings.length > 0) parts.push(`${warnings.length} ${t("common.warning", { count: warnings.length })}`);
+      validationValue = parts.join(", ") || t("mission.config.validationNotPassed");
+      validationIcon = ShieldAlert;
+      validationColor = "bg-tv-error/20 text-tv-error";
+    }
+  } else {
+    validationValue = t("mission.config.validationNotRun");
+  }
+
   const stats = [
     {
       label: t("mission.config.totalDistance"),
@@ -92,6 +128,24 @@ export default function StatsPanel({
       value: batteryPct,
       icon: Battery,
       colorClass: "bg-tv-error/20 text-tv-error",
+    },
+    {
+      label: t("mission.config.altitudeRange"),
+      value: altitudeRange,
+      icon: ArrowUpDown,
+      colorClass: "bg-tv-info/20 text-tv-info",
+    },
+    {
+      label: t("mission.config.transitSpeed"),
+      value: transitSpeed,
+      icon: Gauge,
+      colorClass: "bg-tv-accent/20 text-tv-accent",
+    },
+    {
+      label: t("mission.config.validation"),
+      value: validationValue,
+      icon: validationIcon,
+      colorClass: validationColor,
     },
   ];
 

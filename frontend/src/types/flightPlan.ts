@@ -39,6 +39,16 @@ export interface ValidationResultResponse {
   violations: ValidationViolation[];
 }
 
+export interface InspectionFlightStats {
+  inspection_id: string;
+  min_altitude_agl: number;
+  max_altitude_agl: number;
+  min_altitude_msl: number;
+  max_altitude_msl: number;
+  waypoint_count: number;
+  segment_duration: number | null;
+}
+
 export interface FlightPlanResponse {
   id: string;
   mission_id: string;
@@ -49,6 +59,12 @@ export interface FlightPlanResponse {
   generated_at: string | null;
   waypoints: WaypointResponse[];
   validation_result: ValidationResultResponse | null;
+  min_altitude_agl: number | null;
+  max_altitude_agl: number | null;
+  min_altitude_msl: number | null;
+  max_altitude_msl: number | null;
+  transit_speed: number | null;
+  inspection_stats: InspectionFlightStats[];
 }
 
 export interface GenerateTrajectoryResponse {

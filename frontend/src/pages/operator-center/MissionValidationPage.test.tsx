@@ -98,6 +98,12 @@ function makeFlightPlan(passed: boolean = true): FlightPlanResponse {
             },
           ],
     },
+    min_altitude_agl: null,
+    max_altitude_agl: null,
+    min_altitude_msl: null,
+    max_altitude_msl: null,
+    transit_speed: null,
+    inspection_stats: [],
   };
 }
 

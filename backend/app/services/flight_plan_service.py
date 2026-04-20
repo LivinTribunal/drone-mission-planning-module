@@ -1,9 +1,11 @@
+from collections import defaultdict
 from uuid import UUID
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
+from app.models.airport import Airport
 from app.models.enums import MissionStatus, WaypointType
 from app.models.flight_plan import (
     FlightPlan,
@@ -12,9 +14,16 @@ from app.models.flight_plan import (
     Waypoint,
 )
 from app.models.mission import Mission
-from app.schemas.flight_plan import TransitWaypointInsertRequest, WaypointPositionUpdate
+from app.schemas.flight_plan import (
+    FlightPlanResponse,
+    InspectionFlightStats,
+    TransitWaypointInsertRequest,
+    WaypointPositionUpdate,
+)
+from app.schemas.geometry import parse_ewkb
 from app.services.geometry_converter import geojson_to_ewkt
 from app.services.trajectory.types import WaypointData
+from app.utils.geo import distance_between
 
 
 def _to_point_ewkt(lon: float, lat: float, alt: float) -> str:
@@ -42,6 +51,89 @@ def _waypoint_to_model(wp, flight_plan_id, sequence_order: int) -> Waypoint:
         camera_target=target_ewkt,
         gimbal_pitch=wp.gimbal_pitch,
     )
+
+
+def _extract_altitude(geom) -> float:
+    """extract z-coordinate (altitude MSL) from a postgis geometry column."""
+    geojson = parse_ewkb(geom.data)
+    coords = geojson.get("coordinates", [0, 0, 0])
+    return coords[2] if len(coords) > 2 else 0.0
+
+
+def _extract_coords(geom) -> tuple[float, float, float]:
+    """extract (lon, lat, alt) from a postgis geometry column."""
+    geojson = parse_ewkb(geom.data)
+    coords = geojson.get("coordinates", [0, 0, 0])
+    return (coords[0], coords[1], coords[2] if len(coords) > 2 else 0.0)
+
+
+def build_enriched_response(db: Session, flight_plan: FlightPlan) -> FlightPlanResponse:
+    """build flight plan response with computed altitude and speed stats."""
+    response = FlightPlanResponse.model_validate(flight_plan)
+
+    waypoints = flight_plan.waypoints
+    if not waypoints:
+        return response
+
+    # global altitude stats
+    altitudes_msl = [_extract_altitude(wp.position) for wp in waypoints]
+    response.min_altitude_msl = min(altitudes_msl)
+    response.max_altitude_msl = max(altitudes_msl)
+
+    airport = db.query(Airport).filter(Airport.id == flight_plan.airport_id).first()
+    elevation = airport.elevation if airport else 0.0
+
+    response.min_altitude_agl = response.min_altitude_msl - elevation
+    response.max_altitude_agl = response.max_altitude_msl - elevation
+
+    # transit speed from mission
+    mission = db.query(Mission).filter(Mission.id == flight_plan.mission_id).first()
+    if mission and mission.default_speed is not None:
+        response.transit_speed = mission.default_speed
+
+    # per-inspection stats
+    by_inspection: dict[UUID, list[Waypoint]] = defaultdict(list)
+    for wp in waypoints:
+        if wp.inspection_id:
+            by_inspection[wp.inspection_id].append(wp)
+
+    inspection_stats = []
+    for insp_id, insp_wps in by_inspection.items():
+        insp_alts = [_extract_altitude(wp.position) for wp in insp_wps]
+        insp_min_msl = min(insp_alts)
+        insp_max_msl = max(insp_alts)
+
+        # segment duration: sum of travel time + hover durations
+        seg_duration = 0.0
+        coords_list = [_extract_coords(wp.position) for wp in insp_wps]
+        for i in range(1, len(coords_list)):
+            dist = distance_between(
+                coords_list[i - 1][0],
+                coords_list[i - 1][1],
+                coords_list[i][0],
+                coords_list[i][1],
+            )
+            speed = insp_wps[i].speed or insp_wps[i - 1].speed or 5.0
+            seg_duration += dist / speed if speed > 0 else 0.0
+
+        for wp in insp_wps:
+            if wp.hover_duration:
+                seg_duration += wp.hover_duration
+
+        inspection_stats.append(
+            InspectionFlightStats(
+                inspection_id=insp_id,
+                min_altitude_agl=insp_min_msl - elevation,
+                max_altitude_agl=insp_max_msl - elevation,
+                min_altitude_msl=insp_min_msl,
+                max_altitude_msl=insp_max_msl,
+                waypoint_count=len(insp_wps),
+                segment_duration=round(seg_duration, 2),
+            )
+        )
+
+    response.inspection_stats = inspection_stats
+    return response
 
 
 def persist_flight_plan(
@@ -156,8 +248,8 @@ def persist_flight_plan(
     return flight_plan
 
 
-def get_flight_plan(db: Session, mission_id: UUID) -> FlightPlan:
-    """get flight plan for mission with waypoints and validation"""
+def get_flight_plan(db: Session, mission_id: UUID) -> FlightPlanResponse:
+    """get flight plan for mission with waypoints, validation, and enriched stats."""
     fp = (
         db.query(FlightPlan)
         .options(
@@ -170,7 +262,7 @@ def get_flight_plan(db: Session, mission_id: UUID) -> FlightPlan:
     if not fp:
         raise NotFoundError("flight plan not found")
 
-    return fp
+    return build_enriched_response(db, fp)
 
 
 def batch_update_waypoints(

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Route, Clock, MapPin, Battery, Layers } from "lucide-react";
+import { Route, Clock, MapPin, Battery, Layers, ArrowUpDown, Gauge, ShieldCheck, ShieldAlert } from "lucide-react";
 import type { FlightPlanResponse } from "@/types/flightPlan";
 
 interface MapStatsPanelProps {
@@ -40,6 +40,36 @@ export default function MapStatsPanel({
     batteryPct = `${Math.max(0, Math.round(100 - consumption))}%`;
   }
 
+  const altitudeRange =
+    flightPlan.min_altitude_agl != null && flightPlan.max_altitude_agl != null
+      ? `${flightPlan.min_altitude_agl.toFixed(1)} \u2013 ${flightPlan.max_altitude_agl.toFixed(1)} ${t("common.units.m")} AGL`
+      : "\u2014";
+
+  const transitSpeed =
+    flightPlan.transit_speed != null
+      ? `${flightPlan.transit_speed} ${t("common.units.ms")}`
+      : "\u2014";
+
+  const validationResult = flightPlan.validation_result;
+  let validationValue: string;
+  let validationIcon = ShieldCheck;
+  if (validationResult) {
+    const violations = validationResult.violations.filter((v) => v.category === "violation");
+    const warnings = validationResult.violations.filter((v) => v.category === "warning");
+    if (validationResult.passed && violations.length === 0) {
+      validationValue = t("map.validationPassed");
+      validationIcon = ShieldCheck;
+    } else {
+      const parts: string[] = [];
+      if (violations.length > 0) parts.push(`${violations.length} ${t("common.violation", { count: violations.length })}`);
+      if (warnings.length > 0) parts.push(`${warnings.length} ${t("common.warning", { count: warnings.length })}`);
+      validationValue = parts.join(", ") || t("map.validationNotPassed");
+      validationIcon = ShieldAlert;
+    }
+  } else {
+    validationValue = t("map.validationNotRun");
+  }
+
   const stats = [
     { label: t("map.totalDistance"), value: `${distanceKm} km`, icon: Route },
     { label: t("map.duration"), value: duration, icon: Clock },
@@ -57,6 +87,21 @@ export default function MapStatsPanel({
       label: t("map.batteryLeft"),
       value: batteryPct,
       icon: Battery,
+    },
+    {
+      label: t("map.altitudeRange"),
+      value: altitudeRange,
+      icon: ArrowUpDown,
+    },
+    {
+      label: t("map.transitSpeed"),
+      value: transitSpeed,
+      icon: Gauge,
+    },
+    {
+      label: t("map.validation"),
+      value: validationValue,
+      icon: validationIcon,
     },
   ];
 
