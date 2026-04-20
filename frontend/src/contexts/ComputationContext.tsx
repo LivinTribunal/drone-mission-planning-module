@@ -98,6 +98,7 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
   const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       if (abortRef.current) {
@@ -159,7 +160,6 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
 
       generateTrajectory(missionId, controller.signal)
         .then((result) => {
-          if (!mountedRef.current) return;
           setState({
             status: "COMPLETED",
             missionId,
@@ -167,12 +167,13 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
             error: null,
             lastResult: result.flight_plan,
           });
+          if (!mountedRef.current) return;
           refreshMissions();
           refreshSelectedMission();
           scheduleDismiss(AUTO_DISMISS_SUCCESS_MS);
         })
         .catch((err) => {
-          if (!mountedRef.current) return;
+          if (err?.name === "AbortError" || err?.code === "ERR_CANCELED") return;
           let errorMsg = "trajectory computation failed";
           if (err?.response?.data?.detail) {
             const detail = err.response.data.detail;
@@ -187,12 +188,18 @@ export function ComputationProvider({ children }: { children: ReactNode }) {
             error: errorMsg,
             lastResult: null,
           });
+          if (!mountedRef.current) return;
           refreshMissions();
           refreshSelectedMission();
           scheduleDismiss(AUTO_DISMISS_FAILURE_MS);
         })
         .finally(() => {
           computingRef.current = false;
+          setState((prev) =>
+            prev.status === "COMPUTING"
+              ? { ...prev, status: "FAILED", error: "computation did not complete" }
+              : prev,
+          );
         });
     },
     [selectedMission, refreshMissions, refreshSelectedMission, clearDismissTimer, scheduleDismiss],
