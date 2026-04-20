@@ -1,5 +1,6 @@
 """tests for camera preset CRUD api."""
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -144,25 +145,11 @@ def test_get_nonexistent_preset(client):
     assert r.status_code == 404
 
 
-def test_get_preset_access_control(client, db_engine):
-    """test that a non-owner operator cannot fetch another user's private preset."""
-    # create a private preset as the default super_admin test user
-    r = client.post(
-        "/api/v1/camera-presets",
-        json={"name": "Private Owner Preset", "white_balance": "DAYLIGHT"},
-    )
-    assert r.status_code == 201
-    private_preset_id = r.json()["id"]
+@contextmanager
+def _operator_client(db_engine):
+    """yield a test client as a non-owner operator, restore overrides on exit."""
+    saved = dict(app.dependency_overrides)
 
-    # also create a default preset to verify those remain accessible
-    r = client.post(
-        "/api/v1/camera-presets",
-        json={"name": "Public Default Preset", "is_default": True, "white_balance": "CLOUDY"},
-    )
-    assert r.status_code == 201
-    default_preset_id = r.json()["id"]
-
-    # create a second user (operator) in the db
     session = sessionmaker(bind=db_engine)()
     try:
         existing = session.query(User).filter(User.id == OPERATOR_USER_ID).first()
@@ -180,7 +167,6 @@ def test_get_preset_access_control(client, db_engine):
     finally:
         session.close()
 
-    # build a client that authenticates as the operator user
     operator_stub = SimpleNamespace(
         id=OPERATOR_USER_ID,
         email="operator@tarmacview.com",
@@ -203,13 +189,70 @@ def test_get_preset_access_control(client, db_engine):
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_current_user] = lambda: operator_stub
-    operator_client = TestClient(app)
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(saved)
 
-    # operator should NOT be able to fetch another user's private preset
-    r = operator_client.get(f"/api/v1/camera-presets/{private_preset_id}")
-    assert r.status_code == 404
 
-    # operator CAN fetch a default preset
-    r = operator_client.get(f"/api/v1/camera-presets/{default_preset_id}")
+def test_get_preset_access_control(client, db_engine):
+    """test that a non-owner operator cannot fetch another user's private preset."""
+    r = client.post(
+        "/api/v1/camera-presets",
+        json={"name": "Private Owner Preset", "white_balance": "DAYLIGHT"},
+    )
+    assert r.status_code == 201
+    private_preset_id = r.json()["id"]
+
+    r = client.post(
+        "/api/v1/camera-presets",
+        json={"name": "Public Default Preset", "is_default": True, "white_balance": "CLOUDY"},
+    )
+    assert r.status_code == 201
+    default_preset_id = r.json()["id"]
+
+    with _operator_client(db_engine) as op_client:
+        # operator should NOT be able to fetch another user's private preset
+        r = op_client.get(f"/api/v1/camera-presets/{private_preset_id}")
+        assert r.status_code == 404
+
+        # operator CAN fetch a default preset
+        r = op_client.get(f"/api/v1/camera-presets/{default_preset_id}")
+        assert r.status_code == 200
+        assert r.json()["id"] == default_preset_id
+
+
+def test_update_preset_access_denied(client, db_engine):
+    """test that a non-owner operator cannot update another user's preset."""
+    r = client.post(
+        "/api/v1/camera-presets",
+        json={"name": "Owner Only Update", "white_balance": "DAYLIGHT"},
+    )
+    assert r.status_code == 201
+    preset_id = r.json()["id"]
+
+    with _operator_client(db_engine) as op_client:
+        r = op_client.put(
+            f"/api/v1/camera-presets/{preset_id}",
+            json={"iso": 3200},
+        )
+        assert r.status_code == 403
+
+
+def test_delete_preset_access_denied(client, db_engine):
+    """test that a non-owner operator cannot delete another user's preset."""
+    r = client.post(
+        "/api/v1/camera-presets",
+        json={"name": "Owner Only Delete", "white_balance": "DAYLIGHT"},
+    )
+    assert r.status_code == 201
+    preset_id = r.json()["id"]
+
+    with _operator_client(db_engine) as op_client:
+        r = op_client.delete(f"/api/v1/camera-presets/{preset_id}")
+        assert r.status_code == 403
+
+    # verify preset still exists (uses restored super admin client)
+    r = client.get(f"/api/v1/camera-presets/{preset_id}")
     assert r.status_code == 200
-    assert r.json()["id"] == default_preset_id

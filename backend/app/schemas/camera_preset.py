@@ -9,7 +9,7 @@ from app.schemas.common import FocusModeStr, ListMeta, WhiteBalanceStr
 class CameraPresetCreate(BaseModel):
     """create camera preset."""
 
-    name: str
+    name: str = Field(max_length=100)
     drone_profile_id: UUID | None = None
     is_default: bool = False
     white_balance: WhiteBalanceStr | None = None
@@ -23,7 +23,7 @@ class CameraPresetCreate(BaseModel):
 class CameraPresetUpdate(BaseModel):
     """update camera preset."""
 
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=100)
     drone_profile_id: UUID | None = None
     is_default: bool | None = None
     white_balance: WhiteBalanceStr | None = None

@@ -75,6 +75,7 @@ def create_preset(
         ip_address=request.client.host if request.client else None,
     )
     db.commit()
+    db.refresh(preset)
     return preset
 
 
@@ -101,6 +102,7 @@ def update_preset(
         ip_address=request.client.host if request.client else None,
     )
     db.commit()
+    db.refresh(preset)
     return preset
 
 
@@ -122,5 +124,5 @@ def delete_preset(
         entity_name=preset.name,
         ip_address=request.client.host if request.client else None,
     )
-    camera_preset_service.delete_preset(db, preset_id, current_user)
+    camera_preset_service.delete_preset(db, preset, current_user)
     return DeleteResponse(deleted=True)

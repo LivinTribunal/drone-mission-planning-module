@@ -216,6 +216,7 @@ export default function InspectionConfigForm({
     if (!preset) return;
     onChange({
       ...configOverride,
+      camera_preset_id: preset.id,
       white_balance: preset.white_balance,
       iso: preset.iso,
       shutter_speed: preset.shutter_speed,

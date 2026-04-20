@@ -18,9 +18,11 @@ def list_presets(
     is_default: bool | None = None,
 ) -> list[CameraPreset]:
     """list presets visible to user: defaults + own presets."""
-    query = db.query(CameraPreset).filter(
-        or_(CameraPreset.is_default.is_(True), CameraPreset.created_by == user.id)
-    )
+    query = db.query(CameraPreset)
+    if user.role not in ("COORDINATOR", "SUPER_ADMIN"):
+        query = query.filter(
+            or_(CameraPreset.is_default.is_(True), CameraPreset.created_by == user.id)
+        )
 
     if drone_profile_id is not None:
         query = query.filter(
@@ -50,7 +52,7 @@ def create_preset(db: Session, schema: CameraPresetCreate, user: User) -> Camera
     data["created_by"] = user.id
     preset = CameraPreset(**data)
     db.add(preset)
-    db.commit()
+    db.flush()
     db.refresh(preset)
     return preset
 
@@ -62,19 +64,18 @@ def update_preset(
     preset = get_preset(db, preset_id)
     _check_access(preset, user)
     apply_schema_update(preset, schema)
-    db.commit()
+    db.flush()
     db.refresh(preset)
     return preset
 
 
-def delete_preset(db: Session, preset_id: UUID, user: User) -> None:
+def delete_preset(db: Session, preset: CameraPreset, user: User) -> None:
     """delete camera preset, nullifying references."""
-    preset = get_preset(db, preset_id)
     _check_access(preset, user)
 
     # nullify FK on inspection configurations referencing this preset
     db.query(InspectionConfiguration).filter(
-        InspectionConfiguration.camera_preset_id == preset_id
+        InspectionConfiguration.camera_preset_id == preset.id
     ).update({"camera_preset_id": None})
 
     db.delete(preset)
