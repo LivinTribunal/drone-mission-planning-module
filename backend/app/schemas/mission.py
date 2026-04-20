@@ -25,6 +25,10 @@ InspectionMethodStr = Literal[
 CaptureModeStr = Literal["VIDEO_CAPTURE", "PHOTO_CAPTURE"]
 # hover bearing reference frames - RUNWAY = 0 is approach side, COMPASS = absolute
 HoverBearingRefStr = Literal["RUNWAY", "COMPASS"]
+# white balance presets
+WhiteBalanceStr = Literal["DAYLIGHT", "CLOUDY", "TUNGSTEN", "MANUAL_4000K"]
+# focus mode values
+FocusModeStr = Literal["MANUAL", "AUTO_CENTER", "AUTO_AREA"]
 
 # minimum transit altitude (m AGL) - mirrors trajectory_types.MINIMUM_AGL_ALTITUDE.
 # duplicated here so schemas do not import from services (architectural boundary).
@@ -65,10 +69,10 @@ class InspectionConfigOverride(BaseModel):
     selected_lha_id: UUID | None = None
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
-    white_balance: str | None = Field(default=None, max_length=20)
+    white_balance: WhiteBalanceStr | None = None
     iso: int | None = Field(default=None, gt=0)
     shutter_speed: str | None = Field(default=None, max_length=20)
-    focus_mode: str | None = Field(default=None, max_length=20)
+    focus_mode: FocusModeStr | None = None
     focus_distance_m: float | None = Field(default=None, gt=0)
     optical_zoom: float | None = Field(default=None, gt=0)
 
@@ -121,10 +125,10 @@ class InspectionConfigResponse(BaseModel):
     selected_lha_id: UUID | None = None
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
-    white_balance: str | None = None
+    white_balance: WhiteBalanceStr | None = None
     iso: int | None = None
     shutter_speed: str | None = None
-    focus_mode: str | None = None
+    focus_mode: FocusModeStr | None = None
     focus_distance_m: float | None = None
     optical_zoom: float | None = None
 
@@ -172,10 +176,10 @@ class MissionCreate(BaseModel):
     landing_coordinate: PointZ | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
-    default_white_balance: str | None = Field(default=None, max_length=20)
+    default_white_balance: WhiteBalanceStr | None = None
     default_iso: int | None = Field(default=None, gt=0)
     default_shutter_speed: str | None = Field(default=None, max_length=20)
-    default_focus_mode: str | None = Field(default=None, max_length=20)
+    default_focus_mode: FocusModeStr | None = None
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool = True
     flight_plan_scope: FlightPlanScopeStr = "FULL"
@@ -201,10 +205,10 @@ class MissionUpdate(BaseModel):
     date_time: datetime | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = Field(default=None, ge=0)
-    default_white_balance: str | None = Field(default=None, max_length=20)
+    default_white_balance: WhiteBalanceStr | None = None
     default_iso: int | None = Field(default=None, gt=0)
     default_shutter_speed: str | None = Field(default=None, max_length=20)
-    default_focus_mode: str | None = Field(default=None, max_length=20)
+    default_focus_mode: FocusModeStr | None = None
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool | None = None
     flight_plan_scope: FlightPlanScopeStr | None = None
@@ -235,10 +239,10 @@ class MissionResponse(BaseModel):
     landing_coordinate: PointZ | None = None
     default_capture_mode: CaptureModeStr | None = None
     default_buffer_distance: float | None = None
-    default_white_balance: str | None = None
+    default_white_balance: WhiteBalanceStr | None = None
     default_iso: int | None = None
     default_shutter_speed: str | None = None
-    default_focus_mode: str | None = None
+    default_focus_mode: FocusModeStr | None = None
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool = True
     flight_plan_scope: FlightPlanScopeStr = "FULL"

@@ -667,7 +667,7 @@ export default function InspectionConfigForm({
             >
               <option value="">
                 {mission.default_focus_mode
-                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${t(`mission.config.cameraSettings.fm.${mission.default_focus_mode === "AUTO_CENTER" ? "autoCenter" : mission.default_focus_mode === "AUTO_AREA" ? "autoArea" : "manual"}`, mission.default_focus_mode)}`
+                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${t(`mission.config.cameraSettings.fm.${{ AUTO_CENTER: "autoCenter", AUTO_AREA: "autoArea", MANUAL: "manual" }[mission.default_focus_mode] ?? mission.default_focus_mode}`, mission.default_focus_mode)}`
                   : t("mission.config.cameraSettings.notSet")}
               </option>
               <option value="MANUAL">{t("mission.config.cameraSettings.fm.manual")}</option>

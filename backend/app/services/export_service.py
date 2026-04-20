@@ -1110,7 +1110,16 @@ def export_mission(
     returns (files_dict, sanitized_mission_name) where files_dict maps
     filename -> (content_bytes, content_type).
     """
-    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    # eager-load inspections + configs when JSON export is requested
+    mission_query = db.query(Mission).filter(Mission.id == mission_id)
+    if "JSON" in formats:
+        mission_query = mission_query.options(
+            joinedload(Mission.inspections).joinedload(Inspection.config),
+            joinedload(Mission.inspections)
+            .joinedload(Inspection.template)
+            .joinedload(InspectionTemplate.default_config),
+        )
+    mission = mission_query.first()
     if not mission:
         raise NotFoundError("mission not found")
 
@@ -1166,20 +1175,6 @@ def export_mission(
     if mission.drone_profile_id is not None:
         drone_profile = (
             db.query(DroneProfile).filter(DroneProfile.id == mission.drone_profile_id).first()
-        )
-
-    # eager-load inspections + configs for JSON camera settings export
-    if "JSON" in formats:
-        mission = (
-            db.query(Mission)
-            .options(
-                joinedload(Mission.inspections).joinedload(Inspection.config),
-                joinedload(Mission.inspections)
-                .joinedload(Inspection.template)
-                .joinedload(InspectionTemplate.default_config),
-            )
-            .filter(Mission.id == mission_id)
-            .first()
         )
 
     files: dict[str, tuple[bytes, str]] = {}

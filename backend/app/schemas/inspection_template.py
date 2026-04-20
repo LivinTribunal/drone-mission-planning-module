@@ -4,7 +4,13 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ListMeta
-from app.schemas.mission import CaptureModeStr, HoverBearingRefStr, InspectionMethodStr
+from app.schemas.mission import (
+    CaptureModeStr,
+    FocusModeStr,
+    HoverBearingRefStr,
+    InspectionMethodStr,
+    WhiteBalanceStr,
+)
 
 
 class InspectionConfigCreate(BaseModel):
@@ -30,10 +36,10 @@ class InspectionConfigCreate(BaseModel):
     selected_lha_id: UUID | None = None
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
-    white_balance: str | None = Field(default=None, max_length=20)
+    white_balance: WhiteBalanceStr | None = None
     iso: int | None = Field(default=None, gt=0)
     shutter_speed: str | None = Field(default=None, max_length=20)
-    focus_mode: str | None = Field(default=None, max_length=20)
+    focus_mode: FocusModeStr | None = None
     focus_distance_m: float | None = Field(default=None, gt=0)
     optical_zoom: float | None = Field(default=None, gt=0)
 
@@ -62,10 +68,10 @@ class InspectionConfigResponse(BaseModel):
     selected_lha_id: UUID | None = None
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
-    white_balance: str | None = None
+    white_balance: WhiteBalanceStr | None = None
     iso: int | None = None
     shutter_speed: str | None = None
-    focus_mode: str | None = None
+    focus_mode: FocusModeStr | None = None
     focus_distance_m: float | None = None
     optical_zoom: float | None = None
 
