@@ -196,6 +196,12 @@ export default function InspectionConfigForm({
       ? configOverride.selected_lha_id
       : savedCfg?.selected_lha_id ?? defaultCfg?.selected_lha_id ?? null;
 
+  // lha setting angle override for horizontal range
+  const lhaSettingAngleOverrideId =
+    configOverride.lha_setting_angle_override_id !== undefined
+      ? configOverride.lha_setting_angle_override_id
+      : savedCfg?.lha_setting_angle_override_id ?? defaultCfg?.lha_setting_angle_override_id ?? null;
+
   // angle-lock toggle: when on, editing one of {height, distance, angle}
   // recomputes the third so the triangle stays consistent.
   const [angleLocked, setAngleLocked] = useState(false);
@@ -248,7 +254,7 @@ export default function InspectionConfigForm({
     return Math.round(computeMehtHeight(dist, gs) * 100) / 100;
   }, [inspection.method, targetAgls]);
 
-  // papi observation angle derived from max setting angle + offset
+  // papi observation angle derived from max setting angle + offset (or override)
   const { computedObservationAngle, missingSettingAngleUnits } = useMemo(() => {
     if (inspection.method !== "HORIZONTAL_RANGE") {
       return { computedObservationAngle: null, missingSettingAngleUnits: [] as string[] };
@@ -265,14 +271,25 @@ export default function InspectionConfigForm({
     if (angles.length === 0) {
       return { computedObservationAngle: null, missingSettingAngleUnits: missing };
     }
-    // must match DEFAULT_ANGLE_OFFSET in backend inspection_configuration.py
     const effectiveOffset = typeof angleOffset === "number" ? angleOffset : 0.5;
+
+    // when override is set, use that specific lha's angle instead of max
+    if (lhaSettingAngleOverrideId) {
+      const overrideLha = relevantLhas.find((l) => l.id === lhaSettingAngleOverrideId);
+      if (overrideLha?.setting_angle != null) {
+        return {
+          computedObservationAngle: Math.round((overrideLha.setting_angle + effectiveOffset) * 100) / 100,
+          missingSettingAngleUnits: missing,
+        };
+      }
+    }
+
     const maxAngle = Math.max(...angles);
     return {
       computedObservationAngle: Math.round((maxAngle + effectiveOffset) * 100) / 100,
       missingSettingAngleUnits: missing,
     };
-  }, [inspection.method, targetAgls, selectedLhaIds, angleOffset]);
+  }, [inspection.method, targetAgls, selectedLhaIds, angleOffset, lhaSettingAngleOverrideId]);
 
   function handleNumberChange(
     field: keyof InspectionConfigOverride,
@@ -754,6 +771,35 @@ export default function InspectionConfigForm({
                 className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
                 data-testid="inspection-buffer-distance"
               />
+            </div>
+          )}
+          {inspection.method === "HORIZONTAL_RANGE" && (
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("mission.config.lhaSettingAngleOverride")}
+              </label>
+              <select
+                value={lhaSettingAngleOverrideId ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value || null;
+                  onChange({ ...configOverride, lha_setting_angle_override_id: v });
+                }}
+                className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+                data-testid="inspection-lha-setting-angle-override"
+              >
+                <option value="">{t("mission.config.lhaSettingAngleOverrideAuto")}</option>
+                {targetAgls.flatMap((agl) =>
+                  agl.lhas.map((lha) => (
+                    <option key={lha.id} value={lha.id}>
+                      {t("mission.config.unitDesignator")} {lha.unit_designator}
+                      {lha.setting_angle != null ? ` (${lha.setting_angle}°)` : ""}
+                    </option>
+                  )),
+                )}
+              </select>
+              <p className="text-[11px] text-tv-text-muted mt-1">
+                {t("mission.config.lhaSettingAngleOverrideHint")}
+              </p>
             </div>
           )}
           {inspection.method === "HORIZONTAL_RANGE" &&

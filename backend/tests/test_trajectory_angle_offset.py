@@ -12,6 +12,7 @@ from app.schemas.mission import InspectionConfigOverride
 from app.services.trajectory.helpers import (
     check_missing_setting_angles,
     derive_observation_angle,
+    get_lha_setting_angle_by_id,
 )
 from app.services.trajectory.methods.horizontal_range import calculate_arc_path
 from app.services.trajectory.types import (
@@ -233,3 +234,109 @@ class TestPapiArcPathWithDerivedAngle:
         assert len(waypoints) == 5
         for wp in waypoints:
             assert wp.waypoint_type == WaypointType.MEASUREMENT
+
+
+class TestGetLhaSettingAngleById:
+    """tests for get_lha_setting_angle_by_id helper."""
+
+    def test_found_returns_angle(self):
+        """returns setting angle when lha id matches."""
+        lha = FakeLHA(unit_designator="B", setting_angle=3.0)
+        template = FakeTemplate(targets=[FakeAGL(lhas=[lha])])
+        result = get_lha_setting_angle_by_id(template, lha.id)
+        assert result == 3.0
+
+    def test_not_found_returns_none(self):
+        """returns none when lha id does not match any lha."""
+        lha = FakeLHA(unit_designator="A", setting_angle=3.5)
+        template = FakeTemplate(targets=[FakeAGL(lhas=[lha])])
+        result = get_lha_setting_angle_by_id(template, uuid4())
+        assert result is None
+
+    def test_found_but_no_setting_angle(self):
+        """returns none when lha exists but has no setting angle."""
+        lha = FakeLHA(unit_designator="C", setting_angle=None)
+        template = FakeTemplate(targets=[FakeAGL(lhas=[lha])])
+        result = get_lha_setting_angle_by_id(template, lha.id)
+        assert result is None
+
+    def test_searches_across_agls(self):
+        """finds lha in the second agl target."""
+        lha_a = FakeLHA(unit_designator="A", setting_angle=2.5)
+        lha_b = FakeLHA(unit_designator="B", setting_angle=3.0)
+        template = FakeTemplate(targets=[FakeAGL(lhas=[lha_a]), FakeAGL(lhas=[lha_b])])
+        result = get_lha_setting_angle_by_id(template, lha_b.id)
+        assert result == 3.0
+
+
+class TestLhaSettingAngleOverride:
+    """tests for override selecting a specific lha's angle vs max."""
+
+    def test_override_selects_specific_lha_angle(self):
+        """override uses unit b (3.0) instead of max (3.5)."""
+        lha_a = FakeLHA(unit_designator="A", setting_angle=3.5)
+        lha_b = FakeLHA(unit_designator="B", setting_angle=3.0)
+        template = FakeTemplate(targets=[FakeAGL(lhas=[lha_a, lha_b])])
+
+        override_angle = get_lha_setting_angle_by_id(template, lha_b.id)
+        assert override_angle == 3.0
+
+        offset = 0.5
+        glide_slope = override_angle + offset
+        assert glide_slope == 3.5
+
+        # max-based would give 4.0
+        max_based = derive_observation_angle([3.5, 3.0], offset)
+        assert max_based == 4.0
+        assert glide_slope < max_based
+
+    def test_override_none_uses_max(self):
+        """when override is none, max logic applies."""
+        angles = [2.5, 3.0, 3.5]
+        result = derive_observation_angle(angles, 0.5)
+        assert result == 4.0
+
+    def test_override_lha_not_found_falls_back_to_max(self):
+        """if override lha id not in template, fall back to max."""
+        lha_a = FakeLHA(unit_designator="A", setting_angle=3.5)
+        template = FakeTemplate(targets=[FakeAGL(lhas=[lha_a])])
+
+        override_angle = get_lha_setting_angle_by_id(template, uuid4())
+        assert override_angle is None
+
+        # fallback to max
+        result = derive_observation_angle([3.5], 0.5)
+        assert result == 4.0
+
+    def test_override_lha_missing_setting_angle_falls_back(self):
+        """if override lha has no setting angle, fall back to max."""
+        lha_a = FakeLHA(unit_designator="A", setting_angle=3.5)
+        lha_b = FakeLHA(unit_designator="B", setting_angle=None)
+        template = FakeTemplate(targets=[FakeAGL(lhas=[lha_a, lha_b])])
+
+        override_angle = get_lha_setting_angle_by_id(template, lha_b.id)
+        assert override_angle is None
+
+        # fallback to max of available angles
+        result = derive_observation_angle([3.5], 0.5)
+        assert result == 4.0
+
+
+class TestLhaSettingAngleOverrideSchema:
+    """schema validation for lha_setting_angle_override_id field."""
+
+    def test_override_id_accepts_valid_uuid(self):
+        """field accepts a valid uuid."""
+        uid = uuid4()
+        cfg = InspectionConfigOverride(lha_setting_angle_override_id=uid)
+        assert cfg.lha_setting_angle_override_id == uid
+
+    def test_override_id_accepts_none(self):
+        """field is optional and defaults to none."""
+        cfg = InspectionConfigOverride()
+        assert cfg.lha_setting_angle_override_id is None
+
+    def test_override_id_explicit_none(self):
+        """explicit none is accepted."""
+        cfg = InspectionConfigOverride(lha_setting_angle_override_id=None)
+        assert cfg.lha_setting_angle_override_id is None

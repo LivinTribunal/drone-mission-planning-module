@@ -160,6 +160,16 @@ def get_lha_positions_from_surfaces(surfaces, lha_ids: list) -> list[Point3D]:
     return positions
 
 
+def get_lha_setting_angle_by_id(template, lha_id) -> Degrees | None:
+    """return setting angle of a specific lha by id, or none if not found."""
+    target_id = str(lha_id)
+    for agl in template.targets:
+        for lha in agl.lhas:
+            if str(lha.id) == target_id:
+                return lha.setting_angle
+    return None
+
+
 def get_lha_setting_angles(template, lha_ids=None) -> list[Degrees]:
     """collect and sort setting angles from all LHA units in template."""
     # precompute set to avoid O(m*n) list rebuild per iteration
