@@ -26,7 +26,12 @@ export function getSavedViewport(
       parsed.center.length === 2 &&
       typeof parsed.zoom === "number"
     ) {
-      return parsed as MapViewportState;
+      return {
+        center: parsed.center,
+        zoom: parsed.zoom,
+        bearing: typeof parsed.bearing === "number" ? parsed.bearing : 0,
+        pitch: typeof parsed.pitch === "number" ? parsed.pitch : 0,
+      };
     }
     return null;
   } catch {

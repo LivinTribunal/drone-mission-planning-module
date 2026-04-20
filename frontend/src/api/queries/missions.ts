@@ -38,7 +38,7 @@ export function useFlightPlan(missionId: string | undefined) {
     queryKey: queryKeys.missions.flightPlan(missionId ?? ""),
     queryFn: () => getFlightPlan(missionId!),
     enabled: !!missionId,
-    staleTime: Infinity,
+    staleTime: 60_000,
   });
 }
 

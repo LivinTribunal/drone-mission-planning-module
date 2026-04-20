@@ -35,6 +35,20 @@ describe("useMapViewport", () => {
       localStorage.setItem(VIEWPORT_KEY, "not-json");
       expect(getSavedViewport(AIRPORT_ID)).toBeNull();
     });
+
+    it("falls back to 0 for non-numeric bearing and pitch", () => {
+      const tampered = { center: [48.1, 17.2], zoom: 14, bearing: "bad", pitch: null };
+      localStorage.setItem(VIEWPORT_KEY, JSON.stringify(tampered));
+      const result = getSavedViewport(AIRPORT_ID);
+      expect(result).toEqual({ center: [48.1, 17.2], zoom: 14, bearing: 0, pitch: 0 });
+    });
+
+    it("falls back to 0 for missing bearing and pitch", () => {
+      const partial = { center: [48.1, 17.2], zoom: 14 };
+      localStorage.setItem(VIEWPORT_KEY, JSON.stringify(partial));
+      const result = getSavedViewport(AIRPORT_ID);
+      expect(result).toEqual({ center: [48.1, 17.2], zoom: 14, bearing: 0, pitch: 0 });
+    });
   });
 
   describe("saveViewport", () => {
