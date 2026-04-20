@@ -344,14 +344,12 @@ def _hover_point_lock_handler(
 
 
 def _meht_check_handler(
-    inspection, config, center, runway_heading, speed, target_lha_position, **_kw
+    inspection, config, center, speed, target_lha_position, **_kw
 ) -> list[WaypointData]:
     """handler for MEHT_CHECK method."""
     if target_lha_position is None:
         raise ValueError("meht-check requires a computed MEHT position")
-    return calculate_meht_check_path(
-        target_lha_position, center, runway_heading, config, inspection.id, speed
-    )
+    return calculate_meht_check_path(target_lha_position, center, config, inspection.id, speed)
 
 
 METHOD_REGISTRY: dict[InspectionMethod, Callable] = {

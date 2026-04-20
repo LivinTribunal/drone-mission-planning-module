@@ -69,7 +69,7 @@ class TestMehtCheckPath:
         meht = Point3D(lon=14.26, lat=50.1, alt=395.0)
         lha_center = Point3D(lon=14.263, lat=50.1, alt=380.0)
         cfg = ResolvedConfig()
-        wps = calculate_meht_check_path(meht, lha_center, 90.0, cfg, uuid4(), speed=0.0)
+        wps = calculate_meht_check_path(meht, lha_center, cfg, uuid4(), speed=0.0)
         assert len(wps) == 1
         assert wps[0].waypoint_type == WaypointType.HOVER
 
@@ -78,7 +78,7 @@ class TestMehtCheckPath:
         meht = Point3D(lon=14.26, lat=50.1, alt=395.0)
         lha_center = Point3D(lon=14.263, lat=50.1, alt=380.0)
         cfg = ResolvedConfig()
-        wps = calculate_meht_check_path(meht, lha_center, 90.0, cfg, uuid4(), speed=0.0)
+        wps = calculate_meht_check_path(meht, lha_center, cfg, uuid4(), speed=0.0)
         assert wps[0].hover_duration == DEFAULT_MEHT_HOVER_DURATION
 
     def test_custom_hover_duration(self):
@@ -86,7 +86,7 @@ class TestMehtCheckPath:
         meht = Point3D(lon=14.26, lat=50.1, alt=395.0)
         lha_center = Point3D(lon=14.263, lat=50.1, alt=380.0)
         cfg = ResolvedConfig(hover_duration=20.0)
-        wps = calculate_meht_check_path(meht, lha_center, 90.0, cfg, uuid4(), speed=0.0)
+        wps = calculate_meht_check_path(meht, lha_center, cfg, uuid4(), speed=0.0)
         assert wps[0].hover_duration == 20.0
 
     def test_position_matches_meht_point(self):
@@ -94,7 +94,7 @@ class TestMehtCheckPath:
         meht = Point3D(lon=14.26, lat=50.1, alt=395.0)
         lha_center = Point3D(lon=14.263, lat=50.1, alt=380.0)
         cfg = ResolvedConfig()
-        wps = calculate_meht_check_path(meht, lha_center, 90.0, cfg, uuid4(), speed=0.0)
+        wps = calculate_meht_check_path(meht, lha_center, cfg, uuid4(), speed=0.0)
         assert wps[0].lon == meht.lon
         assert wps[0].lat == meht.lat
         assert wps[0].alt == meht.alt
@@ -105,7 +105,7 @@ class TestMehtCheckPath:
         # lha center is east of meht
         lha_center = Point3D(lon=14.265, lat=50.1, alt=380.0)
         cfg = ResolvedConfig()
-        wps = calculate_meht_check_path(meht, lha_center, 90.0, cfg, uuid4(), speed=0.0)
+        wps = calculate_meht_check_path(meht, lha_center, cfg, uuid4(), speed=0.0)
         expected = bearing_between(meht.lon, meht.lat, lha_center.lon, lha_center.lat)
         assert abs(wps[0].heading - expected) < 1.0
 
@@ -114,7 +114,7 @@ class TestMehtCheckPath:
         meht = Point3D(lon=14.26, lat=50.1, alt=395.0)
         lha_center = Point3D(lon=14.263, lat=50.1, alt=380.0)
         cfg = ResolvedConfig()
-        wps = calculate_meht_check_path(meht, lha_center, 90.0, cfg, uuid4(), speed=0.0)
+        wps = calculate_meht_check_path(meht, lha_center, cfg, uuid4(), speed=0.0)
         # meht is above lha center, so gimbal should be negative (looking down)
         assert wps[0].gimbal_pitch is not None
         assert wps[0].gimbal_pitch < 0
@@ -124,7 +124,7 @@ class TestMehtCheckPath:
         meht = Point3D(lon=14.26, lat=50.1, alt=395.0)
         lha_center = Point3D(lon=14.263, lat=50.1, alt=380.0)
         cfg = ResolvedConfig(camera_gimbal_angle=-45.0)
-        wps = calculate_meht_check_path(meht, lha_center, 90.0, cfg, uuid4(), speed=0.0)
+        wps = calculate_meht_check_path(meht, lha_center, cfg, uuid4(), speed=0.0)
         assert wps[0].gimbal_pitch == -45.0
 
     def test_camera_target_is_lha_center(self):
@@ -132,7 +132,7 @@ class TestMehtCheckPath:
         meht = Point3D(lon=14.26, lat=50.1, alt=395.0)
         lha_center = Point3D(lon=14.263, lat=50.1, alt=380.0)
         cfg = ResolvedConfig()
-        wps = calculate_meht_check_path(meht, lha_center, 90.0, cfg, uuid4(), speed=0.0)
+        wps = calculate_meht_check_path(meht, lha_center, cfg, uuid4(), speed=0.0)
         assert wps[0].camera_target == lha_center
 
     def test_photo_mode(self):
@@ -140,7 +140,7 @@ class TestMehtCheckPath:
         meht = Point3D(lon=14.26, lat=50.1, alt=395.0)
         lha_center = Point3D(lon=14.263, lat=50.1, alt=380.0)
         cfg = ResolvedConfig(capture_mode="PHOTO_CAPTURE")
-        wps = calculate_meht_check_path(meht, lha_center, 90.0, cfg, uuid4(), speed=0.0)
+        wps = calculate_meht_check_path(meht, lha_center, cfg, uuid4(), speed=0.0)
         assert wps[0].camera_action == CameraAction.PHOTO_CAPTURE
 
     def test_video_mode(self):
@@ -148,7 +148,7 @@ class TestMehtCheckPath:
         meht = Point3D(lon=14.26, lat=50.1, alt=395.0)
         lha_center = Point3D(lon=14.263, lat=50.1, alt=380.0)
         cfg = ResolvedConfig(capture_mode="VIDEO_CAPTURE")
-        wps = calculate_meht_check_path(meht, lha_center, 90.0, cfg, uuid4(), speed=0.0)
+        wps = calculate_meht_check_path(meht, lha_center, cfg, uuid4(), speed=0.0)
         assert wps[0].camera_action == CameraAction.RECORDING
 
     def test_dispatch_requires_target(self):

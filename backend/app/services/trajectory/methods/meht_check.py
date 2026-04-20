@@ -7,7 +7,6 @@ from app.utils.geo import bearing_between, elevation_angle
 
 from ..types import (
     DEFAULT_MEHT_HOVER_DURATION,
-    Degrees,
     MetersPerSecond,
     Point3D,
     ResolvedConfig,
@@ -18,7 +17,6 @@ from ..types import (
 def calculate_meht_check_path(
     meht_point: Point3D,
     lha_center: Point3D,
-    runway_heading: Degrees,
     config: ResolvedConfig,
     inspection_id: UUID | None,
     speed: MetersPerSecond,
