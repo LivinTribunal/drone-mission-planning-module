@@ -40,9 +40,13 @@ export function getValidationDisplay(
   if (violations.length > 0) parts.push(`${violations.length} ${labels.violation(violations.length)}`);
   if (warnings.length > 0) parts.push(`${warnings.length} ${labels.warning(warnings.length)}`);
 
+  const hasViolations = violations.length > 0;
+
   return {
     value: parts.join(", ") || labels.notPassed,
     icon: ShieldAlert,
-    colorClass: "bg-tv-error/20 text-tv-error",
+    colorClass: hasViolations
+      ? "bg-tv-error/20 text-tv-error"
+      : "bg-tv-warning/20 text-tv-warning",
   };
 }

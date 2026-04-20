@@ -101,6 +101,7 @@ export default function MapStatsPanel({
       label: t("map.validation"),
       value: validation.value,
       icon: validation.icon,
+      colorClass: validation.colorClass,
     },
   ];
 
@@ -133,14 +134,15 @@ export default function MapStatsPanel({
         <div className="border-t border-tv-border px-2 py-2 space-y-1 max-h-48 overflow-y-auto">
           {stats.map((stat) => {
             const Icon = stat.icon;
+            const textColor = stat.colorClass?.split(" ").find((c) => c.startsWith("text-")) ?? "text-tv-text-secondary";
             return (
               <div
                 key={stat.label}
                 className="flex items-center gap-2 px-2 py-1 text-xs"
               >
-                <Icon className="h-3 w-3 text-tv-text-secondary flex-shrink-0" />
+                <Icon className={`h-3 w-3 flex-shrink-0 ${textColor}`} />
                 <span className="text-tv-text-secondary flex-1">{stat.label}</span>
-                <span className="text-tv-text-primary font-medium">
+                <span className={`font-medium ${stat.colorClass ? textColor : "text-tv-text-primary"}`}>
                   {stat.value}
                 </span>
               </div>
