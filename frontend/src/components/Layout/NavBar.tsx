@@ -23,14 +23,13 @@ export default function NavBar({ items, role }: NavBarProps) {
   const { selectedAirport } = useAirport();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const hasCoordinatorRole =
     user?.role === "COORDINATOR" || user?.role === "SUPER_ADMIN";
 
-  const availableLanguages = Object.keys(i18n.options.resources ?? {});
 
   const [maintenanceMode, setMaintenanceMode] = useState(false);
 
@@ -276,32 +275,6 @@ export default function NavBar({ items, role }: NavBarProps) {
                   </button>
                 </>
               )}
-
-              {/* language selector */}
-              <hr className="my-1 border-tv-border" />
-              <div className="px-4 py-1.5 text-xs font-medium text-tv-text-muted uppercase tracking-wider">
-                {t("user.language")}
-              </div>
-              {availableLanguages.map((code) => (
-                <button
-                  key={code}
-                  onClick={() => i18n.changeLanguage(code)}
-                  className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 text-sm
-                    text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
-                >
-                  {i18n.language === code && (
-                    <svg className="h-4 w-4 text-tv-accent" viewBox="0 0 20 20" fill="currentColor">
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  )}
-                  {!i18n.language.startsWith(code) && <span className="w-4" />}
-                  {t(`languages.${code}`)}
-                </button>
-              ))}
 
               <hr className="my-1 border-tv-border" />
               <button

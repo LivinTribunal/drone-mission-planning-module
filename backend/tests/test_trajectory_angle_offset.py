@@ -13,7 +13,7 @@ from app.services.trajectory.helpers import (
     check_missing_setting_angles,
     derive_observation_angle,
 )
-from app.services.trajectory.methods.papi_horizontal_range import calculate_arc_path
+from app.services.trajectory.methods.horizontal_range import calculate_arc_path
 from app.services.trajectory.types import (
     DEFAULT_ANGLE_OFFSET,
     DEFAULT_GLIDE_SLOPE,

@@ -509,6 +509,31 @@ def _build_inspection_detail_pages(c: canvas.Canvas, data: ReportData, page_num:
             c.drawString(MARGIN + 10 * mm, y, f"Recording Setup: {recording_dur}s")
             y -= 4.5 * mm
 
+        # night camera settings
+        _cam_fields = [
+            ("white_balance", "White Balance", None),
+            ("iso", "ISO", None),
+            ("shutter_speed", "Shutter Speed", None),
+            ("focus_mode", "Focus Mode", None),
+            ("focus_distance_m", "Focus Distance", " m"),
+            ("optical_zoom", "Optical Zoom", "x"),
+        ]
+        _has_cam = any(resolved.get(f[0]) is not None for f in _cam_fields)
+        if _has_cam:
+            y -= 2 * mm
+            c.setFont("Helvetica-Bold", 9)
+            c.setFillColor(colors.HexColor("#333333"))
+            c.drawString(MARGIN + 5 * mm, y, "Night Camera Settings")
+            y -= 5 * mm
+            c.setFont("Helvetica", 8)
+            c.setFillColor(colors.HexColor("#555555"))
+            for key, label, suffix in _cam_fields:
+                val = resolved.get(key)
+                if val is not None:
+                    display = f"{label}: {val}{suffix}" if suffix else f"{label}: {val}"
+                    c.drawString(MARGIN + 10 * mm, y, display)
+                    y -= 4.5 * mm
+
         # measurement parameters
         y -= 2 * mm
         c.setFont("Helvetica-Bold", 9)

@@ -98,11 +98,27 @@ class InspectionConfiguration(Base):
     hover_bearing = Column(Float, nullable=True)
     hover_bearing_reference = Column(String(10), nullable=True)
 
+    # camera settings for night inspections - advisory only, not consumed by trajectory
+    white_balance = Column(String(20), nullable=True)
+    iso = Column(Integer, nullable=True)
+    shutter_speed = Column(String(20), nullable=True)
+    focus_mode = Column(String(20), nullable=True)
+    focus_distance_m = Column(Float, nullable=True)
+    optical_zoom = Column(Float, nullable=True)
+
     # fields merged by resolve_with_defaults. a superset of CONFIG_FIELDS that
     # additionally includes lha_ids so duplicate_mission copies it; lha_ids is
     # NOT consumed from ResolvedConfig in the trajectory path - the orchestrator
     # reads inspection.lha_ids directly.
-    _MERGE_FIELDS = CONFIG_FIELDS + ("lha_ids",)
+    _MERGE_FIELDS = CONFIG_FIELDS + (
+        "lha_ids",
+        "white_balance",
+        "iso",
+        "shutter_speed",
+        "focus_mode",
+        "focus_distance_m",
+        "optical_zoom",
+    )
 
     def resolve_with_defaults(self, template_config: InspectionConfiguration | None):
         """merge this config over template defaults, returning field dict."""

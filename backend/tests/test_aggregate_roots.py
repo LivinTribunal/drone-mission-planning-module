@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
 from app.models.flight_plan import FlightPlan
@@ -582,6 +583,148 @@ class TestMergeFieldsIncludesLhaIds:
 
         merged = config.resolve_with_defaults(template)
         assert merged["lha_ids"] == [str(uid)]
+
+
+class TestCameraSettingsResolve:
+    """tests for resolve_with_defaults with camera settings fields."""
+
+    def test_camera_fields_in_merge_fields(self):
+        """camera settings must be in _MERGE_FIELDS for report/export use."""
+        cam_fields = (
+            "white_balance",
+            "iso",
+            "shutter_speed",
+            "focus_mode",
+            "focus_distance_m",
+            "optical_zoom",
+        )
+        for f in cam_fields:
+            assert f in InspectionConfiguration._MERGE_FIELDS
+
+    def test_camera_fields_not_in_config_fields(self):
+        """camera settings must NOT be in CONFIG_FIELDS - they don't affect trajectory."""
+        from app.models.inspection import CONFIG_FIELDS
+
+        cam_fields = (
+            "white_balance",
+            "iso",
+            "shutter_speed",
+            "focus_mode",
+            "focus_distance_m",
+            "optical_zoom",
+        )
+        for f in cam_fields:
+            assert f not in CONFIG_FIELDS
+
+    def test_resolve_override_camera_settings(self):
+        """operator camera settings override template defaults."""
+        config = InspectionConfiguration(
+            white_balance="TUNGSTEN",
+            iso=800,
+            shutter_speed="1/500",
+            focus_mode="MANUAL",
+            focus_distance_m=50.0,
+            optical_zoom=5.0,
+        )
+        template = InspectionConfiguration(
+            white_balance="DAYLIGHT",
+            iso=100,
+        )
+        merged = config.resolve_with_defaults(template)
+        assert merged["white_balance"] == "TUNGSTEN"
+        assert merged["iso"] == 800
+        assert merged["shutter_speed"] == "1/500"
+        assert merged["focus_mode"] == "MANUAL"
+        assert merged["focus_distance_m"] == 50.0
+        assert merged["optical_zoom"] == 5.0
+
+    def test_resolve_fallback_to_template_camera_settings(self):
+        """camera settings fall back to template when override is None."""
+        config = InspectionConfiguration(
+            white_balance=None,
+            iso=None,
+        )
+        template = InspectionConfiguration(
+            white_balance="DAYLIGHT",
+            iso=400,
+            focus_mode="AUTO_CENTER",
+        )
+        merged = config.resolve_with_defaults(template)
+        assert merged["white_balance"] == "DAYLIGHT"
+        assert merged["iso"] == 400
+        assert merged["focus_mode"] == "AUTO_CENTER"
+
+    def test_resolve_camera_settings_all_none(self):
+        """camera settings are None when neither override nor template set them."""
+        config = InspectionConfiguration()
+        merged = config.resolve_with_defaults(None)
+        assert merged["white_balance"] is None
+        assert merged["iso"] is None
+        assert merged["shutter_speed"] is None
+        assert merged["focus_mode"] is None
+        assert merged["focus_distance_m"] is None
+        assert merged["optical_zoom"] is None
+
+
+class TestCameraSettingsSchemaValidation:
+    """tests for camera settings schema field validation."""
+
+    def test_iso_rejects_zero(self):
+        """iso=0 must be rejected."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        with pytest.raises(ValidationError):
+            InspectionConfigOverride(iso=0)
+
+    def test_iso_rejects_negative(self):
+        """negative iso must be rejected."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        with pytest.raises(ValidationError):
+            InspectionConfigOverride(iso=-100)
+
+    def test_iso_accepts_valid(self):
+        """valid iso is accepted."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        schema = InspectionConfigOverride(iso=400)
+        assert schema.iso == 400
+
+    def test_focus_distance_rejects_zero(self):
+        """focus_distance_m=0 must be rejected."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        with pytest.raises(ValidationError):
+            InspectionConfigOverride(focus_distance_m=0)
+
+    def test_optical_zoom_rejects_zero(self):
+        """optical_zoom=0 must be rejected."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        with pytest.raises(ValidationError):
+            InspectionConfigOverride(optical_zoom=0)
+
+    def test_white_balance_rejects_unknown_value(self):
+        """white_balance not in allowed literal set must be rejected."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        with pytest.raises(ValidationError):
+            InspectionConfigOverride(white_balance="A" * 21)
+
+    def test_all_camera_fields_none_accepted(self):
+        """all camera fields as None are accepted."""
+        from app.schemas.mission import InspectionConfigOverride
+
+        schema = InspectionConfigOverride(
+            white_balance=None,
+            iso=None,
+            shutter_speed=None,
+            focus_mode=None,
+            focus_distance_m=None,
+            optical_zoom=None,
+        )
+        assert schema.white_balance is None
+        assert schema.iso is None
 
 
 class TestMeasurementDensityValidation:

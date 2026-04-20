@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info, RotateCcw } from "lucide-react";
-import type { InspectionResponse, InspectionConfigOverride } from "@/types/mission";
+import type { InspectionResponse, InspectionConfigOverride, MissionDetailResponse } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { DroneProfileResponse } from "@/types/droneProfile";
 import type { AGLResponse } from "@/types/airport";
@@ -14,6 +14,7 @@ interface InspectionConfigFormProps {
   template: InspectionTemplateResponse | null;
   agls: AGLResponse[];
   droneProfile: DroneProfileResponse | null;
+  mission: MissionDetailResponse;
   configOverride: InspectionConfigOverride;
   onChange: (override: InspectionConfigOverride) => void;
   selectedLhaIds: Set<string>;
@@ -26,6 +27,7 @@ export default function InspectionConfigForm({
   template,
   agls,
   droneProfile,
+  mission,
   configOverride,
   onChange,
   selectedLhaIds,
@@ -63,6 +65,31 @@ export default function InspectionConfigForm({
       ? configOverride.capture_mode
       : savedCfg?.capture_mode ?? defaultCfg?.capture_mode ?? null;
   const recordingSetupDuration = resolveNumber("recording_setup_duration");
+
+  // camera settings - inspection override > saved > template > mission default
+  const whiteBalance =
+    configOverride.white_balance !== undefined
+      ? configOverride.white_balance
+      : savedCfg?.white_balance ?? defaultCfg?.white_balance ?? null;
+  const isoValue = resolveNumber("iso");
+  const shutterSpeed =
+    configOverride.shutter_speed !== undefined
+      ? configOverride.shutter_speed
+      : savedCfg?.shutter_speed ?? defaultCfg?.shutter_speed ?? null;
+  const focusMode =
+    configOverride.focus_mode !== undefined
+      ? configOverride.focus_mode
+      : savedCfg?.focus_mode ?? defaultCfg?.focus_mode ?? null;
+  const focusDistanceM = resolveNumber("focus_distance_m");
+  const opticalZoom = resolveNumber("optical_zoom");
+
+  // slant distance from geometry - used as suggested focus distance
+  const computedFocusDistance = useMemo(() => {
+    const dist = resolveNumber("distance_from_lha");
+    const height = resolveNumber("height_above_lha");
+    if (typeof dist !== "number" || typeof height !== "number") return null;
+    return Math.round(Math.sqrt(dist * dist + height * height) * 10) / 10;
+  }, [configOverride, savedCfg, defaultCfg]);
 
   const angleOffset = resolveNumber("angle_offset");
 
@@ -125,7 +152,7 @@ export default function InspectionConfigForm({
 
   // papi observation angle derived from max setting angle + offset
   const { computedObservationAngle, missingSettingAngleUnits } = useMemo(() => {
-    if (inspection.method !== "PAPI_HORIZONTAL_RANGE") {
+    if (inspection.method !== "HORIZONTAL_RANGE") {
       return { computedObservationAngle: null, missingSettingAngleUnits: [] as string[] };
     }
     const relevantLhas = targetAgls.flatMap((a) =>
@@ -424,7 +451,7 @@ export default function InspectionConfigForm({
       </div>
 
       {/* missing setting angle warning */}
-      {inspection.method === "PAPI_HORIZONTAL_RANGE" &&
+      {inspection.method === "HORIZONTAL_RANGE" &&
         missingSettingAngleUnits.length > 0 && (
         <div
           className="flex items-center gap-2 p-3 rounded-2xl border border-tv-warning bg-tv-warning/10"
@@ -483,7 +510,7 @@ export default function InspectionConfigForm({
               />
             </div>
           )}
-          {inspection.method === "PAPI_HORIZONTAL_RANGE" && (
+          {inspection.method === "HORIZONTAL_RANGE" && (
             <div>
               <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
                 {t("mission.config.angleOffset")}
@@ -503,7 +530,7 @@ export default function InspectionConfigForm({
               />
             </div>
           )}
-          {inspection.method === "PAPI_HORIZONTAL_RANGE" &&
+          {inspection.method === "HORIZONTAL_RANGE" &&
             computedObservationAngle != null && (
             <div>
               <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
@@ -559,6 +586,129 @@ export default function InspectionConfigForm({
         />
       </div>
       )}
+
+      {/* camera settings - falls back to mission defaults */}
+      <div data-testid="camera-settings-section">
+        <label className="block text-xs font-semibold mb-2 text-tv-text-secondary">
+          {t("mission.config.cameraSettings.title")}
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.whiteBalance")}
+            </label>
+            <select
+              value={whiteBalance ?? ""}
+              onChange={(e) => {
+                const val = e.target.value || null;
+                onChange({ ...configOverride, white_balance: val });
+              }}
+              className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+              data-testid="inspection-white-balance"
+            >
+              <option value="">
+                {mission.default_white_balance
+                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${t(`mission.config.cameraSettings.wb.${mission.default_white_balance.toLowerCase()}`, mission.default_white_balance)}`
+                  : t("mission.config.cameraSettings.notSet")}
+              </option>
+              <option value="DAYLIGHT">{t("mission.config.cameraSettings.wb.daylight")}</option>
+              <option value="CLOUDY">{t("mission.config.cameraSettings.wb.cloudy")}</option>
+              <option value="TUNGSTEN">{t("mission.config.cameraSettings.wb.tungsten")}</option>
+              <option value="MANUAL_4000K">{t("mission.config.cameraSettings.wb.manual4000k")}</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.iso")}
+            </label>
+            <input
+              type="number"
+              step="100"
+              min="50"
+              value={isoValue}
+              onChange={(e) => handleNumberChange("iso", e.target.value)}
+              placeholder={mission.default_iso != null
+                ? `${t("mission.config.cameraSettings.missionDefault")}: ${mission.default_iso}`
+                : t("mission.config.cameraSettings.isoHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-iso"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.shutterSpeed")}
+            </label>
+            <input
+              type="text"
+              value={shutterSpeed ?? ""}
+              onChange={(e) => {
+                const val = e.target.value || null;
+                onChange({ ...configOverride, shutter_speed: val });
+              }}
+              placeholder={mission.default_shutter_speed
+                ? `${t("mission.config.cameraSettings.missionDefault")}: ${mission.default_shutter_speed}`
+                : t("mission.config.cameraSettings.shutterSpeedHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-shutter-speed"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.focusMode")}
+            </label>
+            <select
+              value={focusMode ?? ""}
+              onChange={(e) => {
+                const val = e.target.value || null;
+                onChange({ ...configOverride, focus_mode: val });
+              }}
+              className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+              data-testid="inspection-focus-mode"
+            >
+              <option value="">
+                {mission.default_focus_mode
+                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${t(`mission.config.cameraSettings.fm.${{ AUTO_CENTER: "autoCenter", AUTO_AREA: "autoArea", MANUAL: "manual" }[mission.default_focus_mode] ?? mission.default_focus_mode}`, mission.default_focus_mode)}`
+                  : t("mission.config.cameraSettings.notSet")}
+              </option>
+              <option value="MANUAL">{t("mission.config.cameraSettings.fm.manual")}</option>
+              <option value="AUTO_CENTER">{t("mission.config.cameraSettings.fm.autoCenter")}</option>
+              <option value="AUTO_AREA">{t("mission.config.cameraSettings.fm.autoArea")}</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.focusDistance")}
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              min="0.1"
+              value={focusDistanceM}
+              onChange={(e) => handleNumberChange("focus_distance_m", e.target.value)}
+              placeholder={computedFocusDistance != null
+                ? `${t("mission.config.cameraSettings.computed")}: ${computedFocusDistance} m`
+                : t("mission.config.cameraSettings.focusDistanceHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-focus-distance"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.opticalZoom")}
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              min="1"
+              value={opticalZoom}
+              onChange={(e) => handleNumberChange("optical_zoom", e.target.value)}
+              placeholder={t("mission.config.cameraSettings.opticalZoomHint")}
+              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="inspection-optical-zoom"
+            />
+          </div>
+        </div>
+      </div>
 
       {/* fly-over specific */}
       {inspection.method === "FLY_OVER" && (

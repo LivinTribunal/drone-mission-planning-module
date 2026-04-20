@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import CoordinateInput from "@/components/mission/CoordinateInput";
 import InspectionConfigForm from "@/components/mission/InspectionConfigForm";
+import type { MissionDetailResponse } from "@/types/mission";
 import WarningsPanel from "@/components/mission/WarningsPanel";
 import StatsPanel from "@/components/mission/StatsPanel";
 import WaypointInfoPanel from "@/components/map/overlays/WaypointInfoPanel";
@@ -153,6 +154,39 @@ describe("StatsPanel", () => {
   });
 });
 
+const stubMission: MissionDetailResponse = {
+  id: "m-1",
+  name: "Test",
+  status: "DRAFT",
+  airport_id: "a-1",
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+  operator_notes: null,
+  drone_profile_id: null,
+  date_time: null,
+  default_speed: null,
+  measurement_speed_override: null,
+  default_altitude_offset: null,
+  takeoff_coordinate: null,
+  landing_coordinate: null,
+  default_capture_mode: null,
+  default_buffer_distance: null,
+  default_white_balance: null,
+  default_iso: null,
+  default_shutter_speed: null,
+  default_focus_mode: null,
+  transit_agl: null,
+  require_perpendicular_runway_crossing: true,
+  flight_plan_scope: "FULL",
+  has_unsaved_map_changes: false,
+  computation_status: "IDLE",
+  computation_error: null,
+  computation_started_at: null,
+  inspection_count: 0,
+  estimated_duration: null,
+  inspections: [],
+};
+
 describe("InspectionConfigForm LHA toggle", () => {
   const mockAgl = {
     id: "agl-1",
@@ -223,6 +257,7 @@ describe("InspectionConfigForm LHA toggle", () => {
         template={mockTemplate}
         agls={[mockAgl]}
         droneProfile={null}
+        mission={stubMission}
         configOverride={{}}
         onChange={onChange}
         selectedLhaIds={new Set<string>()}
@@ -246,6 +281,7 @@ describe("InspectionConfigForm LHA toggle", () => {
         template={mockTemplate}
         agls={[mockAgl]}
         droneProfile={null}
+        mission={stubMission}
         configOverride={{}}
         onChange={onChange}
         selectedLhaIds={new Set(["lha-1"])}

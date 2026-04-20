@@ -18,6 +18,10 @@ export interface MissionResponse {
   landing_coordinate: PointZ | null;
   default_capture_mode: CaptureMode | null;
   default_buffer_distance: number | null;
+  default_white_balance: string | null;
+  default_iso: number | null;
+  default_shutter_speed: string | null;
+  default_focus_mode: string | null;
   transit_agl: number | null;
   require_perpendicular_runway_crossing: boolean;
   flight_plan_scope: FlightPlanScope;
@@ -55,6 +59,12 @@ export interface InspectionConfigResponse {
   selected_lha_id: string | null;
   hover_bearing: number | null;
   hover_bearing_reference: "RUNWAY" | "COMPASS" | null;
+  white_balance: string | null;
+  iso: number | null;
+  shutter_speed: string | null;
+  focus_mode: string | null;
+  focus_distance_m: number | null;
+  optical_zoom: number | null;
 }
 
 export interface InspectionResponse {
@@ -90,6 +100,12 @@ export interface InspectionConfigOverride {
   selected_lha_id?: string | null;
   hover_bearing?: number | null;
   hover_bearing_reference?: "RUNWAY" | "COMPASS" | null;
+  white_balance?: string | null;
+  iso?: number | null;
+  shutter_speed?: string | null;
+  focus_mode?: string | null;
+  focus_distance_m?: number | null;
+  optical_zoom?: number | null;
 }
 
 export interface MissionCreate {
@@ -105,6 +121,10 @@ export interface MissionCreate {
   landing_coordinate?: PointZ | null;
   default_capture_mode?: CaptureMode | null;
   default_buffer_distance?: number | null;
+  default_white_balance?: string | null;
+  default_iso?: number | null;
+  default_shutter_speed?: string | null;
+  default_focus_mode?: string | null;
   transit_agl?: number | null;
   require_perpendicular_runway_crossing?: boolean;
   flight_plan_scope?: FlightPlanScope;
@@ -122,6 +142,10 @@ export interface MissionUpdate {
   landing_coordinate?: PointZ | null;
   default_capture_mode?: CaptureMode | null;
   default_buffer_distance?: number | null;
+  default_white_balance?: string | null;
+  default_iso?: number | null;
+  default_shutter_speed?: string | null;
+  default_focus_mode?: string | null;
   transit_agl?: number | null;
   require_perpendicular_runway_crossing?: boolean;
   flight_plan_scope?: FlightPlanScope;

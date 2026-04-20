@@ -568,6 +568,77 @@ class TestGenerateJson:
         assert ct["altitude_msl"] == 250.0
         assert ct["altitude_agl"] == 150.0
 
+    def test_camera_settings_from_mission_inspections(self):
+        """json output includes per-inspection camera settings when mission is provided."""
+        fp = _make_flight_plan(2)
+
+        config = MagicMock()
+        config.resolve_with_defaults.return_value = {
+            "white_balance": "TUNGSTEN",
+            "iso": 800,
+            "shutter_speed": "1/30",
+            "focus_mode": "MANUAL",
+            "focus_distance_m": 50.0,
+            "optical_zoom": 2.0,
+        }
+
+        template_cfg = MagicMock()
+        template = MagicMock()
+        template.default_config = template_cfg
+
+        insp = MagicMock()
+        insp.id = uuid4()
+        insp.method = "HORIZONTAL_RANGE"
+        insp.sequence_order = 1
+        insp.config = config
+        insp.template = template
+
+        mission = MagicMock()
+        mission.inspections = [insp]
+
+        result = export_service.generate_json(fp, "Night PAPI", 290.0, mission=mission)
+        data = json.loads(result)
+
+        assert "inspections" in data
+        assert len(data["inspections"]) == 1
+        cam = data["inspections"][0]["camera_settings"]
+        assert cam["white_balance"] == "TUNGSTEN"
+        assert cam["iso"] == 800
+        assert cam["shutter_speed"] == "1/30"
+        assert cam["focus_mode"] == "MANUAL"
+        assert cam["focus_distance_m"] == 50.0
+        assert cam["optical_zoom"] == 2.0
+        config.resolve_with_defaults.assert_called_once_with(template_cfg)
+
+    def test_camera_settings_omitted_when_all_none(self):
+        """inspection with no camera settings is excluded from the output."""
+        fp = _make_flight_plan(1)
+
+        config = MagicMock()
+        config.resolve_with_defaults.return_value = {
+            "white_balance": None,
+            "iso": None,
+            "shutter_speed": None,
+            "focus_mode": None,
+            "focus_distance_m": None,
+            "optical_zoom": None,
+        }
+
+        insp = MagicMock()
+        insp.id = uuid4()
+        insp.method = "VERTICAL_PROFILE"
+        insp.sequence_order = 1
+        insp.config = config
+        insp.template = None
+
+        mission = MagicMock()
+        mission.inspections = [insp]
+
+        result = export_service.generate_json(fp, "", 0, mission=mission)
+        data = json.loads(result)
+
+        assert "inspections" not in data
+
 
 class TestGenerateMavlink:
     """tests for mavlink wpl 110 export generation."""
@@ -686,6 +757,10 @@ def _build_export_db_mock(mission, fp, airport, drone_profile=None):
         mock_chain = MagicMock()
         if model.__name__ == "Mission":
             mock_chain.filter.return_value.first.return_value = mission
+            # eager-load path: query(Mission).filter().options().first()
+            mock_chain.filter.return_value.options.return_value.first.return_value = mission
+            # options-first path: query(Mission).options().filter().first()
+            mock_chain.options.return_value.filter.return_value.first.return_value = mission
         elif model.__name__ == "FlightPlan":
             mock_chain.options.return_value.filter.return_value.first.return_value = fp
         elif model.__name__ == "Airport":
