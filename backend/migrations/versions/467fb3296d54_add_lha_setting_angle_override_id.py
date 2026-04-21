@@ -3,9 +3,9 @@
 allows operators to pick a specific lha unit's setting angle for
 horizontal range altitude calculation instead of the default max.
 
-Revision ID: a4b5c6d7e8f9
-Revises: 39a989e86099
-Create Date: 2026-04-20 12:00:00.000000
+Revision ID: 467fb3296d54
+Revises: 6b779529b749
+Create Date: 2026-04-21 18:40:00.000000
 
 """
 
@@ -14,9 +14,8 @@ from typing import Union
 import sqlalchemy as sa
 from alembic import op
 
-# revision identifiers, used by Alembic.
-revision: str = "a4b5c6d7e8f9"
-down_revision: Union[str, None] = "39a989e86099"
+revision: str = "467fb3296d54"
+down_revision: Union[str, None] = "6b779529b749"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 
