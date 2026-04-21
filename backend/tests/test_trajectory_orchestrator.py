@@ -375,7 +375,7 @@ def test_phase5_transit_between_waypoints(client):
 
 
 def test_runway_crossing_warnings(client):
-    """trajectory crossing a runway produces crossing warnings"""
+    """runway crossings are categorized as warnings, not violations."""
     # place takeoff on one side of runway, so transit crosses it
     takeoff = {"type": "Point", "coordinates": [14.26, 50.11, 300]}
     landing = {"type": "Point", "coordinates": [14.26, 50.08, 300]}
@@ -390,10 +390,20 @@ def test_runway_crossing_warnings(client):
     response = client.post(f"/api/v1/missions/{mission_id}/generate-trajectory")
     assert response.status_code == 200
 
-    # crossing warnings are now persisted as violations in the flight plan
-    violations = response.json()["flight_plan"]["validation_result"]["violations"]
+    vr = response.json()["flight_plan"]["validation_result"]
+    violations = vr["violations"]
     assert isinstance(violations, list)
     assert len(violations) > 0
+
+    # any crossing messages should be warnings, never violations
+    crossings = [v for v in violations if "crosses" in v["message"]]
+    for c in crossings:
+        assert c["category"] == "warning"
+
+    # no hard violations from crossings - validation passes
+    hard_violations = [v for v in violations if v["category"] == "violation"]
+    assert len(hard_violations) == 0
+    assert vr["passed"] is True
 
 
 def test_final_validation_produces_soft_warnings(client):

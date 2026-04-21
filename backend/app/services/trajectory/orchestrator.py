@@ -958,10 +958,10 @@ def _generate_trajectory_inner(
                         f"{local_surface.surface_type} {local_surface.identifier} "
                         f"({crossing:.0f}m)"
                     )
-                    seen_msgs = {m for m, _ in non_aborting_violations}
+                    seen_msgs = {m for m, _ in warnings}
                     if msg not in seen_msgs:
                         wp_ids = [f"idx:{j - 1}", f"idx:{j}"]
-                        non_aborting_violations.append((msg, wp_ids))
+                        warnings.append((msg, wp_ids))
 
     for (seq, surface_label), indices in measurement_crossings.items():
         count = len(indices)
@@ -976,7 +976,7 @@ def _generate_trajectory_inner(
             if wid not in seen:
                 seen.add(wid)
                 unique_ids.append(wid)
-        non_aborting_violations.append((msg, unique_ids))
+        warnings.append((msg, unique_ids))
 
     # final validation of assembled path
     final_buffer = (
