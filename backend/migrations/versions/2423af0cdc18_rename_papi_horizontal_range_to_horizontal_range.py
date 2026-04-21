@@ -1,6 +1,6 @@
 """rename papi_horizontal_range to horizontal_range
 
-Revision ID: b2c3d4e5f6a7
+Revision ID: 2423af0cdc18
 Revises: aaecedb1675e
 Create Date: 2026-04-20 12:00:00.000000
 
@@ -10,7 +10,7 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "b2c3d4e5f6a7"
+revision: str = "2423af0cdc18"
 down_revision: Union[str, None] = "aaecedb1675e"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

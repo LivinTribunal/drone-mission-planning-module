@@ -14,6 +14,7 @@ from app.main import app
 from app.models.user import User
 
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000099")
+OPERATOR_USER_ID = UUID("00000000-0000-0000-0000-000000000088")
 
 # stub user for auth bypass in existing tests
 _test_user = SimpleNamespace(
@@ -25,6 +26,7 @@ _test_user = SimpleNamespace(
     airports=[],
 )
 _test_user.has_airport_access = lambda airport_id: True
+_test_user.is_privileged = lambda: _test_user.role in ("COORDINATOR", "SUPER_ADMIN")
 
 
 def _override_current_user():
@@ -103,3 +105,73 @@ def db_session(db_engine):
     finally:
         session.rollback()
         session.close()
+
+
+@pytest.fixture
+def as_operator(db_engine):
+    """context-manager factory that swaps auth to a non-owner OPERATOR user.
+
+    FastAPI's dependency_overrides is global, so a plain "operator_client"
+    fixture would poison requests made through the default `client` fixture
+    for the duration of the test. Using a context manager scopes the override
+    strictly to the `with` block: setup/teardown through the super-admin
+    `client`, and assertions on ownership through the scoped operator client.
+
+    usage:
+        def test_foo(client, as_operator):
+            preset_id = client.post(...).json()["id"]
+            with as_operator() as op_client:
+                assert op_client.get(...).status_code == 404
+    """
+    from contextlib import contextmanager
+
+    session = sessionmaker(bind=db_engine)()
+    try:
+        existing = session.query(User).filter(User.id == OPERATOR_USER_ID).first()
+        if not existing:
+            user = User(
+                id=OPERATOR_USER_ID,
+                email="operator@tarmacview.com",
+                name="Operator B",
+                role="OPERATOR",
+                is_active=True,
+            )
+            user.set_password("testpassword")
+            session.add(user)
+            session.commit()
+    finally:
+        session.close()
+
+    operator_stub = SimpleNamespace(
+        id=OPERATOR_USER_ID,
+        email="operator@tarmacview.com",
+        name="Operator B",
+        role="OPERATOR",
+        is_active=True,
+        airports=[],
+    )
+    operator_stub.has_airport_access = lambda airport_id: True
+    operator_stub.is_privileged = lambda: operator_stub.role in ("COORDINATOR", "SUPER_ADMIN")
+
+    TestSession = sessionmaker(bind=db_engine)
+
+    def override_db():
+        """test db override."""
+        db = TestSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    @contextmanager
+    def _as_operator():
+        saved = dict(app.dependency_overrides)
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_current_user] = lambda: operator_stub
+        try:
+            yield TestClient(app)
+        finally:
+            app.dependency_overrides.clear()
+            app.dependency_overrides.update(saved)
+
+    return _as_operator

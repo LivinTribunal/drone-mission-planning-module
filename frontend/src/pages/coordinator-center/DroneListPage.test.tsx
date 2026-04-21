@@ -43,6 +43,7 @@ const DRONE_1 = {
   updated_at: "2025-01-15T00:00:00Z",
   mission_count: 3,
   model_identifier: null,
+  max_optical_zoom: null,
 };
 
 const DRONE_2 = {
@@ -63,6 +64,7 @@ const DRONE_2 = {
   updated_at: "2025-02-10T00:00:00Z",
   mission_count: 1,
   model_identifier: null,
+  max_optical_zoom: null,
 };
 
 const DRONE_3 = {
@@ -83,6 +85,7 @@ const DRONE_3 = {
   updated_at: "2025-03-05T00:00:00Z",
   mission_count: 0,
   model_identifier: null,
+  max_optical_zoom: null,
 };
 
 function renderPage() {

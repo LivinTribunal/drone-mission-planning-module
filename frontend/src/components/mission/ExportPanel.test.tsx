@@ -27,6 +27,7 @@ function makeMission(
     default_iso: null,
     default_shutter_speed: null,
     default_focus_mode: null,
+    camera_mode: "AUTO",
     transit_agl: null,
     require_perpendicular_runway_crossing: false,
     flight_plan_scope: "FULL",

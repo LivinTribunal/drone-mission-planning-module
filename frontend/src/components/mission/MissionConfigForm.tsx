@@ -1,11 +1,18 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Search } from "lucide-react";
 import type { MissionDetailResponse, MissionUpdate } from "@/types/mission";
 import type { CaptureMode, FlightPlanScope } from "@/types/enums";
 import FlightPlanScopeSelector from "./FlightPlanScopeSelector";
 import type { DroneProfileResponse } from "@/types/droneProfile";
+import type { CameraPresetResponse } from "@/types/cameraPreset";
 import type { PointZ } from "@/types/common";
+import { listCameraPresets } from "@/api/cameraPresets";
+import {
+  WHITE_BALANCE_OPTIONS,
+  ISO_OPTIONS,
+  SHUTTER_SPEED_OPTIONS,
+} from "@/constants/camera";
 import Toggle from "@/components/common/Toggle";
 import CoordinateInput from "./CoordinateInput";
 
@@ -216,6 +223,10 @@ export default function MissionConfigForm({
     values.default_focus_mode !== undefined
       ? values.default_focus_mode
       : mission.default_focus_mode;
+  const cameraMode =
+    values.camera_mode !== undefined
+      ? values.camera_mode
+      : (mission.camera_mode ?? "AUTO");
   const transitAgl =
     values.transit_agl !== undefined
       ? values.transit_agl
@@ -228,6 +239,81 @@ export default function MissionConfigForm({
     values.flight_plan_scope !== undefined
       ? values.flight_plan_scope
       : mission.flight_plan_scope ?? "FULL";
+
+  const [presets, setPresets] = useState<CameraPresetResponse[]>([]);
+  const [appliedPresetId, setAppliedPresetId] = useState<string>("");
+
+  const fetchPresets = useCallback(() => {
+    const params: { drone_profile_id?: string } = {};
+    if (droneProfileId) params.drone_profile_id = droneProfileId;
+    listCameraPresets(params)
+      .then((res) => setPresets(res.data))
+      .catch(() => setPresets([]));
+  }, [droneProfileId]);
+
+  useEffect(() => {
+    fetchPresets();
+  }, [fetchPresets]);
+
+  // derive the applied preset from current camera fields so the dropdown
+  // reflects a matching preset (e.g. the default loaded on MANUAL switch or
+  // after reload) instead of "Apply a preset".
+  useEffect(() => {
+    if (cameraMode !== "MANUAL" || presets.length === 0) return;
+    const match = presets.find(
+      (p) =>
+        (p.white_balance ?? null) === (defaultWhiteBalance ?? null)
+        && (p.iso ?? null) === (defaultIso ?? null)
+        && (p.shutter_speed ?? null) === (defaultShutterSpeed ?? null)
+        && (p.focus_mode ?? null) === (defaultFocusMode ?? null),
+    );
+    setAppliedPresetId(match ? match.id : "");
+  }, [cameraMode, presets, defaultWhiteBalance, defaultIso, defaultShutterSpeed, defaultFocusMode]);
+
+  function handlePresetApply(presetId: string) {
+    if (!presetId) {
+      setAppliedPresetId("");
+      return;
+    }
+    const preset = presets.find((p) => p.id === presetId);
+    if (!preset) return;
+    setAppliedPresetId(preset.id);
+    onChange({
+      camera_mode: "MANUAL",
+      default_white_balance: preset.white_balance ?? null,
+      default_iso: preset.iso ?? null,
+      default_shutter_speed: preset.shutter_speed ?? null,
+      default_focus_mode: preset.focus_mode ?? null,
+    });
+  }
+
+  function handleCameraModeChange(mode: "AUTO" | "MANUAL") {
+    if (mode === cameraMode) return;
+    if (mode === "AUTO") {
+      onChange({ camera_mode: "AUTO" });
+      return;
+    }
+    // MANUAL - if no fields set yet, preload from drone default preset
+    const hasAny =
+      defaultWhiteBalance || defaultIso || defaultShutterSpeed || defaultFocusMode;
+    if (hasAny) {
+      onChange({ camera_mode: "MANUAL" });
+      return;
+    }
+    const def = presets.find((p) => p.is_default);
+    if (def) {
+      setAppliedPresetId(def.id);
+      onChange({
+        camera_mode: "MANUAL",
+        default_white_balance: def.white_balance ?? null,
+        default_iso: def.iso ?? null,
+        default_shutter_speed: def.shutter_speed ?? null,
+        default_focus_mode: def.focus_mode ?? null,
+      });
+    } else {
+      onChange({ camera_mode: "MANUAL" });
+    }
+  }
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -368,9 +454,50 @@ export default function MissionConfigForm({
 
       {/* camera setting defaults */}
       <div data-testid="mission-camera-settings">
-        <label className="block text-xs font-semibold mb-2 text-tv-text-secondary">
-          {t("mission.config.cameraSettings.title")}
-        </label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-semibold text-tv-text-secondary">
+            {t("mission.config.cameraSettings.title")}
+          </label>
+          <div className="inline-flex rounded-full border border-tv-border bg-tv-bg p-0.5 text-xs" data-testid="mission-camera-mode">
+            {(["AUTO", "MANUAL"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => handleCameraModeChange(m)}
+                className={`px-3 py-1 rounded-full transition-colors ${cameraMode === m ? "bg-tv-accent text-white font-medium" : "text-tv-text-secondary hover:text-tv-text-primary"}`}
+                data-testid={`mission-camera-mode-${m.toLowerCase()}`}
+              >
+                {t(m === "AUTO" ? "mission.config.cameraSettings.modeAuto" : "mission.config.cameraSettings.modeManual")}
+              </button>
+            ))}
+          </div>
+        </div>
+        {cameraMode === "AUTO" && (
+          <p className="text-[11px] text-tv-text-muted leading-tight mb-1">
+            {t("mission.config.cameraSettings.modeAutoHint")}
+          </p>
+        )}
+        {cameraMode === "MANUAL" && presets.length > 0 && (
+          <div className="mb-2">
+            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+              {t("mission.config.cameraSettings.presetLabel")}
+            </label>
+            <select
+              value={appliedPresetId}
+              onChange={(e) => handlePresetApply(e.target.value)}
+              className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+              data-testid="mission-camera-preset-select"
+            >
+              <option value="">{t("mission.config.cameraSettings.applyPreset")}</option>
+              {presets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.is_default ? ` (${t("mission.config.cameraSettings.presetDefault")})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {cameraMode === "MANUAL" && (
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
@@ -385,43 +512,46 @@ export default function MissionConfigForm({
               data-testid="default-white-balance-select"
             >
               <option value="">{t("mission.config.cameraSettings.notSet")}</option>
-              <option value="DAYLIGHT">{t("mission.config.cameraSettings.wb.daylight")}</option>
-              <option value="CLOUDY">{t("mission.config.cameraSettings.wb.cloudy")}</option>
-              <option value="TUNGSTEN">{t("mission.config.cameraSettings.wb.tungsten")}</option>
-              <option value="MANUAL_4000K">{t("mission.config.cameraSettings.wb.manual4000k")}</option>
+              {WHITE_BALANCE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
               {t("mission.config.cameraSettings.iso")}
             </label>
-            <input
-              type="number"
-              step="100"
-              min="50"
+            <select
               value={defaultIso ?? ""}
               onChange={(e) =>
                 onChange({ default_iso: e.target.value ? parseInt(e.target.value) : null })
               }
-              placeholder={t("mission.config.cameraSettings.isoHint")}
-              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
               data-testid="default-iso-input"
-            />
+            >
+              <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+              {ISO_OPTIONS.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
               {t("mission.config.cameraSettings.shutterSpeed")}
             </label>
-            <input
-              type="text"
+            <select
               value={defaultShutterSpeed ?? ""}
               onChange={(e) =>
                 onChange({ default_shutter_speed: e.target.value || null })
               }
-              placeholder={t("mission.config.cameraSettings.shutterSpeedHint")}
-              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
               data-testid="default-shutter-speed-input"
-            />
+            >
+              <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+              {SHUTTER_SPEED_OPTIONS.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
@@ -430,18 +560,18 @@ export default function MissionConfigForm({
             <select
               value={defaultFocusMode ?? ""}
               onChange={(e) =>
-                onChange({ default_focus_mode: e.target.value || null })
+                onChange({ default_focus_mode: (e.target.value || null) as "AUTO" | "INFINITY" | null })
               }
               className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
               data-testid="default-focus-mode-select"
             >
               <option value="">{t("mission.config.cameraSettings.notSet")}</option>
-              <option value="MANUAL">{t("mission.config.cameraSettings.fm.manual")}</option>
-              <option value="AUTO_CENTER">{t("mission.config.cameraSettings.fm.autoCenter")}</option>
-              <option value="AUTO_AREA">{t("mission.config.cameraSettings.fm.autoArea")}</option>
+              <option value="AUTO">{t("mission.config.cameraSettings.fm.auto")}</option>
+              <option value="INFINITY">{t("mission.config.cameraSettings.fm.infinity")}</option>
             </select>
           </div>
         </div>
+        )}
       </div>
 
       {/* mission toggles */}

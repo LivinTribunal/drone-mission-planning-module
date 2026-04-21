@@ -98,12 +98,18 @@ class InspectionConfiguration(Base):
     hover_bearing = Column(Float, nullable=True)
     hover_bearing_reference = Column(String(10), nullable=True)
 
-    # camera settings for night inspections - advisory only, not consumed by trajectory
+    # camera preset reference
+    camera_preset_id = Column(
+        UUID, ForeignKey("camera_preset.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # camera settings - advisory only, not consumed by trajectory. nullable
+    # camera_mode (AUTO/MANUAL) = inherit from mission; set to override.
+    camera_mode = Column(String(10), nullable=True)
     white_balance = Column(String(20), nullable=True)
     iso = Column(Integer, nullable=True)
     shutter_speed = Column(String(20), nullable=True)
     focus_mode = Column(String(20), nullable=True)
-    focus_distance_m = Column(Float, nullable=True)
     optical_zoom = Column(Float, nullable=True)
 
     # fields merged by resolve_with_defaults. a superset of CONFIG_FIELDS that
@@ -116,7 +122,6 @@ class InspectionConfiguration(Base):
         "iso",
         "shutter_speed",
         "focus_mode",
-        "focus_distance_m",
         "optical_zoom",
     )
 

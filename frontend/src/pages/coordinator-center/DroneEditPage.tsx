@@ -9,13 +9,32 @@ import {
   deleteDroneProfile,
   uploadDroneModel,
 } from "@/api/droneProfiles";
+import {
+  listCameraPresets,
+  createCameraPreset,
+  updateCameraPreset,
+  deleteCameraPreset,
+} from "@/api/cameraPresets";
+import {
+  WHITE_BALANCE_OPTIONS,
+  ISO_OPTIONS,
+  SHUTTER_SPEED_OPTIONS,
+} from "@/constants/camera";
 import { listMissions } from "@/api/missions";
 import type {
   DroneProfileResponse,
   DroneProfileUpdate,
 } from "@/types/droneProfile";
+import type {
+  CameraPresetResponse,
+  CameraPresetUpdate,
+  FocusMode,
+  Iso,
+  ShutterSpeed,
+  WhiteBalance,
+} from "@/types/cameraPreset";
 import type { MissionResponse } from "@/types/mission";
-import { Layers, Clock, Pencil, Plus, Copy, Trash2, X, Link } from "lucide-react";
+import { Layers, Clock, Pencil, Plus, Copy, Trash2, X, Link, Camera, Star } from "lucide-react";
 import Badge from "@/components/common/Badge";
 import Button from "@/components/common/Button";
 import Card from "@/components/common/Card";
@@ -81,6 +100,7 @@ const FIELDS: FieldDef[] = [
     type: "number",
   },
   { key: "weight", labelKey: "weight", unitKey: "kg", type: "number" },
+  { key: "max_optical_zoom", labelKey: "maxOpticalZoom", unitKey: "x", type: "number" },
 ];
 
 const AUTOSAVE_DELAY = 1500;
@@ -358,6 +378,33 @@ export default function DroneEditPage() {
 
   // collapsible mission list
   const [missionsExpanded, setMissionsExpanded] = useState(true);
+
+  // camera presets
+  const [presetsExpanded, setPresetsExpanded] = useState(true);
+  const [presets, setPresets] = useState<CameraPresetResponse[]>([]);
+  const [newPresetName, setNewPresetName] = useState("");
+  const [showNewPresetInput, setShowNewPresetInput] = useState(false);
+  const [newPresetSettings, setNewPresetSettings] = useState<{
+    white_balance?: WhiteBalance | null;
+    iso?: Iso | null;
+    shutter_speed?: ShutterSpeed | null;
+    focus_mode?: FocusMode | null;
+  }>({});
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [editPresetData, setEditPresetData] = useState<CameraPresetUpdate & { name: string }>({
+    name: "",
+  });
+
+  const fetchPresets = useCallback(() => {
+    if (!id) return;
+    listCameraPresets({ drone_profile_id: id, is_default: true })
+      .then((res) => setPresets(res.data))
+      .catch(() => setPresets([]));
+  }, [id]);
+
+  useEffect(() => {
+    fetchPresets();
+  }, [fetchPresets]);
 
   // filtered drones for search
   const filteredDrones = droneSearch
@@ -806,6 +853,336 @@ export default function DroneEditPage() {
                       </div>
                     ))}
                   </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* camera presets panel */}
+          <div className="bg-tv-surface border border-tv-border rounded-2xl flex flex-col min-h-0">
+            <button
+              onClick={() => setPresetsExpanded(!presetsExpanded)}
+              className="flex items-center justify-between w-full px-4 py-3 flex-shrink-0"
+              data-testid="presets-panel-toggle"
+            >
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-tv-bg px-3 py-1 text-xs font-medium text-tv-text-secondary uppercase tracking-wider">
+                  {t("coordinator.cameraPresets.title")}
+                </span>
+                <span className="rounded-full bg-tv-accent text-tv-accent-text px-2 py-0.5 text-xs font-semibold">
+                  {presets.length}
+                </span>
+              </div>
+              <ChevronIcon expanded={presetsExpanded} />
+            </button>
+
+            {presetsExpanded && (
+              <div className="px-4 pb-3 min-h-0">
+                {presets.length === 0 && !showNewPresetInput && (
+                  <p className="text-sm text-tv-text-muted py-2">
+                    {t("coordinator.cameraPresets.noPresets")}
+                  </p>
+                )}
+                {presets.length > 0 && (
+                  <div className="flex flex-col gap-1 max-h-[280px] overflow-y-auto mb-2">
+                    {presets.map((p) =>
+                      editingPresetId === p.id ? (
+                        <div key={p.id} className="space-y-2 rounded-xl bg-tv-bg p-3">
+                          <div>
+                            <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
+                              {t("coordinator.cameraPresets.name")}
+                            </label>
+                            <input
+                              type="text"
+                              value={editPresetData.name}
+                              onChange={(e) => setEditPresetData({ ...editPresetData, name: e.target.value })}
+                              className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors"
+                              data-testid={`edit-preset-name-${p.id}`}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
+                                {t("mission.config.cameraSettings.whiteBalance")}
+                              </label>
+                              <select
+                                value={editPresetData.white_balance ?? ""}
+                                onChange={(e) => setEditPresetData({ ...editPresetData, white_balance: (e.target.value || null) as WhiteBalance | null })}
+                                className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+                              >
+                                <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+                                {WHITE_BALANCE_OPTIONS.map((o) => (
+                                  <option key={o.value} value={o.value}>{o.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
+                                {t("mission.config.cameraSettings.iso")}
+                              </label>
+                              <select
+                                value={editPresetData.iso ?? ""}
+                                onChange={(e) => setEditPresetData({ ...editPresetData, iso: (e.target.value ? parseInt(e.target.value) : null) as Iso | null })}
+                                className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+                              >
+                                <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+                                {ISO_OPTIONS.map((v) => (
+                                  <option key={v} value={v}>{v}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
+                                {t("mission.config.cameraSettings.shutterSpeed")}
+                              </label>
+                              <select
+                                value={editPresetData.shutter_speed ?? ""}
+                                onChange={(e) => setEditPresetData({ ...editPresetData, shutter_speed: (e.target.value || null) as ShutterSpeed | null })}
+                                className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+                              >
+                                <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+                                {SHUTTER_SPEED_OPTIONS.map((v) => (
+                                  <option key={v} value={v}>{v}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
+                                {t("mission.config.cameraSettings.focusMode")}
+                              </label>
+                              <select
+                                value={editPresetData.focus_mode ?? ""}
+                                onChange={(e) => setEditPresetData({ ...editPresetData, focus_mode: (e.target.value || null) as "AUTO" | "INFINITY" | null })}
+                                className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+                              >
+                                <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+                                <option value="AUTO">{t("mission.config.cameraSettings.fm.auto")}</option>
+                                <option value="INFINITY">{t("mission.config.cameraSettings.fm.infinity")}</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await updateCameraPreset(p.id, editPresetData);
+                                  setEditingPresetId(null);
+                                  fetchPresets();
+                                } catch (err) {
+                                  console.error("update preset failed", err);
+                                }
+                              }}
+                              disabled={!editPresetData.name.trim()}
+                              className="px-3 py-1.5 rounded-full text-xs bg-tv-accent text-tv-accent-text hover:opacity-90 transition-opacity disabled:opacity-50"
+                            >
+                              {t("common.save")}
+                            </button>
+                            <button
+                              onClick={() => setEditingPresetId(null)}
+                              className="px-3 py-1.5 rounded-full text-xs border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+                            >
+                              {t("common.cancel")}
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await deleteCameraPreset(p.id);
+                                  setEditingPresetId(null);
+                                  fetchPresets();
+                                } catch (err) {
+                                  console.error("delete preset failed", err);
+                                }
+                              }}
+                              className="ml-auto p-1 rounded-full text-tv-text-muted hover:text-tv-error transition-colors"
+                              title={t("coordinator.cameraPresets.deletePreset")}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between rounded-xl px-3 py-2 bg-tv-bg cursor-pointer hover:bg-tv-surface-hover transition-colors"
+                        onClick={() => {
+                          setEditingPresetId(p.id);
+                          setEditPresetData({
+                            name: p.name,
+                            white_balance: p.white_balance,
+                            iso: p.iso,
+                            shutter_speed: p.shutter_speed,
+                            focus_mode: p.focus_mode,
+                          });
+                        }}
+                        data-testid={`preset-row-${p.id}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium text-tv-text-primary truncate">
+                            {p.name}
+                            {p.is_default && (
+                              <span className="ml-2 text-[10px] font-semibold uppercase text-tv-accent">
+                                {t("mission.config.cameraSettings.presetDefault")}
+                              </span>
+                            )}
+                          </span>
+                          <span className="block text-xs text-tv-text-muted">
+                            {[
+                              WHITE_BALANCE_OPTIONS.find((o) => o.value === p.white_balance)?.label ?? p.white_balance,
+                              p.iso ? `ISO ${p.iso}` : null,
+                              p.shutter_speed,
+                              p.focus_mode,
+                            ].filter(Boolean).join(" · ") || "—"}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              await updateCameraPreset(p.id, { is_default: !p.is_default });
+                              fetchPresets();
+                            } catch (err) {
+                              console.error("set default preset failed", err);
+                            }
+                          }}
+                          className={`ml-2 p-1 rounded-full transition-colors ${p.is_default ? "text-tv-accent" : "text-tv-text-muted hover:text-tv-accent"}`}
+                          title={t(p.is_default ? "coordinator.cameraPresets.unsetDefault" : "coordinator.cameraPresets.setDefault")}
+                          data-testid={`preset-star-${p.id}`}
+                        >
+                          <Star className={`h-4 w-4 ${p.is_default ? "fill-current" : ""}`} />
+                        </button>
+                        <Pencil className="h-3 w-3 text-tv-text-muted flex-shrink-0 ml-2" />
+                      </div>
+                      ),
+                    )}
+                  </div>
+                )}
+                {showNewPresetInput ? (
+                  <div className="space-y-2 rounded-xl bg-tv-bg p-3">
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
+                        {t("coordinator.cameraPresets.name")}
+                      </label>
+                      <input
+                        type="text"
+                        value={newPresetName}
+                        onChange={(e) => setNewPresetName(e.target.value)}
+                        placeholder={t("coordinator.cameraPresets.namePlaceholder", t("coordinator.cameraPresets.name"))}
+                        className="w-full px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                        data-testid="new-preset-name"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
+                          {t("mission.config.cameraSettings.whiteBalance")}
+                        </label>
+                        <select
+                          value={newPresetSettings.white_balance ?? ""}
+                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, white_balance: (e.target.value || null) as WhiteBalance | null })}
+                          className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+                          data-testid="new-preset-white-balance"
+                        >
+                          <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+                          {WHITE_BALANCE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
+                          {t("mission.config.cameraSettings.iso")}
+                        </label>
+                        <select
+                          value={newPresetSettings.iso ?? ""}
+                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, iso: (e.target.value ? parseInt(e.target.value) : null) as Iso | null })}
+                          className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+                          data-testid="new-preset-iso"
+                        >
+                          <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+                          {ISO_OPTIONS.map((v) => (
+                            <option key={v} value={v}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
+                          {t("mission.config.cameraSettings.shutterSpeed")}
+                        </label>
+                        <select
+                          value={newPresetSettings.shutter_speed ?? ""}
+                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, shutter_speed: (e.target.value || null) as ShutterSpeed | null })}
+                          className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+                          data-testid="new-preset-shutter-speed"
+                        >
+                          <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+                          {SHUTTER_SPEED_OPTIONS.map((v) => (
+                            <option key={v} value={v}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
+                          {t("mission.config.cameraSettings.focusMode")}
+                        </label>
+                        <select
+                          value={newPresetSettings.focus_mode ?? ""}
+                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, focus_mode: (e.target.value || null) as "AUTO" | "INFINITY" | null })}
+                          className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+                          data-testid="new-preset-focus-mode"
+                        >
+                          <option value="">{t("mission.config.cameraSettings.notSet")}</option>
+                          <option value="AUTO">{t("mission.config.cameraSettings.fm.auto")}</option>
+                          <option value="INFINITY">{t("mission.config.cameraSettings.fm.infinity")}</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          if (!newPresetName.trim()) return;
+                          try {
+                            await createCameraPreset({
+                              name: newPresetName.trim(),
+                              drone_profile_id: id,
+                              is_default: true,
+                              white_balance: newPresetSettings.white_balance,
+                              iso: newPresetSettings.iso,
+                              shutter_speed: newPresetSettings.shutter_speed,
+                              focus_mode: newPresetSettings.focus_mode,
+                            });
+                            setNewPresetName("");
+                            setNewPresetSettings({});
+                            setShowNewPresetInput(false);
+                            fetchPresets();
+                          } catch (err) {
+                            console.error("create preset failed", err);
+                          }
+                        }}
+                        disabled={!newPresetName.trim()}
+                        className="px-3 py-1.5 rounded-full text-xs bg-tv-accent text-tv-accent-text hover:opacity-90 transition-opacity disabled:opacity-50"
+                        data-testid="save-new-preset"
+                      >
+                        {t("common.save")}
+                      </button>
+                      <button
+                        onClick={() => { setShowNewPresetInput(false); setNewPresetName(""); setNewPresetSettings({}); }}
+                        className="px-3 py-1.5 rounded-full text-xs border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+                      >
+                        {t("common.cancel")}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowNewPresetInput(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+                    data-testid="add-preset-btn"
+                  >
+                    <Camera className="h-3 w-3" />
+                    {t("coordinator.cameraPresets.addPreset")}
+                  </button>
                 )}
               </div>
             )}

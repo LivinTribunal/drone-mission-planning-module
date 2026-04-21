@@ -1,13 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info, RotateCcw } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info, RotateCcw, Save } from "lucide-react";
 import type { InspectionResponse, InspectionConfigOverride, MissionDetailResponse } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { DroneProfileResponse } from "@/types/droneProfile";
+import type { CameraPresetCreate, CameraPresetResponse } from "@/types/cameraPreset";
 import type { AGLResponse } from "@/types/airport";
 import type { CaptureMode } from "@/types/enums";
+import { listCameraPresets, createCameraPreset } from "@/api/cameraPresets";
 import { solveTriangle } from "@/utils/angleLock";
 import { formatAglDisplayName } from "@/utils/agl";
+import {
+  WHITE_BALANCE_OPTIONS,
+  ISO_OPTIONS,
+  SHUTTER_SPEED_OPTIONS,
+  OPTICAL_ZOOM_MIN,
+} from "@/constants/camera";
+import ZoomSlider from "@/components/common/ZoomSlider";
+import {
+  computeOpticalZoom,
+  isZoomOverOptical,
+  maxPairwiseDistanceM,
+} from "@/utils/cameraAutoCalc";
 
 interface InspectionConfigFormProps {
   inspection: InspectionResponse;
@@ -80,16 +94,88 @@ export default function InspectionConfigForm({
     configOverride.focus_mode !== undefined
       ? configOverride.focus_mode
       : savedCfg?.focus_mode ?? defaultCfg?.focus_mode ?? null;
-  const focusDistanceM = resolveNumber("focus_distance_m");
   const opticalZoom = resolveNumber("optical_zoom");
+  // camera_mode override: null = inherit from mission, otherwise AUTO/MANUAL
+  const cameraMode: "AUTO" | "MANUAL" | null =
+    configOverride.camera_mode !== undefined
+      ? configOverride.camera_mode
+      : (savedCfg?.camera_mode as "AUTO" | "MANUAL" | null) ?? null;
+  const effectiveCameraMode: "AUTO" | "MANUAL" =
+    cameraMode ?? (mission.camera_mode ?? "AUTO");
 
-  // slant distance from geometry - used as suggested focus distance
-  const computedFocusDistance = useMemo(() => {
-    const dist = resolveNumber("distance_from_lha");
-    const height = resolveNumber("height_above_lha");
-    if (typeof dist !== "number" || typeof height !== "number") return null;
-    return Math.round(Math.sqrt(dist * dist + height * height) * 10) / 10;
-  }, [configOverride, savedCfg, defaultCfg]);
+  // horizontal distance from the drone to the lha set - feeds the zoom calc.
+  // per method we pull the field that encodes horizontal offset.
+  const horizontalDistanceToLha = useMemo(() => {
+    const num = (f: keyof InspectionConfigOverride): number | null => {
+      const v = resolveNumber(f);
+      return typeof v === "number" ? v : null;
+    };
+    switch (inspection.method) {
+      case "HOVER_POINT_LOCK":
+        return num("distance_from_lha");
+      case "FLY_OVER":
+      case "PARALLEL_SIDE_SWEEP":
+        return num("lateral_offset") ?? 0;
+      case "HORIZONTAL_RANGE":
+      case "VERTICAL_PROFILE":
+        return num("horizontal_distance");
+      default:
+        return null;
+    }
+  }, [configOverride, savedCfg, defaultCfg, inspection.method]);
+
+  // physical span of the selected lha set - zoom must fit this in the frame.
+  const lhaSpanM = useMemo(() => {
+    const relevantLhas = (
+      template?.target_agl_ids?.length
+        ? agls.filter((a) => template.target_agl_ids!.includes(a.id))
+        : agls
+    ).flatMap((a) =>
+      a.lhas.filter((l) => selectedLhaIds.size === 0 || selectedLhaIds.has(l.id)),
+    );
+    const positions = relevantLhas
+      .map((l) => {
+        const c = l.position?.coordinates;
+        if (!c) return null;
+        return { lat: c[1], lng: c[0], alt: c[2] ?? 0 };
+      })
+      .filter((p): p is { lat: number; lng: number; alt: number } => p !== null);
+    if (positions.length <= 1) return 0;
+    return maxPairwiseDistanceM(positions);
+  }, [template, agls, selectedLhaIds]);
+
+  const computedOpticalZoom = useMemo(() => {
+    return computeOpticalZoom(
+      horizontalDistanceToLha,
+      lhaSpanM,
+      droneProfile?.sensor_fov ?? null,
+      droneProfile?.max_optical_zoom ?? null,
+    );
+  }, [horizontalDistanceToLha, lhaSpanM, droneProfile?.sensor_fov, droneProfile?.max_optical_zoom]);
+
+  // zoom live-binds to the computed value until the user drags the slider.
+  const [zoomTouched, setZoomTouched] = useState<boolean>(() =>
+    "optical_zoom" in configOverride
+      ? configOverride.optical_zoom != null
+      : savedCfg?.optical_zoom != null,
+  );
+
+  // reset touched state when switching to a different inspection
+  useEffect(() => {
+    setZoomTouched(
+      "optical_zoom" in configOverride
+        ? configOverride.optical_zoom != null
+        : savedCfg?.optical_zoom != null,
+    );
+  }, [inspection.id]);
+
+  // auto-propagate computed zoom while untouched
+  useEffect(() => {
+    if (zoomTouched || computedOpticalZoom == null) return;
+    const current = resolveNumber("optical_zoom");
+    if (current === computedOpticalZoom) return;
+    onChange({ ...configOverride, optical_zoom: computedOpticalZoom });
+  }, [computedOpticalZoom, zoomTouched]);
 
   const angleOffset = resolveNumber("angle_offset");
 
@@ -185,6 +271,115 @@ export default function InspectionConfigForm({
   }
 
   const [collapsed, setCollapsed] = useState(false);
+
+  // camera preset picker
+  const [presets, setPresets] = useState<CameraPresetResponse[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(
+    configOverride.camera_preset_id ?? savedCfg?.camera_preset_id ?? "",
+  );
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [showSavePreset, setShowSavePreset] = useState(false);
+
+  const fetchPresets = useCallback(() => {
+    const params: { drone_profile_id?: string } = {};
+    if (mission.drone_profile_id) {
+      params.drone_profile_id = mission.drone_profile_id;
+    }
+    listCameraPresets(params)
+      .then((res) => setPresets(res.data))
+      .catch(() => setPresets([]));
+  }, [mission.drone_profile_id]);
+
+  useEffect(() => {
+    fetchPresets();
+  }, [fetchPresets]);
+
+  // keep the select bound to whatever preset the override/saved config points at.
+  // without this, switching to MANUAL auto-applies the default preset but the
+  // dropdown still reads "Apply Preset".
+  useEffect(() => {
+    const pid = configOverride.camera_preset_id !== undefined
+      ? configOverride.camera_preset_id
+      : savedCfg?.camera_preset_id ?? null;
+    setSelectedPresetId(pid ?? "");
+  }, [configOverride.camera_preset_id, savedCfg?.camera_preset_id]);
+
+  function handlePresetSelect(presetId: string) {
+    setSelectedPresetId(presetId);
+    if (!presetId) return;
+    const preset = presets.find((p) => p.id === presetId);
+    if (!preset) return;
+    onChange({
+      ...configOverride,
+      camera_mode: "MANUAL",
+      camera_preset_id: preset.id,
+      white_balance: preset.white_balance,
+      iso: preset.iso,
+      shutter_speed: preset.shutter_speed,
+      focus_mode: preset.focus_mode,
+    });
+  }
+
+  function handleCameraModeChange(mode: "INHERIT" | "AUTO" | "MANUAL") {
+    if (mode === "INHERIT") {
+      onChange({ ...configOverride, camera_mode: null });
+      return;
+    }
+    if (mode === "AUTO") {
+      onChange({ ...configOverride, camera_mode: "AUTO" });
+      return;
+    }
+    // MANUAL - fill any empty field with the default preset value. Only
+    // values that came from the user or a previous preset count as "set";
+    // template defaults and our auto-derived focus/zoom are overwritten.
+    const hasExplicit = <K extends keyof InspectionConfigOverride>(
+      field: K,
+    ): boolean => {
+      if (field in configOverride) {
+        return (configOverride as Record<string, unknown>)[field] != null;
+      }
+      return (savedCfg as Record<string, unknown> | null | undefined)?.[field] != null;
+    };
+
+    const next: InspectionConfigOverride = { ...configOverride, camera_mode: "MANUAL" };
+    const def = presets.find((p) => p.is_default);
+    if (def) {
+      setSelectedPresetId(def.id);
+      next.camera_preset_id = def.id;
+      if (!hasExplicit("white_balance")) next.white_balance = def.white_balance;
+      if (!hasExplicit("iso")) next.iso = def.iso;
+      if (!hasExplicit("shutter_speed")) next.shutter_speed = def.shutter_speed;
+      if (!hasExplicit("focus_mode")) next.focus_mode = def.focus_mode;
+    }
+    // geometry-derived zoom always fills in when user hasn't touched the slider
+    if (!zoomTouched && computedOpticalZoom != null) {
+      next.optical_zoom = computedOpticalZoom;
+    }
+    onChange(next);
+  }
+
+  function handleSaveAsPreset() {
+    if (!presetName.trim()) return;
+    setSavingPreset(true);
+    createCameraPreset({
+      name: presetName.trim(),
+      drone_profile_id: mission.drone_profile_id ?? undefined,
+      white_balance: whiteBalance as CameraPresetCreate["white_balance"],
+      iso: (typeof isoValue === "number" ? isoValue : undefined) as CameraPresetCreate["iso"],
+      shutter_speed: shutterSpeed as CameraPresetCreate["shutter_speed"],
+      focus_mode: focusMode as CameraPresetCreate["focus_mode"],
+    })
+      .then(() => {
+        setShowSavePreset(false);
+        setPresetName("");
+        fetchPresets();
+      })
+      .catch((err) => {
+        console.error("save preset failed", err);
+      })
+      .finally(() => setSavingPreset(false));
+  }
 
   return (
     <div data-testid="inspection-config-form">
@@ -530,6 +725,25 @@ export default function InspectionConfigForm({
               />
             </div>
           )}
+          {inspection.method === "HORIZONTAL_RANGE" && (
+            <div>
+              <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+                {t("mission.config.bufferDistanceOverride")}
+              </label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={bufferDistance}
+                onChange={(e) =>
+                  handleNumberChange("buffer_distance", e.target.value)
+                }
+                placeholder={t("mission.config.bufferDistanceOverrideHint")}
+                className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+                data-testid="inspection-buffer-distance"
+              />
+            </div>
+          )}
           {inspection.method === "HORIZONTAL_RANGE" &&
             computedObservationAngle != null && (
             <div>
@@ -566,8 +780,10 @@ export default function InspectionConfigForm({
         </div>
       )}
 
-      {/* buffer distance override - inlined into the top grid for hover point lock */}
-      {inspection.method !== "HOVER_POINT_LOCK" && (
+      {/* buffer distance override - inlined into the top grid for hover point lock,
+          and into the geometry grid for horizontal range */}
+      {inspection.method !== "HOVER_POINT_LOCK" &&
+        inspection.method !== "HORIZONTAL_RANGE" && (
       <div>
         <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
           {t("mission.config.bufferDistanceOverride")}
@@ -589,9 +805,61 @@ export default function InspectionConfigForm({
 
       {/* camera settings - falls back to mission defaults */}
       <div data-testid="camera-settings-section">
-        <label className="block text-xs font-semibold mb-2 text-tv-text-secondary">
-          {t("mission.config.cameraSettings.title")}
-        </label>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <label className="text-xs font-semibold text-tv-text-secondary">
+            {t("mission.config.cameraSettings.title")}
+          </label>
+          <div className="inline-flex rounded-full border border-tv-border bg-tv-bg p-0.5 text-xs" data-testid="inspection-camera-mode">
+            {([
+              { key: "INHERIT", active: cameraMode === null },
+              { key: "AUTO", active: cameraMode === "AUTO" },
+              { key: "MANUAL", active: cameraMode === "MANUAL" },
+            ] as const).map(({ key, active }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handleCameraModeChange(key)}
+                className={`px-3 py-1 rounded-full transition-colors ${active ? "bg-tv-accent text-white font-medium" : "text-tv-text-secondary hover:text-tv-text-primary"}`}
+                data-testid={`inspection-camera-mode-${key.toLowerCase()}`}
+              >
+                {t(
+                  key === "INHERIT"
+                    ? "mission.config.cameraSettings.modeInherit"
+                    : key === "AUTO"
+                      ? "mission.config.cameraSettings.modeAuto"
+                      : "mission.config.cameraSettings.modeManual",
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+        {effectiveCameraMode === "AUTO" && (
+          <p className="text-[11px] text-tv-text-muted leading-tight mb-2">
+            {t("mission.config.cameraSettings.modeAutoHint")}
+          </p>
+        )}
+
+        {effectiveCameraMode === "MANUAL" && (<>
+        {/* preset picker */}
+        <div className="mb-3" data-testid="camera-preset-picker">
+          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+            {t("mission.config.cameraSettings.presetLabel")}
+          </label>
+          <select
+            value={selectedPresetId}
+            onChange={(e) => handlePresetSelect(e.target.value)}
+            className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+            data-testid="camera-preset-select"
+          >
+            <option value="">{t("mission.config.cameraSettings.presetNone")}</option>
+            {presets.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.is_default ? ` (${t("mission.config.cameraSettings.presetDefault")})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
@@ -608,49 +876,59 @@ export default function InspectionConfigForm({
             >
               <option value="">
                 {mission.default_white_balance
-                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${t(`mission.config.cameraSettings.wb.${mission.default_white_balance.toLowerCase()}`, mission.default_white_balance)}`
+                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${WHITE_BALANCE_OPTIONS.find((o) => o.value === mission.default_white_balance)?.label ?? mission.default_white_balance}`
                   : t("mission.config.cameraSettings.notSet")}
               </option>
-              <option value="DAYLIGHT">{t("mission.config.cameraSettings.wb.daylight")}</option>
-              <option value="CLOUDY">{t("mission.config.cameraSettings.wb.cloudy")}</option>
-              <option value="TUNGSTEN">{t("mission.config.cameraSettings.wb.tungsten")}</option>
-              <option value="MANUAL_4000K">{t("mission.config.cameraSettings.wb.manual4000k")}</option>
+              {WHITE_BALANCE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
               {t("mission.config.cameraSettings.iso")}
             </label>
-            <input
-              type="number"
-              step="100"
-              min="50"
+            <select
               value={isoValue}
-              onChange={(e) => handleNumberChange("iso", e.target.value)}
-              placeholder={mission.default_iso != null
-                ? `${t("mission.config.cameraSettings.missionDefault")}: ${mission.default_iso}`
-                : t("mission.config.cameraSettings.isoHint")}
-              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              onChange={(e) => {
+                const val = e.target.value ? parseInt(e.target.value) : null;
+                onChange({ ...configOverride, iso: val });
+              }}
+              className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
               data-testid="inspection-iso"
-            />
+            >
+              <option value="">
+                {mission.default_iso != null
+                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${mission.default_iso}`
+                  : t("mission.config.cameraSettings.notSet")}
+              </option>
+              {ISO_OPTIONS.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
               {t("mission.config.cameraSettings.shutterSpeed")}
             </label>
-            <input
-              type="text"
+            <select
               value={shutterSpeed ?? ""}
               onChange={(e) => {
                 const val = e.target.value || null;
                 onChange({ ...configOverride, shutter_speed: val });
               }}
-              placeholder={mission.default_shutter_speed
-                ? `${t("mission.config.cameraSettings.missionDefault")}: ${mission.default_shutter_speed}`
-                : t("mission.config.cameraSettings.shutterSpeedHint")}
-              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
               data-testid="inspection-shutter-speed"
-            />
+            >
+              <option value="">
+                {mission.default_shutter_speed
+                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${mission.default_shutter_speed}`
+                  : t("mission.config.cameraSettings.notSet")}
+              </option>
+              {SHUTTER_SPEED_OPTIONS.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
@@ -659,7 +937,7 @@ export default function InspectionConfigForm({
             <select
               value={focusMode ?? ""}
               onChange={(e) => {
-                const val = e.target.value || null;
+                const val = (e.target.value || null) as "AUTO" | "INFINITY" | null;
                 onChange({ ...configOverride, focus_mode: val });
               }}
               className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
@@ -667,47 +945,110 @@ export default function InspectionConfigForm({
             >
               <option value="">
                 {mission.default_focus_mode
-                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${t(`mission.config.cameraSettings.fm.${{ AUTO_CENTER: "autoCenter", AUTO_AREA: "autoArea", MANUAL: "manual" }[mission.default_focus_mode] ?? mission.default_focus_mode}`, mission.default_focus_mode)}`
+                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${t(`mission.config.cameraSettings.fm.${{ AUTO: "auto", INFINITY: "infinity" }[mission.default_focus_mode] ?? mission.default_focus_mode}`, mission.default_focus_mode)}`
                   : t("mission.config.cameraSettings.notSet")}
               </option>
-              <option value="MANUAL">{t("mission.config.cameraSettings.fm.manual")}</option>
-              <option value="AUTO_CENTER">{t("mission.config.cameraSettings.fm.autoCenter")}</option>
-              <option value="AUTO_AREA">{t("mission.config.cameraSettings.fm.autoArea")}</option>
+              <option value="AUTO">{t("mission.config.cameraSettings.fm.auto")}</option>
+              <option value="INFINITY">{t("mission.config.cameraSettings.fm.infinity")}</option>
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-              {t("mission.config.cameraSettings.focusDistance")}
-            </label>
-            <input
-              type="number"
-              step="0.5"
-              min="0.1"
-              value={focusDistanceM}
-              onChange={(e) => handleNumberChange("focus_distance_m", e.target.value)}
-              placeholder={computedFocusDistance != null
-                ? `${t("mission.config.cameraSettings.computed")}: ${computedFocusDistance} m`
-                : t("mission.config.cameraSettings.focusDistanceHint")}
-              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
-              data-testid="inspection-focus-distance"
+          <div className="col-span-2">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-tv-text-secondary">
+                {t("mission.config.cameraSettings.opticalZoom")}
+              </label>
+              <div className="flex items-center gap-1.5">
+                {!zoomTouched && computedOpticalZoom != null && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-tv-accent/10 text-tv-accent font-medium">
+                    {t("mission.config.cameraSettings.auto")}
+                  </span>
+                )}
+                {zoomTouched && computedOpticalZoom != null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setZoomTouched(false);
+                      onChange({ ...configOverride, optical_zoom: computedOpticalZoom });
+                    }}
+                    className="flex items-center gap-0.5 text-[10px] text-tv-text-secondary hover:text-tv-accent transition-colors"
+                    data-testid="optical-zoom-reset"
+                    title={t("mission.config.cameraSettings.resetToAuto")}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    {t("mission.config.cameraSettings.resetToAuto")}
+                  </button>
+                )}
+                <span className="text-xs text-tv-text-secondary">{typeof opticalZoom === "number" ? `${opticalZoom}x` : ""}</span>
+              </div>
+            </div>
+            <ZoomSlider
+              value={typeof opticalZoom === "number" ? opticalZoom : OPTICAL_ZOOM_MIN}
+              onChange={(v) => {
+                setZoomTouched(true);
+                handleNumberChange("optical_zoom", String(v));
+              }}
+              maxOpticalZoom={droneProfile?.max_optical_zoom}
+              testId="inspection-optical-zoom"
             />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-              {t("mission.config.cameraSettings.opticalZoom")}
-            </label>
-            <input
-              type="number"
-              step="0.5"
-              min="1"
-              value={opticalZoom}
-              onChange={(e) => handleNumberChange("optical_zoom", e.target.value)}
-              placeholder={t("mission.config.cameraSettings.opticalZoomHint")}
-              className="w-full px-3 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
-              data-testid="inspection-optical-zoom"
-            />
+            {isZoomOverOptical(
+              typeof opticalZoom === "number" ? opticalZoom : null,
+              droneProfile?.max_optical_zoom ?? null,
+            ) && (
+              <div
+                className="mt-1 flex items-start gap-1 text-xs text-tv-warning"
+                data-testid="zoom-over-optical-warning"
+              >
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>
+                  {t("mission.config.cameraSettings.zoomOverOpticalWarning", {
+                    max: droneProfile?.max_optical_zoom,
+                  })}
+                </span>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* save as preset */}
+        {!showSavePreset ? (
+          <button
+            type="button"
+            onClick={() => setShowSavePreset(true)}
+            className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+            data-testid="save-as-preset-btn"
+          >
+            <Save className="h-3 w-3" />
+            {t("mission.config.cameraSettings.saveAsPreset")}
+          </button>
+        ) : (
+          <div className="mt-2 flex items-center gap-2" data-testid="save-preset-form">
+            <input
+              type="text"
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              placeholder={t("mission.config.cameraSettings.presetNamePlaceholder")}
+              className="flex-1 px-3 py-1.5 rounded-full text-xs border border-tv-border bg-tv-bg text-tv-text-primary placeholder:text-tv-text-muted focus:outline-none focus:border-tv-accent transition-colors"
+              data-testid="preset-name-input"
+            />
+            <button
+              type="button"
+              onClick={handleSaveAsPreset}
+              disabled={savingPreset || !presetName.trim()}
+              className="px-3 py-1.5 rounded-full text-xs bg-tv-accent text-tv-accent-text hover:opacity-90 transition-opacity disabled:opacity-50"
+              data-testid="preset-save-confirm"
+            >
+              {t("mission.config.cameraSettings.presetSave")}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowSavePreset(false); setPresetName(""); }}
+              className="px-3 py-1.5 rounded-full text-xs border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors"
+            >
+              {t("mission.config.cameraSettings.presetCancel")}
+            </button>
+          </div>
+        )}
+        </>)}
       </div>
 
       {/* fly-over specific */}
@@ -1013,6 +1354,24 @@ export default function InspectionConfigForm({
           <AlertTriangle className="h-4 w-4 text-tv-warning flex-shrink-0" />
           <p className="text-xs text-tv-warning">
             {t("mission.config.speedFramerateWarning")}
+          </p>
+        </div>
+      )}
+
+      {/* zoom-over-optical validation warning */}
+      {isZoomOverOptical(
+        typeof opticalZoom === "number" ? opticalZoom : null,
+        droneProfile?.max_optical_zoom ?? null,
+      ) && (
+        <div
+          className="flex items-center gap-2 p-3 rounded-2xl border border-tv-warning bg-tv-warning/10"
+          data-testid="zoom-over-optical-validation"
+        >
+          <AlertTriangle className="h-4 w-4 text-tv-warning flex-shrink-0" />
+          <p className="text-xs text-tv-warning">
+            {t("mission.config.cameraSettings.zoomOverOpticalWarning", {
+              max: droneProfile?.max_optical_zoom,
+            })}
           </p>
         </div>
       )}

@@ -595,7 +595,6 @@ class TestCameraSettingsResolve:
             "iso",
             "shutter_speed",
             "focus_mode",
-            "focus_distance_m",
             "optical_zoom",
         )
         for f in cam_fields:
@@ -610,7 +609,6 @@ class TestCameraSettingsResolve:
             "iso",
             "shutter_speed",
             "focus_mode",
-            "focus_distance_m",
             "optical_zoom",
         )
         for f in cam_fields:
@@ -622,8 +620,7 @@ class TestCameraSettingsResolve:
             white_balance="TUNGSTEN",
             iso=800,
             shutter_speed="1/500",
-            focus_mode="MANUAL",
-            focus_distance_m=50.0,
+            focus_mode="INFINITY",
             optical_zoom=5.0,
         )
         template = InspectionConfiguration(
@@ -634,8 +631,7 @@ class TestCameraSettingsResolve:
         assert merged["white_balance"] == "TUNGSTEN"
         assert merged["iso"] == 800
         assert merged["shutter_speed"] == "1/500"
-        assert merged["focus_mode"] == "MANUAL"
-        assert merged["focus_distance_m"] == 50.0
+        assert merged["focus_mode"] == "INFINITY"
         assert merged["optical_zoom"] == 5.0
 
     def test_resolve_fallback_to_template_camera_settings(self):
@@ -647,12 +643,12 @@ class TestCameraSettingsResolve:
         template = InspectionConfiguration(
             white_balance="DAYLIGHT",
             iso=400,
-            focus_mode="AUTO_CENTER",
+            focus_mode="AUTO",
         )
         merged = config.resolve_with_defaults(template)
         assert merged["white_balance"] == "DAYLIGHT"
         assert merged["iso"] == 400
-        assert merged["focus_mode"] == "AUTO_CENTER"
+        assert merged["focus_mode"] == "AUTO"
 
     def test_resolve_camera_settings_all_none(self):
         """camera settings are None when neither override nor template set them."""
@@ -662,7 +658,6 @@ class TestCameraSettingsResolve:
         assert merged["iso"] is None
         assert merged["shutter_speed"] is None
         assert merged["focus_mode"] is None
-        assert merged["focus_distance_m"] is None
         assert merged["optical_zoom"] is None
 
 
@@ -690,12 +685,12 @@ class TestCameraSettingsSchemaValidation:
         schema = InspectionConfigOverride(iso=400)
         assert schema.iso == 400
 
-    def test_focus_distance_rejects_zero(self):
-        """focus_distance_m=0 must be rejected."""
+    def test_focus_mode_rejects_invalid(self):
+        """focus_mode only accepts AUTO or INFINITY."""
         from app.schemas.mission import InspectionConfigOverride
 
         with pytest.raises(ValidationError):
-            InspectionConfigOverride(focus_distance_m=0)
+            InspectionConfigOverride(focus_mode="MANUAL")
 
     def test_optical_zoom_rejects_zero(self):
         """optical_zoom=0 must be rejected."""
@@ -720,7 +715,6 @@ class TestCameraSettingsSchemaValidation:
             iso=None,
             shutter_speed=None,
             focus_mode=None,
-            focus_distance_m=None,
             optical_zoom=None,
         )
         assert schema.white_balance is None
