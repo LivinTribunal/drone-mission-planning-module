@@ -1190,11 +1190,11 @@ describe("BulkCreateTemplatesDialog", () => {
   it("shows all valid combinations when no existing templates", () => {
     /** verify all compatible AGL x method combos plus hover point lock are listed. */
     renderDialog();
-    // PAPI: VERTICAL_PROFILE, HORIZONTAL_RANGE = 2
+    // PAPI: VERTICAL_PROFILE, HORIZONTAL_RANGE, MEHT_CHECK = 3
     // RUNWAY_EDGE_LIGHTS: FLY_OVER, PARALLEL_SIDE_SWEEP = 2
-    // + 1 AGL-agnostic HOVER_POINT_LOCK = 5 total
+    // + 1 AGL-agnostic HOVER_POINT_LOCK = 6 total
     expect(screen.getByText("coordinator.inspections.bulkCreateCount")).toBeInTheDocument();
-    expect(screen.getAllByText("PAPI RWY 09")).toHaveLength(2);
+    expect(screen.getAllByText("PAPI RWY 09")).toHaveLength(3);
     expect(screen.getAllByText("RWY EDGE 09")).toHaveLength(2);
     expect(screen.getAllByText("map.inspectionMethodShort.HOVER_POINT_LOCK").length).toBeGreaterThanOrEqual(1);
   });
@@ -1206,7 +1206,7 @@ describe("BulkCreateTemplatesDialog", () => {
         id: "t-1",
         name: "Existing",
         description: null,
-        methods: ["VERTICAL_PROFILE", "HORIZONTAL_RANGE"],
+        methods: ["VERTICAL_PROFILE", "HORIZONTAL_RANGE", "MEHT_CHECK"],
         target_agl_ids: ["agl-papi"],
         default_config: null,
         angular_tolerances: null,
@@ -1255,7 +1255,7 @@ describe("BulkCreateTemplatesDialog", () => {
         id: "t-1",
         name: "All covered",
         description: null,
-        methods: ["VERTICAL_PROFILE", "HORIZONTAL_RANGE"],
+        methods: ["VERTICAL_PROFILE", "HORIZONTAL_RANGE", "MEHT_CHECK"],
         target_agl_ids: ["agl-papi"],
         default_config: null,
         angular_tolerances: null,

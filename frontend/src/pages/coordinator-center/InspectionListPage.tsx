@@ -31,6 +31,7 @@ const ALL_METHODS: InspectionMethod[] = [
   "FLY_OVER",
   "PARALLEL_SIDE_SWEEP",
   "HOVER_POINT_LOCK",
+  "MEHT_CHECK",
 ];
 
 export default function InspectionListPage() {

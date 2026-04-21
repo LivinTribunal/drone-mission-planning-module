@@ -23,6 +23,7 @@ const ALL_METHODS: InspectionMethod[] = [
   "HOVER_POINT_LOCK",
   "FLY_OVER",
   "PARALLEL_SIDE_SWEEP",
+  "MEHT_CHECK",
 ];
 
 export default function CreateTemplateDialog({

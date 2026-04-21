@@ -223,6 +223,23 @@ def get_runway_heading(template, surfaces) -> Degrees:
     return DEFAULT_HEADING
 
 
+def get_threshold_position(template, surfaces) -> Point3D | None:
+    """return the threshold position of the runway linked to the template's first AGL."""
+    for agl in template.targets:
+        for surface in surfaces:
+            if surface.id != agl.surface_id or surface.threshold_position is None:
+                continue
+            try:
+                c = parse_ewkb(surface.threshold_position.data).get("coordinates")
+                if not c or len(c) < 3:
+                    continue
+            except (KeyError, ValueError, TypeError):
+                continue
+            return Point3D(lon=c[0], lat=c[1], alt=c[2])
+
+    return None
+
+
 def get_runway_centerline_midpoint(template, surfaces) -> Point3D | None:
     """return the midpoint of the runway centerline for the template's surface.
 
