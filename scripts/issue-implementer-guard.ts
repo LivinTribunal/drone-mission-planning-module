@@ -55,7 +55,7 @@ interface IssuePayload {
 const TRIGGER_LABEL = 'agent:implement';
 
 /** Labels that block implementation. */
-const BLOCKING_LABELS = ['agent:skip', 'wontfix', 'duplicate', 'invalid', 'blocked'];
+const BLOCKING_LABELS = ['agent:skip', 'wontfix', 'duplicate', 'invalid'];
 
 /** Maximum branch name length. */
 const MAX_BRANCH_LENGTH = 60;
@@ -246,13 +246,10 @@ export function evaluateReviewFix(
         };
       }
 
-      const output = execSync(
-        `gh pr view ${prNumber} --repo "${repo}" --json headRefName,state,labels`,
-        {
-          encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe'],
-        },
-      );
+      const output = execSync(`gh pr view ${prNumber} --repo "${repo}" --json headRefName,state`, {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
       const prData = JSON.parse(output);
 
       if (prData.state !== 'OPEN') {
@@ -262,19 +259,6 @@ export function evaluateReviewFix(
           branchName: '',
           cycle,
           reason: `PR #${prNumber} is ${prData.state}, not OPEN.`,
-        };
-      }
-
-      // blocked label halts all automation until human removes it
-      const prLabels: string[] = (prData.labels || []).map((l: { name: string }) => l.name);
-      const blockedHit = prLabels.filter((l) => BLOCKING_LABELS.includes(l));
-      if (blockedHit.length > 0) {
-        return {
-          ...base,
-          shouldFix: false,
-          branchName: '',
-          cycle,
-          reason: `PR #${prNumber} blocked by label(s): ${blockedHit.join(', ')}.`,
         };
       }
 

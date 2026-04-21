@@ -81,12 +81,6 @@ CONCISENESS RULES:
 - Do NOT write sentences like "X is well-tested" or "correctly follows Y pattern" — skip them entirely.
 
 SEVERITY GUIDE:
-- REQUEST_CHANGES: architecture violations, OPSEC violations, missing tests, missing response_model, raw dict patterns, DDD-lite violations, any failed CI check
+- REQUEST_CHANGES: architecture violations, OPSEC violations, missing tests, missing response_model, raw dict patterns, DDD-lite violations
 - COMMENT: style nitpicks, minor formatting, naming suggestions
-- APPROVE: if all checklist items pass, no OPSEC flags, and all CI checks are green
-
-CI PIPELINE FAILURES:
-- The prompt includes a "CI Pipeline Failures" section with every failed check run for the PR head SHA (lint, tests, type-check, build, structural tests, migration checks, etc.).
-- Every failed check MUST appear as a blocking issue in your output with the check name, the exact file:line from the annotation when available, and a specific fix instruction.
-- Never APPROVE a PR with failing CI — set the verdict to REQUEST_CHANGES.
-- The remediation agent reads your findings verbatim to fix CI failures alongside other review comments, so be precise (e.g., "ruff E501 at `app/services/foo.py:120` — split the line", not "fix lint").
+- APPROVE: if all checklist items pass and no OPSEC flags
