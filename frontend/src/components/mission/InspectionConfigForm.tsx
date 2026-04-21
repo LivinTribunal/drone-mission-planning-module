@@ -4,7 +4,7 @@ import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info, RotateCcw, Save
 import type { InspectionResponse, InspectionConfigOverride, MissionDetailResponse } from "@/types/mission";
 import type { InspectionTemplateResponse } from "@/types/inspectionTemplate";
 import type { DroneProfileResponse } from "@/types/droneProfile";
-import type { CameraPresetResponse } from "@/types/cameraPreset";
+import type { CameraPresetCreate, CameraPresetResponse } from "@/types/cameraPreset";
 import type { AGLResponse } from "@/types/airport";
 import type { CaptureMode } from "@/types/enums";
 import { listCameraPresets, createCameraPreset } from "@/api/cameraPresets";
@@ -365,10 +365,10 @@ export default function InspectionConfigForm({
     createCameraPreset({
       name: presetName.trim(),
       drone_profile_id: mission.drone_profile_id ?? undefined,
-      white_balance: whiteBalance,
-      iso: typeof isoValue === "number" ? isoValue : undefined,
-      shutter_speed: shutterSpeed,
-      focus_mode: focusMode as "AUTO" | "INFINITY" | null | undefined,
+      white_balance: whiteBalance as CameraPresetCreate["white_balance"],
+      iso: (typeof isoValue === "number" ? isoValue : undefined) as CameraPresetCreate["iso"],
+      shutter_speed: shutterSpeed as CameraPresetCreate["shutter_speed"],
+      focus_mode: focusMode as CameraPresetCreate["focus_mode"],
     })
       .then(() => {
         setShowSavePreset(false);

@@ -26,6 +26,7 @@ _test_user = SimpleNamespace(
     airports=[],
 )
 _test_user.has_airport_access = lambda airport_id: True
+_test_user.is_privileged = lambda: _test_user.role in ("COORDINATOR", "SUPER_ADMIN")
 
 
 def _override_current_user():
@@ -150,6 +151,7 @@ def as_operator(db_engine):
         airports=[],
     )
     operator_stub.has_airport_access = lambda airport_id: True
+    operator_stub.is_privileged = lambda: operator_stub.role in ("COORDINATOR", "SUPER_ADMIN")
 
     TestSession = sessionmaker(bind=db_engine)
 

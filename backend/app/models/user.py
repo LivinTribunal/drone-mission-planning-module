@@ -66,6 +66,10 @@ class User(Base):
             return True
         return any(str(a.id) == str(airport_id) for a in self.airports)
 
+    def is_privileged(self) -> bool:
+        """true for coordinator or super-admin roles."""
+        return self.role in (UserRole.COORDINATOR.value, UserRole.SUPER_ADMIN.value)
+
     def is_invitation_valid(self) -> bool:
         """check if invitation token is still valid."""
         if not self.invitation_token or not self.invitation_expires_at:

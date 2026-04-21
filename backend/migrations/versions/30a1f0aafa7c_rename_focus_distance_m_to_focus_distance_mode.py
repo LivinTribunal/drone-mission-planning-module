@@ -1,4 +1,9 @@
-"""rename focus_distance_m to focus_distance_mode
+"""replace focus_distance_m (numeric) with focus_distance_mode (string);
+drop mission.default_focus_distance_m and default_optical_zoom.
+
+DESTRUCTIVE: values in focus_distance_m and the mission defaults are lost -
+the new column has different semantics (enum-ish string, not a distance)
+so no value-mapping is meaningful. Downgrade is one-way (see downgrade()).
 
 Revision ID: 30a1f0aafa7c
 Revises: 4f1a8d2c6b09
@@ -7,9 +12,8 @@ Create Date: 2026-04-21 01:15:39.888557
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision: str = '30a1f0aafa7c'
 down_revision: Union[str, None] = '4f1a8d2c6b09'
@@ -40,24 +44,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """restore numeric focus_distance_m columns and mission defaults."""
-    op.add_column(
-        'mission',
-        sa.Column('default_optical_zoom', sa.Float(), nullable=True),
+    """one-way migration: the forward direction drops data with no preserving
+    inverse, so restoring the old columns would leave a table shape that
+    never existed in prod. refuse rather than produce an inconsistent schema.
+    """
+    raise NotImplementedError(
+        "30a1f0aafa7c is one-way: focus_distance_m values were dropped with "
+        "no preserving inverse. restore from backup if you need the old shape."
     )
-    op.add_column(
-        'mission',
-        sa.Column('default_focus_distance_m', sa.Float(), nullable=True),
-    )
-
-    op.add_column(
-        'inspection_configuration',
-        sa.Column('focus_distance_m', sa.Float(), nullable=True),
-    )
-    op.drop_column('inspection_configuration', 'focus_distance_mode')
-
-    op.add_column(
-        'camera_preset',
-        sa.Column('focus_distance_m', sa.Float(), nullable=True),
-    )
-    op.drop_column('camera_preset', 'focus_distance_mode')

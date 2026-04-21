@@ -25,7 +25,14 @@ import type {
   DroneProfileResponse,
   DroneProfileUpdate,
 } from "@/types/droneProfile";
-import type { CameraPresetResponse } from "@/types/cameraPreset";
+import type {
+  CameraPresetResponse,
+  CameraPresetUpdate,
+  FocusMode,
+  Iso,
+  ShutterSpeed,
+  WhiteBalance,
+} from "@/types/cameraPreset";
 import type { MissionResponse } from "@/types/mission";
 import { Layers, Clock, Pencil, Plus, Copy, Trash2, X, Link, Camera, Star } from "lucide-react";
 import Badge from "@/components/common/Badge";
@@ -378,19 +385,15 @@ export default function DroneEditPage() {
   const [newPresetName, setNewPresetName] = useState("");
   const [showNewPresetInput, setShowNewPresetInput] = useState(false);
   const [newPresetSettings, setNewPresetSettings] = useState<{
-    white_balance?: string | null;
-    iso?: number | null;
-    shutter_speed?: string | null;
-    focus_mode?: "AUTO" | "INFINITY" | null;
+    white_balance?: WhiteBalance | null;
+    iso?: Iso | null;
+    shutter_speed?: ShutterSpeed | null;
+    focus_mode?: FocusMode | null;
   }>({});
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
-  const [editPresetData, setEditPresetData] = useState<{
-    name: string;
-    white_balance?: string | null;
-    iso?: number | null;
-    shutter_speed?: string | null;
-    focus_mode?: "AUTO" | "INFINITY" | null;
-  }>({ name: "" });
+  const [editPresetData, setEditPresetData] = useState<CameraPresetUpdate & { name: string }>({
+    name: "",
+  });
 
   const fetchPresets = useCallback(() => {
     if (!id) return;
@@ -904,7 +907,7 @@ export default function DroneEditPage() {
                               </label>
                               <select
                                 value={editPresetData.white_balance ?? ""}
-                                onChange={(e) => setEditPresetData({ ...editPresetData, white_balance: e.target.value || null })}
+                                onChange={(e) => setEditPresetData({ ...editPresetData, white_balance: (e.target.value || null) as WhiteBalance | null })}
                                 className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
                               >
                                 <option value="">{t("mission.config.cameraSettings.notSet")}</option>
@@ -919,7 +922,7 @@ export default function DroneEditPage() {
                               </label>
                               <select
                                 value={editPresetData.iso ?? ""}
-                                onChange={(e) => setEditPresetData({ ...editPresetData, iso: e.target.value ? parseInt(e.target.value) : null })}
+                                onChange={(e) => setEditPresetData({ ...editPresetData, iso: (e.target.value ? parseInt(e.target.value) : null) as Iso | null })}
                                 className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
                               >
                                 <option value="">{t("mission.config.cameraSettings.notSet")}</option>
@@ -934,7 +937,7 @@ export default function DroneEditPage() {
                               </label>
                               <select
                                 value={editPresetData.shutter_speed ?? ""}
-                                onChange={(e) => setEditPresetData({ ...editPresetData, shutter_speed: e.target.value || null })}
+                                onChange={(e) => setEditPresetData({ ...editPresetData, shutter_speed: (e.target.value || null) as ShutterSpeed | null })}
                                 className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
                               >
                                 <option value="">{t("mission.config.cameraSettings.notSet")}</option>
@@ -1077,7 +1080,7 @@ export default function DroneEditPage() {
                         </label>
                         <select
                           value={newPresetSettings.white_balance ?? ""}
-                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, white_balance: e.target.value || null })}
+                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, white_balance: (e.target.value || null) as WhiteBalance | null })}
                           className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
                           data-testid="new-preset-white-balance"
                         >
@@ -1093,7 +1096,7 @@ export default function DroneEditPage() {
                         </label>
                         <select
                           value={newPresetSettings.iso ?? ""}
-                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, iso: e.target.value ? parseInt(e.target.value) : null })}
+                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, iso: (e.target.value ? parseInt(e.target.value) : null) as Iso | null })}
                           className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
                           data-testid="new-preset-iso"
                         >
@@ -1109,7 +1112,7 @@ export default function DroneEditPage() {
                         </label>
                         <select
                           value={newPresetSettings.shutter_speed ?? ""}
-                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, shutter_speed: e.target.value || null })}
+                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, shutter_speed: (e.target.value || null) as ShutterSpeed | null })}
                           className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
                           data-testid="new-preset-shutter-speed"
                         >

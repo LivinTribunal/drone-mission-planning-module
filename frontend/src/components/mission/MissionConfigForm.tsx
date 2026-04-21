@@ -255,6 +255,21 @@ export default function MissionConfigForm({
     fetchPresets();
   }, [fetchPresets]);
 
+  // derive the applied preset from current camera fields so the dropdown
+  // reflects a matching preset (e.g. the default loaded on MANUAL switch or
+  // after reload) instead of "Apply a preset".
+  useEffect(() => {
+    if (cameraMode !== "MANUAL" || presets.length === 0) return;
+    const match = presets.find(
+      (p) =>
+        (p.white_balance ?? null) === (defaultWhiteBalance ?? null)
+        && (p.iso ?? null) === (defaultIso ?? null)
+        && (p.shutter_speed ?? null) === (defaultShutterSpeed ?? null)
+        && (p.focus_mode ?? null) === (defaultFocusMode ?? null),
+    );
+    setAppliedPresetId(match ? match.id : "");
+  }, [cameraMode, presets, defaultWhiteBalance, defaultIso, defaultShutterSpeed, defaultFocusMode]);
+
   function handlePresetApply(presetId: string) {
     if (!presetId) {
       setAppliedPresetId("");

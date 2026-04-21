@@ -1,4 +1,9 @@
-"""drop optical_zoom from camera_preset; drop focus_distance_mode from camera_preset and inspection_configuration; repurpose focus_mode to AUTO/INFINITY
+"""drop optical_zoom + focus_distance_mode from camera_preset, drop
+focus_distance_mode from inspection_configuration, repurpose focus_mode
+to AUTO/INFINITY.
+
+DESTRUCTIVE: dropped column values are lost and legacy focus_mode values
+outside {AUTO, INFINITY} are nulled. Downgrade is one-way.
 
 Revision ID: b5d7e9f1c3a2
 Revises: 30a1f0aafa7c
@@ -9,7 +14,6 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-
 
 revision: str = "b5d7e9f1c3a2"
 down_revision: Union[str, None] = "30a1f0aafa7c"
@@ -53,16 +57,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """restore dropped columns (without recovering data)."""
-    op.add_column(
-        "inspection_configuration",
-        sa.Column("focus_distance_mode", sa.String(length=20), nullable=True),
-    )
-    op.add_column(
-        "camera_preset",
-        sa.Column("focus_distance_mode", sa.String(length=20), nullable=True),
-    )
-    op.add_column(
-        "camera_preset",
-        sa.Column("optical_zoom", sa.Float(), nullable=True),
+    """one-way: forward drops data and rewrites focus_mode values with no
+    preserving inverse. refuse rather than leave a half-restored schema.
+    """
+    raise NotImplementedError(
+        "b5d7e9f1c3a2 is one-way: dropped columns and rewritten focus_mode "
+        "values cannot be restored. restore from backup if you need the old shape."
     )

@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Session, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -33,3 +33,20 @@ class CameraPreset(Base):
     # relationships
     drone_profile = relationship("DroneProfile")
     creator = relationship("User")
+
+    def demote_sibling_defaults(self, db: Session) -> None:
+        """enforce one-default-per-drone-profile invariant: clear is_default
+        on any other preset in the same bucket (same drone_profile_id, or
+        both null for the global bucket). must run before flush when this
+        preset's is_default is true.
+        """
+        query = db.query(CameraPreset).filter(
+            CameraPreset.id != self.id,
+            CameraPreset.is_default.is_(True),
+        )
+        if self.drone_profile_id is None:
+            query = query.filter(CameraPreset.drone_profile_id.is_(None))
+        else:
+            query = query.filter(CameraPreset.drone_profile_id == self.drone_profile_id)
+        query.update({"is_default": False}, synchronize_session=False)
+        db.flush()
