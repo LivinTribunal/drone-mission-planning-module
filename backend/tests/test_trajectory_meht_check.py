@@ -297,3 +297,50 @@ class TestPrepareMehtCheck:
 
         pos = result.target_lha_pos
         assert pos.lat < threshold.lat
+
+
+# update_agl autocompute branch
+
+
+class TestUpdateAglAutocomputeNoneGuard:
+    """tests for the None guard on agl.position in update_agl's autocompute branch."""
+
+    def test_update_agl_no_crash_when_position_and_distance_are_none(self):
+        """update must not raise AttributeError when position is None and distance is None."""
+        from unittest.mock import MagicMock
+
+        from app.models.agl import AGL
+        from app.models.airport import AirfieldSurface, Airport
+        from app.schemas.infrastructure import AGLUpdate
+        from app.services.airport_service import update_agl
+
+        airport_id = uuid4()
+        surface_id = uuid4()
+        agl_id = uuid4()
+
+        airport = Airport(id=airport_id, icao_code="LZAB", name="Test")
+        surface = AirfieldSurface(
+            id=surface_id, airport_id=airport_id, surface_type="RUNWAY", identifier="RWY"
+        )
+        agl = AGL(
+            id=agl_id,
+            surface_id=surface_id,
+            agl_type="PAPI",
+            name="PAPI RWY",
+            position=None,
+            distance_from_threshold=None,
+        )
+
+        # db.query(...).filter(...).first() returns surface -> agl -> airport in order
+        results = [surface, agl, airport]
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.side_effect = results
+
+        schema = AGLUpdate(name="updated")
+
+        # before the fix this raised AttributeError from agl.position.data on None
+        result = update_agl(db, airport_id, surface_id, agl_id, schema)
+
+        assert result is agl
+        # autocompute must have been skipped, leaving distance_from_threshold untouched
+        assert agl.distance_from_threshold is None

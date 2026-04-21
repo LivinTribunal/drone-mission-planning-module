@@ -214,7 +214,7 @@ def _prepare_meht_check(
     heading_override = None
     for agl in template.targets:
         for surface in surfaces:
-            if surface.id == agl.surface_id and surface.heading:
+            if surface.id == agl.surface_id and surface.heading is not None:
                 heading_override = surface.heading
                 break
         if heading_override is not None:

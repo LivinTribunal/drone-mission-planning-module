@@ -761,7 +761,7 @@ def update_agl(
     should_autocompute = agl.distance_from_threshold is None or (
         "position" in sent_fields and "distance_from_threshold" not in sent_fields
     )
-    if should_autocompute:
+    if should_autocompute and agl.position is not None:
         agl_coords = parse_ewkb(agl.position.data).get("coordinates")
         if agl_coords:
             auto = _along_runway_distance_from_threshold(surface, agl_coords[0], agl_coords[1])
