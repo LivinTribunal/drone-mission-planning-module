@@ -202,8 +202,10 @@ export default function MissionTabNav() {
     try {
       await deleteMission(id);
       setShowDeleteDialog(false);
-      await refreshMissions();
       navigate("/operator-center/missions");
+      refreshMissions().catch((err) =>
+        console.error("refresh after delete failed", err instanceof Error ? err.message : String(err)),
+      );
     } catch (err) {
       console.error("delete failed", err instanceof Error ? err.message : String(err));
     }
