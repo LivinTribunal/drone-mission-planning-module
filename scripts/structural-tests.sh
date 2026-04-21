@@ -196,7 +196,15 @@ fi
 echo ""
 
 # ============================================================================
-# Step 4: Report results
+# Step 4: Migration integrity (duplicate IDs, cycles, unmerged heads)
+#
+# Not wired in yet. Run scripts/check-migrations.sh manually or from CI
+# once all open PRs have rebased onto a clean migration chain. Wiring it
+# in here today would fail every PR branched from the pre-fix main.
+# ============================================================================
+
+# ============================================================================
+# Step 5: Report results
 # ============================================================================
 if (( VIOLATIONS > 0 )); then
   echo "Found ${VIOLATIONS} architectural boundary violation(s)"
