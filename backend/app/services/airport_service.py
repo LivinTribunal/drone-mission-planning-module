@@ -754,6 +754,17 @@ def update_agl(
         _normalize_position_altitude(schema.position.coordinates, airport)
 
     sent_fields = schema.model_dump(exclude_unset=True).keys()
+
+    # capture coords for auto-compute before apply_schema_update converts position to WKTElement
+    coords_for_autocalc: list[float] | None = None
+    if "position" in sent_fields and schema.position and schema.position.coordinates:
+        coords_for_autocalc = list(schema.position.coordinates)
+    elif agl.position is not None:
+        try:
+            coords_for_autocalc = parse_ewkb(agl.position.data).get("coordinates")
+        except Exception:
+            coords_for_autocalc = None
+
     apply_schema_update(agl, schema)
 
     # auto-compute distance from threshold when position changed but field
@@ -761,12 +772,12 @@ def update_agl(
     should_autocompute = agl.distance_from_threshold is None or (
         "position" in sent_fields and "distance_from_threshold" not in sent_fields
     )
-    if should_autocompute and agl.position is not None:
-        agl_coords = parse_ewkb(agl.position.data).get("coordinates")
-        if agl_coords:
-            auto = _along_runway_distance_from_threshold(surface, agl_coords[0], agl_coords[1])
-            if auto is not None:
-                agl.distance_from_threshold = auto
+    if should_autocompute and coords_for_autocalc:
+        auto = _along_runway_distance_from_threshold(
+            surface, coords_for_autocalc[0], coords_for_autocalc[1]
+        )
+        if auto is not None:
+            agl.distance_from_threshold = auto
 
     db.commit()
     db.refresh(agl)
