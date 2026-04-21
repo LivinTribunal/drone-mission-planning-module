@@ -758,9 +758,8 @@ def update_agl(
 
     # auto-compute distance from threshold when position changed but field
     # was not explicitly provided, or when field was explicitly cleared to null.
-    should_autocompute = (
-        agl.distance_from_threshold is None
-        or ("position" in sent_fields and "distance_from_threshold" not in sent_fields)
+    should_autocompute = agl.distance_from_threshold is None or (
+        "position" in sent_fields and "distance_from_threshold" not in sent_fields
     )
     if should_autocompute:
         agl_coords = parse_ewkb(agl.position.data).get("coordinates")
