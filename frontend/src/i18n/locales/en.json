@@ -167,6 +167,8 @@
     "poiUnitDesignator": "Unit",
     "poiLampType": "Lamp Type",
     "poiSettingAngle": "Setting Angle",
+    "poiGlideAngle": "Glide Slope Angle",
+    "poiDistanceFromThreshold": "Distance from Threshold",
     "poiTolerance": "Tolerance",
     "ctr": "CTR",
     "restricted": "Restricted",

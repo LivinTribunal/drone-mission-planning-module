@@ -108,6 +108,18 @@ export default function PoiInfoPanel({
             <InfoRow label={t("dashboard.poiName")} value={formatAglDisplayName(a, parentSurface)} />
             <InfoRow label={t("dashboard.poiType")} value={a.agl_type.replace(/_/g, " ")} />
             {a.side && <InfoRow label={t("dashboard.poiSide")} value={a.side} />}
+            {a.agl_type === "PAPI" && a.glide_slope_angle != null && (
+              <InfoRow
+                label={t("dashboard.poiGlideAngle")}
+                value={`${a.glide_slope_angle}\u00B0`}
+              />
+            )}
+            {a.agl_type === "PAPI" && a.distance_from_threshold != null && (
+              <InfoRow
+                label={t("dashboard.poiDistanceFromThreshold")}
+                value={`${a.distance_from_threshold.toFixed(1)}${t("common.units.m")}`}
+              />
+            )}
             <CoordRows position={a.position} label={t("dashboard.poiCoordinates")} />
           </>
         );

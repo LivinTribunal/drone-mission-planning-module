@@ -540,6 +540,16 @@ export default function EditableFeatureInfo({
                 onChange={(e) => handleChange("glide_slope_angle", e.target.value === "" ? null : parseFloat(e.target.value))}
               />
             )}
+            {val("agl_type") === "PAPI" && (
+              <Input
+                id="feat-dist-threshold"
+                label={t("coordinator.detail.aglDistance")}
+                type="number"
+                step="0.1"
+                value={val("distance_from_threshold")}
+                onChange={(e) => handleChange("distance_from_threshold", e.target.value === "" ? null : parseFloat(e.target.value))}
+              />
+            )}
             <PointCoordEditor
               position={(formData.position as PointZ | undefined) ?? null}
               onChange={(coords) => {

@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 import time
 from uuid import UUID
@@ -37,7 +38,7 @@ from app.services.geometry_converter import (
     geojson_to_ewkt,
     schema_to_model_data,
 )
-from app.utils.geo import polygon_oriented_dimensions
+from app.utils.geo import bearing_between, distance_between, polygon_oriented_dimensions
 
 logger = logging.getLogger(__name__)
 
@@ -330,6 +331,35 @@ def recalculate_surface_dimensions(db: Session, airport_id: UUID, surface_id: UU
 
 
 # obstacles
+
+
+def _along_runway_distance_from_threshold(
+    surface: AirfieldSurface, lon: float, lat: float
+) -> float | None:
+    """along-centerline distance from runway threshold to (lon, lat).
+
+    projects the point onto the runway axis defined by threshold -> end,
+    returns the signed along-track distance in meters. None if the surface
+    has no threshold/end positions.
+    """
+    if surface.threshold_position is None or surface.end_position is None:
+        return None
+    try:
+        t = parse_ewkb(surface.threshold_position.data).get("coordinates")
+        e = parse_ewkb(surface.end_position.data).get("coordinates")
+    except Exception:
+        return None
+    if not t or not e:
+        return None
+
+    # runway heading from threshold to end
+    rwy_bearing = bearing_between(t[0], t[1], e[0], e[1])
+    # bearing and distance from threshold to the point
+    pt_bearing = bearing_between(t[0], t[1], lon, lat)
+    pt_distance = distance_between(t[0], t[1], lon, lat)
+    # along-track component
+    delta = math.radians(pt_bearing - rwy_bearing)
+    return pt_distance * math.cos(delta)
 
 
 def _normalize_position_altitude(position_coords: list[float], airport: Airport) -> None:
@@ -686,6 +716,12 @@ def create_agl(db: Session, airport_id: UUID, surface_id: UUID, schema: AGLCreat
         _normalize_position_altitude(schema.position.coordinates, airport)
 
     data = schema_to_model_data(schema)
+    # auto-compute along-runway distance from threshold when not explicitly set
+    pos = schema.position.coordinates if schema.position else None
+    if data.get("distance_from_threshold") is None and pos:
+        auto = _along_runway_distance_from_threshold(surface, pos[0], pos[1])
+        if auto is not None:
+            data["distance_from_threshold"] = auto
     agl = AGL(surface_id=surface_id, **data)
     db.add(agl)
     db.commit()
@@ -717,7 +753,22 @@ def update_agl(
     if schema.position and schema.position.coordinates and not schema.preserve_altitude:
         _normalize_position_altitude(schema.position.coordinates, airport)
 
+    sent_fields = schema.model_dump(exclude_unset=True).keys()
     apply_schema_update(agl, schema)
+
+    # auto-compute distance from threshold when position changed but field
+    # was not explicitly provided, or when field was explicitly cleared to null.
+    should_autocompute = (
+        agl.distance_from_threshold is None
+        or ("position" in sent_fields and "distance_from_threshold" not in sent_fields)
+    )
+    if should_autocompute:
+        agl_coords = parse_ewkb(agl.position.data).get("coordinates")
+        if agl_coords:
+            auto = _along_runway_distance_from_threshold(surface, agl_coords[0], agl_coords[1])
+            if auto is not None:
+                agl.distance_from_threshold = auto
+
     db.commit()
     db.refresh(agl)
 
