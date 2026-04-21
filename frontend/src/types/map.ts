@@ -173,6 +173,7 @@ export type DrawingTool =
   | "zoom"
   | "zoomReset"
   | "select"
+  | "move"
   | "measurement"
   | "heading"
   | "drawPolygon"

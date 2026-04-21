@@ -35,6 +35,7 @@ export default function CoordinatorMapHelpPanel() {
 
   const shortcuts = [
     { key: "S", desc: t("coordinator.airports.help.shortcutSelect") },
+    { key: "V", desc: t("coordinator.airports.help.shortcutMove") },
     { key: "P", desc: t("coordinator.airports.help.shortcutPan") },
     { key: "M", desc: t("coordinator.airports.help.shortcutMeasurement") },
     { key: "G", desc: t("coordinator.airports.help.shortcutDrawPolygon") },

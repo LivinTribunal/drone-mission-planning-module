@@ -5,6 +5,7 @@ import {
   ZoomIn,
   Maximize2,
   MousePointer2,
+  Move,
   Pentagon,
   Circle,
   Square,
@@ -50,6 +51,7 @@ const ZOOM_PRESETS = [50, 75, 100, 150, 200, 300];
 // group 1 - interact
 const interactTools: ToolDef[] = [
   { key: "select", icon: MousePointer2, tooltipKey: "coordinator.airports.tools.select" },
+  { key: "move", icon: Move, tooltipKey: "coordinator.airports.tools.move" },
   { key: "pan", icon: Hand, tooltipKey: "coordinator.airports.tools.pan" },
 ];
 

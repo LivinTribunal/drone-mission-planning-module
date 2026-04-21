@@ -11,6 +11,19 @@ describe("useMapDrawing", () => {
     expect(result.current.canRedo).toBe(false);
   });
 
+  it("setActiveTool switches to move", () => {
+    const { result } = renderHook(() => useMapDrawing());
+    act(() => result.current.setActiveTool("move"));
+    expect(result.current.activeTool).toBe("move");
+  });
+
+  it("can switch back from move to select", () => {
+    const { result } = renderHook(() => useMapDrawing());
+    act(() => result.current.setActiveTool("move"));
+    act(() => result.current.setActiveTool("select"));
+    expect(result.current.activeTool).toBe("select");
+  });
+
   it("adds a feature and enables undo", () => {
     const { result } = renderHook(() => useMapDrawing());
     const feature = {
