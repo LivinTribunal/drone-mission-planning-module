@@ -273,9 +273,13 @@ export default function InspectionConfigForm({
     }
     const effectiveOffset = typeof angleOffset === "number" ? angleOffset : 0.5;
 
-    // when override is set, use that specific lha's angle instead of max
+    // when override is set, use that specific lha's angle instead of max.
+    // search the full template (not just selectedLhaIds-filtered lhas) so the
+    // preview matches the backend, which also ignores the lha_ids filter.
     if (lhaSettingAngleOverrideId) {
-      const overrideLha = relevantLhas.find((l) => l.id === lhaSettingAngleOverrideId);
+      const overrideLha = targetAgls
+        .flatMap((a) => a.lhas)
+        .find((l) => l.id === lhaSettingAngleOverrideId);
       if (overrideLha?.setting_angle != null) {
         return {
           computedObservationAngle: Math.round((overrideLha.setting_angle + effectiveOffset) * 100) / 100,

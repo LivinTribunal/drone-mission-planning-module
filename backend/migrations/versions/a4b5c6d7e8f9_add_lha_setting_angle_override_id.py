@@ -35,10 +35,20 @@ def upgrade() -> None:
         ["id"],
         ondelete="SET NULL",
     )
+    # index speeds up ON DELETE SET NULL cascade from lha
+    op.create_index(
+        "ix_inspection_configuration_lha_setting_angle_override_id",
+        "inspection_configuration",
+        ["lha_setting_angle_override_id"],
+    )
 
 
 def downgrade() -> None:
     """drop lha_setting_angle_override_id column."""
+    op.drop_index(
+        "ix_inspection_configuration_lha_setting_angle_override_id",
+        table_name="inspection_configuration",
+    )
     op.drop_constraint(
         "fk_inspection_config_lha_setting_angle_override",
         "inspection_configuration",

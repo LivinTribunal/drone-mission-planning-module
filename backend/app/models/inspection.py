@@ -97,7 +97,7 @@ class InspectionConfiguration(Base):
     camera_gimbal_angle = Column(Float, nullable=True)
     selected_lha_id = Column(UUID, ForeignKey("lha.id", ondelete="SET NULL"), nullable=True)
     lha_setting_angle_override_id = Column(
-        UUID, ForeignKey("lha.id", ondelete="SET NULL"), nullable=True
+        UUID, ForeignKey("lha.id", ondelete="SET NULL"), nullable=True, index=True
     )
     hover_bearing = Column(Float, nullable=True)
     hover_bearing_reference = Column(String(10), nullable=True)
