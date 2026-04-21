@@ -2,9 +2,11 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { NavLink, Outlet, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { Loader2, Pencil, Plus, Copy, X, Upload, ChevronDown, Search } from "lucide-react";
+import { Loader2, Pencil, Plus, Copy, X, Upload, ChevronDown, Search, Trash2 } from "lucide-react";
 import { useMission } from "@/contexts/MissionContext";
-import { updateMission, duplicateMission } from "@/api/missions";
+import { updateMission, duplicateMission, deleteMission } from "@/api/missions";
+import Modal from "@/components/common/Modal";
+import Button from "@/components/common/Button";
 import type { MissionResponse, MissionDetailResponse } from "@/types/mission";
 import Badge from "@/components/common/Badge";
 import DetailSelector from "@/components/common/DetailSelector";
@@ -80,6 +82,7 @@ export default function MissionTabNav() {
   const [missionSearch, setMissionSearch] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
   const renameErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // compact pill selector refs + portal position
   const compactSelectorRef = useRef<HTMLDivElement>(null);
@@ -193,6 +196,21 @@ export default function MissionTabNav() {
     setRenaming(false);
   }
 
+  async function handleDeleteMission() {
+    /** delete the current mission after confirmation. */
+    if (!id) return;
+    try {
+      await deleteMission(id);
+      setShowDeleteDialog(false);
+      navigate("/operator-center/missions");
+      refreshMissions().catch((err) =>
+        console.error("refresh after delete failed", err instanceof Error ? err.message : String(err)),
+      );
+    } catch (err) {
+      console.error("delete failed", err instanceof Error ? err.message : String(err));
+    }
+  }
+
   const tabs = [
     { label: t("mission.overviewTab"), path: "overview" },
     { label: t("mission.configuration"), path: "configuration" },
@@ -211,6 +229,7 @@ export default function MissionTabNav() {
         { icon: Plus, onClick: () => navigate("/operator-center/missions"), title: t("mission.createNew"), variant: "accent" },
         { icon: Copy, onClick: handleDuplicate, title: t("mission.duplicate") },
         { icon: Pencil, onClick: startRename, title: t("common.edit") },
+        { icon: Trash2, onClick: () => setShowDeleteDialog(true), title: t("common.delete"), variant: "danger" as const },
         { icon: X, onClick: handleDeselect, title: t("common.close") },
       ]}
       renderSelected={() => (
@@ -429,6 +448,24 @@ export default function MissionTabNav() {
         <div className="flex-1 min-h-0 pb-2">
           <Outlet context={outletContext} />
         </div>
+
+        <Modal
+          isOpen={showDeleteDialog}
+          onClose={() => setShowDeleteDialog(false)}
+          title={t("mission.validationExportPage.deleteConfirmTitle")}
+        >
+          <p className="text-sm text-tv-text-primary mb-6">
+            {t("mission.validationExportPage.deleteConfirmMessage")}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setShowDeleteDialog(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button variant="danger" onClick={handleDeleteMission}>
+              {t("common.delete")}
+            </Button>
+          </div>
+        </Modal>
       </div>
     );
   }
@@ -467,6 +504,24 @@ export default function MissionTabNav() {
           <Outlet context={outletContext} />
         </div>
       </div>
+
+      <Modal
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        title={t("mission.validationExportPage.deleteConfirmTitle")}
+      >
+        <p className="text-sm text-tv-text-primary mb-6">
+          {t("mission.validationExportPage.deleteConfirmMessage")}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setShowDeleteDialog(false)}>
+            {t("common.cancel")}
+          </Button>
+          <Button variant="danger" onClick={handleDeleteMission}>
+            {t("common.delete")}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -306,7 +306,7 @@ def _generate_trajectory_inner(
 
     warnings: list[tuple[str, list[str]]] = []
     suggestions: list[tuple[str, list[str]]] = []
-    non_aborting_violations: list[tuple[str, list[str]]] = []
+    papi_obstruction_violations: list[tuple[str, list[str]]] = []
     if had_constraints:
         warnings.append(("constraints were reset - re-attach after generation", []))
 
@@ -919,7 +919,7 @@ def _generate_trajectory_inner(
                 else:
                     wp_str = f"{min(display_wps)}-{max(display_wps)}"
                 wp_ids = [f"idx:{wi + pass_start}" for wi in d_obstructed]
-                non_aborting_violations.append(
+                papi_obstruction_violations.append(
                     (
                         f"{d_label} (wp {wp_str}): camera view to PAPI obstructed",
                         wp_ids,
@@ -958,10 +958,10 @@ def _generate_trajectory_inner(
                         f"{local_surface.surface_type} {local_surface.identifier} "
                         f"({crossing:.0f}m)"
                     )
-                    seen_msgs = {m for m, _ in non_aborting_violations}
+                    seen_msgs = {m for m, _ in warnings}
                     if msg not in seen_msgs:
                         wp_ids = [f"idx:{j - 1}", f"idx:{j}"]
-                        non_aborting_violations.append((msg, wp_ids))
+                        warnings.append((msg, wp_ids))
 
     for (seq, surface_label), indices in measurement_crossings.items():
         count = len(indices)
@@ -976,7 +976,7 @@ def _generate_trajectory_inner(
             if wid not in seen:
                 seen.add(wid)
                 unique_ids.append(wid)
-        non_aborting_violations.append((msg, unique_ids))
+        warnings.append((msg, unique_ids))
 
     # final validation of assembled path
     final_buffer = (
@@ -1055,7 +1055,7 @@ def _generate_trajectory_inner(
         warnings,
         total_dist,
         total_dur,
-        violations=non_aborting_violations,
+        violations=papi_obstruction_violations,
         suggestions=suggestions,
     )
 
