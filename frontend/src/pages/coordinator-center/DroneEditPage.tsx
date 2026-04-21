@@ -19,9 +19,7 @@ import {
   WHITE_BALANCE_OPTIONS,
   ISO_OPTIONS,
   SHUTTER_SPEED_OPTIONS,
-  OPTICAL_ZOOM_MIN,
 } from "@/constants/camera";
-import ZoomSlider from "@/components/common/ZoomSlider";
 import { listMissions } from "@/api/missions";
 import type {
   DroneProfileResponse,
@@ -383,9 +381,7 @@ export default function DroneEditPage() {
     white_balance?: string | null;
     iso?: number | null;
     shutter_speed?: string | null;
-    focus_mode?: string | null;
-    focus_distance_mode?: "AUTO" | "INFINITY" | null;
-    optical_zoom?: number | null;
+    focus_mode?: "AUTO" | "INFINITY" | null;
   }>({});
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [editPresetData, setEditPresetData] = useState<{
@@ -393,9 +389,7 @@ export default function DroneEditPage() {
     white_balance?: string | null;
     iso?: number | null;
     shutter_speed?: string | null;
-    focus_mode?: string | null;
-    focus_distance_mode?: "AUTO" | "INFINITY" | null;
-    optical_zoom?: number | null;
+    focus_mode?: "AUTO" | "INFINITY" | null;
   }>({ name: "" });
 
   const fetchPresets = useCallback(() => {
@@ -955,42 +949,13 @@ export default function DroneEditPage() {
                               </label>
                               <select
                                 value={editPresetData.focus_mode ?? ""}
-                                onChange={(e) => setEditPresetData({ ...editPresetData, focus_mode: e.target.value || null })}
+                                onChange={(e) => setEditPresetData({ ...editPresetData, focus_mode: (e.target.value || null) as "AUTO" | "INFINITY" | null })}
                                 className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
                               >
                                 <option value="">{t("mission.config.cameraSettings.notSet")}</option>
-                                <option value="MANUAL">{t("mission.config.cameraSettings.fm.manual")}</option>
-                                <option value="AUTO_CENTER">{t("mission.config.cameraSettings.fm.autoCenter")}</option>
-                                <option value="AUTO_AREA">{t("mission.config.cameraSettings.fm.autoArea")}</option>
+                                <option value="AUTO">{t("mission.config.cameraSettings.fm.auto")}</option>
+                                <option value="INFINITY">{t("mission.config.cameraSettings.fm.infinity")}</option>
                               </select>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
-                                {t("mission.config.cameraSettings.focusDistance")}
-                              </label>
-                              <select
-                                value={editPresetData.focus_distance_mode ?? ""}
-                                onChange={(e) => setEditPresetData({ ...editPresetData, focus_distance_mode: (e.target.value || null) as "AUTO" | "INFINITY" | null })}
-                                className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
-                              >
-                                <option value="">{t("mission.config.cameraSettings.notSet")}</option>
-                                <option value="AUTO">{t("mission.config.cameraSettings.focusDistanceModes.auto")}</option>
-                                <option value="INFINITY">{t("mission.config.cameraSettings.focusDistanceModes.infinity")}</option>
-                              </select>
-                            </div>
-                            <div>
-                              <div className="flex items-center justify-between mb-0.5">
-                                <label className="text-[10px] font-medium text-tv-text-secondary">
-                                  {t("mission.config.cameraSettings.opticalZoom")}
-                                </label>
-                                <span className="text-[10px] text-tv-text-secondary">{editPresetData.optical_zoom ?? OPTICAL_ZOOM_MIN}x</span>
-                              </div>
-                              <ZoomSlider
-                                value={editPresetData.optical_zoom ?? OPTICAL_ZOOM_MIN}
-                                onChange={(v) => setEditPresetData({ ...editPresetData, optical_zoom: v })}
-                                maxOpticalZoom={drone?.max_optical_zoom}
-                                size="sm"
-                              />
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1044,8 +1009,6 @@ export default function DroneEditPage() {
                             iso: p.iso,
                             shutter_speed: p.shutter_speed,
                             focus_mode: p.focus_mode,
-                            focus_distance_mode: p.focus_distance_mode,
-                            optical_zoom: p.optical_zoom,
                           });
                         }}
                         data-testid={`preset-row-${p.id}`}
@@ -1162,45 +1125,14 @@ export default function DroneEditPage() {
                         </label>
                         <select
                           value={newPresetSettings.focus_mode ?? ""}
-                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, focus_mode: e.target.value || null })}
+                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, focus_mode: (e.target.value || null) as "AUTO" | "INFINITY" | null })}
                           className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
                           data-testid="new-preset-focus-mode"
                         >
                           <option value="">{t("mission.config.cameraSettings.notSet")}</option>
-                          <option value="MANUAL">{t("mission.config.cameraSettings.fm.manual")}</option>
-                          <option value="AUTO_CENTER">{t("mission.config.cameraSettings.fm.autoCenter")}</option>
-                          <option value="AUTO_AREA">{t("mission.config.cameraSettings.fm.autoArea")}</option>
+                          <option value="AUTO">{t("mission.config.cameraSettings.fm.auto")}</option>
+                          <option value="INFINITY">{t("mission.config.cameraSettings.fm.infinity")}</option>
                         </select>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-medium mb-0.5 text-tv-text-secondary">
-                          {t("mission.config.cameraSettings.focusDistance")}
-                        </label>
-                        <select
-                          value={newPresetSettings.focus_distance_mode ?? ""}
-                          onChange={(e) => setNewPresetSettings({ ...newPresetSettings, focus_distance_mode: (e.target.value || null) as "AUTO" | "INFINITY" | null })}
-                          className="w-full appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs border border-tv-border bg-tv-surface text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
-                          data-testid="new-preset-focus-distance-mode"
-                        >
-                          <option value="">{t("mission.config.cameraSettings.notSet")}</option>
-                          <option value="AUTO">{t("mission.config.cameraSettings.focusDistanceModes.auto")}</option>
-                          <option value="INFINITY">{t("mission.config.cameraSettings.focusDistanceModes.infinity")}</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <label className="text-[10px] font-medium text-tv-text-secondary">
-                            {t("mission.config.cameraSettings.opticalZoom")}
-                          </label>
-                          <span className="text-[10px] text-tv-text-secondary">{newPresetSettings.optical_zoom ?? OPTICAL_ZOOM_MIN}x</span>
-                        </div>
-                        <ZoomSlider
-                          value={newPresetSettings.optical_zoom ?? OPTICAL_ZOOM_MIN}
-                          onChange={(v) => setNewPresetSettings({ ...newPresetSettings, optical_zoom: v })}
-                          maxOpticalZoom={drone?.max_optical_zoom}
-                          size="sm"
-                          testId="new-preset-optical-zoom"
-                        />
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1216,8 +1148,6 @@ export default function DroneEditPage() {
                               iso: newPresetSettings.iso,
                               shutter_speed: newPresetSettings.shutter_speed,
                               focus_mode: newPresetSettings.focus_mode,
-                              focus_distance_mode: newPresetSettings.focus_distance_mode,
-                              optical_zoom: newPresetSettings.optical_zoom,
                             });
                             setNewPresetName("");
                             setNewPresetSettings({});

@@ -310,7 +310,7 @@ describe("InspectionConfigForm method variants", () => {
     expect(call![0].optical_zoom).toBeLessThanOrEqual(7);
   });
 
-  it("propagates focus_distance_mode dropdown changes", () => {
+  it("propagates focus_mode dropdown changes", () => {
     const onChange = vi.fn();
     renderForm({
       inspection: baseInspection({ method: "HOVER_POINT_LOCK" }),
@@ -318,11 +318,11 @@ describe("InspectionConfigForm method variants", () => {
       configOverride: { camera_mode: "MANUAL" },
       onChange,
     });
-    fireEvent.change(screen.getByTestId("inspection-focus-distance-mode"), {
+    fireEvent.change(screen.getByTestId("inspection-focus-mode"), {
       target: { value: "INFINITY" },
     });
     expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ focus_distance_mode: "INFINITY" }),
+      expect.objectContaining({ focus_mode: "INFINITY" }),
     );
   });
 

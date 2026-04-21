@@ -173,7 +173,6 @@ def generate_json(
             "iso",
             "shutter_speed",
             "focus_mode",
-            "focus_distance_mode",
             "optical_zoom",
         )
         inspections_out = []

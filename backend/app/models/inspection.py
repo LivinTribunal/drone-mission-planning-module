@@ -110,7 +110,6 @@ class InspectionConfiguration(Base):
     iso = Column(Integer, nullable=True)
     shutter_speed = Column(String(20), nullable=True)
     focus_mode = Column(String(20), nullable=True)
-    focus_distance_mode = Column(String(20), nullable=True)
     optical_zoom = Column(Float, nullable=True)
 
     # fields merged by resolve_with_defaults. a superset of CONFIG_FIELDS that
@@ -123,7 +122,6 @@ class InspectionConfiguration(Base):
         "iso",
         "shutter_speed",
         "focus_mode",
-        "focus_distance_mode",
         "optical_zoom",
     )
 

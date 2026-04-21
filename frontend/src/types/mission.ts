@@ -24,7 +24,7 @@ export interface MissionResponse {
   default_white_balance: string | null;
   default_iso: number | null;
   default_shutter_speed: string | null;
-  default_focus_mode: string | null;
+  default_focus_mode: "AUTO" | "INFINITY" | null;
   transit_agl: number | null;
   require_perpendicular_runway_crossing: boolean;
   flight_plan_scope: FlightPlanScope;
@@ -66,8 +66,7 @@ export interface InspectionConfigResponse {
   white_balance: string | null;
   iso: number | null;
   shutter_speed: string | null;
-  focus_mode: string | null;
-  focus_distance_mode: "AUTO" | "INFINITY" | null;
+  focus_mode: "AUTO" | "INFINITY" | null;
   optical_zoom: number | null;
   camera_preset_id: string | null;
 }
@@ -109,8 +108,7 @@ export interface InspectionConfigOverride {
   white_balance?: string | null;
   iso?: number | null;
   shutter_speed?: string | null;
-  focus_mode?: string | null;
-  focus_distance_mode?: "AUTO" | "INFINITY" | null;
+  focus_mode?: "AUTO" | "INFINITY" | null;
   optical_zoom?: number | null;
   camera_preset_id?: string | null;
 }
@@ -132,7 +130,7 @@ export interface MissionCreate {
   default_white_balance?: string | null;
   default_iso?: number | null;
   default_shutter_speed?: string | null;
-  default_focus_mode?: string | null;
+  default_focus_mode?: "AUTO" | "INFINITY" | null;
   transit_agl?: number | null;
   require_perpendicular_runway_crossing?: boolean;
   flight_plan_scope?: FlightPlanScope;
@@ -154,7 +152,7 @@ export interface MissionUpdate {
   default_white_balance?: string | null;
   default_iso?: number | null;
   default_shutter_speed?: string | null;
-  default_focus_mode?: string | null;
+  default_focus_mode?: "AUTO" | "INFINITY" | null;
   transit_agl?: number | null;
   require_perpendicular_runway_crossing?: boolean;
   flight_plan_scope?: FlightPlanScope;

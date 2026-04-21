@@ -4,20 +4,7 @@ import {
   distanceBetween,
   isZoomOverOptical,
   maxPairwiseDistanceM,
-  slantDistanceM,
 } from "./cameraAutoCalc";
-
-describe("slantDistanceM", () => {
-  it("returns sqrt of squares, rounded", () => {
-    expect(slantDistanceM(3, 4)).toBe(5);
-    expect(slantDistanceM(50, 30)).toBeCloseTo(58.3, 1);
-  });
-
-  it("returns null when any leg is missing", () => {
-    expect(slantDistanceM(null, 5)).toBeNull();
-    expect(slantDistanceM(5, undefined)).toBeNull();
-  });
-});
 
 describe("distanceBetween", () => {
   it("computes planar meters for close-by points", () => {
@@ -57,10 +44,10 @@ describe("computeOpticalZoom", () => {
   });
 
   it("computes zoom that fits the lha span in frame", () => {
-    // fov 60 deg, distance 100, span 10: angular span ~ 5.72 deg, zoom ~ 10.5
-    // max 15 - should not clamp
+    // fov 60 deg, D=100 m: frameWidth@1x = 2*100*tan(30°) ~= 115.5 m.
+    // span 10 m -> zoom = 115.5 / 10 ~= 11.5 (rounded to 0.5).
     const zoom = computeOpticalZoom(100, 10, 60, 15);
-    expect(zoom).toBeCloseTo(10.5, 0);
+    expect(zoom).toBe(11.5);
   });
 
   it("clamps to max_optical_zoom", () => {

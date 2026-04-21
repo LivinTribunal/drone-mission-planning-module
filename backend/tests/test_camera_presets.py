@@ -20,9 +20,7 @@ PRESET_PAYLOAD = {
     "white_balance": "TUNGSTEN",
     "iso": 800,
     "shutter_speed": "1/500",
-    "focus_mode": "MANUAL",
-    "focus_distance_mode": "INFINITY",
-    "optical_zoom": 5.0,
+    "focus_mode": "INFINITY",
 }
 
 
@@ -34,7 +32,7 @@ def test_create_preset(client):
     assert data["name"] == "PAPI Night - DJI M30T"
     assert data["white_balance"] == "TUNGSTEN"
     assert data["iso"] == 800
-    assert data["focus_mode"] == "MANUAL"
+    assert data["focus_mode"] == "INFINITY"
     assert data["is_default"] is False
     assert data["created_by"] is not None
 

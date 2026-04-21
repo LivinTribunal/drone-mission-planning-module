@@ -644,8 +644,6 @@
         "shutterSpeed": "Shutter Speed",
         "shutterSpeedHint": "e.g. 1/500, 1/1000",
         "focusMode": "Focus Mode",
-        "focusDistance": "Focus Distance (m)",
-        "focusDistanceHint": "Set to PAPI distance",
         "opticalZoom": "Zoom",
         "opticalZoomHint": "e.g. 2.0, 5.0",
         "optical": "Optical",
@@ -659,19 +657,14 @@
           "manual4000k": "4000K — Manual"
         },
         "fm": {
-          "manual": "Manual",
-          "autoCenter": "Auto Center",
-          "autoArea": "Auto Area"
+          "auto": "Auto focus",
+          "infinity": "Infinite focus"
         },
         "missionDefault": "Mission default",
         "computed": "Computed",
         "auto": "auto",
         "resetToAuto": "reset",
         "zoomOverOpticalWarning": "Zoom exceeds drone's optical limit ({{max}}x); values above use digital zoom and lose image quality.",
-        "focusDistanceModes": {
-          "auto": "Auto focus",
-          "infinity": "Infinite focus"
-        },
         "presetLabel": "Camera Preset",
         "presetNone": "No preset selected",
         "presetDefault": "default",

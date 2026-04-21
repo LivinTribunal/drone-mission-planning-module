@@ -1,14 +1,5 @@
 import { OPTICAL_ZOOM_MAX, OPTICAL_ZOOM_MIN } from "@/constants/camera";
 
-/** slant distance between two orthogonal legs. */
-export function slantDistanceM(
-  horizontalM: number | null | undefined,
-  verticalM: number | null | undefined,
-): number | null {
-  if (typeof horizontalM !== "number" || typeof verticalM !== "number") return null;
-  return Math.round(Math.sqrt(horizontalM * horizontalM + verticalM * verticalM) * 10) / 10;
-}
-
 /** great-circle-ish planar distance in meters between two lat/lng/alt points. */
 export function distanceBetween(
   a: { lat: number; lng: number; alt?: number | null },
@@ -41,20 +32,29 @@ export function maxPairwiseDistanceM(
 }
 
 /**
- * maximum optical zoom the drone can apply while still fitting every selected
- * LHA inside the frame. the camera must see the full lha_span at the given
- * distance, so zoom is bounded by sensor_fov / angular_span.
+ * optical zoom needed so the LHA set fits across the frame at the given
+ * horizontal distance.
+ *
+ * geometry:
+ *   at 1x zoom the camera sees a frame of width  W = 2 * D * tan(FOV/2)
+ *   to make an object of size S fill that frame: zoom = W / S
+ *
+ *   => zoom = (2 * D * tan(FOV/2)) / S
+ *
+ * where D is the horizontal distance from the drone to the LHA set, FOV is
+ * the sensor horizontal FOV, and S is the LHA span (0 or 1 LHA => clamp to
+ * the drone's max optical zoom).
  */
 export function computeOpticalZoom(
-  distanceToLhaM: number | null | undefined,
+  horizontalDistanceM: number | null | undefined,
   lhaSpanM: number | null | undefined,
   sensorFovDeg: number | null | undefined,
   maxOpticalZoom: number | null | undefined,
 ): number | null {
   if (
-    typeof distanceToLhaM !== "number" ||
+    typeof horizontalDistanceM !== "number" ||
     typeof sensorFovDeg !== "number" ||
-    distanceToLhaM <= 0 ||
+    horizontalDistanceM <= 0 ||
     sensorFovDeg <= 0
   ) {
     return null;
@@ -63,15 +63,13 @@ export function computeOpticalZoom(
     ? maxOpticalZoom
     : OPTICAL_ZOOM_MAX;
 
-  // single light or no span - zoom as tight as optics allow
+  const frameWidthAt1x = 2 * horizontalDistanceM * Math.tan((sensorFovDeg * Math.PI) / 360);
   const span = typeof lhaSpanM === "number" && lhaSpanM > 0 ? lhaSpanM : 0;
+
+  // single light or no span - zoom as tight as optics allow
   if (span <= 0.01) return upper;
 
-  // angular span (radians) subtended by the lha set from the drone
-  const angularSpanRad = 2 * Math.atan(span / (2 * distanceToLhaM));
-  if (angularSpanRad <= 0) return upper;
-  const fovRad = (sensorFovDeg * Math.PI) / 180;
-  const rawZoom = fovRad / angularSpanRad;
+  const rawZoom = frameWidthAt1x / span;
   const clamped = Math.max(OPTICAL_ZOOM_MIN, Math.min(upper, rawZoom));
   return Math.round(clamped * 2) / 2;
 }

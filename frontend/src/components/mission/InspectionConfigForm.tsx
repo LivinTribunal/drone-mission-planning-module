@@ -21,7 +21,6 @@ import {
   computeOpticalZoom,
   isZoomOverOptical,
   maxPairwiseDistanceM,
-  slantDistanceM,
 } from "@/utils/cameraAutoCalc";
 
 interface InspectionConfigFormProps {
@@ -95,12 +94,6 @@ export default function InspectionConfigForm({
     configOverride.focus_mode !== undefined
       ? configOverride.focus_mode
       : savedCfg?.focus_mode ?? defaultCfg?.focus_mode ?? null;
-  const focusDistanceMode: "AUTO" | "INFINITY" | null =
-    configOverride.focus_distance_mode !== undefined
-      ? configOverride.focus_distance_mode
-      : (savedCfg?.focus_distance_mode as "AUTO" | "INFINITY" | null | undefined)
-          ?? (defaultCfg?.focus_distance_mode as "AUTO" | "INFINITY" | null | undefined)
-          ?? null;
   const opticalZoom = resolveNumber("optical_zoom");
   // camera_mode override: null = inherit from mission, otherwise AUTO/MANUAL
   const cameraMode: "AUTO" | "MANUAL" | null =
@@ -110,49 +103,26 @@ export default function InspectionConfigForm({
   const effectiveCameraMode: "AUTO" | "MANUAL" =
     cameraMode ?? (mission.camera_mode ?? "AUTO");
 
-  // distance from drone camera to the lha centroid - needed for zoom calc.
-  // inputs differ per method since each stores geometry in its own fields.
-  const distanceToLha = useMemo(() => {
+  // horizontal distance from the drone to the lha set - feeds the zoom calc.
+  // per method we pull the field that encodes horizontal offset.
+  const horizontalDistanceToLha = useMemo(() => {
     const num = (f: keyof InspectionConfigOverride): number | null => {
       const v = resolveNumber(f);
       return typeof v === "number" ? v : null;
     };
     switch (inspection.method) {
       case "HOVER_POINT_LOCK":
-        return slantDistanceM(num("distance_from_lha"), num("height_above_lha"));
+        return num("distance_from_lha");
       case "FLY_OVER":
       case "PARALLEL_SIDE_SWEEP":
-        return slantDistanceM(num("lateral_offset") ?? 0, num("height_above_lights"));
-      case "HORIZONTAL_RANGE": {
-        // trajectory engine: glide_height = horizontal_distance * tan(observation_angle).
-        const horizontal = num("horizontal_distance");
-        if (horizontal == null) return null;
-        const relevantLhas = (
-          template?.target_agl_ids?.length
-            ? agls.filter((a) => template.target_agl_ids!.includes(a.id))
-            : agls
-        ).flatMap((a) =>
-          a.lhas.filter((l) => selectedLhaIds.size === 0 || selectedLhaIds.has(l.id)),
-        );
-        const settingAngles = relevantLhas
-          .map((l) => l.setting_angle)
-          .filter((a): a is number => a != null);
-        if (settingAngles.length === 0) {
-          return Math.round(horizontal * 10) / 10;
-        }
-        const offset = num("angle_offset") ?? 0.5;
-        const angle = Math.max(...settingAngles) + offset;
-        const vertical = horizontal * Math.tan((angle * Math.PI) / 180);
-        return slantDistanceM(horizontal, vertical);
-      }
-      case "VERTICAL_PROFILE": {
-        const h = num("horizontal_distance");
-        return h != null ? Math.round(h * 10) / 10 : null;
-      }
+        return num("lateral_offset") ?? 0;
+      case "HORIZONTAL_RANGE":
+      case "VERTICAL_PROFILE":
+        return num("horizontal_distance");
       default:
         return null;
     }
-  }, [configOverride, savedCfg, defaultCfg, inspection.method, template, agls, selectedLhaIds]);
+  }, [configOverride, savedCfg, defaultCfg, inspection.method]);
 
   // physical span of the selected lha set - zoom must fit this in the frame.
   const lhaSpanM = useMemo(() => {
@@ -176,12 +146,12 @@ export default function InspectionConfigForm({
 
   const computedOpticalZoom = useMemo(() => {
     return computeOpticalZoom(
-      distanceToLha,
+      horizontalDistanceToLha,
       lhaSpanM,
       droneProfile?.sensor_fov ?? null,
       droneProfile?.max_optical_zoom ?? null,
     );
-  }, [distanceToLha, lhaSpanM, droneProfile?.sensor_fov, droneProfile?.max_optical_zoom]);
+  }, [horizontalDistanceToLha, lhaSpanM, droneProfile?.sensor_fov, droneProfile?.max_optical_zoom]);
 
   // zoom live-binds to the computed value until the user drags the slider.
   const [zoomTouched, setZoomTouched] = useState<boolean>(() =>
@@ -325,12 +295,21 @@ export default function InspectionConfigForm({
     fetchPresets();
   }, [fetchPresets]);
 
+  // keep the select bound to whatever preset the override/saved config points at.
+  // without this, switching to MANUAL auto-applies the default preset but the
+  // dropdown still reads "Apply Preset".
+  useEffect(() => {
+    const pid = configOverride.camera_preset_id !== undefined
+      ? configOverride.camera_preset_id
+      : savedCfg?.camera_preset_id ?? null;
+    setSelectedPresetId(pid ?? "");
+  }, [configOverride.camera_preset_id, savedCfg?.camera_preset_id]);
+
   function handlePresetSelect(presetId: string) {
     setSelectedPresetId(presetId);
     if (!presetId) return;
     const preset = presets.find((p) => p.id === presetId);
     if (!preset) return;
-    if (preset.optical_zoom != null) setZoomTouched(true);
     onChange({
       ...configOverride,
       camera_mode: "MANUAL",
@@ -339,8 +318,6 @@ export default function InspectionConfigForm({
       iso: preset.iso,
       shutter_speed: preset.shutter_speed,
       focus_mode: preset.focus_mode,
-      focus_distance_mode: preset.focus_distance_mode,
-      optical_zoom: preset.optical_zoom,
     });
   }
 
@@ -374,14 +351,9 @@ export default function InspectionConfigForm({
       if (!hasExplicit("iso")) next.iso = def.iso;
       if (!hasExplicit("shutter_speed")) next.shutter_speed = def.shutter_speed;
       if (!hasExplicit("focus_mode")) next.focus_mode = def.focus_mode;
-      if (!hasExplicit("focus_distance_mode")) next.focus_distance_mode = def.focus_distance_mode;
-      if (def.optical_zoom != null && !zoomTouched) {
-        next.optical_zoom = def.optical_zoom;
-        setZoomTouched(true);
-      }
     }
-    // fall back to geometry-derived zoom when preset didn't supply one
-    if (next.optical_zoom == null && computedOpticalZoom != null) {
+    // geometry-derived zoom always fills in when user hasn't touched the slider
+    if (!zoomTouched && computedOpticalZoom != null) {
       next.optical_zoom = computedOpticalZoom;
     }
     onChange(next);
@@ -396,9 +368,7 @@ export default function InspectionConfigForm({
       white_balance: whiteBalance,
       iso: typeof isoValue === "number" ? isoValue : undefined,
       shutter_speed: shutterSpeed,
-      focus_mode: focusMode,
-      focus_distance_mode: focusDistanceMode,
-      optical_zoom: typeof opticalZoom === "number" ? opticalZoom : undefined,
+      focus_mode: focusMode as "AUTO" | "INFINITY" | null | undefined,
     })
       .then(() => {
         setShowSavePreset(false);
@@ -967,7 +937,7 @@ export default function InspectionConfigForm({
             <select
               value={focusMode ?? ""}
               onChange={(e) => {
-                const val = e.target.value || null;
+                const val = (e.target.value || null) as "AUTO" | "INFINITY" | null;
                 onChange({ ...configOverride, focus_mode: val });
               }}
               className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
@@ -975,33 +945,14 @@ export default function InspectionConfigForm({
             >
               <option value="">
                 {mission.default_focus_mode
-                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${t(`mission.config.cameraSettings.fm.${{ AUTO_CENTER: "autoCenter", AUTO_AREA: "autoArea", MANUAL: "manual" }[mission.default_focus_mode] ?? mission.default_focus_mode}`, mission.default_focus_mode)}`
+                  ? `${t("mission.config.cameraSettings.missionDefault")}: ${t(`mission.config.cameraSettings.fm.${{ AUTO: "auto", INFINITY: "infinity" }[mission.default_focus_mode] ?? mission.default_focus_mode}`, mission.default_focus_mode)}`
                   : t("mission.config.cameraSettings.notSet")}
               </option>
-              <option value="MANUAL">{t("mission.config.cameraSettings.fm.manual")}</option>
-              <option value="AUTO_CENTER">{t("mission.config.cameraSettings.fm.autoCenter")}</option>
-              <option value="AUTO_AREA">{t("mission.config.cameraSettings.fm.autoArea")}</option>
+              <option value="AUTO">{t("mission.config.cameraSettings.fm.auto")}</option>
+              <option value="INFINITY">{t("mission.config.cameraSettings.fm.infinity")}</option>
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
-              {t("mission.config.cameraSettings.focusDistance")}
-            </label>
-            <select
-              value={focusDistanceMode ?? ""}
-              onChange={(e) => {
-                const val = (e.target.value || null) as "AUTO" | "INFINITY" | null;
-                onChange({ ...configOverride, focus_distance_mode: val });
-              }}
-              className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
-              data-testid="inspection-focus-distance-mode"
-            >
-              <option value="">{t("mission.config.cameraSettings.notSet")}</option>
-              <option value="AUTO">{t("mission.config.cameraSettings.focusDistanceModes.auto")}</option>
-              <option value="INFINITY">{t("mission.config.cameraSettings.focusDistanceModes.infinity")}</option>
-            </select>
-          </div>
-          <div>
+          <div className="col-span-2">
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-medium text-tv-text-secondary">
                 {t("mission.config.cameraSettings.opticalZoom")}

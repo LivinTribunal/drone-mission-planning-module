@@ -545,15 +545,14 @@ export default function MissionConfigForm({
             <select
               value={defaultFocusMode ?? ""}
               onChange={(e) =>
-                onChange({ default_focus_mode: e.target.value || null })
+                onChange({ default_focus_mode: (e.target.value || null) as "AUTO" | "INFINITY" | null })
               }
               className="w-full appearance-none pl-3 pr-7 py-2 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23888%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
               data-testid="default-focus-mode-select"
             >
               <option value="">{t("mission.config.cameraSettings.notSet")}</option>
-              <option value="MANUAL">{t("mission.config.cameraSettings.fm.manual")}</option>
-              <option value="AUTO_CENTER">{t("mission.config.cameraSettings.fm.autoCenter")}</option>
-              <option value="AUTO_AREA">{t("mission.config.cameraSettings.fm.autoArea")}</option>
+              <option value="AUTO">{t("mission.config.cameraSettings.fm.auto")}</option>
+              <option value="INFINITY">{t("mission.config.cameraSettings.fm.infinity")}</option>
             </select>
           </div>
         </div>
