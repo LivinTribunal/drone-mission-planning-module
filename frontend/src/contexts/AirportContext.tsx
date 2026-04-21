@@ -20,6 +20,8 @@ interface AirportContextValue {
   selectAirport: (airport: AirportResponse) => void;
   clearAirport: () => void;
   refreshAirportDetail: () => void;
+  // used by deep-linked mission pages when no airport is selected yet
+  ensureAirport: (airportId: string) => void;
 }
 
 const AirportContext = createContext<AirportContextValue | null>(null);
@@ -43,7 +45,22 @@ export function AirportProvider({ children }: { children: ReactNode }) {
         if (fetchCounterRef.current !== requestId) return;
         setAirportDetail(detail);
         setSelectedAirport((prev) => {
-          if (!prev || prev.id !== detail.id) return prev;
+          // deep-linked nav may arrive with no selected airport - hydrate from detail
+          if (!prev || prev.id !== detail.id) {
+            const summary: AirportResponse = {
+              id: detail.id,
+              icao_code: detail.icao_code,
+              name: detail.name,
+              city: detail.city,
+              country: detail.country,
+              elevation: detail.elevation,
+              location: detail.location,
+              default_drone_profile_id: detail.default_drone_profile_id,
+              terrain_source: detail.terrain_source,
+              has_dem: detail.has_dem,
+            };
+            return summary;
+          }
           if (prev.default_drone_profile_id === detail.default_drone_profile_id) return prev;
           return { ...prev, default_drone_profile_id: detail.default_drone_profile_id };
         });
@@ -122,6 +139,14 @@ export function AirportProvider({ children }: { children: ReactNode }) {
     }
   }, [selectedAirport, fetchDetail]);
 
+  const ensureAirport = useCallback(
+    (airportId: string) => {
+      if (airportDetail?.id === airportId) return;
+      fetchDetail(airportId);
+    },
+    [airportDetail?.id, fetchDetail],
+  );
+
   return (
     <AirportContext.Provider
       value={{
@@ -132,6 +157,7 @@ export function AirportProvider({ children }: { children: ReactNode }) {
         selectAirport,
         clearAirport,
         refreshAirportDetail,
+        ensureAirport,
       }}
     >
       {children}

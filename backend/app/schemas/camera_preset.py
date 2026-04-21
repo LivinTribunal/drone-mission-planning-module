@@ -1,13 +1,15 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.common import FocusModeStr, ListMeta, WhiteBalanceStr
 
 
 class CameraPresetCreate(BaseModel):
     """create camera preset."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(max_length=100)
     drone_profile_id: UUID | None = None
@@ -19,7 +21,9 @@ class CameraPresetCreate(BaseModel):
 
 
 class CameraPresetUpdate(BaseModel):
-    """update camera preset."""
+    """update camera preset. at least one field must be provided."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, max_length=100)
     drone_profile_id: UUID | None = None
@@ -28,6 +32,13 @@ class CameraPresetUpdate(BaseModel):
     iso: int | None = Field(default=None, gt=0)
     shutter_speed: str | None = Field(default=None, max_length=20)
     focus_mode: FocusModeStr | None = None
+
+    @model_validator(mode="after")
+    def _require_any_field(self) -> "CameraPresetUpdate":
+        """reject PUT requests that provide no fields to change."""
+        if not self.model_fields_set:
+            raise ValueError("at least one field must be provided")
+        return self
 
 
 class CameraPresetResponse(BaseModel):

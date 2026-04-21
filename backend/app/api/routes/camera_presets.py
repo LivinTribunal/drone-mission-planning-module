@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import OperatorUser
@@ -40,17 +40,7 @@ def get_preset(
     db: Session = Depends(get_db),
 ):
     """get camera preset by id."""
-    preset = camera_preset_service.get_preset(db, preset_id)
-
-    # visibility: default presets, own presets, or coordinator/admin
-    if (
-        not preset.is_default
-        and preset.created_by != current_user.id
-        and current_user.role not in ("COORDINATOR", "SUPER_ADMIN")
-    ):
-        raise HTTPException(status_code=404, detail="camera preset not found")
-
-    return preset
+    return camera_preset_service.get_preset_for_user(db, preset_id, current_user)
 
 
 @router.post("", status_code=201, response_model=CameraPresetResponse)
@@ -61,9 +51,6 @@ def create_preset(
     db: Session = Depends(get_db),
 ):
     """create camera preset."""
-    if body.is_default and current_user.role not in ("COORDINATOR", "SUPER_ADMIN"):
-        raise HTTPException(status_code=403, detail="only coordinators can create default presets")
-
     preset = camera_preset_service.create_preset(db, body, current_user)
     log_audit(
         db,
@@ -88,9 +75,6 @@ def update_preset(
     db: Session = Depends(get_db),
 ):
     """update camera preset."""
-    if body.is_default and current_user.role not in ("COORDINATOR", "SUPER_ADMIN"):
-        raise HTTPException(status_code=403, detail="only coordinators can set default presets")
-
     preset = camera_preset_service.update_preset(db, preset_id, body, current_user)
     log_audit(
         db,
@@ -114,15 +98,15 @@ def delete_preset(
     db: Session = Depends(get_db),
 ):
     """delete camera preset."""
-    preset = camera_preset_service.get_preset(db, preset_id)
+    preset = camera_preset_service.delete_preset(db, preset_id, current_user)
     log_audit(
         db,
         current_user,
         AuditAction.DELETE,
         entity_type="CameraPreset",
-        entity_id=preset_id,
+        entity_id=preset.id,
         entity_name=preset.name,
         ip_address=request.client.host if request.client else None,
     )
-    camera_preset_service.delete_preset(db, preset, current_user)
+    db.commit()
     return DeleteResponse(deleted=True)

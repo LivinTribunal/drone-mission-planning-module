@@ -63,6 +63,33 @@ describe("computeOpticalZoom", () => {
   it("returns null when inputs missing", () => {
     expect(computeOpticalZoom(null, 10, 84, 7)).toBeNull();
     expect(computeOpticalZoom(50, 10, null, 7)).toBeNull();
+    expect(computeOpticalZoom(undefined, 10, 84, 7)).toBeNull();
+    expect(computeOpticalZoom(50, 10, undefined, 7)).toBeNull();
+  });
+
+  it("returns null for non-positive distance or fov", () => {
+    expect(computeOpticalZoom(0, 10, 84, 7)).toBeNull();
+    expect(computeOpticalZoom(-5, 10, 84, 7)).toBeNull();
+    expect(computeOpticalZoom(50, 10, 0, 7)).toBeNull();
+    expect(computeOpticalZoom(50, 10, -10, 7)).toBeNull();
+  });
+
+  it("falls back to OPTICAL_ZOOM_MAX when maxOpticalZoom is missing or non-positive", () => {
+    // no span + no explicit max → clamp to OPTICAL_ZOOM_MAX (20)
+    expect(computeOpticalZoom(100, 0, 60, null)).toBe(20);
+    expect(computeOpticalZoom(100, 0, 60, 0)).toBe(20);
+    expect(computeOpticalZoom(100, 0, 60, undefined)).toBe(20);
+  });
+
+  it("treats negative span as zero (zooms to max)", () => {
+    expect(computeOpticalZoom(50, -3, 84, 7)).toBe(7);
+  });
+
+  it("rounds to nearest half step", () => {
+    // D=100 m, FOV=60°: frameWidth ~115.47. span=23.1 → zoom ~5.0
+    expect(computeOpticalZoom(100, 23.1, 60, 15)).toBe(5);
+    // span=10 → zoom ~11.547 → rounds to 11.5
+    expect(computeOpticalZoom(100, 10, 60, 15)).toBe(11.5);
   });
 });
 

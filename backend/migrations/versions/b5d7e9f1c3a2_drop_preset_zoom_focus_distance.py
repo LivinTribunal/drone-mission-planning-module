@@ -17,14 +17,25 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _drop_column_if_exists(bind, table: str, column: str) -> None:
+    """drop a column only when it exists - safe for fresh DBs where earlier
+    iterations of the preset schema may have never been applied.
+    """
+    insp = sa.inspect(bind)
+    cols = {c["name"] for c in insp.get_columns(table)}
+    if column in cols:
+        op.drop_column(table, column)
+
+
 def upgrade() -> None:
     """drop zoom + focus_distance_mode from preset; drop focus_distance_mode
     from inspection_configuration; null legacy focus_mode values since the
     enum now means AUTO/INFINITY instead of MANUAL/AUTO_CENTER/AUTO_AREA.
     """
-    op.drop_column("camera_preset", "optical_zoom")
-    op.drop_column("camera_preset", "focus_distance_mode")
-    op.drop_column("inspection_configuration", "focus_distance_mode")
+    bind = op.get_bind()
+    _drop_column_if_exists(bind, "camera_preset", "optical_zoom")
+    _drop_column_if_exists(bind, "camera_preset", "focus_distance_mode")
+    _drop_column_if_exists(bind, "inspection_configuration", "focus_distance_mode")
 
     # enum semantics changed - wipe stale values so reads don't fail validation
     op.execute(

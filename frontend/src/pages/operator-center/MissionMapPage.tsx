@@ -64,7 +64,7 @@ export default function MissionMapPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { airportDetail } = useAirport();
+  const { airportDetail, ensureAirport } = useAirport();
   const { setSaveContext, setComputeContext, refreshMissions, updateMissionFromPage, setCompactLeftPanel } =
     useOutletContext<MissionTabOutletContext>();
   const computation = useComputation();
@@ -153,6 +153,10 @@ export default function MissionMapPage() {
       const missionData = await getMission(id);
       setMission(missionData);
 
+      // deep-linked nav: ensure the airport context matches the mission
+      // regardless of whether the user picked one before landing here.
+      ensureAirport(missionData.airport_id);
+
       if (missionData.updated_at) {
         setLastSaved(new Date(missionData.updated_at));
       }
@@ -180,7 +184,7 @@ export default function MissionMapPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, t]);
+  }, [id, t, ensureAirport]);
 
   useEffect(() => {
     fetchData();
