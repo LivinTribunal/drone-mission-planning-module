@@ -74,6 +74,8 @@ class DroneProfile(Base):
     weight = Column(Float)
     model_identifier = Column(String, nullable=True)
     max_optical_zoom = Column(Float, nullable=True)
+    # 1x focal length (mm) - used to translate optical_zoom into dji wpml focalLength.
+    sensor_base_focal_length = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

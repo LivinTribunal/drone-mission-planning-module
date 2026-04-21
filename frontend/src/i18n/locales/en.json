@@ -791,6 +791,11 @@
         "full": "Export includes full flight: takeoff → transit → measurements → transit → landing",
         "noTakeoffLanding": "Export starts/ends at transit altitude - no ground-level takeoff or landing",
         "measurementsOnly": "Export includes measurement waypoints only - no takeoff, landing, or transit"
+      },
+      "capabilityNote": {
+        "full": "Carries all camera settings (white balance, ISO, shutter, focus, optical zoom) per inspection.",
+        "zoomOnly": "Carries optical zoom per inspection. Set ISO, shutter speed, white balance and focus mode on the controller before flight.",
+        "none": "No camera settings in this format - set all camera values on the controller. A full settings reference is included in the mission report PDF."
       }
     },
     "missionReport": {

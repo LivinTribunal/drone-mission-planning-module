@@ -99,3 +99,38 @@ describe("ExportPanel - mission report section", () => {
     expect(screen.getByTestId("mission-report-section")).toBeInTheDocument();
   });
 });
+
+describe("ExportPanel - per-format capability notes", () => {
+  it("renders zoom-only note for KMZ and WPML formats", () => {
+    renderPanel();
+
+    const kmzNote = screen.getByTestId("capability-KMZ");
+    const wpmlNote = screen.getByTestId("capability-WPML");
+    expect(kmzNote.textContent).toBe(
+      "mission.validationExportPage.capabilityNote.zoomOnly",
+    );
+    expect(wpmlNote.textContent).toBe(
+      "mission.validationExportPage.capabilityNote.zoomOnly",
+    );
+  });
+
+  it("renders full-coverage note for JSON format", () => {
+    renderPanel();
+
+    const jsonNote = screen.getByTestId("capability-JSON");
+    expect(jsonNote.textContent).toBe(
+      "mission.validationExportPage.capabilityNote.full",
+    );
+  });
+
+  it("renders no-camera-settings note for formats without camera metadata", () => {
+    renderPanel();
+
+    for (const fmt of ["KML", "MAVLINK", "UGCS", "CSV", "GPX", "LITCHI", "DRONEDEPLOY"]) {
+      const note = screen.getByTestId(`capability-${fmt}`);
+      expect(note.textContent).toBe(
+        "mission.validationExportPage.capabilityNote.none",
+      );
+    }
+  });
+});
