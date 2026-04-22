@@ -472,6 +472,11 @@ def _generate_trajectory_inner(
 
         # ordered LHA positions are used by fly-over and parallel-side-sweep
         ordered_lhas = get_ordered_lha_positions(template, lha_ids)
+        if config.direction_reversed and inspection.method in (
+            InspectionMethod.FLY_OVER,
+            InspectionMethod.PARALLEL_SIDE_SWEEP,
+        ):
+            ordered_lhas = list(reversed(ordered_lhas))
 
         # method-specific pre-computation via registry
         prepare_fn = PREPARE_REGISTRY.get(inspection.method)

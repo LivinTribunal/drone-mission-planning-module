@@ -361,4 +361,72 @@ describe("InspectionConfigForm method variants", () => {
     expect(last).toMatchObject({ distance_from_lha: 20 });
     expect(last.height_above_lha).toBeUndefined();
   });
+
+  it("direction widget renders for the three in-scope methods", () => {
+    const methods = ["HORIZONTAL_RANGE", "FLY_OVER", "PARALLEL_SIDE_SWEEP"] as const;
+    for (const method of methods) {
+      const { unmount } = renderForm({
+        inspection: baseInspection({ method }),
+        template: papiTemplate as never,
+      });
+      expect(screen.getByTestId("direction-reversed-section")).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("direction widget is hidden for the three excluded methods", () => {
+    const excluded = ["HOVER_POINT_LOCK", "MEHT_CHECK", "VERTICAL_PROFILE"] as const;
+    for (const method of excluded) {
+      const { unmount } = renderForm({
+        inspection: baseInspection({ method }),
+        template: papiTemplate as never,
+      });
+      expect(screen.queryByTestId("direction-reversed-section")).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("direction widget shows placeholder when bearing is null", () => {
+    renderForm({
+      inspection: baseInspection({ method: "FLY_OVER" }),
+      directionBearing: null,
+    });
+    // the i18n stub echoes the key; real app renders "—"
+    expect(screen.getByTestId("inspection-direction-bearing").textContent).toBe(
+      "mission.config.direction.unknown",
+    );
+  });
+
+  it("direction widget shows the bearing when provided", () => {
+    renderForm({
+      inspection: baseInspection({ method: "FLY_OVER" }),
+      directionBearing: 142,
+    });
+    expect(screen.getByTestId("inspection-direction-bearing").textContent).toBe("142°");
+  });
+
+  it("direction toggle flips direction_reversed from false to true", () => {
+    const onChange = vi.fn();
+    renderForm({
+      inspection: baseInspection({ method: "FLY_OVER" }),
+      onChange,
+    });
+    fireEvent.click(screen.getByTestId("inspection-direction-reversed-toggle"));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ direction_reversed: true }),
+    );
+  });
+
+  it("direction toggle flips direction_reversed from true to false", () => {
+    const onChange = vi.fn();
+    renderForm({
+      inspection: baseInspection({ method: "FLY_OVER" }),
+      configOverride: { direction_reversed: true },
+      onChange,
+    });
+    fireEvent.click(screen.getByTestId("inspection-direction-reversed-toggle"));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ direction_reversed: false }),
+    );
+  });
 });

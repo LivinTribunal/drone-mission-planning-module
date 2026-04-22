@@ -699,6 +699,11 @@ export default function MissionConfigPage() {
                   handleToggleLha(selectedInspectionId, lhaId);
                 }}
                 disabled={!canModify}
+                directionBearing={
+                  flightPlan?.inspection_stats.find(
+                    (s) => s.inspection_id === selectedInspectionId,
+                  )?.direction_bearing ?? null
+                }
               />
             </div>
           )}

@@ -23,6 +23,7 @@ export interface InspectionConfigResponse {
   lha_setting_angle_override_id: string | null;
   hover_bearing: number | null;
   hover_bearing_reference: "RUNWAY" | "COMPASS" | null;
+  direction_reversed: boolean;
   white_balance: string | null;
   iso: number | null;
   shutter_speed: string | null;

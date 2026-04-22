@@ -169,6 +169,7 @@ export default function InspectionEditPage() {
             lha_setting_angle_override_id: cfg.lha_setting_angle_override_id,
             hover_bearing: cfg.hover_bearing,
             hover_bearing_reference: cfg.hover_bearing_reference,
+            direction_reversed: cfg.direction_reversed,
             white_balance: cfg.white_balance,
             iso: cfg.iso,
             shutter_speed: cfg.shutter_speed,
@@ -197,6 +198,7 @@ export default function InspectionEditPage() {
             lha_setting_angle_override_id: null,
             hover_bearing: null,
             hover_bearing_reference: null,
+            direction_reversed: false,
             white_balance: null,
             iso: null,
             shutter_speed: null,
@@ -286,25 +288,26 @@ export default function InspectionEditPage() {
     }, AUTOSAVE_DELAY);
   }
 
-  function handleConfigChange(field: string, value: number | string | null) {
+  function handleConfigChange(field: string, value: number | string | boolean | null) {
     /**handle a config field change and schedule autosave.*/
     setEditConfig((prev) => {
       if (!prev) return prev;
       if (field === "custom_tolerances") {
-        if (value === null) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { default: _, ...rest } = prev.custom_tolerances ?? {};
+        if (typeof value === "number" || typeof value === "string") {
           return {
             ...prev,
-            custom_tolerances: Object.keys(rest).length > 0 ? rest : null,
+            custom_tolerances: {
+              ...(prev.custom_tolerances ?? {}),
+              default: typeof value === "number" ? value : parseFloat(value),
+            },
           };
         }
+        // null or boolean clears the default
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { default: _, ...rest } = prev.custom_tolerances ?? {};
         return {
           ...prev,
-          custom_tolerances: {
-            ...(prev.custom_tolerances ?? {}),
-            default: typeof value === "number" ? value : parseFloat(value),
-          },
+          custom_tolerances: Object.keys(rest).length > 0 ? rest : null,
         };
       }
       return { ...prev, [field]: value };

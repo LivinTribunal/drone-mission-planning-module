@@ -39,9 +39,10 @@ def calculate_arc_path(
 
     waypoints = []
     for i in range(density):
-        # interpolate angle from -sweep to +sweep in density steps
+        # interpolate angle from -sweep to +sweep, flipping sign when reversed
         if density > 1:
-            sweep_offset = -half_sweep + (2 * half_sweep / (density - 1)) * i
+            natural = -half_sweep + (2 * half_sweep / (density - 1)) * i
+            sweep_offset = -natural if config.direction_reversed else natural
         else:
             # single measurement on approach centerline
             sweep_offset = 0.0

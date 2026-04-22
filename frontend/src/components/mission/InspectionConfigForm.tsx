@@ -35,6 +35,9 @@ interface InspectionConfigFormProps {
   selectedLhaIds: Set<string>;
   onToggleLha: (lhaId: string) => void;
   disabled?: boolean;
+  // computed traversal bearing (0-359) from the latest trajectory, or null when
+  // trajectory is missing / method has no meaningful direction.
+  directionBearing?: number | null;
 }
 
 export default function InspectionConfigForm({
@@ -48,6 +51,7 @@ export default function InspectionConfigForm({
   selectedLhaIds,
   onToggleLha,
   disabled = false,
+  directionBearing = null,
 }: InspectionConfigFormProps) {
   const { t } = useTranslation();
 
@@ -65,6 +69,18 @@ export default function InspectionConfigForm({
     if (typeof saved === "number") return saved;
     const def = defaultCfg?.[field as keyof typeof defaultCfg];
     return typeof def === "number" ? def : "";
+  }
+
+  function resolveBoolean(field: keyof InspectionConfigOverride): boolean {
+    /** resolve a boolean config field: dirty override > saved > template default > false. */
+    if (field in configOverride) {
+      const v = configOverride[field];
+      if (typeof v === "boolean") return v;
+    }
+    const saved = savedCfg?.[field as keyof typeof savedCfg];
+    if (typeof saved === "boolean") return saved;
+    const def = defaultCfg?.[field as keyof typeof defaultCfg];
+    return typeof def === "boolean" ? def : false;
   }
 
   const altitudeOffset = resolveNumber("altitude_offset");
@@ -863,6 +879,60 @@ export default function InspectionConfigForm({
           data-testid="inspection-buffer-distance"
         />
       </div>
+      )}
+
+      {/* direction flip - horizontal-range, fly-over, parallel-side-sweep */}
+      {(inspection.method === "HORIZONTAL_RANGE" ||
+        inspection.method === "FLY_OVER" ||
+        inspection.method === "PARALLEL_SIDE_SWEEP") && (
+        <div
+          className="rounded-2xl border border-tv-border bg-tv-bg/50 p-3"
+          data-testid="direction-reversed-section"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <label className="block text-xs font-medium text-tv-text-primary">
+              {t("mission.config.direction.label")}
+            </label>
+            <div className="flex items-center gap-2">
+              <svg className="h-6 w-6 flex-shrink-0" viewBox="0 0 24 24">
+                <line
+                  x1="12" y1="20" x2="12" y2="4"
+                  stroke="var(--tv-accent)" strokeWidth="2" strokeLinecap="round"
+                  transform={`rotate(${directionBearing ?? 0}, 12, 12)`}
+                />
+                <polygon
+                  points="12,2 9,8 15,8"
+                  fill="var(--tv-accent)"
+                  transform={`rotate(${directionBearing ?? 0}, 12, 12)`}
+                />
+              </svg>
+              <span
+                className="text-xs font-medium text-tv-text-primary tabular-nums"
+                data-testid="inspection-direction-bearing"
+              >
+                {directionBearing === null
+                  ? t("mission.config.direction.unknown")
+                  : `${directionBearing}°`}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const current = resolveBoolean("direction_reversed");
+                  onChange({ ...configOverride, direction_reversed: !current });
+                }}
+                disabled={disabled}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors flex-shrink-0 disabled:opacity-50"
+                title={t("mission.config.direction.flipTitle")}
+                data-testid="inspection-direction-reversed-toggle"
+              >
+                <RotateCcw className="h-3 w-3" />
+                {resolveBoolean("direction_reversed")
+                  ? t("mission.config.direction.reversed")
+                  : t("mission.config.direction.flip")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* camera settings - falls back to mission defaults */}

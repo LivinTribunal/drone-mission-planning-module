@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import UUID as PyUUID
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Table
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -53,6 +53,7 @@ CONFIG_FIELDS: tuple[str, ...] = (
     "lha_setting_angle_override_id",
     "hover_bearing",
     "hover_bearing_reference",
+    "direction_reversed",
 )
 
 
@@ -101,6 +102,7 @@ class InspectionConfiguration(Base):
     )
     hover_bearing = Column(Float, nullable=True)
     hover_bearing_reference = Column(String(10), nullable=True)
+    direction_reversed = Column(Boolean, nullable=False, default=False)
 
     # camera preset reference
     camera_preset_id = Column(

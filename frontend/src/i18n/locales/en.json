@@ -645,6 +645,14 @@
       "angleLockOn": "On",
       "angleLockOff": "Off",
       "angleLockHint": "On: editing any field recomputes the third so the camera always points at the LHA. Off: all three are independent.",
+      "direction": {
+        "label": "Direction",
+        "natural": "Natural",
+        "reversed": "Reversed",
+        "flip": "Opposite",
+        "flipTitle": "Flip traversal direction",
+        "unknown": "—"
+      },
       "hoverBearing": "Approach bearing (°)",
       "hoverBearingRef": {
         "RUNWAY": "Relative to RWY",
