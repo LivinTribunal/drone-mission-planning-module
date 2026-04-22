@@ -4,7 +4,7 @@ import math
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
 from app.schemas.geometry import parse_ewkb
-from app.utils.geo import elevation_angle, point_at_distance
+from app.utils.geo import EARTH_RADIUS_M, elevation_angle, point_at_distance
 
 from .types import (
     DEFAULT_GLIDE_SLOPE,
@@ -36,15 +36,12 @@ def sort_positions_along_heading(positions: list[Point3D], heading: Degrees) -> 
     # centroid as origin for relative positions
     center_lat = sum(p.lat for p in positions) / len(positions)
     center_lon = sum(p.lon for p in positions) / len(positions)
-
-    # approximate meters per degree at this latitude
-    meters_per_deg_lat = 111320.0
-    meters_per_deg_lon = 111320.0 * math.cos(math.radians(center_lat))
+    cos_center_lat = math.cos(math.radians(center_lat))
 
     def projection(p: Point3D) -> float:
         """scalar projection onto heading vector."""
-        delta_north = (p.lat - center_lat) * meters_per_deg_lat
-        delta_east = (p.lon - center_lon) * meters_per_deg_lon
+        delta_north = math.radians(p.lat - center_lat) * EARTH_RADIUS_M
+        delta_east = math.radians(p.lon - center_lon) * EARTH_RADIUS_M * cos_center_lat
         return delta_east * east_component + delta_north * north_component
 
     return sorted(positions, key=projection)
