@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { useAirport } from "@/contexts/AirportContext";
-import type { MapFeature, MapLayerConfig } from "@/types/map";
+import type { LocateRequest, MapFeature, MapLayerConfig } from "@/types/map";
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import AirportMap from "@/components/map/AirportMap";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
@@ -28,6 +28,7 @@ export default function AirportPage() {
   } = useAirport();
 
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
+  const [locateRequest, setLocateRequest] = useState<LocateRequest | null>(null);
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(DEFAULT_LAYER_CONFIG);
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
   const [is3D, setIs3D] = useState(false);
@@ -42,6 +43,12 @@ export default function AirportPage() {
   const handleFeatureClick = useCallback((feature: MapFeature | null) => {
     /** set selected feature when clicked on map or list panel. */
     setSelectedFeature(feature);
+  }, []);
+
+  const handleFeatureLocate = useCallback((feature: MapFeature) => {
+    /** double-click intent: select and request a map recenter. */
+    setSelectedFeature(feature);
+    setLocateRequest((prev) => ({ feature, key: (prev?.key ?? 0) + 1 }));
   }, []);
 
   const handleLayerChange = useCallback((layers: MapLayerConfig) => {
@@ -105,6 +112,7 @@ export default function AirportPage() {
         onFeatureClick={handleFeatureClick}
         onLayerChange={handleLayerChange}
         focusFeature={selectedFeature}
+        locateRequest={locateRequest}
         is3D={is3D}
         onToggle3D={setIs3D}
         leftPanelChildren={
@@ -112,22 +120,26 @@ export default function AirportPage() {
             <GroundSurfacesPanel
               surfaces={surfaces}
               layerConfig={layerConfig}
-              onItemClick={handleFeatureClick}
+              onSelect={handleFeatureClick}
+              onLocate={handleFeatureLocate}
             />
             <ObstaclesPanel
               obstacles={obstacles}
               layerConfig={layerConfig}
-              onItemClick={handleFeatureClick}
+              onSelect={handleFeatureClick}
+              onLocate={handleFeatureLocate}
             />
             <SafetyZonesPanel
               safetyZones={safetyZones}
               layerConfig={layerConfig}
-              onItemClick={handleFeatureClick}
+              onSelect={handleFeatureClick}
+              onLocate={handleFeatureLocate}
             />
             <AGLPanel
               surfaces={surfaces}
               layerConfig={layerConfig}
-              onItemClick={handleFeatureClick}
+              onSelect={handleFeatureClick}
+              onLocate={handleFeatureLocate}
             />
             {selectedFeature && (
               <PoiInfoPanel

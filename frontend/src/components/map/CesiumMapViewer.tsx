@@ -11,7 +11,6 @@ import {
   ScreenSpaceEventHandler,
   defined,
   Cartesian2,
-  HeadingPitchRange,
   Math as CesiumMath,
   Viewer as CesiumViewerType,
   Entity as CesiumEntity,
@@ -20,7 +19,8 @@ import "cesium/Build/Cesium/Widgets/widgets.css";
 import type { AirportDetailResponse } from "@/types/airport";
 import type { WaypointResponse } from "@/types/flightPlan";
 import type { PointZ } from "@/types/common";
-import type { MapLayerConfig, MapFeature, MapFeatureType } from "@/types/map";
+import type { LocateRequest, MapLayerConfig, MapFeature, MapFeatureType } from "@/types/map";
+import { flyCesiumToFeature } from "@/hooks/useFocusFeature";
 import CesiumInfrastructure from "./cesium/CesiumInfrastructure";
 import CesiumTrajectory from "./cesium/CesiumTrajectory";
 
@@ -45,6 +45,7 @@ interface CesiumMapViewerProps {
   onBearingChange?: (bearing: number) => void;
   onViewerReady?: (viewer: CesiumViewerType) => void;
   focusFeature?: MapFeature | null;
+  locateRequest?: LocateRequest | null;
   highlightedWaypointIds?: string[] | null;
 }
 
@@ -156,6 +157,7 @@ export default function CesiumMapViewer({
   onBearingChange,
   onViewerReady,
   focusFeature,
+  locateRequest,
   highlightedWaypointIds,
 }: CesiumMapViewerProps) {
   const viewerRef = useRef<CesiumViewerType | null>(null);
@@ -163,8 +165,6 @@ export default function CesiumMapViewer({
   const [initialized, setInitialized] = useState(false);
   // selected feature id for declarative highlight overlay
   const [selectedFeatureKey, setSelectedFeatureKey] = useState<string | null>(null);
-  // skip flyTo when focusFeature change came from a map click (not a list panel)
-  const skipCesiumFlyRef = useRef(false);
 
   // offset between cesium terrain (ellipsoidal height) and airport MSL elevation.
   // polylines need this because they don't support heightReference.
@@ -218,8 +218,10 @@ export default function CesiumMapViewer({
 
   // initialize viewer once when ref is first set
   useEffect(() => {
-    const viewer = viewerRef.current;
-    if (!initialized || !viewer || viewer.isDestroyed()) return;
+    const viewerMaybe = viewerRef.current;
+    if (!initialized || !viewerMaybe || viewerMaybe.isDestroyed()) return;
+    // rebind as non-nullable - tsc loses the null guard across nested closures below
+    const viewer: CesiumViewerType = viewerMaybe;
 
     // enable depth test against terrain
     viewer.scene.globe.depthTestAgainstTerrain = true;
@@ -250,68 +252,62 @@ export default function CesiumMapViewer({
       },
     });
 
-    // click handler
+    // shared pick + select body for single + double click
+    function pickAndSelect(event: { position: Cartesian2 }): MapFeature | null {
+      // drillPick penetrates terrain so waypoints rendered via
+      // disableDepthTestDistance are clickable even when underground
+      const picks = viewer.scene.drillPick(event.position, 5);
+      const picked = picks.find((p: { id?: unknown }) => defined(p.id) && (p.id as CesiumEntity).properties);
+      if (!picked || !picked.id) {
+        clearSelection();
+        onWaypointClickRef.current?.(null);
+        onFeatureClickRef.current?.(null);
+        return null;
+      }
+      const entity = picked.id as CesiumEntity;
+      const props = entity.properties;
+      if (!props) {
+        selectEntity(entity);
+        return null;
+      }
+      const rawType = props.featureType?.getValue();
+      const rawId = props.featureId?.getValue();
+      const featureId = typeof rawId === "string" ? rawId : undefined;
+      const featureType = isMapFeatureType(rawType) ? rawType : undefined;
+      let feature: MapFeature | null = null;
+      if (featureType && featureId) {
+        feature = lookupFeature(
+          airportRef.current,
+          featureType,
+          featureId,
+          waypointsRef.current,
+          takeoffCoordRef.current,
+          landingCoordRef.current,
+        );
+        if (featureType === "waypoint") {
+          onWaypointClickRef.current?.(featureId);
+        }
+        if (feature) onFeatureClickRef.current?.(feature);
+      }
+      selectEntity(entity);
+      return feature;
+    }
+
     handlerRef.current = new ScreenSpaceEventHandler(viewer.scene.canvas);
+    // single-click: select only, never fly
     handlerRef.current.setInputAction(
       (event: { position: Cartesian2 }) => {
-        // drillPick penetrates terrain so waypoints rendered via
-        // disableDepthTestDistance are clickable even when underground
-        const picks = viewer.scene.drillPick(event.position, 5);
-        const picked = picks.find((p: { id?: unknown }) => defined(p.id) && (p.id as CesiumEntity).properties);
-        if (picked && picked.id) {
-          const entity = picked.id as CesiumEntity;
-
-          const props = entity.properties;
-          if (props) {
-            const rawType = props.featureType?.getValue();
-            const rawId = props.featureId?.getValue();
-            const featureId = typeof rawId === "string" ? rawId : undefined;
-            const featureType = isMapFeatureType(rawType) ? rawType : undefined;
-            // skip flyTo for map clicks - only double-click or list panel should fly
-            skipCesiumFlyRef.current = true;
-            if (featureType === "waypoint" && featureId) {
-              onWaypointClickRef.current?.(featureId);
-              // also build feature info for the info panel
-              const feature = lookupFeature(
-                airportRef.current,
-                featureType,
-                featureId,
-                waypointsRef.current,
-                takeoffCoordRef.current,
-                landingCoordRef.current,
-              );
-              if (feature) onFeatureClickRef.current?.(feature);
-            } else if (onFeatureClickRef.current && featureType && featureId) {
-              const feature = lookupFeature(
-                airportRef.current,
-                featureType,
-                featureId,
-                waypointsRef.current,
-                takeoffCoordRef.current,
-                landingCoordRef.current,
-              );
-              if (feature) onFeatureClickRef.current(feature);
-            }
-          }
-
-          selectEntity(entity);
-        } else {
-          clearSelection();
-          onWaypointClickRef.current?.(null);
-          onFeatureClickRef.current?.(null);
-        }
+        pickAndSelect(event);
       },
       ScreenSpaceEventType.LEFT_CLICK,
     );
 
-    // double-click: fly to the picked entity
+    // double-click: select AND fly to the picked entity
     handlerRef.current.setInputAction(
       (event: { position: Cartesian2 }) => {
-        const picks = viewer.scene.drillPick(event.position, 5);
-        const picked = picks.find((p: { id?: unknown }) => defined(p.id) && (p.id as CesiumEntity).properties);
-        if (picked && picked.id) {
-          const entity = picked.id as CesiumEntity;
-          viewer.flyTo(entity, { duration: 1.0 });
+        const feature = pickAndSelect(event);
+        if (feature) {
+          void flyCesiumToFeature(viewer, feature);
         }
       },
       ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
@@ -421,73 +417,28 @@ export default function CesiumMapViewer({
     };
   }, [terrainMode]);
 
-  // fly to focused feature when selected from a list panel (not from map click)
+  // highlight the focused feature. fly is a separate intent via locateRequest.
   useEffect(() => {
     const viewer = viewerRef.current;
-    if (!initialized || !viewer || viewer.isDestroyed() || !focusFeature) return;
-
-    // skip flyTo when the focus change came from a map single-click
-    if (skipCesiumFlyRef.current) {
-      skipCesiumFlyRef.current = false;
-      // still update highlight
-      const targetType = focusFeature.type;
-      const targetId = focusFeature.data.id;
-      setSelectedFeatureKey(`${targetType}:${targetId}`);
+    if (!initialized || !viewer || viewer.isDestroyed()) return;
+    if (!focusFeature) {
+      setSelectedFeatureKey(null);
       return;
     }
-
-    // find the matching cesium entity by featureType + featureId
-    const targetType = focusFeature.type;
-    const targetId = focusFeature.data.id;
-    const match = viewer.entities.values.find((entity) => {
-      const props = entity.properties;
-      if (!props) return false;
-      return (
-        props.featureType?.getValue() === targetType &&
-        props.featureId?.getValue() === targetId
-      );
-    });
-
-    // range offset varies by feature type
-    let range = 300;
-    if (targetType === "obstacle") range = 150;
-    else if (targetType === "agl" || targetType === "lha") range = 100;
-    else if (targetType === "surface") range = 500;
-    else if (targetType === "waypoint") range = 300;
-
-    if (match) {
-      setSelectedFeatureKey(`${targetType}:${targetId}`);
-      viewer.flyTo(match, {
-        duration: 1.5,
-        offset: new HeadingPitchRange(
-          CesiumMath.toRadians(0),
-          CesiumMath.toRadians(-45),
-          range,
-        ),
-      });
-    } else {
-      // fallback: fly to coordinates from feature data
-      let lon: number | undefined;
-      let lat: number | undefined;
-      let alt = 0;
-      const data = focusFeature.data as Record<string, unknown>;
-      const pos = data.position as { coordinates?: number[] } | undefined;
-      if (pos?.coordinates) {
-        [lon, lat, alt] = pos.coordinates;
-      }
-      if (lon != null && lat != null) {
-        viewer.camera.flyTo({
-          destination: Cartesian3.fromDegrees(lon, lat, (alt ?? 0) + range),
-          orientation: {
-            heading: CesiumMath.toRadians(0),
-            pitch: CesiumMath.toRadians(-45),
-            roll: 0,
-          },
-          duration: 1.5,
-        });
-      }
-    }
+    setSelectedFeatureKey(`${focusFeature.type}:${focusFeature.data.id}`);
   }, [focusFeature, initialized]);
+
+  // explicit locate intent: fly when key bumps.
+  const lastLocateKeyRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!initialized || !viewer || viewer.isDestroyed() || !locateRequest) return;
+    if (lastLocateKeyRef.current === locateRequest.key) return;
+    lastLocateKeyRef.current = locateRequest.key;
+    setSelectedFeatureKey(`${locateRequest.feature.type}:${locateRequest.feature.data.id}`);
+    void flyCesiumToFeature(viewer, locateRequest.feature);
+  }, [locateRequest, initialized]);
 
   return (
     <Viewer

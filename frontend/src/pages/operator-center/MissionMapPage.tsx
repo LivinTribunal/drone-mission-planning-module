@@ -29,7 +29,7 @@ import type {
   WaypointPositionUpdate,
 } from "@/types/flightPlan";
 import type { PointZ } from "@/types/common";
-import type { MapFeature, MapLayerConfig } from "@/types/map";
+import type { LocateRequest, MapFeature, MapLayerConfig } from "@/types/map";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
 import AirportMap from "@/components/map/AirportMap";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
@@ -89,6 +89,7 @@ export default function MissionMapPage() {
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
+  const [locateRequest, setLocateRequest] = useState<LocateRequest | null>(null);
   const [hiddenInspectionIds, setHiddenInspectionIds] = useState<Set<string>>(new Set());
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
@@ -447,6 +448,11 @@ export default function MissionMapPage() {
     }
   }, []);
 
+  // locate handler - bump the intent so the map recenters, even if called twice for the same item
+  const requestLocate = useCallback((feature: MapFeature) => {
+    setLocateRequest((prev) => ({ feature, key: (prev?.key ?? 0) + 1 }));
+  }, []);
+
   // handle waypoint click - select waypoint and show as feature info
   const handleWaypointClick = useCallback(
     (wpId: string | null) => {
@@ -507,6 +513,58 @@ export default function MissionMapPage() {
       }
     },
     [effectiveWaypoints, mission],
+  );
+
+  // double-click on a waypoint row in the side panel: select + recenter the map.
+  const handleWaypointLocate = useCallback(
+    (wpId: string) => {
+      handleWaypointClick(wpId);
+      // read the just-selected feature from the handler's logic - rebuild it locally
+      // to pass into requestLocate. keep minimal duplication by reusing lookup.
+      if (wpId === "takeoff" && mission?.takeoff_coordinate) {
+        const [lon, lat, alt] = mission.takeoff_coordinate.coordinates;
+        requestLocate({
+          type: "waypoint",
+          data: {
+            id: "takeoff",
+            waypoint_type: "TAKEOFF",
+            sequence_order: 0,
+            position: { type: "Point", coordinates: [lon, lat, alt] },
+            stack_count: 1,
+          },
+        });
+        return;
+      }
+      if (wpId === "landing" && mission?.landing_coordinate) {
+        const [lon, lat, alt] = mission.landing_coordinate.coordinates;
+        requestLocate({
+          type: "waypoint",
+          data: {
+            id: "landing",
+            waypoint_type: "LANDING",
+            sequence_order: 0,
+            position: { type: "Point", coordinates: [lon, lat, alt] },
+            stack_count: 1,
+          },
+        });
+        return;
+      }
+      const wp = effectiveWaypoints.find((w) => w.id === wpId);
+      if (wp) {
+        const [lon, lat, alt] = wp.position.coordinates;
+        requestLocate({
+          type: "waypoint",
+          data: {
+            id: wp.id,
+            waypoint_type: wp.waypoint_type,
+            sequence_order: wp.sequence_order,
+            position: { type: "Point", coordinates: [lon, lat, alt] },
+            stack_count: 1,
+          },
+        });
+      }
+    },
+    [handleWaypointClick, requestLocate, effectiveWaypoints, mission],
   );
 
   // handle inspection toggle visibility
@@ -840,6 +898,7 @@ export default function MissionMapPage() {
             visibleInspectionIds={visibleInspectionIds}
             onFeatureClick={handleFeatureClick}
             focusFeature={selectedFeature}
+            locateRequest={locateRequest}
             onLayerChange={handleLayerChange}
             activeTool={activeTool}
             onPlaceTakeoff={handlePlaceTakeoff}
@@ -905,6 +964,7 @@ export default function MissionMapPage() {
                     waypoints={filteredWaypoints}
                     selectedId={selectedWaypointId}
                     onSelect={handleWaypointClick}
+                    onLocate={handleWaypointLocate}
                     takeoffCoordinate={selectedInspectionId ? null : mission.takeoff_coordinate}
                     landingCoordinate={selectedInspectionId ? null : mission.landing_coordinate}
                     visibleInspectionIds={visibleInspectionIds}

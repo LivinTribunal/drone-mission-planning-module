@@ -7,7 +7,10 @@ import type { PointZ } from "@/types/common";
 interface WaypointListPanelProps {
   waypoints: WaypointResponse[];
   selectedId: string | null;
+  // single-click: select only, no map recenter
   onSelect: (id: string | null) => void;
+  // double-click: select AND recenter the map on the item
+  onLocate?: (id: string) => void;
   takeoffCoordinate?: PointZ | null;
   landingCoordinate?: PointZ | null;
   visibleInspectionIds?: Set<string>;
@@ -90,6 +93,7 @@ export default function WaypointListPanel({
   waypoints,
   selectedId,
   onSelect,
+  onLocate,
   takeoffCoordinate,
   landingCoordinate,
   visibleInspectionIds,
@@ -151,6 +155,7 @@ export default function WaypointListPanel({
       <button
         key={wp.id}
         onClick={() => onSelect(selectedId === wp.id ? null : wp.id)}
+        onDoubleClick={() => onLocate?.(wp.id)}
         className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
           selectedId === wp.id
             ? "bg-tv-accent/20 text-tv-accent"
@@ -203,6 +208,7 @@ export default function WaypointListPanel({
           {waypoints.length === 0 && hasTakeoff && (
             <button
               onClick={() => onSelect(selectedId === "takeoff" ? null : "takeoff")}
+              onDoubleClick={() => onLocate?.("takeoff")}
               className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
                 selectedId === "takeoff"
                   ? "bg-tv-accent/20 text-tv-accent"
@@ -217,6 +223,7 @@ export default function WaypointListPanel({
           {waypoints.length === 0 && hasLanding && (
             <button
               onClick={() => onSelect(selectedId === "landing" ? null : "landing")}
+              onDoubleClick={() => onLocate?.("landing")}
               className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
                 selectedId === "landing"
                   ? "bg-tv-accent/20 text-tv-accent"

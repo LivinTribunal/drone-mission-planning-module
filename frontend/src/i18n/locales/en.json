@@ -409,11 +409,12 @@
       "rightClick": "Right-click",
       "middleMouse": "Middle mouse",
       "scroll": "Scroll",
-      "descSelect": "Click features to inspect. Drag on empty space to pan.",
+      "descSelect": "Click to select. Double-click to recenter the map on the object.",
       "descPan": "Click+drag to move the map. Cannot select features.",
       "descMove": "Drag waypoints to new positions. In DRAFT, only takeoff/landing.",
       "descMeasure": "Click to place points. Distance updates live. Right-click to clear. Max 25 points.",
-      "descZoom": "Left click zoom in, right click zoom out."
+      "descZoom": "Left click zoom in, right click zoom out.",
+      "clickSelectDblLocate": "Click to select. Double-click to recenter the map on the object."
     }
   },
   "mission": {
@@ -890,7 +891,8 @@
         "shortcutShiftDrag": "Move entire polygon",
         "shortcutRightClickVertex": "Delete vertex",
         "shortcutEscape": "Cancel / deselect",
-        "shortcutDelete": "Delete selected feature"
+        "shortcutDelete": "Delete selected feature",
+        "clickSelectDblLocate": "Click to select. Double-click to recenter the map on the object."
       }
     },
     "airportEditor": "Airport Editor",

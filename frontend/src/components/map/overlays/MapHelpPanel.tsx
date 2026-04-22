@@ -133,6 +133,13 @@ export default function MapHelpPanel({ variant = "full" }: MapHelpPanelProps) {
           ))}
         </div>
       </div>
+
+      {/* click interaction hint */}
+      <div className="mt-2 pt-2 border-t border-tv-border">
+        <p className="text-xs text-tv-text-secondary" data-testid="click-locate-hint">
+          {t("map.help.clickSelectDblLocate")}
+        </p>
+      </div>
     </div>
   );
 }

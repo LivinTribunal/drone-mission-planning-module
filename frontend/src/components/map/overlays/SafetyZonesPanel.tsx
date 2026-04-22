@@ -7,7 +7,10 @@ import type { MapFeature, MapLayerConfig } from "@/types/map";
 interface SafetyZonesPanelProps {
   safetyZones: SafetyZoneResponse[];
   layerConfig: MapLayerConfig;
-  onItemClick: (feature: MapFeature) => void;
+  // single-click: select only, no recenter
+  onSelect: (feature: MapFeature) => void;
+  // double-click: select AND recenter
+  onLocate?: (feature: MapFeature) => void;
 }
 
 const ZONE_COLORS: Record<string, string> = {
@@ -20,7 +23,8 @@ const ZONE_COLORS: Record<string, string> = {
 export default function SafetyZonesPanel({
   safetyZones,
   layerConfig,
-  onItemClick,
+  onSelect,
+  onLocate,
 }: SafetyZonesPanelProps) {
   /** collapsible list of safety zones with color-coded indicators. */
   const { t } = useTranslation();
@@ -31,10 +35,16 @@ export default function SafetyZonesPanel({
   const count = regularZones.length;
   const grayed = !layerConfig.safetyZones;
 
-  function handleClick(zone: SafetyZoneResponse) {
-    /** trigger feature selection for a safety zone. */
+  function handleSelect(zone: SafetyZoneResponse) {
+    /** single-click: select zone without recentering. */
     if (grayed) return;
-    onItemClick({ type: "safety_zone", data: zone });
+    onSelect({ type: "safety_zone", data: zone });
+  }
+
+  function handleLocate(zone: SafetyZoneResponse) {
+    /** double-click: select zone and recenter. */
+    if (grayed) return;
+    onLocate?.({ type: "safety_zone", data: zone });
   }
 
   return (
@@ -63,7 +73,8 @@ export default function SafetyZonesPanel({
         <div className="border-t border-tv-border max-h-60 overflow-y-auto">
           {boundaryZone ? (
             <button
-              onClick={() => handleClick(boundaryZone)}
+              onClick={() => handleSelect(boundaryZone)}
+              onDoubleClick={() => handleLocate(boundaryZone)}
               className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors border-b border-tv-border ${
                 grayed ? "opacity-50 pointer-events-none" : "hover:bg-tv-surface-hover cursor-pointer"
               }`}
@@ -102,7 +113,8 @@ export default function SafetyZonesPanel({
             regularZones.map((zone, idx) => (
               <button
                 key={zone.id}
-                onClick={() => handleClick(zone)}
+                onClick={() => handleSelect(zone)}
+                onDoubleClick={() => handleLocate(zone)}
                 className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${
                   grayed
                     ? "opacity-50 pointer-events-none"

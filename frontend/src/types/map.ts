@@ -90,6 +90,14 @@ export type MapFeature =
   | MapFeatureLHA
   | MapFeatureWaypoint;
 
+// request to recenter the map/camera on a feature. the key is a monotonic
+// counter bumped by the producer so the same feature can be re-located back
+// to back (set state equality would otherwise swallow the event).
+export interface LocateRequest {
+  feature: MapFeature;
+  key: number;
+}
+
 export interface AirportMapProps {
   airport: AirportDetailResponse;
   layers?: Partial<MapLayerConfig>;
@@ -143,6 +151,7 @@ export interface AirportMapProps {
   zoomPercent?: number;
   onZoomChange?: (percent: number) => void;
   focusFeature?: MapFeature | null;
+  locateRequest?: LocateRequest | null;
   showZoomControls?: boolean;
   showCompass?: boolean;
   is3D?: boolean;

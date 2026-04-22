@@ -9,7 +9,10 @@ import type { MapFeature } from "@/types/map";
 
 interface CoordinatorAGLPanelProps {
   surfaces: SurfaceResponse[];
-  onItemClick: (feature: MapFeature) => void;
+  // single-click: select the feature, no recenter
+  onSelect: (feature: MapFeature) => void;
+  // double-click: select AND recenter
+  onLocate?: (feature: MapFeature) => void;
   onDeleteAgl: (id: string) => Promise<void>;
   onDeleteLha?: (id: string) => Promise<void>;
   onAdd?: () => void;
@@ -17,7 +20,8 @@ interface CoordinatorAGLPanelProps {
 
 export default function CoordinatorAGLPanel({
   surfaces,
-  onItemClick,
+  onSelect,
+  onLocate,
   onDeleteAgl,
   onDeleteLha,
   onAdd,
@@ -50,15 +54,26 @@ export default function CoordinatorAGLPanel({
     });
   }
 
-  function handleAglClick(agl: AGLResponse) {
-    /** trigger feature selection for an agl system. */
-    onItemClick({ type: "agl", data: agl });
+  function handleAglSelect(agl: AGLResponse) {
+    /** single-click: select agl without recentering. */
+    onSelect({ type: "agl", data: agl });
   }
 
-  function handleLhaClick(lha: LHAResponse, e: React.MouseEvent) {
-    /** trigger feature selection for an lha unit. */
+  function handleAglLocate(agl: AGLResponse) {
+    /** double-click: select + recenter. */
+    onLocate?.({ type: "agl", data: agl });
+  }
+
+  function handleLhaSelect(lha: LHAResponse, e: React.MouseEvent) {
+    /** single-click: select lha without recentering. */
     e.stopPropagation();
-    onItemClick({ type: "lha", data: lha });
+    onSelect({ type: "lha", data: lha });
+  }
+
+  function handleLhaLocate(lha: LHAResponse, e: React.MouseEvent) {
+    /** double-click: select + recenter. */
+    e.stopPropagation();
+    onLocate?.({ type: "lha", data: lha });
   }
 
   return (
@@ -119,9 +134,10 @@ export default function CoordinatorAGLPanel({
                   >
                     <div
                       onClick={() => {
-                        handleAglClick(agl);
+                        handleAglSelect(agl);
                         toggleExpand(agl.id);
                       }}
+                      onDoubleClick={() => handleAglLocate(agl)}
                       className={`flex w-full items-center gap-2 px-3 py-2 cursor-pointer hover:bg-tv-surface-hover transition-colors ${
                         idx === count - 1 && !expanded ? "rounded-b-2xl" : ""
                       }`}
@@ -179,7 +195,8 @@ export default function CoordinatorAGLPanel({
                         {agl.lhas.map((lha, lhaIdx) => (
                           <button
                             key={lha.id}
-                            onClick={(e) => handleLhaClick(lha, e)}
+                            onClick={(e) => handleLhaSelect(lha, e)}
+                            onDoubleClick={(e) => handleLhaLocate(lha, e)}
                             className={`flex w-full items-center gap-2 pl-8 pr-3 py-2 text-left transition-colors hover:bg-tv-surface-hover cursor-pointer ${
                               lhaIdx < agl.lhas.length - 1 ? "border-b border-tv-border" : ""
                             } ${lhaIdx === agl.lhas.length - 1 && idx === count - 1 ? "rounded-b-2xl" : ""}`}
