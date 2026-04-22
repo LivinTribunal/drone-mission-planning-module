@@ -47,6 +47,7 @@ export interface InspectionFlightStats {
   max_altitude_msl: number;
   waypoint_count: number;
   segment_duration: number | null;
+  direction_bearing: number | null;
 }
 
 export interface FlightPlanResponse {

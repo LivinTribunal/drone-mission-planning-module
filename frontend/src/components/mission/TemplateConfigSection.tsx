@@ -9,7 +9,7 @@ import { formatAglDisplayName } from "@/utils/agl";
 interface TemplateConfigSectionProps {
   config: Omit<InspectionConfigResponse, "id"> | null;
   method: string;
-  onChange: (field: string, value: number | string | null) => void;
+  onChange: (field: string, value: number | string | boolean | null) => void;
   onMethodChange: (method: InspectionMethod) => void;
   allAgls: AGLResponse[];
   selectedAglId: string;
@@ -272,17 +272,28 @@ export default function TemplateConfigSection({
         step="0.5"
       />
 
-      {(method === "FLY_OVER" || method === "PARALLEL_SIDE_SWEEP") && (
-        <Input
-          label={t("mission.config.directionHeading")}
-          type="number"
-          value={config?.direction_heading ?? ""}
-          onChange={(e) => handleNumber("direction_heading", e.target.value)}
-          step="1"
-          min={0}
-          max={359}
-          placeholder={t("mission.config.directionHeadingHint")}
-        />
+      {(method === "HORIZONTAL_RANGE" ||
+        method === "FLY_OVER" ||
+        method === "PARALLEL_SIDE_SWEEP") && (
+        <div className="flex items-center justify-between gap-3 py-1">
+          <label className="block text-xs font-medium text-tv-text-secondary">
+            {t("mission.config.direction.label")}
+          </label>
+          <button
+            type="button"
+            onClick={() => onChange("direction_reversed", !(config?.direction_reversed ?? false))}
+            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs border transition-colors ${
+              config?.direction_reversed
+                ? "border-tv-accent bg-tv-accent/10 text-tv-accent"
+                : "border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover"
+            }`}
+            data-testid="template-direction-reversed-toggle"
+          >
+            {config?.direction_reversed
+              ? t("mission.config.direction.reversed")
+              : t("mission.config.direction.natural")}
+          </button>
+        </div>
       )}
     </div>
   );
