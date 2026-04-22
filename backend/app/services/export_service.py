@@ -52,12 +52,15 @@ class _UUIDEncoder(json.JSONEncoder):
 # safety zone types that represent active keep-outs for flight planning.
 # airport_boundary is informational (marks the airport footprint) and must not
 # be shipped as an exclusion polygon, otherwise the drone can't even take off.
+# enum members (which inherit from str) are kept so the membership check works
+# whether the ORM returns raw strings or enum instances - avoids silent filter-out
+# if the column is later migrated to sa.Enum(SafetyZoneType).
 _BLOCKING_SAFETY_ZONE_TYPES = frozenset(
     {
-        SafetyZoneType.RESTRICTED.value,
-        SafetyZoneType.PROHIBITED.value,
-        SafetyZoneType.TEMPORARY_NO_FLY.value,
-        SafetyZoneType.CTR.value,
+        SafetyZoneType.RESTRICTED,
+        SafetyZoneType.PROHIBITED,
+        SafetyZoneType.TEMPORARY_NO_FLY,
+        SafetyZoneType.CTR,
     }
 )
 

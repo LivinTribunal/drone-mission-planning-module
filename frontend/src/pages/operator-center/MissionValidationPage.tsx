@@ -13,6 +13,7 @@ import {
   cancelMission,
   deleteMission,
 } from "@/api/missions";
+import type { ExportOptions } from "@/api/missions";
 import useDownloadMissionReport from "@/hooks/useDownloadMissionReport";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { FlightPlanResponse } from "@/types/flightPlan";
@@ -186,10 +187,7 @@ export default function MissionValidationPage() {
     }
   }
 
-  async function handleExport(
-    formats: string[],
-    options?: { includeGeozones?: boolean; includeRunwayBuffers?: boolean },
-  ) {
+  async function handleExport(formats: string[], options?: ExportOptions) {
     if (!id || !mission) return;
     setIsExporting(true);
     try {

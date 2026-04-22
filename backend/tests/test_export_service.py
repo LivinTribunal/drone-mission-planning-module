@@ -8,6 +8,8 @@ from io import BytesIO
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+import pytest
+
 from app.services import export_service
 
 # WKB constants for building mock geometry
@@ -1813,8 +1815,9 @@ class TestExportMissionGeozoneGate:
         mission.takeoff_coordinate = None
         return mission
 
-    def test_unsupported_format_with_flag_raises_400(self):
-        """flag + unsupported format (e.g. WPML/GPX) => DomainError 400."""
+    @pytest.mark.parametrize("incapable_format", ["WPML", "GPX", "LITCHI", "CSV", "DRONEDEPLOY"])
+    def test_unsupported_format_with_flag_raises_400(self, incapable_format):
+        """flag + every incapable format => DomainError 400 (guards GEOZONE_CAPABLE_FORMATS)."""
         from app.core.exceptions import DomainError
 
         mission = self._mission()
@@ -1824,10 +1827,8 @@ class TestExportMissionGeozoneGate:
         drone.supports_geozone_upload = True
         db = _build_export_db_mock(mission, fp, airport, drone)
 
-        import pytest
-
         with pytest.raises(DomainError) as exc_info:
-            export_service.export_mission(db, uuid4(), ["WPML"], include_geozones=True)
+            export_service.export_mission(db, uuid4(), [incapable_format], include_geozones=True)
         assert exc_info.value.status_code == 400
         # gate fires before status transition
         mission.transition_to.assert_not_called()

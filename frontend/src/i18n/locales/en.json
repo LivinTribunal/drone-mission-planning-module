@@ -805,7 +805,7 @@
       },
       "geozones": {
         "label": "Include geozones in export",
-        "runwayBuffersLabel": "Also include runway/taxiway buffers as inclusion zones (MAVLINK only)",
+        "runwayBuffersLabel": "Also include runway/taxiway buffers as inclusion zones (MAVLINK, UGCS, JSON)",
         "enforcedNote": "Selected MAVLINK/JSON/UGCS exports will enforce these keep-outs in flight.",
         "advisoryNote": "KMZ/KML carries zones as a visual overlay. DJI Pilot 2 shows them but does not enforce them in flight.",
         "tooltipNoFormatSelected": "Select at least one export format first.",

@@ -43,7 +43,8 @@ def upgrade() -> None:
         ),
     )
 
-    # seed known mavlink-fence-capable manufacturers to true
+    # seed known mavlink-fence-capable manufacturers to true. substring match
+    # (wrapped in %) so "ArduPilot Custom", "PX4 Autopilot", etc. all get flagged.
     bind = op.get_bind()
     for pattern in _MAVLINK_MANUFACTURER_PATTERNS:
         bind.execute(
@@ -51,7 +52,7 @@ def upgrade() -> None:
                 "UPDATE drone_profile SET supports_geozone_upload = true "
                 "WHERE manufacturer ILIKE :pattern"
             ),
-            {"pattern": pattern},
+            {"pattern": f"%{pattern}%"},
         )
 
 
