@@ -529,6 +529,11 @@ export default function AirportEditPage() {
     setPendingLhaParentAglId(null);
   }, [setActiveTool, pendingGeometry, pendingPointPosition]);
 
+  // 3d disables vertex editing, so drop move back to select
+  useEffect(() => {
+    if (is3D && activeTool === "move") setActiveTool("select");
+  }, [is3D, activeTool, setActiveTool]);
+
   const [boundaryEntityOverride, setBoundaryEntityOverride] = useState<EntityType | null>(null);
 
   const handleCreationCancel = useCallback(() => {

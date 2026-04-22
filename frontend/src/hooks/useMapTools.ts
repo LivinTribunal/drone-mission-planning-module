@@ -24,7 +24,6 @@ interface MapToolsReturn {
 // editing tools that are disabled in 3d mode
 const EDITING_TOOLS = new Set([
   MapTool.MOVE_WAYPOINT,
-  MapTool.MOVE_FEATURE,
   MapTool.MEASURE,
   MapTool.HEADING,
   MapTool.PLACE_TAKEOFF,
@@ -76,9 +75,6 @@ export default function useMapTools(): MapToolsReturn {
           break;
         case "w":
           trySet(MapTool.MOVE_WAYPOINT);
-          break;
-        case "v":
-          trySet(MapTool.MOVE_FEATURE);
           break;
         case "m":
           trySet(MapTool.MEASURE);
