@@ -31,6 +31,8 @@ function makeMission(
     transit_agl: null,
     require_perpendicular_runway_crossing: false,
     flight_plan_scope: "FULL",
+    boundary_constraint_mode: "NONE",
+    boundary_preference: "DONT_CARE",
     has_unsaved_map_changes: false,
     computation_status: "IDLE",
     computation_error: null,

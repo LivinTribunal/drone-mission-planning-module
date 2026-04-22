@@ -466,3 +466,54 @@ def test_obstacle_ground_level_inside_violation():
     )
     # waypoint at alt=0 inside ground-level obstacle
     assert check_obstacle(5.0, 5.0, 0.0, obs) is True
+
+
+# boundary-mode aware validate_inspection_pass
+
+
+def _local_geoms_with_boundary(name: str = "fence"):
+    """build LocalGeometries containing a single airport-boundary polygon."""
+    from shapely.geometry import box as shp_box
+
+    from app.services.trajectory.types import LocalBoundary, LocalGeometries
+    from app.utils.local_projection import LocalProjection
+
+    proj = LocalProjection(ref_lon=0.0, ref_lat=0.0)
+    poly = shp_box(-500, -500, 500, 500)
+    return LocalGeometries(
+        proj=proj,
+        obstacles=[],
+        zones=[],
+        boundary_zones=[LocalBoundary(polygon=poly, name=name)],
+        surfaces=[],
+    )
+
+
+def test_validate_inspection_pass_suppresses_boundary_when_mode_none():
+    """mode NONE -> no outside-boundary warnings emitted."""
+    from app.services.trajectory.safety_validator import validate_inspection_pass
+
+    # waypoint well outside the boundary polygon
+    wp = WaypointData(lon=10.0, lat=10.0, alt=300.0)
+    local_geoms = _local_geoms_with_boundary()
+
+    violations = validate_inspection_pass(
+        [wp], None, [], local_geoms, boundary_constraint_mode="NONE"
+    )
+    assert not any(v.violation_kind == "geofence" for v in violations)
+
+
+def test_validate_inspection_pass_info_level_when_mode_inside():
+    """mode INSIDE -> warnings keep is_warning but add info marker to message."""
+    from app.services.trajectory.safety_validator import validate_inspection_pass
+
+    wp = WaypointData(lon=10.0, lat=10.0, alt=300.0)
+    local_geoms = _local_geoms_with_boundary()
+
+    violations = validate_inspection_pass(
+        [wp], None, [], local_geoms, boundary_constraint_mode="INSIDE"
+    )
+    geofence = [v for v in violations if v.violation_kind == "geofence"]
+    assert len(geofence) == 1
+    assert geofence[0].is_warning
+    assert "info" in geofence[0].message.lower()

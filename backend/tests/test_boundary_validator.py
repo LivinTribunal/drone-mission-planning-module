@@ -61,36 +61,59 @@ def test_waypoint_inside_boundary_no_violation():
     wp = WaypointData(lon=14.26, lat=50.10, alt=100.0)
     local_geoms = _build_boundary_local_geoms()
 
-    result = _batch_check_boundary_zones([wp], local_geoms)
+    result = _batch_check_boundary_zones([wp], local_geoms, boundary_constraint_mode="INSIDE")
 
     assert result == []
 
 
 def test_waypoint_outside_boundary_soft_violation():
-    """waypoint outside the boundary polygon is a soft geofence warning (pending A* rerouting)."""
+    """INSIDE mode info-downgrades the outside-boundary warning."""
     wp = WaypointData(lon=14.30, lat=50.20, alt=100.0)
     local_geoms = _build_boundary_local_geoms(name="prague fence")
 
-    result = _batch_check_boundary_zones([wp], local_geoms)
+    result = _batch_check_boundary_zones([wp], local_geoms, boundary_constraint_mode="INSIDE")
 
     assert len(result) == 1
     violation = result[0]
     assert violation.is_warning
     assert violation.violation_kind == "geofence"
     assert "prague fence" in violation.message
+    assert "info" in violation.message
     assert violation.waypoint_index == 0
 
 
 def test_mixed_waypoints_only_outside_flagged():
-    """only the waypoint outside the boundary is flagged."""
+    """only the waypoint outside the boundary is flagged (INSIDE mode)."""
     inside = WaypointData(lon=14.26, lat=50.10, alt=100.0)
     outside = WaypointData(lon=14.50, lat=50.50, alt=100.0)
     local_geoms = _build_boundary_local_geoms()
 
-    result = _batch_check_boundary_zones([inside, outside], local_geoms)
+    result = _batch_check_boundary_zones(
+        [inside, outside], local_geoms, boundary_constraint_mode="INSIDE"
+    )
 
     indices = {v.waypoint_index for v in result}
     assert indices == {1}
+
+
+def test_none_mode_suppresses_boundary_warning():
+    """NONE mode intentionally suppresses outside-boundary warnings."""
+    wp = WaypointData(lon=14.30, lat=50.20, alt=100.0)
+    local_geoms = _build_boundary_local_geoms()
+
+    result = _batch_check_boundary_zones([wp], local_geoms, boundary_constraint_mode="NONE")
+
+    assert result == []
+
+
+def test_outside_mode_suppresses_boundary_warning():
+    """OUTSIDE mode expects waypoints outside the boundary and suppresses the warning."""
+    wp = WaypointData(lon=14.30, lat=50.20, alt=100.0)
+    local_geoms = _build_boundary_local_geoms()
+
+    result = _batch_check_boundary_zones([wp], local_geoms, boundary_constraint_mode="OUTSIDE")
+
+    assert result == []
 
 
 def test_check_safety_zone_inverted_for_boundary(db_session, boundary_wkb):
@@ -119,7 +142,7 @@ def test_boundary_ignores_altitude_band():
     outside = WaypointData(lon=14.30, lat=50.20, alt=5.0)
     local_geoms = _build_boundary_local_geoms()
 
-    result = _batch_check_boundary_zones([outside], local_geoms)
+    result = _batch_check_boundary_zones([outside], local_geoms, boundary_constraint_mode="INSIDE")
 
     assert len(result) == 1
     assert result[0].violation_kind == "geofence"

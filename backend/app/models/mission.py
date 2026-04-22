@@ -46,6 +46,8 @@ TRAJECTORY_FIELDS = {
     "transit_agl",
     "require_perpendicular_runway_crossing",
     "flight_plan_scope",
+    "boundary_constraint_mode",
+    "boundary_preference",
 }
 
 # minimum allowable cruise altitude (AGL meters) - kept in sync with
@@ -120,6 +122,14 @@ class Mission(Base):
         Boolean, nullable=False, default=True, server_default="true"
     )
     flight_plan_scope = Column(String(25), nullable=False, default="FULL", server_default="FULL")
+
+    # airport-boundary mission-level knobs
+    boundary_constraint_mode = Column(
+        String(10), nullable=False, default="NONE", server_default="NONE"
+    )
+    boundary_preference = Column(
+        String(20), nullable=False, default="DONT_CARE", server_default="DONT_CARE"
+    )
     has_unsaved_map_changes = Column(Boolean, nullable=False, default=False, server_default="false")
 
     # trajectory computation lifecycle
@@ -144,6 +154,14 @@ class Mission(Base):
         CheckConstraint(
             "computation_status IN ('IDLE', 'COMPUTING', 'COMPLETED', 'FAILED')",
             name="ck_mission_computation_status",
+        ),
+        CheckConstraint(
+            "boundary_constraint_mode IN ('INSIDE', 'OUTSIDE', 'NONE')",
+            name="ck_mission_boundary_constraint_mode",
+        ),
+        CheckConstraint(
+            "boundary_preference IN ('PREFER_INSIDE', 'PREFER_OUTSIDE', 'DONT_CARE')",
+            name="ck_mission_boundary_preference",
         ),
     )
 

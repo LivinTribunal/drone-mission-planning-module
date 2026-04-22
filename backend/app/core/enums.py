@@ -122,6 +122,22 @@ class FlightPlanScope(str, enum.Enum):
     MEASUREMENTS_ONLY = "MEASUREMENTS_ONLY"
 
 
+class BoundaryConstraintMode(str, enum.Enum):
+    """hard airport-boundary constraint for pathfinding."""
+
+    INSIDE = "INSIDE"
+    OUTSIDE = "OUTSIDE"
+    NONE = "NONE"
+
+
+class BoundaryPreference(str, enum.Enum):
+    """soft airport-boundary preference for pathfinding edge costs."""
+
+    PREFER_INSIDE = "PREFER_INSIDE"
+    PREFER_OUTSIDE = "PREFER_OUTSIDE"
+    DONT_CARE = "DONT_CARE"
+
+
 class AuditAction(str, enum.Enum):
     """action types for audit log entries."""
 

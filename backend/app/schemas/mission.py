@@ -13,6 +13,10 @@ ComputationStatusStr = Literal["IDLE", "COMPUTING", "COMPLETED", "FAILED"]
 # flight plan scope values - mirrors FlightPlanScope enum
 FlightPlanScopeStr = Literal["FULL", "NO_TAKEOFF_LANDING", "MEASUREMENTS_ONLY"]
 
+# airport-boundary mission-level knobs
+BoundaryConstraintModeStr = Literal["INSIDE", "OUTSIDE", "NONE"]
+BoundaryPreferenceStr = Literal["PREFER_INSIDE", "PREFER_OUTSIDE", "DONT_CARE"]
+
 # inspection method values - mirrors InspectionMethod enum
 InspectionMethodStr = Literal[
     "VERTICAL_PROFILE",
@@ -189,6 +193,8 @@ class MissionCreate(BaseModel):
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool = True
     flight_plan_scope: FlightPlanScopeStr = "FULL"
+    boundary_constraint_mode: BoundaryConstraintModeStr = "NONE"
+    boundary_preference: BoundaryPreferenceStr = "DONT_CARE"
 
     @field_validator("transit_agl")
     @classmethod
@@ -219,6 +225,8 @@ class MissionUpdate(BaseModel):
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool | None = None
     flight_plan_scope: FlightPlanScopeStr | None = None
+    boundary_constraint_mode: BoundaryConstraintModeStr | None = None
+    boundary_preference: BoundaryPreferenceStr | None = None
 
     @field_validator("transit_agl")
     @classmethod
@@ -254,6 +262,8 @@ class MissionResponse(BaseModel):
     transit_agl: float | None = None
     require_perpendicular_runway_crossing: bool = True
     flight_plan_scope: FlightPlanScopeStr = "FULL"
+    boundary_constraint_mode: BoundaryConstraintModeStr = "NONE"
+    boundary_preference: BoundaryPreferenceStr = "DONT_CARE"
     has_unsaved_map_changes: bool = False
     computation_status: ComputationStatusStr = "IDLE"
     computation_error: str | None = None

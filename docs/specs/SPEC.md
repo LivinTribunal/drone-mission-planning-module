@@ -138,6 +138,14 @@ Compute transit paths between segments (straight-line for MVP). Add TAKEOFF from
 
 **Camera heading:** MEASUREMENT waypoints point at LHA center. TRANSIT/TAKEOFF/LANDING point in direction of travel.
 
+### Airport Boundary Modes
+Missions carry two mission-level knobs that steer A* pathfinding relative to the `AIRPORT_BOUNDARY` safety zone:
+
+- `boundary_constraint_mode` — `INSIDE` | `OUTSIDE` | `NONE` (default `NONE`). Hard rule. `INSIDE` drops visibility-graph nodes and edges that leave the boundary polygon; `OUTSIDE` drops those that intersect it. `NONE` ignores the boundary in A*. The service layer rejects non-`NONE` modes when the airport has no boundary zone (HTTP 422). A *no feasible path* outcome under a hard constraint surfaces as a structured `TrajectoryGenerationError` instead of a generic failure.
+- `boundary_preference` — `PREFER_INSIDE` | `PREFER_OUTSIDE` | `DONT_CARE` (default `DONT_CARE`). Soft bias applied as an edge-cost multiplier (`BOUNDARY_PREFERENCE_PENALTY`, currently 1.5×) when an edge midpoint violates the preferred side. Allows boundary-crossing when it is the only feasible route.
+
+**Interaction:** when `boundary_constraint_mode != NONE`, the soft preference is ignored (the hard rule subsumes it); the UI disables the preference selector in that case. The post-generation safety validator downgrades the "outside airport boundary" soft warning to info-level when the hard mode is `INSIDE`, and suppresses it entirely when `NONE` or `OUTSIDE` is active (both treat off-boundary waypoints as intentional). Changing either mission field invalidates the computed trajectory and regresses the mission to `DRAFT`.
+
 ---
 
 ## UI Pages — Wireframe Summary

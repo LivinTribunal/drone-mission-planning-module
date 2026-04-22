@@ -721,6 +721,11 @@ export default function MissionConfigPage() {
               disabled={!canModify}
               useTakeoffAsLanding={useTakeoffAsLanding}
               onUseTakeoffAsLandingChange={setUseTakeoffAsLanding}
+              hasAirportBoundary={
+                (airportDetail?.safety_zones ?? []).some(
+                  (z) => z.type === "AIRPORT_BOUNDARY" && z.is_active,
+                )
+              }
             />
           </div>
 

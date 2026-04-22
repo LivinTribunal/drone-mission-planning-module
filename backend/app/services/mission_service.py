@@ -3,12 +3,26 @@ from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
-from app.models.airport import Airport
-from app.models.enums import MissionStatus
+from app.models.airport import Airport, SafetyZone
+from app.models.enums import MissionStatus, SafetyZoneType
 from app.models.inspection import Inspection, InspectionConfiguration
 from app.models.mission import TRAJECTORY_FIELDS, TRANSITIONS, DroneProfile, Mission
 from app.schemas.mission import MissionCreate, MissionUpdate
 from app.services.geometry_converter import apply_schema_update, schema_to_model_data
+
+
+def _airport_has_boundary(db: Session, airport_id: UUID) -> bool:
+    """check whether the airport has an AIRPORT_BOUNDARY safety zone."""
+    return (
+        db.query(SafetyZone.id)
+        .filter(
+            SafetyZone.airport_id == airport_id,
+            SafetyZone.type == SafetyZoneType.AIRPORT_BOUNDARY.value,
+            SafetyZone.is_active == True,  # noqa: E712
+        )
+        .first()
+        is not None
+    )
 
 
 def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mission:
@@ -105,6 +119,14 @@ def create_mission(db: Session, schema: MissionCreate) -> Mission:
 
     data = schema_to_model_data(schema)
 
+    # reject boundary hard mode when the airport has no boundary zone
+    if data.get("boundary_constraint_mode", "NONE") != "NONE":
+        if not _airport_has_boundary(db, schema.airport_id):
+            raise DomainError(
+                "boundary constraint requires an airport boundary zone to be defined",
+                status_code=422,
+            )
+
     # auto-fill from airport default when no drone specified
     if not data.get("drone_profile_id") and airport.default_drone_profile_id:
         data["drone_profile_id"] = airport.default_drone_profile_id
@@ -140,6 +162,14 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
         raise NotFoundError("mission not found")
 
     data = schema.model_dump(exclude_unset=True)
+
+    # reject boundary hard mode when the airport has no boundary zone
+    if "boundary_constraint_mode" in data and data["boundary_constraint_mode"] != "NONE":
+        if not _airport_has_boundary(db, mission.airport_id):
+            raise DomainError(
+                "boundary constraint requires an airport boundary zone to be defined",
+                status_code=422,
+            )
 
     # trajectory-affecting fields changed - regress to DRAFT
     trajectory_changed = any(k in TRAJECTORY_FIELDS for k in data.keys())
@@ -218,6 +248,8 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
         default_buffer_distance=original.default_buffer_distance,
         transit_agl=original.transit_agl,
         flight_plan_scope=original.flight_plan_scope,
+        boundary_constraint_mode=original.boundary_constraint_mode,
+        boundary_preference=original.boundary_preference,
     )
     db.add(copy)
     db.flush()

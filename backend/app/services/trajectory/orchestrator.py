@@ -335,6 +335,10 @@ def _generate_trajectory_inner(
     # reducing the runway closure window. defaults True for legacy behavior.
     require_perpendicular = data.mission.require_perpendicular_runway_crossing
 
+    # mission-level airport-boundary knobs
+    boundary_constraint_mode = data.mission.boundary_constraint_mode or "NONE"
+    boundary_preference = data.mission.boundary_preference or "DONT_CARE"
+
     # set up local projection centered on airport for Shapely-based pathfinding
     airport_coords = _parse_coordinate(data.airport.location.data, "airport")
     proj = LocalProjection(ref_lon=airport_coords[0], ref_lat=airport_coords[1])
@@ -614,6 +618,7 @@ def _generate_trajectory_inner(
             local_geoms,
             elevation_provider=data.elevation_provider,
             buffer_distance=config.buffer_distance,
+            boundary_constraint_mode=boundary_constraint_mode,
         )
 
         obstacle_violations = [
@@ -627,6 +632,8 @@ def _generate_trajectory_inner(
                 center,
                 buffer_distance_override=config.buffer_distance,
                 require_perpendicular_runway_crossing=require_perpendicular,
+                boundary_constraint_mode=boundary_constraint_mode,
+                boundary_preference=boundary_preference,
             )
 
             # re-validate after rerouting
@@ -637,6 +644,7 @@ def _generate_trajectory_inner(
                 local_geoms,
                 elevation_provider=data.elevation_provider,
                 buffer_distance=config.buffer_distance,
+                boundary_constraint_mode=boundary_constraint_mode,
             )
 
         hard = [v for v in violations if not v.is_warning]
@@ -772,6 +780,8 @@ def _generate_trajectory_inner(
                 transit_agl=transit_agl,
                 buffer_distance_override=mission_buffer_override,
                 require_perpendicular_runway_crossing=require_perpendicular,
+                boundary_constraint_mode=boundary_constraint_mode,
+                boundary_preference=boundary_preference,
             )
             all_waypoints.extend(transit_wps)
 
@@ -797,6 +807,8 @@ def _generate_trajectory_inner(
             transit_agl=transit_agl,
             buffer_distance_override=mission_buffer_override,
             require_perpendicular_runway_crossing=require_perpendicular,
+            boundary_constraint_mode=boundary_constraint_mode,
+            boundary_preference=boundary_preference,
         )
         all_waypoints.extend(landing_transit)
 
@@ -856,6 +868,8 @@ def _generate_trajectory_inner(
                     transit_agl=transit_agl,
                     buffer_distance_override=mission_buffer_override,
                     require_perpendicular_runway_crossing=require_perpendicular,
+                    boundary_constraint_mode=boundary_constraint_mode,
+                    boundary_preference=boundary_preference,
                 )
                 all_waypoints.extend(transit_wps)
 
@@ -883,6 +897,8 @@ def _generate_trajectory_inner(
                 transit_agl=transit_agl,
                 buffer_distance_override=mission_buffer_override,
                 require_perpendicular_runway_crossing=require_perpendicular,
+                boundary_constraint_mode=boundary_constraint_mode,
+                boundary_preference=boundary_preference,
             )
             all_waypoints.extend(landing_transit)
 
@@ -1014,6 +1030,7 @@ def _generate_trajectory_inner(
         local_geoms,
         elevation_provider=provider,
         buffer_distance=final_buffer,
+        boundary_constraint_mode=boundary_constraint_mode,
     )
     final_hard = [v for v in final_violations if not v.is_warning]
     if final_hard:

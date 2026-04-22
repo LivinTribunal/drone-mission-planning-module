@@ -440,6 +440,62 @@ describe("MissionConfigForm", () => {
     const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1][0];
     expect(lastCall.takeoff_coordinate).toEqual(lastCall.landing_coordinate);
   });
+
+  it("renders boundary behavior section by default", () => {
+    /** both radio groups render when airport has a boundary. */
+    renderForm({ hasAirportBoundary: true });
+    expect(screen.getByTestId("boundary-behavior-section")).toBeInTheDocument();
+    expect(screen.getByTestId("boundary-constraint-mode")).toBeInTheDocument();
+    expect(screen.getByTestId("boundary-preference")).toBeInTheDocument();
+  });
+
+  it("disables both groups and shows hint when airport has no boundary", () => {
+    /** no-boundary airports disable the whole boundary section. */
+    renderForm({ hasAirportBoundary: false });
+    expect(screen.getByTestId("boundary-no-zone-hint")).toBeInTheDocument();
+    expect(
+      (screen.getByTestId("boundary-constraint-none") as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId("boundary-preference-dont_care") as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("preference group is disabled when constraint is not NONE", () => {
+    /** hard constraint subsumes preference - preference radios are disabled. */
+    renderForm({
+      values: { boundary_constraint_mode: "INSIDE" },
+      hasAirportBoundary: true,
+    });
+    expect(
+      (screen.getByTestId("boundary-preference-prefer_inside") as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      screen.getByTestId("boundary-preference-disabled-hint"),
+    ).toBeInTheDocument();
+  });
+
+  it("preference group is enabled when constraint is NONE", () => {
+    /** preference radios active when no hard constraint. */
+    renderForm({ hasAirportBoundary: true });
+    expect(
+      (screen.getByTestId("boundary-preference-prefer_inside") as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it("calls onChange when boundary constraint mode changes", () => {
+    /** clicking a constraint mode emits onChange with that mode. */
+    const { onChange } = renderForm({ hasAirportBoundary: true });
+    fireEvent.click(screen.getByTestId("boundary-constraint-inside"));
+    expect(onChange).toHaveBeenCalledWith({ boundary_constraint_mode: "INSIDE" });
+  });
+
+  it("calls onChange when boundary preference changes", () => {
+    /** clicking a preference emits onChange with that value. */
+    const { onChange } = renderForm({ hasAirportBoundary: true });
+    fireEvent.click(screen.getByTestId("boundary-preference-prefer_outside"));
+    expect(onChange).toHaveBeenCalledWith({ boundary_preference: "PREFER_OUTSIDE" });
+  });
 });
 
 /* ------------------------------------------------------------------ */

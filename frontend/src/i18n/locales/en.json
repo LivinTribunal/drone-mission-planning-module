@@ -491,6 +491,23 @@
       "transitAglHint": "Minimum 5 m - leave empty for safe default",
       "requirePerpendicularCrossing": "Force perpendicular runway crossing",
       "requirePerpendicularCrossingHint": "Off = shortest geodesic crossing, minimises runway closure window",
+      "boundary": {
+        "title": "Airport boundary behavior",
+        "noBoundaryZone": "This airport has no boundary zone - boundary options are unavailable.",
+        "constraintLabel": "Constraint",
+        "preferenceLabel": "Preference",
+        "preferenceSubsumedHint": "Preference is ignored while a hard constraint is active.",
+        "constraint": {
+          "none": "None",
+          "inside": "Inside",
+          "outside": "Outside"
+        },
+        "preference": {
+          "dont_care": "Don't care",
+          "prefer_inside": "Prefer inside",
+          "prefer_outside": "Prefer outside"
+        }
+      },
       "takeoffCoordinate": "Takeoff Coordinate",
       "landingCoordinate": "Landing Coordinate",
       "operatorNotes": "Operator Notes",
