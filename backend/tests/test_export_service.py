@@ -764,8 +764,7 @@ def _build_export_db_mock(mission, fp, airport, drone_profile=None):
             mock_chain.options.return_value.filter.return_value.first.return_value = fp
         elif model.__name__ == "Airport":
             mock_chain.filter.return_value.first.return_value = airport
-            # eager-loaded path: query(Airport).options(...).filter().first()
-            mock_chain.options.return_value.filter.return_value.first.return_value = airport
+            # eager-loaded path: query(Airport).filter().options(...).first()
             mock_chain.filter.return_value.options.return_value.first.return_value = airport
         elif model.__name__ == "DroneProfile":
             mock_chain.filter.return_value.first.return_value = drone_profile
@@ -1845,8 +1844,6 @@ class TestExportMissionGeozoneGate:
         drone.supports_geozone_upload = False
         db = _build_export_db_mock(mission, fp, airport, drone)
 
-        import pytest
-
         with pytest.raises(DomainError) as exc_info:
             export_service.export_mission(db, uuid4(), ["JSON"], include_geozones=True)
         assert exc_info.value.status_code == 400
@@ -1864,8 +1861,6 @@ class TestExportMissionGeozoneGate:
         fp = _make_flight_plan(1)
         airport = _make_airport_with_geozones()
         db = _build_export_db_mock(mission, fp, airport, None)
-
-        import pytest
 
         with pytest.raises(DomainError) as exc_info:
             export_service.export_mission(db, uuid4(), ["JSON"], include_geozones=True)
@@ -1901,8 +1896,6 @@ class TestExportMissionGeozoneGate:
         drone.supports_geozone_upload = True
         db = _build_export_db_mock(mission, fp, airport, drone)
 
-        import pytest
-
         with pytest.raises(DomainError) as exc_info:
             export_service.export_mission(db, uuid4(), ["JSON"], include_runway_buffers=True)
         assert exc_info.value.status_code == 400
@@ -1927,6 +1920,38 @@ class TestExportMissionGeozoneGate:
         data = json.loads(content)
         assert data["fileType"] == "Plan"
         assert len(data["geoFence"]["polygons"]) >= 1
+
+    def test_mavlink_firmware_type_px4_default(self):
+        """px4-manufactured drone produces firmwareType=12 (MAV_AUTOPILOT_PX4)."""
+        mission = self._mission()
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        drone = MagicMock()
+        drone.supports_geozone_upload = True
+        drone.manufacturer = "PX4 Autopilot"
+        db = _build_export_db_mock(mission, fp, airport, drone)
+
+        files, _ = export_service.export_mission(db, uuid4(), ["MAVLINK"], include_geozones=True)
+
+        content, _ = next(iter(files.values()))
+        data = json.loads(content)
+        assert data["mission"]["firmwareType"] == 12
+
+    def test_mavlink_firmware_type_ardupilot(self):
+        """ardupilot-manufactured drone produces firmwareType=3 (MAV_AUTOPILOT_ARDUPILOTMEGA)."""
+        mission = self._mission()
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        drone = MagicMock()
+        drone.supports_geozone_upload = True
+        drone.manufacturer = "ArduPilot"
+        db = _build_export_db_mock(mission, fp, airport, drone)
+
+        files, _ = export_service.export_mission(db, uuid4(), ["MAVLINK"], include_geozones=True)
+
+        content, _ = next(iter(files.values()))
+        data = json.loads(content)
+        assert data["mission"]["firmwareType"] == 3
 
     def test_legacy_export_without_flag_unchanged(self):
         """no flag => no geozone handling, no extra queries, legacy output."""

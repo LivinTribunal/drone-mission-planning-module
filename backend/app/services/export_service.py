@@ -616,6 +616,34 @@ _MAV_CMD_VIDEO_STOP_CAPTURE = 2501
 # MAV_FRAME_GLOBAL_RELATIVE_ALT
 _MAV_FRAME = 3
 
+# MAV_AUTOPILOT enum values used by QGC in .plan files; controls which
+# command parameter dialect QGC / Mission Planner renders for each item.
+# ArduPilot and PX4 differ on several per-item params (hover time encoding,
+# camera trigger semantics), so picking the wrong value silently corrupts
+# the mission in the ground station. values per mavlink common.xml.
+_MAV_AUTOPILOT_ARDUPILOTMEGA = 3
+_MAV_AUTOPILOT_PX4 = 12
+
+# manufacturer substrings that run ArduPilot firmware. everything else in
+# the supports_geozone_upload=True set (PX4, Pixhawk, Holybro, CubePilot)
+# defaults to PX4, which matches the prior hardcoded value for that branch.
+_ARDUPILOT_MANUFACTURER_PATTERNS = ("ardupilot",)
+
+
+def _mavlink_firmware_type(drone_profile) -> int:
+    """pick the MAV_AUTOPILOT value for a drone profile's .plan export.
+
+    ArduPilot-branded manufacturers map to ARDUPILOTMEGA; everything else
+    (PX4/Pixhawk/Holybro/CubePilot and unknown) falls back to PX4.
+    """
+    manufacturer = getattr(drone_profile, "manufacturer", None) or ""
+    manufacturer_lc = manufacturer.lower()
+    for pattern in _ARDUPILOT_MANUFACTURER_PATTERNS:
+        if pattern in manufacturer_lc:
+            return _MAV_AUTOPILOT_ARDUPILOTMEGA
+    return _MAV_AUTOPILOT_PX4
+
+
 _WAYPOINT_TYPE_COMMANDS = {
     "TAKEOFF": _MAV_CMD_NAV_TAKEOFF,
     "LANDING": _MAV_CMD_NAV_LAND,
@@ -703,6 +731,7 @@ def _generate_mavlink_plan(
     mission_name: str,
     airport_elevation: float,
     geozone_payload: dict,
+    drone_profile=None,
 ) -> bytes:
     """serialize flight plan to qgc .plan json with embedded geoFence polygons."""
     items = _build_mavlink_mission_items(flight_plan, airport_elevation)
@@ -722,7 +751,7 @@ def _generate_mavlink_plan(
         "groundStation": "TarmacView",
         "mission": {
             "version": 2,
-            "firmwareType": 12,
+            "firmwareType": _mavlink_firmware_type(drone_profile),
             "vehicleType": 2,
             "cruiseSpeed": 5,
             "hoverSpeed": 5,
@@ -750,10 +779,13 @@ def generate_mavlink(
     airport_elevation: float = 0,
     *,
     geozone_payload: dict | None = None,
+    drone_profile=None,
 ) -> bytes:
     """serialize flight plan to mavlink: wpl 110 text, or .plan json when geozones included."""
     if geozone_payload is not None:
-        return _generate_mavlink_plan(flight_plan, mission_name, airport_elevation, geozone_payload)
+        return _generate_mavlink_plan(
+            flight_plan, mission_name, airport_elevation, geozone_payload, drone_profile
+        )
 
     lines = ["QGC WPL 110"]
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
@@ -1644,7 +1676,15 @@ def export_mission(
                 mission=mission,
                 geozone_payload=geozone_payload,
             )
-        elif fmt in ("KML", "UGCS", "MAVLINK"):
+        elif fmt == "MAVLINK":
+            content = generator(
+                flight_plan,
+                mission.name,
+                airport_elevation,
+                geozone_payload=geozone_payload,
+                drone_profile=drone_profile,
+            )
+        elif fmt in ("KML", "UGCS"):
             content = generator(
                 flight_plan,
                 mission.name,
