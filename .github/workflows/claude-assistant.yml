@@ -280,15 +280,20 @@ jobs:
             const prompt = sections.join('\n');
             core.setOutput('prompt', prompt);
 
-      - name: Run implementer (plan mode)
+      - name: Dispatch issue-implementer (plan mode)
         if: steps.instruction.outputs.mode == 'plan'
         id: implementer
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: ${{ steps.impl-prompt.outputs.prompt }}
-          claude_args: '--model claude-opus-4-7 --max-turns 100 --effort xhigh --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
-          allowed_bots: 'github-actions'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr-number }}
+          ASSISTANT_PROMPT: ${{ steps.impl-prompt.outputs.prompt }}
+        run: |
+          # hand the prompt to the full implementer agent - max-turns 500, separate job, full commit/push pipeline.
+          gh workflow run issue-implementer.yml \
+            --repo "${{ github.repository }}" \
+            -f pr_number="$PR_NUMBER" \
+            -f assistant_prompt="$ASSISTANT_PROMPT"
+          echo "dispatched issue-implementer for PR #${PR_NUMBER} (${#ASSISTANT_PROMPT} prompt chars)"
 
       # ======================================================================
       # QUICK MODE — skip planning, execute directly
@@ -344,10 +349,11 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.quick-prompt.outputs.prompt }}
-          claude_args: '--model claude-opus-4-7 --max-turns 100 --effort xhigh --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
+          claude_args: '--model claude-opus-4-7 --max-turns 200 --effort xhigh --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
           allowed_bots: 'github-actions'
 
       - name: Check for changes
+        if: steps.instruction.outputs.mode == 'quick'
         id: changes
         run: |
           CHANGED=$(git diff --name-only 2>/dev/null || echo "")
@@ -362,7 +368,7 @@ jobs:
           fi
 
       - name: Commit and push
-        if: steps.changes.outputs.has-changes == 'true'
+        if: steps.instruction.outputs.mode == 'quick' && steps.changes.outputs.has-changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
@@ -397,13 +403,14 @@ jobs:
             const fileCount = process.env.FILE_COUNT;
             const mode = process.env.MODE;
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            const planDispatched = mode === 'plan';
 
-            // add reaction to original comment
+            // add reaction to original comment - plan mode hands off, so 'eyes' signals work in progress
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               comment_id: parseInt(process.env.ORIGINAL_COMMENT_ID),
-              content: hasChanges ? 'rocket' : 'confused',
+              content: planDispatched ? 'eyes' : (hasChanges ? 'rocket' : 'confused'),
             });
 
             // update plan comment if it exists (plan mode)
@@ -417,9 +424,11 @@ jobs:
               let body = existing.body || '';
               body = body.replace(
                 'Implementing now...',
-                hasChanges
-                  ? `Done — pushed ${fileCount} file(s).`
-                  : 'No changes were needed.',
+                planDispatched
+                  ? 'Dispatched to issue-implementer — see the Actions tab for progress.'
+                  : (hasChanges
+                      ? `Done — pushed ${fileCount} file(s).`
+                      : 'No changes were needed.'),
               );
 
               await github.rest.issues.updateComment({
