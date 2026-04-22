@@ -66,6 +66,7 @@ class InspectionConfigOverride(BaseModel):
     height_above_lha: float | None = Field(default=None, gt=0)
     camera_gimbal_angle: float | None = None
     selected_lha_id: UUID | None = None
+    lha_setting_angle_override_id: UUID | None = None
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
     camera_mode: CameraModeStr | None = None
@@ -123,6 +124,7 @@ class InspectionConfigResponse(BaseModel):
     height_above_lha: float | None = None
     camera_gimbal_angle: float | None = None
     selected_lha_id: UUID | None = None
+    lha_setting_angle_override_id: UUID | None = None
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
     camera_mode: CameraModeStr | None = None

@@ -32,6 +32,7 @@ from .helpers import (
     get_glide_slope_angle,
     get_lha_positions,
     get_lha_positions_from_surfaces,
+    get_lha_setting_angle_by_id,
     get_lha_setting_angles,
     get_ordered_lha_positions,
     get_runway_heading,
@@ -442,7 +443,24 @@ def _generate_trajectory_inner(
                 offset = (
                     config.angle_offset if config.angle_offset is not None else DEFAULT_ANGLE_OFFSET
                 )
-                glide_slope = derive_observation_angle(setting_angles, offset)
+
+                # lha setting angle override - use a specific lha's angle instead of max
+                override_id = config.lha_setting_angle_override_id
+                if override_id is not None:
+                    override_angle = get_lha_setting_angle_by_id(template, override_id)
+                    if override_angle is not None:
+                        glide_slope = override_angle + offset
+                    else:
+                        warnings.append(
+                            (
+                                f"{label}: overridden LHA not found or has no setting angle "
+                                "- falling back to max",
+                                [],
+                            )
+                        )
+                        glide_slope = derive_observation_angle(setting_angles, offset)
+                else:
+                    glide_slope = derive_observation_angle(setting_angles, offset)
             else:
                 warnings.append(
                     (

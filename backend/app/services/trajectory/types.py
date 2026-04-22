@@ -176,6 +176,7 @@ class ResolvedConfig:
     height_above_lha: Meters | None = None
     camera_gimbal_angle: Degrees | None = None
     selected_lha_id: UUID | str | None = None
+    lha_setting_angle_override_id: UUID | str | None = None
     hover_bearing: Degrees | None = None
     hover_bearing_reference: str | None = None
 

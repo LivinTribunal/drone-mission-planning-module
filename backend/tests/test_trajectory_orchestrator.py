@@ -1353,3 +1353,231 @@ def test_mission_measurement_speed_override_fallback(client):
         assert wp["speed"] == pytest.approx(1.0), (
             f"inspection B should use mission fallback 1.0, got {wp['speed']}"
         )
+
+
+# lha setting angle override - orchestrator integration
+
+
+def _setup_horizontal_range_mission(client, icao):
+    """build a HORIZONTAL_RANGE mission with 4 lhas of varying setting angles."""
+    airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": icao},
+    ).json()
+    airport_id = airport["id"]
+
+    surface = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces", json=TRAJECTORY_SURFACE_PAYLOAD
+    ).json()
+    surface_id = surface["id"]
+
+    agl = client.post(
+        f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls",
+        json=TRAJECTORY_AGL_PAYLOAD,
+    ).json()
+    agl_id = agl["id"]
+
+    lha_ids_by_designator: dict[str, str] = {}
+    for i in range(1, 5):
+        resp = client.post(
+            f"/api/v1/airports/{airport_id}/surfaces/{surface_id}/agls/{agl_id}/lhas",
+            json=make_lha_payload(i),
+        ).json()
+        lha_ids_by_designator[resp["unit_designator"]] = resp["id"]
+
+    template = client.post(
+        "/api/v1/inspection-templates",
+        json={
+            "name": f"Override Template {icao}",
+            "methods": ["HORIZONTAL_RANGE"],
+            "target_agl_ids": [agl_id],
+            "default_config": {"measurement_density": 6},
+        },
+    ).json()
+
+    drone = client.post("/api/v1/drone-profiles", json=TRAJECTORY_DRONE_PAYLOAD).json()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": f"Override Test {icao}",
+            "airport_id": airport_id,
+            "drone_profile_id": drone["id"],
+            "default_speed": 5.0,
+            "takeoff_coordinate": DEFAULT_TAKEOFF,
+            "landing_coordinate": DEFAULT_LANDING,
+        },
+    ).json()
+    mission_id = mission["id"]
+
+    return mission_id, template["id"], lha_ids_by_designator
+
+
+def test_orchestrator_lha_setting_angle_override_uses_override_angle(client, db_engine):
+    """orchestrator applies override lha setting angle instead of max."""
+    import math
+
+    from sqlalchemy.orm import Session
+
+    from app.schemas.geometry import parse_ewkb
+    from app.services.trajectory.orchestrator import generate_trajectory
+    from app.services.trajectory.types import MIN_ARC_RADIUS
+
+    mission_id, template_id, lhas = _setup_horizontal_range_mission(client, "LOVR")
+
+    # override to lha D (setting_angle=3.0); max would be 4.5
+    r = client.post(
+        f"/api/v1/missions/{mission_id}/inspections",
+        json={
+            "template_id": template_id,
+            "method": "HORIZONTAL_RANGE",
+            "config": {
+                "lha_setting_angle_override_id": lhas["D"],
+            },
+        },
+    )
+    assert r.status_code == 201, r.text
+    inspection_id = r.json()["id"]
+
+    with Session(db_engine) as db:
+        flight_plan, warnings = generate_trajectory(db, mission_id)
+
+        # 3.0 (override) + 0.5 (default offset) = 3.5 deg
+        expected_alt = 300.0 + MIN_ARC_RADIUS * math.tan(math.radians(3.5))
+        # max-based glide would be 4.5 + 0.5 = 5.0 deg
+        max_alt = 300.0 + MIN_ARC_RADIUS * math.tan(math.radians(5.0))
+
+        measurement_wps = [
+            w
+            for w in flight_plan.waypoints
+            if w.waypoint_type == "MEASUREMENT" and str(w.inspection_id) == inspection_id
+        ]
+        assert measurement_wps, "expected measurement waypoints for horizontal range pass"
+        alts = [parse_ewkb(w.position.data)["coordinates"][2] for w in measurement_wps]
+        for alt in alts:
+            assert alt == pytest.approx(expected_alt, abs=0.05), (
+                f"override path should use angle 3.5, got alt {alt} (expected {expected_alt:.2f})"
+            )
+            assert alt < max_alt - 1.0, (
+                f"override altitude {alt:.2f} should be clearly below max-based {max_alt:.2f}"
+            )
+
+    # no "override not found" warning should be emitted when the override id resolves
+    override_warnings = [msg for msg, _ in warnings if "overridden LHA" in msg]
+    assert override_warnings == []
+
+
+def test_orchestrator_lha_setting_angle_override_falls_back_with_warning(client, db_engine):
+    """invalid override id logs a warning and falls back to max-based glide slope."""
+    import math
+
+    from sqlalchemy.orm import Session
+
+    from app.models.inspection import Inspection
+    from app.schemas.geometry import parse_ewkb
+    from app.services.trajectory.orchestrator import generate_trajectory
+    from app.services.trajectory.types import MIN_ARC_RADIUS
+
+    mission_id, template_id, _lhas = _setup_horizontal_range_mission(client, "LOVB")
+
+    # use a real lha from a different surface so the fk passes but the orchestrator
+    # cannot find it inside this template's targets - exercises the fallback branch.
+    other_airport = client.post(
+        "/api/v1/airports",
+        json={**TRAJECTORY_AIRPORT_PAYLOAD, "icao_code": "LOVX"},
+    ).json()
+    other_surface = client.post(
+        f"/api/v1/airports/{other_airport['id']}/surfaces", json=TRAJECTORY_SURFACE_PAYLOAD
+    ).json()
+    other_agl = client.post(
+        f"/api/v1/airports/{other_airport['id']}/surfaces/{other_surface['id']}/agls",
+        json=TRAJECTORY_AGL_PAYLOAD,
+    ).json()
+    other_lha = client.post(
+        f"/api/v1/airports/{other_airport['id']}/surfaces/{other_surface['id']}"
+        f"/agls/{other_agl['id']}/lhas",
+        json=make_lha_payload(1),
+    ).json()
+
+    r = client.post(
+        f"/api/v1/missions/{mission_id}/inspections",
+        json={
+            "template_id": template_id,
+            "method": "HORIZONTAL_RANGE",
+            "config": {
+                "lha_setting_angle_override_id": other_lha["id"],
+            },
+        },
+    )
+    assert r.status_code == 201, r.text
+    inspection_id = r.json()["id"]
+
+    # sanity: the override id really was persisted
+    with Session(db_engine) as db:
+        insp = db.query(Inspection).filter(Inspection.id == inspection_id).first()
+        assert insp.config is not None
+        assert str(insp.config.lha_setting_angle_override_id) == other_lha["id"]
+
+        flight_plan, warnings = generate_trajectory(db, mission_id)
+
+        # max-based fallback: 4.5 + 0.5 = 5.0 deg
+        expected_alt = 300.0 + MIN_ARC_RADIUS * math.tan(math.radians(5.0))
+
+        measurement_wps = [
+            w
+            for w in flight_plan.waypoints
+            if w.waypoint_type == "MEASUREMENT" and str(w.inspection_id) == inspection_id
+        ]
+        assert measurement_wps, "expected measurement waypoints for fallback path"
+        alts = [parse_ewkb(w.position.data)["coordinates"][2] for w in measurement_wps]
+        for alt in alts:
+            assert alt == pytest.approx(expected_alt, abs=0.05), (
+                f"fallback should use max-based angle 5.0, got alt {alt}"
+            )
+
+    override_warnings = [msg for msg, _ in warnings if "overridden LHA" in msg]
+    assert len(override_warnings) == 1, (
+        f"expected one override-not-found warning, got {override_warnings}"
+    )
+
+
+def test_orchestrator_no_override_uses_max_angle(client, db_engine):
+    """orchestrator default behavior (no override) uses max setting angle."""
+    import math
+
+    from sqlalchemy.orm import Session
+
+    from app.schemas.geometry import parse_ewkb
+    from app.services.trajectory.orchestrator import generate_trajectory
+    from app.services.trajectory.types import MIN_ARC_RADIUS
+
+    mission_id, template_id, _ = _setup_horizontal_range_mission(client, "LOVM")
+
+    r = client.post(
+        f"/api/v1/missions/{mission_id}/inspections",
+        json={
+            "template_id": template_id,
+            "method": "HORIZONTAL_RANGE",
+        },
+    )
+    assert r.status_code == 201, r.text
+    inspection_id = r.json()["id"]
+
+    with Session(db_engine) as db:
+        flight_plan, warnings = generate_trajectory(db, mission_id)
+
+        # max-based: 4.5 + 0.5 = 5.0 deg
+        expected_alt = 300.0 + MIN_ARC_RADIUS * math.tan(math.radians(5.0))
+
+        measurement_wps = [
+            w
+            for w in flight_plan.waypoints
+            if w.waypoint_type == "MEASUREMENT" and str(w.inspection_id) == inspection_id
+        ]
+        assert measurement_wps
+        alts = [parse_ewkb(w.position.data)["coordinates"][2] for w in measurement_wps]
+        for alt in alts:
+            assert alt == pytest.approx(expected_alt, abs=0.05)
+
+    override_warnings = [msg for msg, _ in warnings if "overridden LHA" in msg]
+    assert override_warnings == []

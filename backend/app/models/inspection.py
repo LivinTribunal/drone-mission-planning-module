@@ -50,6 +50,7 @@ CONFIG_FIELDS: tuple[str, ...] = (
     "height_above_lha",
     "camera_gimbal_angle",
     "selected_lha_id",
+    "lha_setting_angle_override_id",
     "hover_bearing",
     "hover_bearing_reference",
 )
@@ -95,6 +96,9 @@ class InspectionConfiguration(Base):
     height_above_lha = Column(Float, nullable=True)
     camera_gimbal_angle = Column(Float, nullable=True)
     selected_lha_id = Column(UUID, ForeignKey("lha.id", ondelete="SET NULL"), nullable=True)
+    lha_setting_angle_override_id = Column(
+        UUID, ForeignKey("lha.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     hover_bearing = Column(Float, nullable=True)
     hover_bearing_reference = Column(String(10), nullable=True)
 

@@ -20,6 +20,7 @@ export interface InspectionConfigResponse {
   height_above_lha: number | null;
   camera_gimbal_angle: number | null;
   selected_lha_id: string | null;
+  lha_setting_angle_override_id: string | null;
   hover_bearing: number | null;
   hover_bearing_reference: "RUNWAY" | "COMPASS" | null;
   white_balance: string | null;
