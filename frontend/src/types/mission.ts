@@ -11,6 +11,8 @@ export interface MissionResponse {
   created_at: string;
   updated_at: string;
   operator_notes: string | null;
+  drone_id?: string | null;
+  /** @deprecated resolved from drone.drone_profile_id; use drone_id as the canonical fleet ref */
   drone_profile_id: string | null;
   date_time: string | null;
   default_speed: number | null;
@@ -121,6 +123,8 @@ export interface MissionCreate {
   name: string;
   airport_id: string;
   operator_notes?: string | null;
+  drone_id?: string | null;
+  /** @deprecated accepted for back-compat - backend auto-materializes a fleet drone */
   drone_profile_id?: string | null;
   date_time?: string | null;
   default_speed?: number | null;
@@ -143,6 +147,8 @@ export interface MissionCreate {
 export interface MissionUpdate {
   name?: string;
   operator_notes?: string | null;
+  drone_id?: string | null;
+  /** @deprecated accepted for back-compat - backend auto-materializes a fleet drone */
   drone_profile_id?: string | null;
   date_time?: string | null;
   default_speed?: number | null;

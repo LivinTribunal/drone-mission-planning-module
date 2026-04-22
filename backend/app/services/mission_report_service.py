@@ -204,8 +204,8 @@ def _load_report_data(db: Session, mission_id: UUID) -> ReportData:
         raise NotFoundError("airport not found")
 
     drone_profile = None
-    if mission.drone_profile_id:
-        drone_profile = db.get(DroneProfile, mission.drone_profile_id)
+    if mission.drone is not None and mission.drone.drone_profile_id is not None:
+        drone_profile = db.get(DroneProfile, mission.drone.drone_profile_id)
 
     waypoints = sorted(flight_plan.waypoints, key=lambda w: w.sequence_order)
     inspections = sorted(mission.inspections, key=lambda i: i.sequence_order)

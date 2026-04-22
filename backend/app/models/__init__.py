@@ -9,6 +9,7 @@ from app.models.airport import (  # noqa: F401
 )
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.camera_preset import CameraPreset  # noqa: F401
+from app.models.drone import Drone  # noqa: F401
 from app.models.enums import (  # noqa: F401
     AuditAction,
     CameraAction,

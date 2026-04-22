@@ -181,9 +181,14 @@ def set_default_drone(
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
-    """set or clear the default drone profile for an airport."""
+    """set or clear the default fleet drone for an airport."""
     check_airport_access(current_user, airport_id)
-    return airport_service.set_default_drone(db, airport_id, body.drone_profile_id)
+    return airport_service.set_default_drone(
+        db,
+        airport_id,
+        drone_id=body.drone_id,
+        drone_profile_id=body.drone_profile_id,
+    )
 
 
 @router.post("/{airport_id}/bulk-change-drone", response_model=BulkChangeDroneResponse)
@@ -193,13 +198,15 @@ def bulk_change_drone(
     current_user: CoordinatorUser,
     db: Session = Depends(get_db),
 ):
-    """change drone profile on missions at an airport."""
+    """bulk-reassign fleet drone across missions at an airport."""
     check_airport_access(current_user, airport_id)
     count, regressed, ids = airport_service.bulk_change_drone(
         db,
         airport_id,
-        body.drone_profile_id,
+        drone_id=body.drone_id,
+        drone_profile_id=body.drone_profile_id,
         from_drone_id=body.from_drone_id,
+        from_drone_profile_id=body.from_drone_profile_id,
         scope=body.scope,
         mission_ids=body.mission_ids,
     )

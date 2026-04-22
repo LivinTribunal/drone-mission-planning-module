@@ -480,7 +480,8 @@ class TestAdminAirports:
         assert "data" in resp.json()
 
     def test_drone_count_is_per_airport(self, seeded_admin_client, admin_session_factory):
-        """drone_count reflects distinct drones used at each airport, not global total."""
+        """drone_count reflects distinct fleet drones used at each airport, not global total."""
+        from app.models.drone import Drone
         from app.models.mission import DroneProfile, Mission
 
         db = admin_session_factory()
@@ -497,16 +498,26 @@ class TestAdminAirports:
                 elevation=60.0,
                 location="SRID=4326;POINTZ(11.0 41.0 60)",
             )
-            drone1 = DroneProfile(name="Drone 1")
-            drone2 = DroneProfile(name="Drone 2")
-            db.add_all([airport_a, airport_b, drone1, drone2])
+            profile1 = DroneProfile(name="Profile 1")
+            profile2 = DroneProfile(name="Profile 2")
+            db.add_all([airport_a, airport_b, profile1, profile2])
             db.flush()
 
-            # airport A gets two missions with different drones
-            db.add(Mission(name="M1", airport_id=airport_a.id, drone_profile_id=drone1.id))
-            db.add(Mission(name="M2", airport_id=airport_a.id, drone_profile_id=drone2.id))
-            # airport B gets one mission with one drone
-            db.add(Mission(name="M3", airport_id=airport_b.id, drone_profile_id=drone1.id))
+            drone_a1 = Drone(
+                airport_id=airport_a.id, drone_profile_id=profile1.id, name="A Drone 1"
+            )
+            drone_a2 = Drone(
+                airport_id=airport_a.id, drone_profile_id=profile2.id, name="A Drone 2"
+            )
+            drone_b1 = Drone(
+                airport_id=airport_b.id, drone_profile_id=profile1.id, name="B Drone 1"
+            )
+            db.add_all([drone_a1, drone_a2, drone_b1])
+            db.flush()
+
+            db.add(Mission(name="M1", airport_id=airport_a.id, drone_id=drone_a1.id))
+            db.add(Mission(name="M2", airport_id=airport_a.id, drone_id=drone_a2.id))
+            db.add(Mission(name="M3", airport_id=airport_b.id, drone_id=drone_b1.id))
             db.commit()
         finally:
             db.close()

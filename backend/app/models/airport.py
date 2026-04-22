@@ -33,11 +33,18 @@ class Airport(Base):
     country = Column(String(100))
     elevation = Column(Float, nullable=False)
     location = Column(Geometry("POINTZ", srid=4326), nullable=False)
-    default_drone_profile_id = Column(
-        UUID, ForeignKey("drone_profile.id", ondelete="SET NULL"), nullable=True
+    default_drone_id = Column(
+        UUID,
+        ForeignKey(
+            "drone.id",
+            ondelete="SET NULL",
+            name="airport_default_drone_id_fkey",
+            use_alter=True,
+        ),
+        nullable=True,
     )
 
-    default_drone_profile = relationship("DroneProfile", foreign_keys=[default_drone_profile_id])
+    default_drone = relationship("Drone", foreign_keys=[default_drone_id], post_update=True)
 
     # multi-tenancy prep - nullable until org logic is implemented
     organization_id = Column(UUID, nullable=True)
@@ -60,6 +67,12 @@ class Airport(Base):
     safety_zones = relationship(
         "SafetyZone", back_populates="airport", cascade="all, delete-orphan"
     )
+    drones = relationship(
+        "Drone",
+        back_populates="airport",
+        cascade="all, delete-orphan",
+        foreign_keys="Drone.airport_id",
+    )
 
     def add_surface(self, surface):
         """add surface to this airport."""
@@ -70,6 +83,20 @@ class Airport(Base):
         """add obstacle to this airport."""
         obstacle.airport_id = self.id
         self.obstacles.append(obstacle)
+
+    @property
+    def default_drone_profile_id(self):
+        """legacy accessor - resolves the template id via the default fleet drone."""
+        if self.default_drone is None:
+            return None
+        return self.default_drone.drone_profile_id
+
+    def add_drone(self, drone):
+        """add fleet drone to this airport; enforces (airport, name) uniqueness in memory."""
+        if any(d.name == drone.name for d in self.drones):
+            raise ConflictError(f"a drone named '{drone.name}' already exists at this airport")
+        drone.airport_id = self.id
+        self.drones.append(drone)
 
     def add_safety_zone(self, zone):
         """add safety zone to this airport; enforces max-one airport boundary invariant."""

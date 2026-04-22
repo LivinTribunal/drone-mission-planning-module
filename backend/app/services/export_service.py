@@ -1168,12 +1168,11 @@ def export_mission(
     }.get(scope, "")
     safe_name = _sanitize_filename(mission.name + scope_suffix)
 
-    # load the drone profile for dji enum lookup - cheap, single-row query, only
-    # needed for KMZ/WPML but simpler than branching inside the loop.
+    # load the drone profile template for dji enum lookup via the fleet drone link
     drone_profile = None
-    if mission.drone_profile_id is not None:
+    if mission.drone is not None and mission.drone.drone_profile_id is not None:
         drone_profile = (
-            db.query(DroneProfile).filter(DroneProfile.id == mission.drone_profile_id).first()
+            db.query(DroneProfile).filter(DroneProfile.id == mission.drone.drone_profile_id).first()
         )
 
     files: dict[str, tuple[bytes, str]] = {}

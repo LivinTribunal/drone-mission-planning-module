@@ -35,7 +35,7 @@ TRANSITIONS = {
 
 # fields that affect trajectory - changing these invalidates computed trajectory
 TRAJECTORY_FIELDS = {
-    "drone_profile_id",
+    "drone_id",
     "default_speed",
     "measurement_speed_override",
     "default_altitude_offset",
@@ -79,6 +79,8 @@ class DroneProfile(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+    drones = relationship("Drone", back_populates="drone_profile")
+
 
 class Mission(Base):
     """aggregate root - owns inspections and controls status transitions."""
@@ -98,7 +100,7 @@ class Mission(Base):
     )
     airport_id = Column(UUID, ForeignKey("airport.id", ondelete="CASCADE"), nullable=False)
     operator_notes = Column(String)
-    drone_profile_id = Column(UUID, ForeignKey("drone_profile.id", ondelete="SET NULL"))
+    drone_id = Column(UUID, ForeignKey("drone.id", ondelete="SET NULL"), nullable=True)
     date_time = Column(DateTime(timezone=True))
     default_speed = Column(Float)
     measurement_speed_override = Column(Float, nullable=True)
@@ -127,8 +129,8 @@ class Mission(Base):
     computation_error = Column(String, nullable=True)
     computation_started_at = Column(DateTime(timezone=True), nullable=True)
 
-    airport = relationship("Airport")
-    drone_profile = relationship("DroneProfile")
+    airport = relationship("Airport", foreign_keys=[airport_id])
+    drone = relationship("Drone", foreign_keys=[drone_id])
     inspections = relationship("Inspection", back_populates="mission", cascade="all, delete-orphan")
     flight_plan = relationship("FlightPlan", back_populates="mission", uselist=False)
 
@@ -213,16 +215,29 @@ class Mission(Base):
 
         raise ValueError(f"inspection {inspection_id} not found")
 
-    def change_drone_profile(self, drone_profile_id):
-        """change drone profile - invalidates trajectory, blocked after export.
-
-        note: mission_service.update_mission currently handles drone profile
-        changes via TRAJECTORY_FIELDS check + invalidate_trajectory() directly,
-        bypassing this method. kept as the canonical aggregate-root api for
-        programmatic callers and test coverage.
-        """
+    def change_drone(self, drone_id):
+        """change fleet drone assigned to mission - invalidates trajectory."""
         self.invalidate_trajectory()
-        self.drone_profile_id = drone_profile_id
+        self.drone_id = drone_id
+
+    # backward-compat alias - older callers still reach for change_drone_profile
+    def change_drone_profile(self, drone_id):
+        """legacy alias for change_drone - accepts a drone fleet id."""
+        self.change_drone(drone_id)
+
+    @property
+    def drone_profile(self):
+        """return the shared profile template for the assigned drone, if any."""
+        if self.drone is None:
+            return None
+        return self.drone.drone_profile
+
+    @property
+    def drone_profile_id(self):
+        """return profile id via the assigned drone for backward compat."""
+        if self.drone is None:
+            return None
+        return self.drone.drone_profile_id
 
     def mark_computing(self):
         """set computation status to COMPUTING with timestamp."""

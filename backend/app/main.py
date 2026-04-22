@@ -15,6 +15,7 @@ from app.api.routes.airports import router as airports_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.camera_presets import router as camera_presets_router
 from app.api.routes.drone_profiles import router as drone_profiles_router
+from app.api.routes.drones import router as drones_router
 from app.api.routes.flight_plans import router as flight_plans_router
 from app.api.routes.inspection_templates import router as templates_router
 from app.api.routes.missions import router as missions_router
@@ -73,6 +74,7 @@ app.include_router(admin_router)
 app.include_router(airports_router)
 app.include_router(camera_presets_router)
 app.include_router(drone_profiles_router)
+app.include_router(drones_router)
 app.include_router(flight_plans_router)
 app.include_router(missions_router)
 app.include_router(templates_router)

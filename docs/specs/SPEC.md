@@ -34,9 +34,11 @@
 
 ### Mission & Inspection
 
-**mission** — name, status (MissionStatus enum), created_at, updated_at, operator_notes, drone_profile_id (FK), date_time, default_speed, measurement_speed_override, default_altitude_offset, takeoff_coordinate (PointZ 4326), landing_coordinate (PointZ 4326)
+**mission** — name, status (MissionStatus enum), created_at, updated_at, operator_notes, drone_id (FK → drone, airport-scoped fleet unit), date_time, default_speed, measurement_speed_override, default_altitude_offset, takeoff_coordinate (PointZ 4326), landing_coordinate (PointZ 4326)
 
-**drone_profile** — name, manufacturer, model, max_speed, max_climb_rate, max_altitude, battery_capacity, endurance_minutes, camera_resolution, camera_frame_rate (INTEGER), sensor_fov, weight
+**drone_profile** — (shared template) name, manufacturer, model, max_speed, max_climb_rate, max_altitude, battery_capacity, endurance_minutes, camera_resolution, camera_frame_rate (INTEGER), sensor_fov, weight, model_identifier, max_optical_zoom. Globally readable catalog; writes are SUPER_ADMIN only.
+
+**drone** — (airport-scoped fleet unit) airport_id (FK → airport, RESTRICT), drone_profile_id (FK → drone_profile, RESTRICT), name (unique per airport), serial_number, notes, created_at, updated_at. Migration `a7b3c9e2d1f0` materializes one drone row per distinct (airport, drone_profile) pair already in use and repoints mission.drone_id + airport.default_drone_id accordingly.
 
 **inspection** — mission_id (FK), template_id (FK), config_id (FK → inspection_configuration), method (VARCHAR 30), sequence_order, lha_ids (JSONB — array of UUID, denormalized from config for quick access)
 
@@ -223,8 +225,9 @@ Airport list, inspection template editor (AGL selector, LHA checkboxes, default 
 - `Mission.transition_to(target_status)` — enforces state machine
 - `Mission.invalidate_trajectory()` — PLANNED/VALIDATED -> DRAFT on trajectory changes, clears flight plan
 - `Mission.add_inspection(inspection)` / `remove_inspection(id)` — invalidates trajectory, max 10
-- `Mission.change_drone_profile(id)` — invalidates trajectory
+- `Mission.change_drone(drone_id)` — invalidates trajectory (fleet reassignment). Legacy `change_drone_profile` retained as alias.
 - `Airport.add_surface/obstacle/safety_zone()` — sets airport_id on child
+- `Airport.add_drone(drone)` — airport-scoped fleet unit, enforces (airport, name) uniqueness
 - `InspectionConfiguration.resolve_with_defaults(template_config)` — merges overrides
 - `AGL.calculate_lha_center_point()` — centroid of LHA positions
 - `Inspection.is_speed_compatible_with_frame_rate(drone, speed)` — speed/framerate check

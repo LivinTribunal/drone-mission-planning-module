@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.core.exceptions import NotFoundError, TrajectoryGenerationError
 from app.models.agl import AGL
 from app.models.airport import AirfieldSurface, Airport, Obstacle, SafetyZone
+from app.models.drone import Drone
 from app.models.enums import CameraAction, InspectionMethod, MissionStatus, WaypointType
 from app.models.flight_plan import ConstraintRule, FlightPlan
 from app.models.inspection import Inspection, InspectionTemplate
@@ -145,7 +146,7 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
     mission = (
         db.query(Mission)
         .options(
-            joinedload(Mission.drone_profile),
+            joinedload(Mission.drone).joinedload(Drone.drone_profile),
             joinedload(Mission.inspections)
             .joinedload(Inspection.template)
             .joinedload(InspectionTemplate.default_config),
@@ -192,10 +193,14 @@ def _load_mission_data(db: Session, mission_id: UUID) -> MissionData:
 
     provider = create_elevation_provider(airport)
 
+    resolved_profile = None
+    if mission.drone is not None:
+        resolved_profile = mission.drone.drone_profile
+
     return MissionData(
         mission=mission,
         airport=airport,
-        drone=mission.drone_profile,
+        drone=resolved_profile,
         obstacles=obstacles,
         safety_zones=safety_zones,
         surfaces=surfaces,
