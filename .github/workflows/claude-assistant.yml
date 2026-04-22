@@ -2,7 +2,7 @@ name: Claude PR Assistant
 
 on:
   issue_comment:
-    types: [created]
+    types: [ created ]
 
 permissions:
   contents: write
@@ -18,9 +18,8 @@ jobs:
   assist:
     name: Claude Assistant
     if: >-
-      github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@claude') &&
-      (github.event.comment.author_association == 'OWNER' ||
+      github.event.issue.pull_request && contains(github.event.comment.body,
+      '@claude') && (github.event.comment.author_association == 'OWNER' ||
        github.event.comment.author_association == 'COLLABORATOR' ||
        github.event.comment.author_association == 'MEMBER')
     runs-on: ubuntu-latest
@@ -64,7 +63,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Setup Node.js
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
@@ -175,8 +174,9 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.planner-prompt.outputs.prompt }}
-          claude_args: '--model claude-opus-4-7 --max-turns 30 --effort xhigh --allowedTools "Read,Glob,Grep,Bash"'
-          allowed_bots: 'github-actions'
+          claude_args: "--model claude-opus-4-7 --max-turns 100 --effort xhigh
+            --allowedTools \"Read,Glob,Grep,Bash\""
+          allowed_bots: "github-actions"
 
       - name: Extract plan
         if: steps.instruction.outputs.mode == 'plan'
@@ -349,8 +349,9 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.quick-prompt.outputs.prompt }}
-          claude_args: '--model claude-opus-4-7 --max-turns 200 --effort xhigh --allowedTools "Edit,Write,Read,Glob,Grep,Bash"'
-          allowed_bots: 'github-actions'
+          claude_args: "--model claude-opus-4-7 --max-turns 200 --effort xhigh
+            --allowedTools \"Edit,Write,Read,Glob,Grep,Bash\""
+          allowed_bots: "github-actions"
 
       - name: Check for changes
         if: steps.instruction.outputs.mode == 'quick'
@@ -368,7 +369,8 @@ jobs:
           fi
 
       - name: Commit and push
-        if: steps.instruction.outputs.mode == 'quick' && steps.changes.outputs.has-changes == 'true'
+        if: steps.instruction.outputs.mode == 'quick' &&
+          steps.changes.outputs.has-changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
