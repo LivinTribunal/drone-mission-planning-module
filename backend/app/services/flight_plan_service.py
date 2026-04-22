@@ -26,9 +26,9 @@ from app.utils.geo import bearing_between, distance_between
 
 # methods where first-to-last traversal bearing is meaningful.
 _BEARING_METHODS = {
-    InspectionMethod.HORIZONTAL_RANGE.value,
-    InspectionMethod.FLY_OVER.value,
-    InspectionMethod.PARALLEL_SIDE_SWEEP.value,
+    InspectionMethod.HORIZONTAL_RANGE,
+    InspectionMethod.FLY_OVER,
+    InspectionMethod.PARALLEL_SIDE_SWEEP,
 }
 
 
