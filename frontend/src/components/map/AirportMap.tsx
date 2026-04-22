@@ -237,6 +237,7 @@ const TOOL_CURSORS: Record<string, string> = {
   [MapTool.SELECT]: "default",
   [MapTool.PAN]: "grab",
   [MapTool.MOVE_WAYPOINT]: TOOL_CURSOR_MOVE,
+  [MapTool.MOVE_FEATURE]: TOOL_CURSOR_MOVE,
   [MapTool.MEASURE]: TOOL_CURSOR_MEASURE,
   [MapTool.HEADING]: TOOL_CURSOR_HEADING,
   [MapTool.ZOOM]: "zoom-in",
@@ -287,6 +288,7 @@ function flyToFeature(map: maplibregl.Map, feature: MapFeature) {
 
 const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   activeTool?: MapTool;
+  vertexEditTool?: MapTool;
   pendingGeometry?: GeoJSON.Polygon | null;
   pendingPointPosition?: [number, number] | null;
 }>(function AirportMap({
@@ -315,6 +317,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   leftPanelChildren,
   useTakeoffAsLanding,
   activeTool,
+  vertexEditTool,
   onPlaceTakeoff,
   onPlaceLanding,
   measureData,
@@ -1592,12 +1595,13 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     };
   }, [interactive, activeTool]);
 
-  // drag agl/lha points in select mode
+  // drag agl/lha points only when the vertex-edit tool is active
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !interactive || !onInfraPointDrag) return;
     const tool = activeTool ?? MapTool.SELECT;
-    if (tool !== MapTool.SELECT) return;
+    const dragTool = vertexEditTool ?? MapTool.SELECT;
+    if (tool !== dragTool) return;
 
     const dragState = {
       featureId: "", featureType: "" as "agl" | "lha", originalAlt: 0, dragging: false,
@@ -1691,7 +1695,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       map.off("mousemove", handleMouseMove);
       map.off("mouseup", handleMouseUp);
     };
-  }, [activeTool, interactive, onInfraPointDrag]);
+  }, [activeTool, vertexEditTool, interactive, onInfraPointDrag]);
 
   // click, hover, dblclick handler (transit insert/delete, feature selection, hover highlight)
   const TRANSIT_HOVER_SOURCE = "transit-hover-source";

@@ -4,6 +4,7 @@ export enum MapTool {
   SELECT = "SELECT",
   PAN = "PAN",
   MOVE_WAYPOINT = "MOVE_WAYPOINT",
+  MOVE_FEATURE = "MOVE_FEATURE",
   MEASURE = "MEASURE",
   HEADING = "HEADING",
   ZOOM = "ZOOM",

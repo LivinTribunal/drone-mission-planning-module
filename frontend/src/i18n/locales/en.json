@@ -845,7 +845,8 @@
   "coordinator": {
     "airports": {
       "tools": {
-        "select": "Select and edit features (S)",
+        "select": "Select features (S)",
+        "move": "Move and reshape features (V)",
         "pan": "Pan the map (P)",
         "measurement": "Measure distances between points (M)",
         "drawPolygon": "Draw polygon boundary (G)",
@@ -863,6 +864,7 @@
         "title": "Controls Help",
         "controls": "Controls",
         "shortcutSelect": "Select features",
+        "shortcutMove": "Move and reshape features",
         "shortcutPan": "Pan the map",
         "shortcutMeasurement": "Measurement tool",
         "shortcutDrawPolygon": "Draw polygon",

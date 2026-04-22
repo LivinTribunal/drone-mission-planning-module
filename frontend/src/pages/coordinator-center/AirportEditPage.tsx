@@ -111,6 +111,7 @@ function updateSourceFeatureGeometry(
 
 const DRAWING_TOOL_TO_MAP_TOOL: Record<DrawingTool, MapTool> = {
   select: MapTool.SELECT,
+  move: MapTool.MOVE_FEATURE,
   pan: MapTool.PAN,
   measurement: MapTool.MEASURE,
   heading: MapTool.HEADING,
@@ -334,7 +335,7 @@ export default function AirportEditPage() {
     [markDirty, getMap, airport],
   );
 
-  useVertexEditor(map, selectedFeature, activeTool === "select", handleVertexGeometryUpdate);
+  useVertexEditor(map, selectedFeature, activeTool === "move", handleVertexGeometryUpdate);
 
   // measurement and heading tools
   const measure = useMeasureDistance();
@@ -509,7 +510,7 @@ export default function AirportEditPage() {
   }, [lhaPickedMarkers, touchpointPickedMarker, thresholdPickedMarker, endPickedMarker, getMap, t]);
 
   // cancel pending creation when user picks another drawing tool, clear tools on switch
-  const SAFE_TOOLS: DrawingTool[] = ["select", "pan", "zoom", "zoomReset", "measurement", "heading"];
+  const SAFE_TOOLS: DrawingTool[] = ["select", "move", "pan", "zoom", "zoomReset", "measurement", "heading"];
   const handleToolChange = useCallback((tool: DrawingTool) => {
     /** handle toolbar tool change, cancelling pending creation if needed. */
     setActiveTool(tool);
@@ -527,6 +528,11 @@ export default function AirportEditPage() {
     setPendingCircleRadius(undefined);
     setPendingLhaParentAglId(null);
   }, [setActiveTool, pendingGeometry, pendingPointPosition]);
+
+  // 3d disables vertex editing, so drop move back to select
+  useEffect(() => {
+    if (is3D && activeTool === "move") setActiveTool("select");
+  }, [is3D, activeTool, setActiveTool]);
 
   const [boundaryEntityOverride, setBoundaryEntityOverride] = useState<EntityType | null>(null);
 
@@ -758,6 +764,7 @@ export default function AirportEditPage() {
 
       const keyMap: Record<string, () => void> = {
         s: () => handleToolChange("select"),
+        v: () => handleToolChange("move"),
         p: () => handleToolChange("pan"),
         m: () => handleToolChange("measurement"),
         h: () => handleToolChange("heading"),
@@ -776,7 +783,7 @@ export default function AirportEditPage() {
       }
 
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedFeature && activeTool === "select") {
+        if (selectedFeature && (activeTool === "select" || activeTool === "move")) {
           // delete is handled by EditableFeatureInfo's delete button
         }
       }
@@ -1196,6 +1203,7 @@ export default function AirportEditPage() {
           is3D={is3D}
           onToggle3D={setIs3D}
           activeTool={mapTool}
+          vertexEditTool={MapTool.MOVE_FEATURE}
           onMapClick={mapTool === MapTool.MEASURE || mapTool === MapTool.HEADING || pickingTouchpoint || pickingLha || pickingThreshold || pickingEnd ? handleMapClick : undefined}
           measureData={{
             points: measure.pointsGeoJSON,
