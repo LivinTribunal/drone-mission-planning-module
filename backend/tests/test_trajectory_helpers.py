@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.services.trajectory.helpers import _designator_sort_key
+from app.services.trajectory._common import _designator_sort_key
 from tests.data.trajectory import DESIGNATOR_MAP
 
 

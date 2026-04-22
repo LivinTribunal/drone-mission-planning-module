@@ -4,12 +4,12 @@ import math
 
 from shapely.geometry import LineString, box
 
-from app.services.trajectory.safety_validator import (
+from app.services.trajectory.types import LocalObstacle, LocalZone
+from app.services.trajectory.validation import (
     segment_runway_crossing_length,
     segments_intersect_obstacle,
     segments_intersect_zone,
 )
-from app.services.trajectory.types import LocalObstacle, LocalZone
 from app.utils.local_projection import LocalProjection
 
 # round-trip projection accuracy

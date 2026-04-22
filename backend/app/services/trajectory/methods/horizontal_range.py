@@ -2,10 +2,9 @@ import math
 from uuid import UUID
 
 from app.models.enums import CameraAction, WaypointType
-from app.utils.geo import bearing_between, elevation_angle, point_at_distance
+from app.utils.geo import bearing_between, elevation_angle, opposite_bearing, point_at_distance
 
 from ..config_resolver import _resolve_measurement_speed
-from ..helpers import _opposite_bearing
 from ..types import (
     DEFAULT_SWEEP_ANGLE,
     MIN_ARC_RADIUS,
@@ -33,7 +32,7 @@ def calculate_arc_path(
     arc_alt = center.alt + glide_height + config.altitude_offset
 
     # arc centered on approach heading (facing PAPI front)
-    approach = _opposite_bearing(runway_heading)
+    approach = opposite_bearing(runway_heading)
 
     measurement_speed = _resolve_measurement_speed(config, speed)
 

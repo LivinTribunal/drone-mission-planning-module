@@ -15,7 +15,7 @@ from app.schemas.flight_plan import (
 )
 from app.schemas.mission import ComputationStatusResponse
 from app.services import flight_plan_service
-from app.services.trajectory.orchestrator import generate_trajectory
+from app.services.trajectory import generate_trajectory
 
 logger = logging.getLogger(__name__)
 

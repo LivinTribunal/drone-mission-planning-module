@@ -4,7 +4,7 @@ obstacle grounding, and center point altitude derivation."""
 import math
 
 from app.services.elevation_provider import FlatElevationProvider
-from app.services.trajectory.helpers import _apply_terrain_delta
+from app.services.trajectory._common import _apply_terrain_delta
 from app.services.trajectory.methods.horizontal_range import calculate_arc_path
 from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
 from app.services.trajectory.types import (

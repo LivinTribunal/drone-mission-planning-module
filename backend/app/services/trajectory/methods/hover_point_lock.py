@@ -1,9 +1,8 @@
 from uuid import UUID
 
 from app.models.enums import CameraAction, WaypointType
-from app.utils.geo import bearing_between, elevation_angle, point_at_distance
+from app.utils.geo import bearing_between, elevation_angle, opposite_bearing, point_at_distance
 
-from ..helpers import _opposite_bearing
 from ..types import (
     DEFAULT_HOVER_DISTANCE_PAPI,
     DEFAULT_HOVER_DISTANCE_RUNWAY,
@@ -55,9 +54,9 @@ def calculate_hover_point_lock_path(
             bearing_from_lha = config.hover_bearing % 360
         else:
             # RUNWAY reference: 0 = approach side (opposite of runway heading)
-            bearing_from_lha = (_opposite_bearing(runway_heading) + config.hover_bearing) % 360
+            bearing_from_lha = (opposite_bearing(runway_heading) + config.hover_bearing) % 360
     else:
-        bearing_from_lha = _opposite_bearing(runway_heading)
+        bearing_from_lha = opposite_bearing(runway_heading)
 
     lon, lat = point_at_distance(target_lha.lon, target_lha.lat, bearing_from_lha, distance)
     alt = target_lha.alt + height + config.altitude_offset

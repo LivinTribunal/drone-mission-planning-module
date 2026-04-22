@@ -6,7 +6,7 @@ deceleration, and triangular fallback for short segments.
 
 import pytest
 
-from app.services.trajectory.orchestrator import _segment_duration_with_accel
+from app.services.trajectory.segment_builder import _segment_duration_with_accel
 from app.services.trajectory.types import (
     DEFAULT_ACCELERATION,
     DEFAULT_DECELERATION,

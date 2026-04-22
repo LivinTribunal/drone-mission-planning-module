@@ -20,7 +20,7 @@ def test_generate_trajectory_mission_not_found(db_engine):
     """orchestrator raises NotFoundError for missing mission"""
     from sqlalchemy.orm import Session
 
-    from app.services.trajectory.orchestrator import generate_trajectory
+    from app.services.trajectory import generate_trajectory
 
     with Session(db_engine) as db:
         with pytest.raises(NotFoundError, match="mission not found"):
@@ -31,7 +31,7 @@ def test_generate_trajectory_no_inspections(client, db_engine):
     """orchestrator raises TrajectoryGenerationError when mission has no inspections"""
     from sqlalchemy.orm import Session
 
-    from app.services.trajectory.orchestrator import generate_trajectory
+    from app.services.trajectory import generate_trajectory
 
     airport = client.post(
         "/api/v1/airports",
@@ -1120,7 +1120,7 @@ def test_hover_point_lock_missing_selected_lha_raises(client, db_engine):
     """orchestrator raises TrajectoryGenerationError when HOVER_POINT_LOCK has no selected LHA."""
     from sqlalchemy.orm import Session
 
-    from app.services.trajectory.orchestrator import generate_trajectory
+    from app.services.trajectory import generate_trajectory
 
     airport = client.post(
         "/api/v1/airports",
@@ -1420,7 +1420,7 @@ def test_orchestrator_lha_setting_angle_override_uses_override_angle(client, db_
     from sqlalchemy.orm import Session
 
     from app.schemas.geometry import parse_ewkb
-    from app.services.trajectory.orchestrator import generate_trajectory
+    from app.services.trajectory import generate_trajectory
     from app.services.trajectory.types import MIN_ARC_RADIUS
 
     mission_id, template_id, lhas = _setup_horizontal_range_mission(client, "LOVR")
@@ -1475,7 +1475,7 @@ def test_orchestrator_lha_setting_angle_override_falls_back_with_warning(client,
 
     from app.models.inspection import Inspection
     from app.schemas.geometry import parse_ewkb
-    from app.services.trajectory.orchestrator import generate_trajectory
+    from app.services.trajectory import generate_trajectory
     from app.services.trajectory.types import MIN_ARC_RADIUS
 
     mission_id, template_id, _lhas = _setup_horizontal_range_mission(client, "LOVB")
@@ -1548,7 +1548,7 @@ def test_orchestrator_no_override_uses_max_angle(client, db_engine):
     from sqlalchemy.orm import Session
 
     from app.schemas.geometry import parse_ewkb
-    from app.services.trajectory.orchestrator import generate_trajectory
+    from app.services.trajectory import generate_trajectory
     from app.services.trajectory.types import MIN_ARC_RADIUS
 
     mission_id, template_id, _ = _setup_horizontal_range_mission(client, "LOVM")
