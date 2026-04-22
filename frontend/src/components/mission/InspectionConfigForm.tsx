@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info, RotateCcw, Save } from "lucide-react";
 import type { InspectionResponse, InspectionConfigOverride, MissionDetailResponse } from "@/types/mission";
@@ -177,14 +177,29 @@ export default function InspectionConfigForm({
       : savedCfg?.optical_zoom != null,
   );
 
-  // reset touched state when switching to a different inspection
+  // track the inspection + horizontal distance we last keyed zoomTouched against.
+  // when inspection switches, re-seed from saved. when only the distance changes
+  // for the same inspection, release the touched flag so the derived zoom runs.
+  const zoomKeyRef = useRef<{ id: string; dist: number | null }>({
+    id: inspection.id,
+    dist: horizontalDistanceToLha,
+  });
   useEffect(() => {
-    setZoomTouched(
-      "optical_zoom" in configOverride
-        ? configOverride.optical_zoom != null
-        : savedCfg?.optical_zoom != null,
-    );
-  }, [inspection.id]);
+    const last = zoomKeyRef.current;
+    if (last.id !== inspection.id) {
+      zoomKeyRef.current = { id: inspection.id, dist: horizontalDistanceToLha };
+      setZoomTouched(
+        "optical_zoom" in configOverride
+          ? configOverride.optical_zoom != null
+          : savedCfg?.optical_zoom != null,
+      );
+      return;
+    }
+    if (last.dist !== horizontalDistanceToLha) {
+      zoomKeyRef.current = { id: inspection.id, dist: horizontalDistanceToLha };
+      setZoomTouched(false);
+    }
+  }, [inspection.id, horizontalDistanceToLha]);
 
   // auto-propagate computed zoom while untouched
   useEffect(() => {

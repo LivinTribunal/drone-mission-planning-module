@@ -1,7 +1,13 @@
+import { useState, type ComponentProps } from "react";
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import InspectionConfigForm from "./InspectionConfigForm";
-import type { InspectionResponse, MissionDetailResponse } from "@/types/mission";
+import type {
+  InspectionResponse,
+  InspectionConfigOverride,
+  MissionDetailResponse,
+} from "@/types/mission";
+import { computeOpticalZoom } from "@/utils/cameraAutoCalc";
 
 // minimal template/inspection stubs
 const baseInspection = (
@@ -428,5 +434,180 @@ describe("InspectionConfigForm method variants", () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ direction_reversed: false }),
     );
+  });
+});
+
+// --- horizontal-distance -> optical_zoom resync ---
+describe("InspectionConfigForm zoom resync", () => {
+  // two LHAs ~111m apart at the equator so the LHA span is non-zero
+  // and the computed zoom genuinely depends on horizontal_distance.
+  const papiAglWithSpan = {
+    id: "agl-papi",
+    surface_id: "s-1",
+    agl_type: "PAPI",
+    name: "PAPI",
+    position: { lat: 0, lng: 0, alt: 0 },
+    side: null,
+    glide_slope_angle: 3,
+    distance_from_threshold: 300,
+    offset_from_centerline: null,
+    lhas: [
+      {
+        id: "lha-p1",
+        agl_id: "agl-papi",
+        unit_designator: "1",
+        setting_angle: 2.5,
+        transition_sector_width: null,
+        lamp_type: "LED",
+        position: { type: "Point", coordinates: [0, 0, 0] },
+        tolerance: null,
+      },
+      {
+        id: "lha-p2",
+        agl_id: "agl-papi",
+        unit_designator: "2",
+        setting_angle: 2.5,
+        transition_sector_width: null,
+        lamp_type: "LED",
+        position: { type: "Point", coordinates: [0.001, 0, 0] },
+        tolerance: null,
+      },
+    ],
+  };
+
+  const droneProfile = {
+    id: "d-1",
+    name: "Test Drone",
+    sensor_fov: 84,
+    max_optical_zoom: 20,
+  } as never;
+
+  // controlled wrapper - real apps own configOverride state, so propagating
+  // the form's onChange back into props is what triggers the re-derive flow.
+  function ControlledForm(
+    props: Omit<ComponentProps<typeof InspectionConfigForm>, "configOverride" | "onChange"> & {
+      initialOverride: InspectionConfigOverride;
+      onChangeSpy: (o: InspectionConfigOverride) => void;
+    },
+  ) {
+    const { initialOverride, onChangeSpy, ...rest } = props;
+    const [override, setOverride] = useState<InspectionConfigOverride>(initialOverride);
+    return (
+      <InspectionConfigForm
+        {...rest}
+        configOverride={override}
+        onChange={(next) => {
+          setOverride(next);
+          onChangeSpy(next);
+        }}
+      />
+    );
+  }
+
+  function renderControlled(initialOverride: InspectionConfigOverride) {
+    const onChangeSpy = vi.fn();
+    render(
+      <ControlledForm
+        inspection={baseInspection({ method: "HORIZONTAL_RANGE" })}
+        template={papiTemplate as never}
+        agls={[papiAglWithSpan] as never}
+        droneProfile={droneProfile}
+        mission={baseMission}
+        selectedLhaIds={new Set<string>()}
+        onToggleLha={vi.fn()}
+        disabled={false}
+        initialOverride={initialOverride}
+        onChangeSpy={onChangeSpy}
+      />,
+    );
+    return { onChangeSpy };
+  }
+
+  function lastOpticalZoom(spy: ReturnType<typeof vi.fn>): number | null | undefined {
+    const calls = spy.mock.calls;
+    for (let i = calls.length - 1; i >= 0; i--) {
+      const arg = calls[i]?.[0] as InspectionConfigOverride | undefined;
+      if (arg && "optical_zoom" in arg) return arg.optical_zoom;
+    }
+    return undefined;
+  }
+
+  it("re-derives optical_zoom when horizontal_distance changes after a saved value exists", () => {
+    const { onChangeSpy } = renderControlled({
+      horizontal_distance: 100,
+      optical_zoom: 5,
+    });
+    onChangeSpy.mockClear();
+
+    act(() => {
+      fireEvent.change(screen.getByTestId("inspection-horizontal-distance"), {
+        target: { value: "500" },
+      });
+    });
+
+    const expected = computeOpticalZoom(500, 111.195, 84, 20);
+    expect(expected).not.toBeNull();
+    const submitted = lastOpticalZoom(onChangeSpy);
+    expect(submitted).toBeCloseTo(expected as number, 1);
+    expect(submitted).not.toBe(5);
+  });
+
+  it("re-derives optical_zoom when horizontal_distance changes even after the slider was touched", () => {
+    // MANUAL mode renders the optical-zoom slider so we can fake a real drag.
+    const { onChangeSpy } = renderControlled({
+      horizontal_distance: 100,
+      optical_zoom: 5,
+      camera_mode: "MANUAL",
+    });
+    act(() => {
+      fireEvent.change(screen.getByTestId("inspection-optical-zoom"), {
+        target: { value: "10" },
+      });
+    });
+    onChangeSpy.mockClear();
+
+    act(() => {
+      fireEvent.change(screen.getByTestId("inspection-horizontal-distance"), {
+        target: { value: "500" },
+      });
+    });
+
+    const expected = computeOpticalZoom(500, 111.195, 84, 20);
+    expect(expected).not.toBeNull();
+    const submitted = lastOpticalZoom(onChangeSpy);
+    expect(submitted).toBeCloseTo(expected as number, 1);
+    expect(submitted).not.toBe(10);
+  });
+
+  it("does not overwrite optical_zoom when horizontal_distance is unset", () => {
+    // FLY_OVER with no lateral_offset configured falls back to 0,
+    // but with no lha span computed zoom is null, so nothing is auto-applied.
+    const onChangeSpy = vi.fn();
+    function Setup() {
+      const [override, setOverride] = useState<InspectionConfigOverride>({
+        optical_zoom: 4,
+      });
+      return (
+        <InspectionConfigForm
+          inspection={baseInspection({ method: "FLY_OVER" })}
+          template={runwayTemplate as never}
+          agls={[runwayAgl] as never}
+          droneProfile={null}
+          mission={baseMission}
+          configOverride={override}
+          selectedLhaIds={new Set<string>()}
+          onToggleLha={vi.fn()}
+          disabled={false}
+          onChange={(o) => {
+            setOverride(o);
+            onChangeSpy(o);
+          }}
+        />
+      );
+    }
+    render(<Setup />);
+    // no zoom auto-overwrite expected because no drone profile -> no FOV ->
+    // computed zoom is null and the auto-propagate effect short-circuits.
+    expect(lastOpticalZoom(onChangeSpy)).toBeUndefined();
   });
 });
