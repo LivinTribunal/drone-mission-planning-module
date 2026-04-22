@@ -162,7 +162,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.build-prompt.outputs.prompt }}
-          claude_args: "--max-turns 15 --json-schema '${{ steps.schema.outputs.value }}'"
+          claude_args: "--model claude-opus-4-7 --max-turns 15 --effort xhigh --json-schema '${{ steps.schema.outputs.value }}'"
 
       - name: Parse structured verdict
         if: steps.guard.outputs.should-triage == 'true'
@@ -287,7 +287,7 @@ jobs:
               "notes": "Brief description of what you observed"
             }
             ```
-          claude_args: '--max-turns 20'
+          claude_args: '--model claude-opus-4-7 --max-turns 20 --effort xhigh'
 
       - name: Parse reproduction result
         if: steps.reproduce.outcome == 'success'
