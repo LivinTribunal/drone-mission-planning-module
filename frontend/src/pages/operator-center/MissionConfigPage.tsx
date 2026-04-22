@@ -21,6 +21,7 @@ import {
   removeInspection,
   reorderInspections,
   getFlightPlan,
+  resolveAutoHeadings,
 } from "@/api/missions";
 import { listDroneProfiles } from "@/api/droneProfiles";
 import { listInspectionTemplates } from "@/api/inspectionTemplates";
@@ -379,6 +380,33 @@ export default function MissionConfigPage() {
     }));
   }
 
+  async function handleAutoResolveHeadings() {
+    if (!id || !mission) return;
+    const previousStatus = mission.status;
+    try {
+      const result = await resolveAutoHeadings(id);
+      const fresh = await getMission(id);
+      updateMissionState(fresh, previousStatus);
+      const saved = result.total_distance_m;
+      const base = result.baseline_distance_m;
+      showNotification(
+        t("mission.config.direction.optimizeSuccess", {
+          count: result.auto_inspection_count,
+          saved: Math.max(0, Math.round(base - saved)),
+        }),
+      );
+    } catch (err) {
+      if (isAxiosError(err)) {
+        const msg =
+          (err.response?.data as { detail?: string })?.detail ??
+          t("mission.config.direction.optimizeError");
+        showNotification(msg);
+      } else {
+        showNotification(t("mission.config.direction.optimizeError"));
+      }
+    }
+  }
+
   function handleToggleLha(inspId: string, lhaId: string) {
     setSelectedLhas((prev) => {
       const current = prev[inspId] ?? new Set();
@@ -680,6 +708,16 @@ export default function MissionConfigPage() {
               agls={allAgls}
               onChangeMethod={handleChangeMethod}
             />
+            {canModify && mission.inspections.some((i) => i.config?.direction_is_auto) && (
+              <button
+                type="button"
+                onClick={handleAutoResolveHeadings}
+                className="mt-3 w-full rounded-full border border-tv-border bg-tv-bg px-3 py-1.5 text-xs font-medium text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                data-testid="mission-optimize-headings"
+              >
+                {t("mission.config.direction.optimizeButton")}
+              </button>
+            )}
           </div>
 
           {/* inspection config - only when selected */}

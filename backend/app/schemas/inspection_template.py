@@ -38,6 +38,7 @@ class InspectionConfigCreate(BaseModel):
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
     direction_reversed: bool = False
+    direction_is_auto: bool = False
     white_balance: WhiteBalanceStr | None = None
     iso: int | None = Field(default=None, gt=0)
     shutter_speed: str | None = Field(default=None, max_length=20)
@@ -72,6 +73,7 @@ class InspectionConfigResponse(BaseModel):
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
     direction_reversed: bool = False
+    direction_is_auto: bool = False
     white_balance: WhiteBalanceStr | None = None
     iso: int | None = None
     shutter_speed: str | None = None

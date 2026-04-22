@@ -405,28 +405,40 @@ describe("InspectionConfigForm method variants", () => {
     expect(screen.getByTestId("inspection-direction-bearing").textContent).toBe("142°");
   });
 
-  it("direction toggle flips direction_reversed from false to true", () => {
+  it("direction mode REVERSED sets direction_reversed=true and direction_is_auto=false", () => {
     const onChange = vi.fn();
     renderForm({
       inspection: baseInspection({ method: "FLY_OVER" }),
       onChange,
     });
-    fireEvent.click(screen.getByTestId("inspection-direction-reversed-toggle"));
+    fireEvent.click(screen.getByTestId("inspection-direction-mode-reversed"));
     expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ direction_reversed: true }),
+      expect.objectContaining({ direction_reversed: true, direction_is_auto: false }),
     );
   });
 
-  it("direction toggle flips direction_reversed from true to false", () => {
+  it("direction mode NATURAL resets direction_reversed=false and direction_is_auto=false", () => {
     const onChange = vi.fn();
     renderForm({
       inspection: baseInspection({ method: "FLY_OVER" }),
       configOverride: { direction_reversed: true },
       onChange,
     });
-    fireEvent.click(screen.getByTestId("inspection-direction-reversed-toggle"));
+    fireEvent.click(screen.getByTestId("inspection-direction-mode-natural"));
     expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ direction_reversed: false }),
+      expect.objectContaining({ direction_reversed: false, direction_is_auto: false }),
+    );
+  });
+
+  it("direction mode AUTO sets direction_is_auto=true", () => {
+    const onChange = vi.fn();
+    renderForm({
+      inspection: baseInspection({ method: "FLY_OVER" }),
+      onChange,
+    });
+    fireEvent.click(screen.getByTestId("inspection-direction-mode-auto"));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ direction_is_auto: true }),
     );
   });
 });

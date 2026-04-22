@@ -71,6 +71,7 @@ class InspectionConfigOverride(BaseModel):
     hover_bearing_reference: HoverBearingRefStr | None = None
     camera_mode: CameraModeStr | None = None
     direction_reversed: bool | None = None
+    direction_is_auto: bool | None = None
     white_balance: WhiteBalanceStr | None = None
     iso: int | None = Field(default=None, gt=0)
     shutter_speed: str | None = Field(default=None, max_length=20)
@@ -130,6 +131,7 @@ class InspectionConfigResponse(BaseModel):
     hover_bearing_reference: HoverBearingRefStr | None = None
     camera_mode: CameraModeStr | None = None
     direction_reversed: bool = False
+    direction_is_auto: bool = False
     white_balance: WhiteBalanceStr | None = None
     iso: int | None = None
     shutter_speed: str | None = None
@@ -285,3 +287,26 @@ class MissionListResponse(BaseModel):
 
     data: list[MissionResponse]
     meta: ListMeta
+
+
+class HeadingAssignment(BaseModel):
+    """resolved heading for a single inspection."""
+
+    inspection_id: UUID
+    sequence_order: int
+    direction_reversed: bool
+    is_auto: bool
+
+
+class HeadingAutoResponse(BaseModel):
+    """result of auto-heading optimization over a mission's inspection set."""
+
+    mission_id: UUID
+    assignments: list[HeadingAssignment]
+    total_distance_m: float
+    total_turn_deg: float
+    baseline_distance_m: float
+    baseline_turn_deg: float
+    improvement_pct: float
+    auto_inspection_count: int
+    pinned_inspection_count: int

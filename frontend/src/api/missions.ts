@@ -9,6 +9,7 @@ import type {
   InspectionUpdate,
   ReorderRequest,
   ComputationStatusResponse,
+  HeadingAutoResponse,
 } from "@/types/mission";
 import type { MissionStatus } from "@/types/enums";
 import type {
@@ -153,6 +154,13 @@ export async function removeInspection(
   const res = await client.delete(
     `/missions/${missionId}/inspections/${inspectionId}`,
   );
+  return res.data;
+}
+
+export async function resolveAutoHeadings(
+  missionId: string,
+): Promise<HeadingAutoResponse> {
+  const res = await client.post(`/missions/${missionId}/headings/auto`);
   return res.data;
 }
 

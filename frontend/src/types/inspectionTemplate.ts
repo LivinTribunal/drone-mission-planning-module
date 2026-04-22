@@ -24,6 +24,7 @@ export interface InspectionConfigResponse {
   hover_bearing: number | null;
   hover_bearing_reference: "RUNWAY" | "COMPASS" | null;
   direction_reversed: boolean;
+  direction_is_auto: boolean;
   white_balance: string | null;
   iso: number | null;
   shutter_speed: string | null;

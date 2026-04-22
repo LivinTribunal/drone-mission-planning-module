@@ -65,6 +65,7 @@ export interface InspectionConfigResponse {
   hover_bearing_reference: "RUNWAY" | "COMPASS" | null;
   camera_mode: CameraMode | null;
   direction_reversed: boolean;
+  direction_is_auto: boolean;
   white_balance: string | null;
   iso: number | null;
   shutter_speed: string | null;
@@ -109,6 +110,7 @@ export interface InspectionConfigOverride {
   hover_bearing_reference?: "RUNWAY" | "COMPASS" | null;
   camera_mode?: CameraMode | null;
   direction_reversed?: boolean;
+  direction_is_auto?: boolean;
   white_balance?: string | null;
   iso?: number | null;
   shutter_speed?: string | null;
@@ -182,4 +184,23 @@ export interface ComputationStatusResponse {
   computation_status: ComputationStatus;
   computation_error: string | null;
   computation_started_at: string | null;
+}
+
+export interface HeadingAssignment {
+  inspection_id: string;
+  sequence_order: number;
+  direction_reversed: boolean;
+  is_auto: boolean;
+}
+
+export interface HeadingAutoResponse {
+  mission_id: string;
+  assignments: HeadingAssignment[];
+  total_distance_m: number;
+  total_turn_deg: number;
+  baseline_distance_m: number;
+  baseline_turn_deg: number;
+  improvement_pct: number;
+  auto_inspection_count: number;
+  pinned_inspection_count: number;
 }

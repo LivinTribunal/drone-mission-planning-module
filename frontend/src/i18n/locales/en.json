@@ -651,7 +651,22 @@
         "reversed": "Reversed",
         "flip": "Opposite",
         "flipTitle": "Flip traversal direction",
-        "unknown": "—"
+        "unknown": "—",
+        "mode": {
+          "auto": "Auto",
+          "natural": "Natural",
+          "reversed": "Reversed"
+        },
+        "modeTitle": {
+          "auto": "Solver picks direction to minimize total transit",
+          "natural": "Traverse in natural direction",
+          "reversed": "Traverse in reversed direction"
+        },
+        "autoHint": "Direction is resolved by the heading optimizer over all Auto inspections.",
+        "autoResolvedSuffix": "auto-resolved",
+        "optimizeButton": "Auto-optimize headings",
+        "optimizeSuccess": "Optimized {{count}} inspection(s), saved ~{{saved}}m transit",
+        "optimizeError": "Failed to optimize headings"
       },
       "hoverBearing": "Approach bearing (°)",
       "hoverBearingRef": {
