@@ -286,7 +286,7 @@ export default function InspectionEditPage() {
     }, AUTOSAVE_DELAY);
   }
 
-  function handleConfigChange(field: string, value: number | null) {
+  function handleConfigChange(field: string, value: number | string | null) {
     /**handle a config field change and schedule autosave.*/
     setEditConfig((prev) => {
       if (!prev) return prev;
@@ -301,7 +301,10 @@ export default function InspectionEditPage() {
         }
         return {
           ...prev,
-          custom_tolerances: { ...(prev.custom_tolerances ?? {}), default: value },
+          custom_tolerances: {
+            ...(prev.custom_tolerances ?? {}),
+            default: typeof value === "number" ? value : parseFloat(value),
+          },
         };
       }
       return { ...prev, [field]: value };

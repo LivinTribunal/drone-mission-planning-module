@@ -9,7 +9,7 @@ import { formatAglDisplayName } from "@/utils/agl";
 interface TemplateConfigSectionProps {
   config: Omit<InspectionConfigResponse, "id"> | null;
   method: string;
-  onChange: (field: string, value: number | null) => void;
+  onChange: (field: string, value: number | string | null) => void;
   onMethodChange: (method: InspectionMethod) => void;
   allAgls: AGLResponse[];
   selectedAglId: string;
@@ -223,6 +223,35 @@ export default function TemplateConfigSection({
           onChange={(e) => handleNumber("sweep_angle", e.target.value)}
           step="0.5"
         />
+      )}
+
+      {method === "HORIZONTAL_RANGE" && selectedAgl && selectedAgl.lhas.length > 0 && (
+        <div className="relative">
+          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+            {t("mission.config.lhaSettingAngleOverride")}
+          </label>
+          <select
+            value={config?.lha_setting_angle_override_id ?? ""}
+            onChange={(e) =>
+              onChange("lha_setting_angle_override_id", e.target.value || null)
+            }
+            className="w-full px-4 py-2.5 pr-10 rounded-full text-sm border border-tv-border bg-tv-bg text-tv-text-primary focus:outline-none focus:border-tv-accent transition-colors appearance-none"
+          >
+            <option value="">{t("mission.config.lhaSettingAngleOverrideAuto")}</option>
+            {selectedAgl.lhas.map((lha) => (
+              <option key={lha.id} value={lha.id}>
+                {t("mission.config.unitDesignator")} {lha.unit_designator}
+                {lha.setting_angle != null ? ` (${lha.setting_angle}°)` : ""}
+              </option>
+            ))}
+          </select>
+          <svg className="pointer-events-none absolute right-3 top-[2.1rem] h-4 w-4 text-tv-text-secondary" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+          </svg>
+          <p className="text-[11px] text-tv-text-muted mt-1">
+            {t("mission.config.lhaSettingAngleOverrideHint")}
+          </p>
+        </div>
       )}
 
       {method === "VERTICAL_PROFILE" && (
