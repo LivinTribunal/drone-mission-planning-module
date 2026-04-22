@@ -291,12 +291,28 @@ def cancel_mission(
 @router.post("/{mission_id}/headings/auto", response_model=HeadingAutoResponse)
 def auto_resolve_headings(
     mission_id: UUID,
+    request: Request,
     current_user: OperatorUser,
     db: Session = Depends(get_db),
 ):
     """resolve optimal direction_reversed for all auto-heading inspections."""
     check_mission_access(db, current_user, mission_id)
-    return heading_optimizer.solve_and_persist(db, mission_id)
+    result = heading_optimizer.solve_and_persist(db, mission_id)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.UPDATE,
+        entity_type="Mission",
+        entity_id=mission_id,
+        details={
+            "action": "auto_resolve_headings",
+            "auto_inspection_count": result.auto_inspection_count,
+            "improvement_pct": result.improvement_pct,
+        },
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return result
 
 
 # inspections

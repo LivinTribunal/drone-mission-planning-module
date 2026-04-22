@@ -396,3 +396,298 @@ class TestHeadingOptimizerModuleSurface:
     def test_solve_and_persist_exported(self):
         """solve_and_persist is exposed for the route layer."""
         assert hasattr(heading_optimizer, "solve_and_persist")
+
+
+# integration tests - exercise solve_and_persist through the route against real postgis
+
+
+@pytest.fixture
+def auto_headings_airport(client):
+    """create a unique airport per test for the auto-headings integration tests."""
+    import random
+    import string
+
+    # 4-char alpha ICAO codes - random alpha suffix keeps each test isolated
+    suffix = "".join(random.choices(string.ascii_uppercase, k=2))
+    icao = f"LK{suffix}"
+    payload = {
+        "icao_code": icao,
+        "name": f"Auto Headings Test {suffix}",
+        "elevation": 300.0,
+        "location": {"type": "Point", "coordinates": [15.0, 50.0, 300.0]},
+    }
+    r = client.post("/api/v1/airports", json=payload)
+    assert r.status_code == 201
+    return r.json()["id"]
+
+
+def _make_mission_with_inspection(
+    client,
+    airport_id: str,
+    config: dict | None,
+) -> tuple[str, str]:
+    """create a mission + one HORIZONTAL_RANGE inspection. returns (mission_id, inspection_id)."""
+    template = client.post(
+        "/api/v1/inspection-templates",
+        json={"name": "Auto Headings Template", "methods": ["HORIZONTAL_RANGE"]},
+    ).json()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={"name": "Auto Headings Mission", "airport_id": airport_id},
+    ).json()
+
+    body = {"template_id": template["id"], "method": "HORIZONTAL_RANGE"}
+    if config is not None:
+        body["config"] = config
+    insp = client.post(
+        f"/api/v1/missions/{mission['id']}/inspections",
+        json=body,
+    ).json()
+    return mission["id"], insp["id"]
+
+
+class TestSolveAndPersistIntegration:
+    """round-trip POST /headings/auto through FastAPI + postgis."""
+
+    def test_persists_new_config_when_inspection_has_none(
+        self, client, auto_headings_airport, monkeypatch
+    ):
+        """inspection with no config gets a new InspectionConfiguration written."""
+        from app.schemas.mission import HeadingAssignment
+        from app.services import heading_optimizer as opt
+
+        mission_id, inspection_id = _make_mission_with_inspection(
+            client, auto_headings_airport, config=None
+        )
+
+        # stub the pure solver - return an auto assignment requesting reversed=True
+        def fake_solve(inspections, surfaces):
+            """deterministic solution: the single inspection is auto + reversed."""
+            assignments = [
+                HeadingAssignment(
+                    inspection_id=insp.id,
+                    sequence_order=insp.sequence_order,
+                    direction_reversed=True,
+                    is_auto=True,
+                )
+                for insp in inspections
+            ]
+            return opt.HeadingSolution(
+                assignments=assignments,
+                total_distance_m=100.0,
+                total_turn_deg=0.0,
+                baseline_distance_m=200.0,
+                baseline_turn_deg=0.0,
+                improvement_pct=50.0,
+                auto_inspection_count=1,
+                pinned_inspection_count=0,
+            )
+
+        monkeypatch.setattr(opt, "solve_headings", fake_solve)
+
+        r = client.post(f"/api/v1/missions/{mission_id}/headings/auto")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["auto_inspection_count"] == 1
+        assert body["improvement_pct"] == 50.0
+
+        # verify the config now exists and was written with direction_reversed=True
+        detail = client.get(f"/api/v1/missions/{mission_id}").json()
+        insp_cfg = detail["inspections"][0].get("config")
+        assert insp_cfg is not None
+        assert insp_cfg["direction_reversed"] is True
+        assert insp_cfg["direction_is_auto"] is True
+
+    def test_regresses_mission_and_deletes_flight_plan(
+        self, client, auto_headings_airport, db_engine, monkeypatch
+    ):
+        """persisting a new direction invalidates trajectory and removes flight plan."""
+        from sqlalchemy.orm import sessionmaker
+
+        from app.models.flight_plan import FlightPlan
+        from app.models.mission import Mission, MissionStatus
+        from app.schemas.mission import HeadingAssignment
+        from app.services import heading_optimizer as opt
+
+        mission_id, inspection_id = _make_mission_with_inspection(
+            client,
+            auto_headings_airport,
+            config={"direction_is_auto": True, "direction_reversed": False},
+        )
+
+        # seed mission into PLANNED with a flight plan so we can observe regression
+        Session = sessionmaker(bind=db_engine)
+        session = Session()
+        try:
+            mission = session.query(Mission).filter(Mission.id == mission_id).first()
+            mission.status = MissionStatus.PLANNED
+            flight_plan = FlightPlan(
+                mission_id=mission.id,
+                airport_id=mission.airport_id,
+                total_distance=1000.0,
+                estimated_duration=300.0,
+            )
+            session.add(flight_plan)
+            session.commit()
+            flight_plan_id = flight_plan.id
+        finally:
+            session.close()
+
+        # stub the solver to request a direction_reversed flip
+        def fake_solve(inspections, surfaces):
+            """return a solution that flips direction_reversed for the lone inspection."""
+            assignments = [
+                HeadingAssignment(
+                    inspection_id=insp.id,
+                    sequence_order=insp.sequence_order,
+                    direction_reversed=True,
+                    is_auto=True,
+                )
+                for insp in inspections
+            ]
+            return opt.HeadingSolution(
+                assignments=assignments,
+                total_distance_m=90.0,
+                total_turn_deg=0.0,
+                baseline_distance_m=180.0,
+                baseline_turn_deg=0.0,
+                improvement_pct=50.0,
+                auto_inspection_count=1,
+                pinned_inspection_count=0,
+            )
+
+        monkeypatch.setattr(opt, "solve_headings", fake_solve)
+
+        r = client.post(f"/api/v1/missions/{mission_id}/headings/auto")
+        assert r.status_code == 200
+
+        # mission regressed from PLANNED -> DRAFT, flight plan is gone
+        session = Session()
+        try:
+            refreshed = session.query(Mission).filter(Mission.id == mission_id).first()
+            assert refreshed.status == MissionStatus.DRAFT
+            assert refreshed.flight_plan is None
+            assert session.query(FlightPlan).filter(FlightPlan.id == flight_plan_id).first() is None
+        finally:
+            session.close()
+
+    def test_no_change_leaves_mission_status_alone(
+        self, client, auto_headings_airport, db_engine, monkeypatch
+    ):
+        """when the solver picks the already-configured direction, no regression happens."""
+        from sqlalchemy.orm import sessionmaker
+
+        from app.models.mission import Mission, MissionStatus
+        from app.schemas.mission import HeadingAssignment
+        from app.services import heading_optimizer as opt
+
+        mission_id, inspection_id = _make_mission_with_inspection(
+            client,
+            auto_headings_airport,
+            config={"direction_is_auto": True, "direction_reversed": False},
+        )
+
+        Session = sessionmaker(bind=db_engine)
+        session = Session()
+        try:
+            mission = session.query(Mission).filter(Mission.id == mission_id).first()
+            mission.status = MissionStatus.PLANNED
+            session.commit()
+        finally:
+            session.close()
+
+        # stub the solver to return the same direction_reversed already configured
+        def fake_solve_noop(inspections, surfaces):
+            """return a solution matching the current (False) direction_reversed."""
+            assignments = [
+                HeadingAssignment(
+                    inspection_id=insp.id,
+                    sequence_order=insp.sequence_order,
+                    direction_reversed=False,
+                    is_auto=True,
+                )
+                for insp in inspections
+            ]
+            return opt.HeadingSolution(
+                assignments=assignments,
+                total_distance_m=0.0,
+                total_turn_deg=0.0,
+                baseline_distance_m=0.0,
+                baseline_turn_deg=0.0,
+                improvement_pct=0.0,
+                auto_inspection_count=1,
+                pinned_inspection_count=0,
+            )
+
+        monkeypatch.setattr(opt, "solve_headings", fake_solve_noop)
+
+        r = client.post(f"/api/v1/missions/{mission_id}/headings/auto")
+        assert r.status_code == 200
+
+        session = Session()
+        try:
+            refreshed = session.query(Mission).filter(Mission.id == mission_id).first()
+            assert refreshed.status == MissionStatus.PLANNED
+        finally:
+            session.close()
+
+    def test_audit_log_entry_written(self, client, auto_headings_airport, db_engine, monkeypatch):
+        """route emits an audit log entry for the auto-resolve action."""
+        from sqlalchemy.orm import sessionmaker
+
+        from app.models.audit_log import AuditLog
+        from app.schemas.mission import HeadingAssignment
+        from app.services import heading_optimizer as opt
+
+        mission_id, inspection_id = _make_mission_with_inspection(
+            client,
+            auto_headings_airport,
+            config={"direction_is_auto": True},
+        )
+
+        def fake_solve(inspections, surfaces):
+            """return a trivial solution so the persist path completes."""
+            assignments = [
+                HeadingAssignment(
+                    inspection_id=insp.id,
+                    sequence_order=insp.sequence_order,
+                    direction_reversed=False,
+                    is_auto=True,
+                )
+                for insp in inspections
+            ]
+            return opt.HeadingSolution(
+                assignments=assignments,
+                total_distance_m=0.0,
+                total_turn_deg=0.0,
+                baseline_distance_m=0.0,
+                baseline_turn_deg=0.0,
+                improvement_pct=0.0,
+                auto_inspection_count=1,
+                pinned_inspection_count=0,
+            )
+
+        monkeypatch.setattr(opt, "solve_headings", fake_solve)
+
+        r = client.post(f"/api/v1/missions/{mission_id}/headings/auto")
+        assert r.status_code == 200
+
+        Session = sessionmaker(bind=db_engine)
+        session = Session()
+        try:
+            entries = (
+                session.query(AuditLog)
+                .filter(AuditLog.entity_id == UUID(mission_id))
+                .filter(AuditLog.action == "UPDATE")
+                .all()
+            )
+            matched = [
+                e
+                for e in entries
+                if e.details and e.details.get("action") == "auto_resolve_headings"
+            ]
+            assert matched, "expected an auto_resolve_headings audit entry"
+            assert matched[-1].details.get("auto_inspection_count") == 1
+        finally:
+            session.close()

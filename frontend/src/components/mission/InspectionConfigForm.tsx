@@ -889,7 +889,13 @@ export default function InspectionConfigForm({
           const isReversed = resolveBoolean("direction_reversed");
           const setMode = (mode: "AUTO" | "NATURAL" | "REVERSED") => {
             if (mode === "AUTO") {
-              onChange({ ...configOverride, direction_is_auto: true });
+              // reset direction_reversed so the bearing display stays coherent
+              // until the optimizer runs and writes back a resolved value.
+              onChange({
+                ...configOverride,
+                direction_is_auto: true,
+                direction_reversed: false,
+              });
               return;
             }
             onChange({

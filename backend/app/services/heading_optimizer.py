@@ -24,7 +24,6 @@ from app.models.enums import InspectionMethod
 from app.models.inspection import Inspection, InspectionConfiguration, InspectionTemplate
 from app.models.mission import Mission
 from app.schemas.mission import HeadingAssignment, HeadingAutoResponse
-from app.services.inspection_service import _delete_flight_plan_if_exists
 from app.services.trajectory.config_resolver import resolve_with_defaults
 from app.services.trajectory.helpers import (
     determine_end_position,
@@ -36,6 +35,7 @@ from app.services.trajectory.helpers import (
 )
 from app.services.trajectory.types import Point3D
 from app.utils.geo import bearing_between, distance_between
+from app.utils.mission_helpers import delete_flight_plan_if_exists
 
 # solver safety cap - brute force is fine for k <= MAX_AUTO_INSPECTIONS (2^10 = 1024)
 MAX_AUTO_INSPECTIONS: int = 10
@@ -429,7 +429,7 @@ def solve_and_persist(db: Session, mission_id: UUID) -> HeadingAutoResponse:
             changed = True
 
     if changed:
-        _delete_flight_plan_if_exists(db, mission)
+        delete_flight_plan_if_exists(db, mission)
         try:
             mission.invalidate_trajectory()
         except ValueError as e:
