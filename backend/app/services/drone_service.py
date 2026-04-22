@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
@@ -60,13 +61,6 @@ def create_drone(db: Session, airport_id: UUID, schema: DroneCreate) -> Drone:
     if not profile:
         raise DomainError("drone profile not found")
 
-    drone = Drone(
-        drone_profile_id=schema.drone_profile_id,
-        name=schema.name,
-        serial_number=schema.serial_number,
-        notes=schema.notes,
-    )
-
     # duplicate name at this airport
     exists = (
         db.query(Drone).filter(Drone.airport_id == airport_id, Drone.name == schema.name).first()
@@ -74,7 +68,14 @@ def create_drone(db: Session, airport_id: UUID, schema: DroneCreate) -> Drone:
     if exists:
         raise ConflictError(f"a drone named '{schema.name}' already exists at this airport")
 
-    drone.airport_id = airport_id
+    drone = Drone(
+        airport_id=airport_id,
+        drone_profile_id=schema.drone_profile_id,
+        name=schema.name,
+        serial_number=schema.serial_number,
+        notes=schema.notes,
+    )
+
     db.add(drone)
     db.commit()
     db.refresh(drone)
@@ -173,7 +174,21 @@ def find_or_create_drone_for_profile(
         name=name,
     )
     db.add(drone)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # concurrent creator won the race on (airport_id, name) - roll back the
+        # failed insert and return the drone that landed first
+        db.rollback()
+        winner = (
+            db.query(Drone)
+            .filter(Drone.airport_id == airport_id, Drone.drone_profile_id == drone_profile_id)
+            .order_by(Drone.created_at)
+            .first()
+        )
+        if winner:
+            return winner
+        raise ConflictError(f"a drone named '{name}' already exists at this airport") from None
     return drone
 
 

@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
@@ -78,6 +78,13 @@ class BulkChangeDroneRequest(BaseModel):
     from_drone_profile_id: UUID | None = None
     scope: Literal["ALL_DRAFT", "SELECTED"] = "ALL_DRAFT"
     mission_ids: list[UUID] = []
+
+    @model_validator(mode="after")
+    def _require_target_drone(self):
+        """reject payloads where neither target drone_id nor drone_profile_id was provided."""
+        if self.drone_id is None and self.drone_profile_id is None:
+            raise ValueError("either drone_id or drone_profile_id must be provided")
+        return self
 
 
 class BulkChangeDroneResponse(BaseModel):

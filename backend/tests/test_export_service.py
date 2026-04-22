@@ -780,7 +780,7 @@ class TestExportMissionFormats:
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "test"
-        mission.drone_profile_id = None
+        mission.drone = None
 
         fp = _make_flight_plan(1)
         fp.airport_id = uuid4()
@@ -802,7 +802,7 @@ class TestExportMissionFormats:
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "Test Mission"
-        mission.drone_profile_id = None
+        mission.drone = None
 
         fp = _make_flight_plan(2)
         fp.airport_id = uuid4()
@@ -830,7 +830,7 @@ class TestExportMissionFormats:
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "Test Mission"
-        mission.drone_profile_id = None
+        mission.drone = None
 
         fp = _make_flight_plan(2)
         fp.airport_id = uuid4()
@@ -862,7 +862,7 @@ class TestExportMissionFormats:
         mission = MagicMock()
         mission.status = "EXPORTED"
         mission.name = "Already Done"
-        mission.drone_profile_id = None
+        mission.drone = None
 
         fp = _make_flight_plan(1)
         fp.airport_id = uuid4()
@@ -885,7 +885,7 @@ class TestExportMissionFormats:
         mission = MagicMock()
         mission.status = "DRAFT"
         mission.name = "x"
-        mission.drone_profile_id = None
+        mission.drone = None
 
         fp = _make_flight_plan(1)
         airport = MagicMock()
@@ -918,7 +918,7 @@ class TestExportMissionFormats:
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "x"
-        mission.drone_profile_id = None
+        mission.drone = None
 
         db = _build_export_db_mock(mission, None, None)
 
@@ -934,7 +934,7 @@ class TestExportMissionFormats:
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "x"
-        mission.drone_profile_id = None
+        mission.drone = None
 
         fp = _make_flight_plan(1)
         fp.airport_id = uuid4()
@@ -957,7 +957,7 @@ class TestExportMissionFormats:
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "x"
-        mission.drone_profile_id = None
+        mission.drone = None
         mission.transition_to.side_effect = ValueError("bad transition")
 
         fp = _make_flight_plan(1)
@@ -979,7 +979,7 @@ class TestExportMissionFormats:
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "Airport Inspection"
-        mission.drone_profile_id = uuid4()
+        mission.drone.drone_profile_id = uuid4()
         mission.takeoff_coordinate = None
 
         fp = _make_flight_plan(1)
@@ -1013,7 +1013,7 @@ class TestExportMissionFormats:
         mission = MagicMock()
         mission.status = "VALIDATED"
         mission.name = "Test_2.Mission: runway / 22"
-        mission.drone_profile_id = None
+        mission.drone = None
 
         fp = _make_flight_plan(1)
         fp.airport_id = uuid4()

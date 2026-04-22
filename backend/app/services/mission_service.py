@@ -14,7 +14,12 @@ from app.services.geometry_converter import schema_to_model_data
 
 def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mission:
     """validate and execute status transition via aggregate root."""
-    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    mission = (
+        db.query(Mission)
+        .options(joinedload(Mission.drone).joinedload(Drone.drone_profile))
+        .filter(Mission.id == mission_id)
+        .first()
+    )
     if not mission:
         raise NotFoundError("mission not found")
 
@@ -33,9 +38,15 @@ def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mis
         )
 
     db.commit()
-    db.refresh(mission)
 
-    return mission
+    # re-query with eager loads so MissionResponse.drone_profile_id does not
+    # lazy-load on expired attributes during response serialization
+    return (
+        db.query(Mission)
+        .options(joinedload(Mission.drone).joinedload(Drone.drone_profile))
+        .filter(Mission.id == mission_id)
+        .first()
+    )
 
 
 def list_missions(
@@ -277,7 +288,10 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
     """
     original = (
         db.query(Mission)
-        .options(joinedload(Mission.inspections).joinedload(Inspection.config))
+        .options(
+            joinedload(Mission.inspections).joinedload(Inspection.config),
+            joinedload(Mission.drone).joinedload(Drone.drone_profile),
+        )
         .filter(Mission.id == mission_id)
         .first()
     )
@@ -323,6 +337,15 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
         copy.add_inspection(new_insp)
 
     db.commit()
-    db.refresh(copy)
 
-    return copy
+    # re-query with eager loads so downstream serialization of drone_profile_id
+    # does not trigger a lazy load on expired attributes
+    return (
+        db.query(Mission)
+        .options(
+            joinedload(Mission.inspections).joinedload(Inspection.config),
+            joinedload(Mission.drone).joinedload(Drone.drone_profile),
+        )
+        .filter(Mission.id == copy.id)
+        .first()
+    )

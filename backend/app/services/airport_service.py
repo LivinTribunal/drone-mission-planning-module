@@ -290,22 +290,7 @@ def bulk_change_drone(
             Mission.airport_id == airport_id, Mission.status == MissionStatus.DRAFT
         )
         if from_fleet_id is not None:
-            drones_with_same_profile = (
-                db.query(Drone.id)
-                .join(Drone.drone_profile)
-                .filter(Drone.airport_id == airport_id)
-                .filter(
-                    Drone.drone_profile_id.in_(
-                        db.query(Drone.drone_profile_id).filter(Drone.id == from_fleet_id)
-                    )
-                )
-                .all()
-            )
-            ids = [d[0] for d in drones_with_same_profile]
-            if ids:
-                query = query.filter(Mission.drone_id.in_(ids))
-            else:
-                query = query.filter(Mission.drone_id == from_fleet_id)
+            query = query.filter(Mission.drone_id == from_fleet_id)
         draft_missions = query.all()
         for mission in draft_missions:
             mission.change_drone(target_drone_id)
