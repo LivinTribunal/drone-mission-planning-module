@@ -179,7 +179,7 @@ class ResolvedConfig:
     lha_setting_angle_override_id: UUID | str | None = None
     hover_bearing: Degrees | None = None
     hover_bearing_reference: str | None = None
-    direction_heading: Degrees | None = None
+    direction_reversed: bool = False
 
 
 @dataclass

@@ -37,7 +37,7 @@ class InspectionConfigCreate(BaseModel):
     lha_setting_angle_override_id: UUID | None = None
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
-    direction_heading: float | None = Field(default=None, ge=0, lt=360)
+    direction_reversed: bool = False
     white_balance: WhiteBalanceStr | None = None
     iso: int | None = Field(default=None, gt=0)
     shutter_speed: str | None = Field(default=None, max_length=20)
@@ -71,7 +71,7 @@ class InspectionConfigResponse(BaseModel):
     lha_setting_angle_override_id: UUID | None = None
     hover_bearing: float | None = None
     hover_bearing_reference: HoverBearingRefStr | None = None
-    direction_heading: float | None = None
+    direction_reversed: bool = False
     white_balance: WhiteBalanceStr | None = None
     iso: int | None = None
     shutter_speed: str | None = None

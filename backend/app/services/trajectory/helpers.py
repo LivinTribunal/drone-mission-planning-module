@@ -4,7 +4,7 @@ import math
 from app.core.exceptions import TrajectoryGenerationError
 from app.models.enums import CameraAction, InspectionMethod, WaypointType
 from app.schemas.geometry import parse_ewkb
-from app.utils.geo import EARTH_RADIUS_M, elevation_angle, point_at_distance
+from app.utils.geo import elevation_angle, point_at_distance
 
 from .types import (
     DEFAULT_GLIDE_SLOPE,
@@ -22,29 +22,6 @@ from .types import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def sort_positions_along_heading(positions: list[Point3D], heading: Degrees) -> list[Point3D]:
-    """sort positions by projection onto heading vector (0=N, 90=E)."""
-    if len(positions) <= 1:
-        return positions
-
-    heading_rad = math.radians(heading)
-    east_component = math.sin(heading_rad)
-    north_component = math.cos(heading_rad)
-
-    # centroid as origin for relative positions
-    center_lat = sum(p.lat for p in positions) / len(positions)
-    center_lon = sum(p.lon for p in positions) / len(positions)
-    cos_center_lat = math.cos(math.radians(center_lat))
-
-    def projection(p: Point3D) -> float:
-        """scalar projection onto heading vector."""
-        delta_north = math.radians(p.lat - center_lat) * EARTH_RADIUS_M
-        delta_east = math.radians(p.lon - center_lon) * EARTH_RADIUS_M * cos_center_lat
-        return delta_east * east_component + delta_north * north_component
-
-    return sorted(positions, key=projection)
 
 
 def _designator_sort_key(designator: str | None) -> tuple:

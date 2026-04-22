@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
-from app.models.enums import MissionStatus, WaypointType
+from app.models.enums import InspectionMethod, MissionStatus, WaypointType
 from app.models.flight_plan import (
     FlightPlan,
     ValidationResult,
@@ -22,7 +22,14 @@ from app.schemas.flight_plan import (
 from app.schemas.geometry import parse_ewkb
 from app.services.geometry_converter import geojson_to_ewkt
 from app.services.trajectory.types import WaypointData
-from app.utils.geo import distance_between
+from app.utils.geo import bearing_between, distance_between
+
+# methods where first-to-last traversal bearing is meaningful.
+_BEARING_METHODS = {
+    InspectionMethod.HORIZONTAL_RANGE.value,
+    InspectionMethod.FLY_OVER.value,
+    InspectionMethod.PARALLEL_SIDE_SWEEP.value,
+}
 
 
 def _to_point_ewkt(lon: float, lat: float, alt: float) -> str:
@@ -106,6 +113,12 @@ def build_enriched_response(db: Session, flight_plan: FlightPlan) -> FlightPlanR
         if wp.inspection_id:
             by_inspection[wp.inspection_id].append(wp)
 
+    # inspection id -> method, for deriving the displayed traversal bearing
+    method_by_inspection: dict[UUID, str] = {}
+    if mission:
+        for insp in mission.inspections:
+            method_by_inspection[insp.id] = insp.method
+
     inspection_stats = []
     for insp_id, insp_wps in by_inspection.items():
         insp_alts = [_extract_altitude(wp.position) for wp in insp_wps]
@@ -129,6 +142,22 @@ def build_enriched_response(db: Session, flight_plan: FlightPlan) -> FlightPlanR
             if wp.hover_duration:
                 seg_duration += wp.hover_duration
 
+        # traversal bearing between the first and last measurement waypoints.
+        # only meaningful for arc/linear methods with >= 2 measurement waypoints.
+        direction_bearing: int | None = None
+        if method_by_inspection.get(insp_id) in _BEARING_METHODS:
+            meas_coords = [
+                _extract_coords(wp.position)
+                for wp in insp_wps
+                if wp.waypoint_type == WaypointType.MEASUREMENT.value
+            ]
+            if len(meas_coords) >= 2:
+                first_lon, first_lat, _ = meas_coords[0]
+                last_lon, last_lat, _ = meas_coords[-1]
+                direction_bearing = (
+                    round(bearing_between(first_lon, first_lat, last_lon, last_lat)) % 360
+                )
+
         inspection_stats.append(
             InspectionFlightStats(
                 inspection_id=insp_id,
@@ -138,6 +167,7 @@ def build_enriched_response(db: Session, flight_plan: FlightPlan) -> FlightPlanR
                 max_altitude_msl=insp_max_msl,
                 waypoint_count=len(insp_wps),
                 segment_duration=round(seg_duration, 2),
+                direction_bearing=direction_bearing,
             )
         )
 

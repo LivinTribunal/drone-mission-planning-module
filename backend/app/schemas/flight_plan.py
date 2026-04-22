@@ -152,6 +152,9 @@ class InspectionFlightStats(BaseModel):
     max_altitude_msl: float
     waypoint_count: int
     segment_duration: float | None = None
+    # displayed-only bearing between first and last measurement waypoint, 0-359.
+    # None for single-wp trajectories and methods where lateral direction is not meaningful.
+    direction_bearing: int | None = None
 
 
 class FlightPlanResponse(BaseModel):
