@@ -174,6 +174,20 @@ Two-column layout. Left scrollable panel: MissionConfigForm (drone profile selec
 ### Page 08 — Validation & Export (`/operator-center/missions/:id/validation-export`)
 Left: per-constraint breakdown (pass/fail/warning), "Edit Configuration" → Config tab, "Accept" → VALIDATED. Right: map + export section (KML/KMZ/JSON/MAVLink checkboxes, download button). Export disabled until VALIDATED. Complete/Cancel disabled until EXPORTED. Delete available always.
 
+**Geozone export (opt-in).** The operator can tick "Include geozones in export" to bundle the airport's safety zones + obstacles (and optionally runway/taxiway buffers) alongside the waypoints. The checkbox is gated by two axes: format support and drone capability (`DroneProfile.supports_geozone_upload`).
+
+| Format       | Keep-out support          | Enforcement                        | Gate behavior                    |
+|--------------|---------------------------|------------------------------------|----------------------------------|
+| MAVLINK      | Native (`.plan` geoFence) | Enforced by ArduPilot/PX4 firmware | Emits `.plan` JSON when on       |
+| JSON         | Native (TarmacView schema)| Enforced by downstream tooling     | Adds top-level `geozones` object |
+| UGCS         | Native (`noFlyZones`)     | Enforced by UgCS route engine      | Adds route-level no-fly polygons |
+| KMZ          | Advisory overlay          | Pilot 2 renders, does NOT enforce  | Adds `wpmz/geozones.kml` sidecar |
+| KML          | Advisory overlay          | Google Earth renders only          | Adds "Keep-out zones" folder     |
+| WPML         | Unsupported               | —                                  | Button disabled for WPML         |
+| GPX/LITCHI/CSV/DRONEDEPLOY | Unsupported | —                                  | Button disabled                  |
+
+The gate rejects mismatched combinations with `400` before running the export (see `backend/app/services/export_service.py::export_mission`). DJI enterprise fleets that use FlightHub 2 still have `supports_geozone_upload = False` because fences are pushed out-of-band via the FlightHub 2 Custom Flight Area API — see `docs/adr/2026-04-22-geozone-export.md`.
+
 ### Page 09 — Airport (Operator) (`/operator-center/airport`)
 Read-only full airport view. All infrastructure on map. Left: surface list, AGL/PoI list. Everything clickable.
 

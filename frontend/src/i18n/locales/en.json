@@ -802,6 +802,15 @@
         "full": "Export includes full flight: takeoff → transit → measurements → transit → landing",
         "noTakeoffLanding": "Export starts/ends at transit altitude - no ground-level takeoff or landing",
         "measurementsOnly": "Export includes measurement waypoints only - no takeoff, landing, or transit"
+      },
+      "geozones": {
+        "label": "Include geozones in export",
+        "runwayBuffersLabel": "Also include runway/taxiway buffers as inclusion zones (MAVLINK only)",
+        "enforcedNote": "Selected MAVLINK/JSON/UGCS exports will enforce these keep-outs in flight.",
+        "advisoryNote": "KMZ/KML carries zones as a visual overlay. DJI Pilot 2 shows them but does not enforce them in flight.",
+        "tooltipNoFormatSelected": "Select at least one export format first.",
+        "tooltipUnsupportedFormat": "Geozones are only embeddable in: {{formats}}. Select one of those formats.",
+        "tooltipDroneIncapable": "This mission's drone profile does not support geozone upload. Pick a MAVLink-capable airframe (ArduPilot, PX4, Holybro, CubePilot, Pixhawk)."
       }
     },
     "missionReport": {

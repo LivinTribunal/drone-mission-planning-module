@@ -149,6 +149,7 @@ describe("StatsPanel", () => {
           weight: null,
           model_identifier: null,
           max_optical_zoom: null,
+          supports_geozone_upload: false,
           created_at: "2026-03-19T00:00:00Z",
           updated_at: "2026-03-19T00:00:00Z",
           mission_count: 0,

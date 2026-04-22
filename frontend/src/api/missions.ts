@@ -69,13 +69,23 @@ export async function validateMission(
   return res.data;
 }
 
+export interface ExportOptions {
+  includeGeozones?: boolean;
+  includeRunwayBuffers?: boolean;
+}
+
 export async function exportMissionFiles(
   id: string,
   formats: string[],
+  options: ExportOptions = {},
 ): Promise<{ blob: Blob; filename: string | null }> {
   const res = await client.post(
     `/missions/${id}/export`,
-    { formats },
+    {
+      formats,
+      include_geozones: options.includeGeozones ?? false,
+      include_runway_buffers: options.includeRunwayBuffers ?? false,
+    },
     { responseType: "blob" },
   );
   return { blob: res.data, filename: parseContentDispositionFilename(res.headers) };

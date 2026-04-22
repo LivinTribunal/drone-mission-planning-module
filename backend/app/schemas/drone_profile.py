@@ -33,6 +33,7 @@ class DroneProfileCreate(BaseModel):
     weight: float | None = None
     model_identifier: str | None = None
     max_optical_zoom: float | None = None
+    supports_geozone_upload: bool = False
 
     @field_validator("model_identifier")
     @classmethod
@@ -58,6 +59,7 @@ class DroneProfileUpdate(BaseModel):
     weight: float | None = None
     model_identifier: str | None = None
     max_optical_zoom: float | None = None
+    supports_geozone_upload: bool | None = None
 
     @field_validator("model_identifier")
     @classmethod
@@ -84,6 +86,7 @@ class DroneProfileResponse(BaseModel):
     weight: float | None = None
     model_identifier: str | None = None
     max_optical_zoom: float | None = None
+    supports_geozone_upload: bool = False
     created_at: datetime
     updated_at: datetime
     mission_count: int = 0

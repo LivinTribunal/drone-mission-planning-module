@@ -181,14 +181,24 @@ def export_mission(
 ):
     """generate export files and transition VALIDATED -> EXPORTED."""
     check_mission_access(db, current_user, mission_id)
-    files, safe_name = export_service.export_mission(db, mission_id, body.formats)
+    files, safe_name = export_service.export_mission(
+        db,
+        mission_id,
+        body.formats,
+        include_geozones=body.include_geozones,
+        include_runway_buffers=body.include_runway_buffers,
+    )
     log_audit(
         db,
         current_user,
         AuditAction.EXPORT,
         entity_type="Mission",
         entity_id=mission_id,
-        details={"formats": body.formats},
+        details={
+            "formats": body.formats,
+            "include_geozones": body.include_geozones,
+            "include_runway_buffers": body.include_runway_buffers,
+        },
         ip_address=request.client.host if request.client else None,
     )
     db.commit()
