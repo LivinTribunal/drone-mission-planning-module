@@ -20,16 +20,16 @@ export interface ExportPanelProps {
 }
 
 const EXPORT_FORMATS = [
-  { value: "KML", labelKey: "formatKml", descKey: "formatKmlDesc" },
-  { value: "KMZ", labelKey: "formatKmz", descKey: "formatKmzDesc" },
-  { value: "JSON", labelKey: "formatJson", descKey: "formatJsonDesc" },
-  { value: "MAVLINK", labelKey: "formatMavlink", descKey: "formatMavlinkDesc" },
-  { value: "UGCS", labelKey: "formatUgcs", descKey: "formatUgcsDesc" },
-  { value: "WPML", labelKey: "formatWpml", descKey: "formatWpmlDesc" },
-  { value: "CSV", labelKey: "formatCsv", descKey: "formatCsvDesc" },
-  { value: "GPX", labelKey: "formatGpx", descKey: "formatGpxDesc" },
-  { value: "LITCHI", labelKey: "formatLitchi", descKey: "formatLitchiDesc" },
-  { value: "DRONEDEPLOY", labelKey: "formatDronedeploy", descKey: "formatDronedeployDesc" },
+  { value: "KML", labelKey: "formatKml", descKey: "formatKmlDesc", capabilityKey: "none" },
+  { value: "KMZ", labelKey: "formatKmz", descKey: "formatKmzDesc", capabilityKey: "zoomOnly" },
+  { value: "JSON", labelKey: "formatJson", descKey: "formatJsonDesc", capabilityKey: "full" },
+  { value: "MAVLINK", labelKey: "formatMavlink", descKey: "formatMavlinkDesc", capabilityKey: "none" },
+  { value: "UGCS", labelKey: "formatUgcs", descKey: "formatUgcsDesc", capabilityKey: "none" },
+  { value: "WPML", labelKey: "formatWpml", descKey: "formatWpmlDesc", capabilityKey: "zoomOnly" },
+  { value: "CSV", labelKey: "formatCsv", descKey: "formatCsvDesc", capabilityKey: "none" },
+  { value: "GPX", labelKey: "formatGpx", descKey: "formatGpxDesc", capabilityKey: "none" },
+  { value: "LITCHI", labelKey: "formatLitchi", descKey: "formatLitchiDesc", capabilityKey: "none" },
+  { value: "DRONEDEPLOY", labelKey: "formatDronedeploy", descKey: "formatDronedeployDesc", capabilityKey: "none" },
 ] as const;
 
 function canExport(status: MissionStatus): boolean {
@@ -171,6 +171,14 @@ export default function ExportPanel({
                     </span>
                     <p className="text-xs text-tv-text-muted">
                       {t(`mission.validationExportPage.${fmt.descKey}`)}
+                    </p>
+                    <p
+                      className="text-[11px] text-tv-text-muted italic mt-1"
+                      data-testid={`capability-${fmt.value}`}
+                    >
+                      {t(
+                        `mission.validationExportPage.capabilityNote.${fmt.capabilityKey}`,
+                      )}
                     </p>
                   </div>
                 </label>

@@ -650,14 +650,106 @@ def _append_turn_param(parent) -> None:
     _sub_text(turn_param, "waypointTurnDampingDist", "0.2")
 
 
-def _append_action_group(placemark, wp, index: int) -> None:
-    """emit a wpml:actionGroup covering yaw, gimbal, hover, and camera actions.
+_CAMERA_SETTING_KEYS = (
+    "white_balance",
+    "iso",
+    "shutter_speed",
+    "focus_mode",
+    "optical_zoom",
+)
+
+
+def _resolve_inspection_camera_settings(mission) -> dict:
+    """map inspection_id -> resolved camera settings dict from mission + template.
+
+    returns an empty dict when the mission has no inspections loaded. mirrors the
+    resolution logic used in generate_json so both paths produce the same values.
+    """
+    if not mission or not getattr(mission, "inspections", None):
+        return {}
+
+    result: dict = {}
+    for insp in mission.inspections:
+        resolved: dict = {}
+        if getattr(insp, "config", None):
+            template_cfg = insp.template.default_config if getattr(insp, "template", None) else None
+            resolved = insp.config.resolve_with_defaults(template_cfg)
+        result[insp.id] = {k: resolved.get(k) for k in _CAMERA_SETTING_KEYS}
+    return result
+
+
+def _first_zoom_emission_waypoints(waypoints, inspection_camera: dict) -> set:
+    """sequence_orders of measurement waypoints that should emit a zoom action.
+
+    walks waypoints in order, picks the first MEASUREMENT waypoint per
+    inspection_id, and emits only when the resolved optical_zoom is set, differs
+    from 1.0x, and differs from the last zoom value already emitted on route.
+    """
+    seen_inspection_ids = set()
+    emissions: set = set()
+    last_zoom = None
+    for wp in waypoints:
+        insp_id = getattr(wp, "inspection_id", None)
+        if insp_id is None:
+            continue
+        if getattr(wp, "waypoint_type", None) != "MEASUREMENT":
+            continue
+        if insp_id in seen_inspection_ids:
+            continue
+        seen_inspection_ids.add(insp_id)
+
+        cam = inspection_camera.get(insp_id)
+        if not cam:
+            continue
+        zoom = cam.get("optical_zoom")
+        if zoom is None or zoom == 1.0:
+            continue
+        if last_zoom is not None and zoom == last_zoom:
+            continue
+
+        emissions.add(wp.sequence_order)
+        last_zoom = zoom
+    return emissions
+
+
+def _append_zoom_action(group, zoom_factor: float, drone_profile, action_id: int) -> int:
+    """emit a wpml:zoom action translating optical_zoom into the dji schema.
+
+    prefers focalLength when the drone profile exposes a 1x sensor base focal
+    length; falls back to zoomFactor otherwise. returns the next action id.
+    """
+    action = ET.SubElement(group, _wpml_tag("action"))
+    _sub_text(action, "actionId", str(action_id))
+    _sub_text(action, "actionActuatorFunc", "zoom")
+    params = ET.SubElement(action, _wpml_tag("actionActuatorFuncParam"))
+    _sub_text(params, "payloadPositionIndex", "0")
+
+    base = getattr(drone_profile, "sensor_base_focal_length", None) if drone_profile else None
+    if base is not None and base > 0:
+        focal = zoom_factor * base
+        _sub_text(params, "focalLength", f"{focal:g}")
+    else:
+        _sub_text(params, "zoomFactor", f"{zoom_factor:g}")
+
+    return action_id + 1
+
+
+def _append_action_group(
+    placemark,
+    wp,
+    index: int,
+    *,
+    zoom_factor: float | None = None,
+    drone_profile=None,
+) -> None:
+    """emit a wpml:actionGroup covering yaw, gimbal, hover, camera, and zoom actions.
 
     rotateYaw + gimbalRotate are only emitted for measurement/hover waypoints
     with a camera target. takeoff / landing / transit points keep the nose
     along flight direction and the gimbal in its default position.
 
-    order matches real dji exports: rotateYaw -> gimbalRotate -> hover -> camera.
+    order matches real dji exports: rotateYaw -> gimbalRotate -> hover -> camera,
+    with zoom appended last since it is a post-arrival framing adjustment.
     """
     camera_func = _DJI_CAMERA_ACTIONS.get(wp.camera_action)
     hover_secs = wp.hover_duration or 0
@@ -665,7 +757,15 @@ def _append_action_group(placemark, wp, index: int) -> None:
     heading_val = wp.heading if aims else None
     gimbal_pitch = getattr(wp, "gimbal_pitch", None) if aims else None
 
-    if not camera_func and hover_secs <= 0 and heading_val is None and gimbal_pitch is None:
+    emit_zoom = zoom_factor is not None
+
+    if (
+        not camera_func
+        and hover_secs <= 0
+        and heading_val is None
+        and gimbal_pitch is None
+        and not emit_zoom
+    ):
         return
 
     group = ET.SubElement(placemark, _wpml_tag("actionGroup"))
@@ -737,9 +837,21 @@ def _append_action_group(placemark, wp, index: int) -> None:
             _sub_text(params, "useGlobalPayloadLensIndex", "1")
         elif camera_func == "startRecord":
             _sub_text(params, "useGlobalPayloadLensIndex", "1")
+        action_id += 1
+
+    if emit_zoom:
+        action_id = _append_zoom_action(group, zoom_factor, drone_profile, action_id)
 
 
-def _append_placemark(folder, wp, airport_elevation: float, *, in_waylines: bool) -> None:
+def _append_placemark(
+    folder,
+    wp,
+    airport_elevation: float,
+    *,
+    in_waylines: bool,
+    zoom_factor: float | None = None,
+    drone_profile=None,
+) -> None:
     """add a wpml waypoint placemark.
 
     waylines executeHeight is written as AGL relative to the takeoff point,
@@ -779,7 +891,13 @@ def _append_placemark(folder, wp, airport_elevation: float, *, in_waylines: bool
         _sub_text(placemark, "useGlobalTurnParam", "1")
     _sub_text(placemark, "useStraightLine", "1")
 
-    _append_action_group(placemark, wp, wp.sequence_order)
+    _append_action_group(
+        placemark,
+        wp,
+        wp.sequence_order,
+        zoom_factor=zoom_factor,
+        drone_profile=drone_profile,
+    )
 
     if in_waylines:
         # waylines always carries waypointGimbalHeadingParam with zeros, per
@@ -825,6 +943,16 @@ def _max_agl(waypoints, airport_elevation: float) -> float:
     return max(heights) if heights else 100.0
 
 
+def _zoom_factor_for(wp, zoom_seqs: set, inspection_camera: dict) -> float | None:
+    """return optical_zoom value to emit at this waypoint, or None."""
+    if wp.sequence_order not in zoom_seqs:
+        return None
+    cam = inspection_camera.get(getattr(wp, "inspection_id", None))
+    if not cam:
+        return None
+    return cam.get("optical_zoom")
+
+
 def _build_dji_template_kml(
     flight_plan: FlightPlan,
     mission_name: str,
@@ -835,6 +963,8 @@ def _build_dji_template_kml(
     """build wpmz/template.kml - mission config plus reference waypoint template."""
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
     auto_speed = f"{waypoints[0].speed or 5:g}" if waypoints else "10"
+    inspection_camera = _resolve_inspection_camera_settings(mission)
+    zoom_seqs = _first_zoom_emission_waypoints(waypoints, inspection_camera)
     # keep global ceiling above the highest waypoint so the drone honors per-point altitude
     global_height = str(max(50, int(_max_agl(waypoints, airport_elevation) + 5)))
     now = datetime.now(timezone.utc)
@@ -875,7 +1005,14 @@ def _build_dji_template_kml(
     _sub_text(folder, "globalUseStraightLine", "1")
 
     for wp in waypoints:
-        _append_placemark(folder, wp, airport_elevation, in_waylines=False)
+        _append_placemark(
+            folder,
+            wp,
+            airport_elevation,
+            in_waylines=False,
+            zoom_factor=_zoom_factor_for(wp, zoom_seqs, inspection_camera),
+            drone_profile=drone_profile,
+        )
 
     _append_payload_param(folder)
 
@@ -892,6 +1029,8 @@ def _build_dji_waylines_wpml(
     """build wpmz/waylines.wpml - executable wayline consumed by the aircraft."""
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
     auto_speed = f"{waypoints[0].speed or 5:g}" if waypoints else "10"
+    inspection_camera = _resolve_inspection_camera_settings(mission)
+    zoom_seqs = _first_zoom_emission_waypoints(waypoints, inspection_camera)
 
     kml = ET.Element(_kml_tag("kml"))
     doc = ET.SubElement(kml, _kml_tag("Document"))
@@ -917,7 +1056,14 @@ def _build_dji_waylines_wpml(
     _sub_text(folder, "realTimeFollowSurfaceByFov", "0")
 
     for wp in waypoints:
-        _append_placemark(folder, wp, airport_elevation, in_waylines=True)
+        _append_placemark(
+            folder,
+            wp,
+            airport_elevation,
+            in_waylines=True,
+            zoom_factor=_zoom_factor_for(wp, zoom_seqs, inspection_camera),
+            drone_profile=drone_profile,
+        )
 
     return ET.tostring(kml, encoding="utf-8", xml_declaration=True)
 
@@ -1109,9 +1255,10 @@ def export_mission(
     returns (files_dict, sanitized_mission_name) where files_dict maps
     filename -> (content_bytes, content_type).
     """
-    # eager-load inspections + configs when JSON export is requested
+    # eager-load inspections + configs whenever an export format carries
+    # per-inspection camera settings (json, kmz, wpml).
     mission_query = db.query(Mission).filter(Mission.id == mission_id)
-    if "JSON" in formats:
+    if any(f in formats for f in ("JSON", "KMZ", "WPML")):
         mission_query = mission_query.options(
             joinedload(Mission.inspections).joinedload(Inspection.config),
             joinedload(Mission.inspections)

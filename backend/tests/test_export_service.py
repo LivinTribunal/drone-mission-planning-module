@@ -1520,3 +1520,205 @@ class TestGenerateDronedeploy:
         wp = data["waypoints"][0]
         # alt = 300 - 290 = 10
         assert abs(wp["alt"] - 10.0) < 0.01
+
+
+def _make_inspection(optical_zoom, *, other_settings=None):
+    """build a mock inspection whose config resolves to optical_zoom + extras."""
+    resolved = {
+        "white_balance": None,
+        "iso": None,
+        "shutter_speed": None,
+        "focus_mode": None,
+        "optical_zoom": optical_zoom,
+    }
+    if other_settings:
+        resolved.update(other_settings)
+
+    config = MagicMock()
+    config.resolve_with_defaults.return_value = resolved
+
+    template = MagicMock()
+    template.default_config = MagicMock()
+
+    insp = MagicMock()
+    insp.id = uuid4()
+    insp.config = config
+    insp.template = template
+    return insp
+
+
+def _kmz_texts(fp, *, mission=None, drone_profile=None):
+    """generate a kmz and return (template_kml, waylines_wpml) as strings."""
+    result = export_service.generate_kmz(
+        fp, "Night", 0, mission=mission, drone_profile=drone_profile
+    )
+    return _read_wpmz(result)
+
+
+class TestGenerateKmzCameraSettings:
+    """tests for per-inspection camera settings emission in the dji kmz export."""
+
+    def test_no_zoom_action_when_optical_zoom_null(self):
+        """inspection without optical_zoom emits no zoom action."""
+        fp = _make_flight_plan(3)
+        insp = _make_inspection(optical_zoom=None)
+        fp.waypoints[1].inspection_id = insp.id
+
+        mission = MagicMock()
+        mission.inspections = [insp]
+        mission.takeoff_coordinate = None
+
+        template, waylines = _kmz_texts(fp, mission=mission)
+
+        assert "actionActuatorFunc>zoom" not in template
+        assert "actionActuatorFunc>zoom" not in waylines
+
+    def test_no_zoom_action_when_optical_zoom_is_1x(self):
+        """baseline 1.0x is a no-op and emits no zoom action."""
+        fp = _make_flight_plan(3)
+        insp = _make_inspection(optical_zoom=1.0)
+        fp.waypoints[1].inspection_id = insp.id
+
+        mission = MagicMock()
+        mission.inspections = [insp]
+        mission.takeoff_coordinate = None
+
+        template, waylines = _kmz_texts(fp, mission=mission)
+
+        assert "actionActuatorFunc>zoom" not in template
+        assert "actionActuatorFunc>zoom" not in waylines
+
+    def test_zoom_action_emitted_at_first_measurement_waypoint(self):
+        """zoom action appears only in the first measurement waypoint per inspection."""
+        fp = _make_flight_plan(4)
+        # extend the flight plan so wp1, wp2 are both MEASUREMENT + same inspection
+        fp.waypoints[1].waypoint_type = "MEASUREMENT"
+        fp.waypoints[2].waypoint_type = "MEASUREMENT"
+        insp = _make_inspection(optical_zoom=3.0)
+        fp.waypoints[1].inspection_id = insp.id
+        fp.waypoints[2].inspection_id = insp.id
+
+        mission = MagicMock()
+        mission.inspections = [insp]
+        mission.takeoff_coordinate = None
+
+        _, waylines = _kmz_texts(fp, mission=mission)
+
+        # exactly one zoom action across the whole wayline
+        assert waylines.count("<wpml:actionActuatorFunc>zoom</wpml:actionActuatorFunc>") == 1
+        # lives inside the first measurement waypoint's action group
+        wp1_idx = waylines.find("<wpml:index>1</wpml:index>")
+        wp2_idx = waylines.find("<wpml:index>2</wpml:index>")
+        zoom_idx = waylines.find("<wpml:actionActuatorFunc>zoom")
+        assert wp1_idx < zoom_idx < wp2_idx
+
+    def test_zoom_action_per_inspection_with_different_zoom(self):
+        """two inspections with different optical_zoom each emit their own zoom action."""
+        fp = _make_flight_plan(4)
+        fp.waypoints[1].waypoint_type = "MEASUREMENT"
+        fp.waypoints[2].waypoint_type = "MEASUREMENT"
+        insp1 = _make_inspection(optical_zoom=2.0)
+        insp2 = _make_inspection(optical_zoom=5.0)
+        fp.waypoints[1].inspection_id = insp1.id
+        fp.waypoints[2].inspection_id = insp2.id
+
+        mission = MagicMock()
+        mission.inspections = [insp1, insp2]
+        mission.takeoff_coordinate = None
+
+        _, waylines = _kmz_texts(fp, mission=mission)
+
+        assert waylines.count("<wpml:actionActuatorFunc>zoom</wpml:actionActuatorFunc>") == 2
+
+    def test_zoom_action_not_repeated_when_value_matches_previous(self):
+        """consecutive inspections with the same optical_zoom emit the action only once."""
+        fp = _make_flight_plan(4)
+        fp.waypoints[1].waypoint_type = "MEASUREMENT"
+        fp.waypoints[2].waypoint_type = "MEASUREMENT"
+        insp1 = _make_inspection(optical_zoom=3.0)
+        insp2 = _make_inspection(optical_zoom=3.0)
+        fp.waypoints[1].inspection_id = insp1.id
+        fp.waypoints[2].inspection_id = insp2.id
+
+        mission = MagicMock()
+        mission.inspections = [insp1, insp2]
+        mission.takeoff_coordinate = None
+
+        _, waylines = _kmz_texts(fp, mission=mission)
+
+        assert waylines.count("<wpml:actionActuatorFunc>zoom</wpml:actionActuatorFunc>") == 1
+
+    def test_zoom_uses_focal_length_when_drone_profile_has_base(self):
+        """focalLength = optical_zoom × sensor_base_focal_length when the base is set."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].waypoint_type = "MEASUREMENT"
+        insp = _make_inspection(optical_zoom=5.0)
+        fp.waypoints[1].inspection_id = insp.id
+
+        mission = MagicMock()
+        mission.inspections = [insp]
+        mission.takeoff_coordinate = None
+
+        drone_profile = MagicMock()
+        drone_profile.model_identifier = None
+        drone_profile.manufacturer = "DJI"
+        drone_profile.model = "M30T"
+        drone_profile.sensor_base_focal_length = 24.0
+
+        _, waylines = _kmz_texts(fp, mission=mission, drone_profile=drone_profile)
+
+        # 5.0 x 24.0 = 120.0 - :g formatting drops trailing .0
+        assert "<wpml:focalLength>120</wpml:focalLength>" in waylines
+        assert "zoomFactor" not in waylines
+
+    def test_zoom_falls_back_to_zoom_factor_without_base(self):
+        """when the drone profile lacks sensor_base_focal_length, emit zoomFactor."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].waypoint_type = "MEASUREMENT"
+        insp = _make_inspection(optical_zoom=4.0)
+        fp.waypoints[1].inspection_id = insp.id
+
+        mission = MagicMock()
+        mission.inspections = [insp]
+        mission.takeoff_coordinate = None
+
+        drone_profile = MagicMock()
+        drone_profile.model_identifier = None
+        drone_profile.manufacturer = "DJI"
+        drone_profile.model = "M4T"
+        drone_profile.sensor_base_focal_length = None
+
+        _, waylines = _kmz_texts(fp, mission=mission, drone_profile=drone_profile)
+
+        assert "<wpml:zoomFactor>4</wpml:zoomFactor>" in waylines
+        assert "focalLength" not in waylines
+
+    def test_zoom_action_present_in_both_template_and_waylines(self):
+        """both template.kml and waylines.wpml carry the zoom action."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].waypoint_type = "MEASUREMENT"
+        insp = _make_inspection(optical_zoom=2.5)
+        fp.waypoints[1].inspection_id = insp.id
+
+        mission = MagicMock()
+        mission.inspections = [insp]
+        mission.takeoff_coordinate = None
+
+        template, waylines = _kmz_texts(fp, mission=mission)
+
+        for content in (template, waylines):
+            assert "<wpml:actionActuatorFunc>zoom</wpml:actionActuatorFunc>" in content
+
+    def test_zoom_skipped_when_inspection_not_in_mission(self):
+        """waypoint tagged to an inspection the mission doesn't know about emits nothing."""
+        fp = _make_flight_plan(3)
+        fp.waypoints[1].waypoint_type = "MEASUREMENT"
+        fp.waypoints[1].inspection_id = uuid4()
+
+        mission = MagicMock()
+        mission.inspections = []
+        mission.takeoff_coordinate = None
+
+        _, waylines = _kmz_texts(fp, mission=mission)
+
+        assert "actionActuatorFunc>zoom" not in waylines
