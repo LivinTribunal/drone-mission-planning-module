@@ -51,6 +51,7 @@ import {
   computePlacementUpdates,
   placementKeysFromUpdates,
 } from "@/utils/takeoffLandingPlacement";
+import { matchUndoRedoShortcut } from "@/utils/keyboardShortcuts";
 
 interface WaypointMoveAction {
   waypointId: string;
@@ -717,6 +718,14 @@ export default function MissionMapPage() {
     [id, clearHistory, t, refreshMissions, updateMissionFromPage],
   );
 
+  // keep latest undo/redo refs so the window listener never sees a stale closure
+  const handleUndoRef = useRef(handleUndo);
+  const handleRedoRef = useRef(handleRedo);
+  useEffect(() => {
+    handleUndoRef.current = handleUndo;
+    handleRedoRef.current = handleRedo;
+  });
+
   // ESC key handler - clear measure, reset tool
   // Ctrl+Z / Ctrl+Shift+Z for undo/redo
   useEffect(() => {
@@ -743,15 +752,15 @@ export default function MissionMapPage() {
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+      const undoRedo = matchUndoRedoShortcut(e);
+      if (undoRedo === "undo") {
         e.preventDefault();
-        handleUndo();
+        handleUndoRef.current();
         return;
       }
-
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) {
+      if (undoRedo === "redo") {
         e.preventDefault();
-        handleRedo();
+        handleRedoRef.current();
         return;
       }
 
@@ -761,7 +770,7 @@ export default function MissionMapPage() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeTool, measure, heading, resetTool, handleUndo, handleRedo]);
+  }, [activeTool, measure, heading, resetTool]);
 
   // beforeunload for dirty state
   useEffect(() => {
