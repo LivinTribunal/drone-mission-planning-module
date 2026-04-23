@@ -263,7 +263,10 @@ def _enumerate(
     best_dist, best_turn = _score_assignment(segments, best_choices)
     best_cost = best_dist + TURN_PENALTY_WEIGHT * best_turn
 
-    for mask in range(1, 1 << k):
+    # enumerate every assignment including mask=0 (all-natural). the strict
+    # `best_cost - 1e-9` guard prevents re-selecting a configuration equivalent
+    # to `base` when one has already been evaluated.
+    for mask in range(1 << k):
         choices = list(base)
         for bit, seg_idx in enumerate(auto_indices):
             choices[seg_idx] = bool((mask >> bit) & 1)

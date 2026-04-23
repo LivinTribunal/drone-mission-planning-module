@@ -355,6 +355,37 @@ class TestSolveHeadings:
         assert first.assignments[0].direction_reversed == second.assignments[0].direction_reversed
         assert first.total_distance_m == pytest.approx(second.total_distance_m)
 
+    def test_auto_inspection_starting_reversed_flips_back_when_natural_is_shorter(self):
+        """auto inspection starting with reversed=True flips back when natural wins.
+
+        guards against a regression in the brute-force enumerator: if mask=0
+        (all auto inspections set to natural/False) is skipped, the solver
+        cannot discover the all-natural assignment when any auto inspection
+        already has current_reversed=True.
+        """
+        from app.utils.geo import point_at_distance
+
+        # row A: eastward 4 LHAs starting at origin - pinned natural
+        row_a = _row(0.0, 0.0, 4, spacing_m=10.0)
+        a_exit_lon, a_exit_lat, _ = row_a[-1].position_coords
+
+        # row B: eastward 4 LHAs starting 60m east of A's exit.
+        # natural B: entry is close to A's exit (~60m transit).
+        # reversed B: entry is far from A's exit (~90m transit).
+        # natural (False) is the optimal direction for B.
+        start_lon, start_lat = point_at_distance(a_exit_lon, a_exit_lat, 90.0, 60.0)
+        row_b = _row(start_lon, start_lat, 4, spacing_m=10.0)
+
+        # B enters with direction_reversed=True (stale state from a prior pass)
+        insp_a = _fly_over(1, row_a, is_auto=False, direction_reversed=False)
+        insp_b = _fly_over(2, row_b, is_auto=True, direction_reversed=True)
+
+        sol = solve_headings([insp_a, insp_b], surfaces=[])
+        assignments = {a.sequence_order: a for a in sol.assignments}
+        # optimal is natural (False) despite the stale True starting state
+        assert assignments[2].direction_reversed is False
+        assert assignments[2].is_auto is True
+
     def test_pinned_inspection_keeps_current_reversed(self):
         """pinned (is_auto=False) inspections stay at their configured reversed value."""
         row = _row(0.0, 0.0, 3)
