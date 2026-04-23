@@ -15,9 +15,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.airport import Airport
+from app.models.enums import SafetyZoneType
 from app.models.flight_plan import FlightPlan
 from app.models.inspection import Inspection, InspectionTemplate
 from app.models.mission import DroneProfile, Mission
+from app.schemas.export import GEOZONE_CAPABLE_FORMATS
 from app.schemas.geometry import parse_ewkb
 
 
@@ -47,10 +49,175 @@ class _UUIDEncoder(json.JSONEncoder):
         return super().default(o)
 
 
+# safety zone types that represent active keep-outs for flight planning.
+# airport_boundary is informational (marks the airport footprint) and must not
+# be shipped as an exclusion polygon, otherwise the drone can't even take off.
+# enum members (which inherit from str) are kept so the membership check works
+# whether the ORM returns raw strings or enum instances - avoids silent filter-out
+# if the column is later migrated to sa.Enum(SafetyZoneType).
+_BLOCKING_SAFETY_ZONE_TYPES = frozenset(
+    {
+        SafetyZoneType.RESTRICTED,
+        SafetyZoneType.PROHIBITED,
+        SafetyZoneType.TEMPORARY_NO_FLY,
+        SafetyZoneType.CTR,
+    }
+)
+
+
+def _polygon_outer_ring(geom) -> list[list[float]]:
+    """return the outer ring coordinates of a polygon geometry as [lon, lat, z]."""
+    if geom is None:
+        return []
+    data = parse_ewkb(geom.data)
+    rings = data.get("coordinates", [])
+    if not rings:
+        return []
+    return rings[0]
+
+
+def build_geozone_payload(airport, include_runway_buffers: bool = False) -> dict:
+    """build the in-memory geozone structure from an airport aggregate.
+
+    returns a dict with 'safety_zones', 'obstacles', and 'runway_buffers' lists;
+    each entry carries polygon coords, type, altitude band (when available), and
+    source id so generators can shape them into their native format.
+    """
+    safety_zones = []
+    for zone in getattr(airport, "safety_zones", None) or []:
+        if not getattr(zone, "is_active", True):
+            continue
+        if zone.type not in _BLOCKING_SAFETY_ZONE_TYPES:
+            continue
+        ring = _polygon_outer_ring(zone.geometry)
+        if not ring:
+            continue
+        safety_zones.append(
+            {
+                "id": zone.id,
+                "name": zone.name,
+                "type": zone.type,
+                "altitude_floor": zone.altitude_floor,
+                "altitude_ceiling": zone.altitude_ceiling,
+                "coordinates": ring,
+            }
+        )
+
+    obstacles = []
+    for obs in getattr(airport, "obstacles", None) or []:
+        ring = _polygon_outer_ring(obs.boundary)
+        if not ring:
+            continue
+        obstacles.append(
+            {
+                "id": obs.id,
+                "name": obs.name,
+                "type": obs.type,
+                "height": obs.height,
+                "buffer_distance": obs.buffer_distance,
+                "coordinates": ring,
+            }
+        )
+
+    runway_buffers = []
+    if include_runway_buffers:
+        for surf in getattr(airport, "surfaces", None) or []:
+            ring = _polygon_outer_ring(getattr(surf, "boundary", None))
+            if not ring:
+                continue
+            runway_buffers.append(
+                {
+                    "id": surf.id,
+                    "identifier": surf.identifier,
+                    "surface_type": surf.surface_type,
+                    "buffer_distance": surf.buffer_distance,
+                    "coordinates": ring,
+                }
+            )
+
+    return {
+        "safety_zones": safety_zones,
+        "obstacles": obstacles,
+        "runway_buffers": runway_buffers,
+    }
+
+
+def _geozones_to_geojson_polygon(ring: list[list[float]]) -> dict:
+    """wrap a single outer ring in a GeoJSON Polygon."""
+    return {"type": "Polygon", "coordinates": [ring]}
+
+
+_KML_KEEPOUT_ADVISORY = (
+    "ADVISORY ONLY. DJI Pilot 2 renders this polygon as a visual overlay but "
+    "does not enforce it in flight. Keep-outs are enforced by MAVLINK/JSON/UGCS "
+    "exports or by FlightHub 2 Custom Flight Areas."
+)
+
+
+def _append_kml_keepout_folder(kml, geozone_payload: dict) -> None:
+    """attach a Keep-out zones folder with polygon placemarks for each geozone."""
+    has_any = (
+        geozone_payload["safety_zones"]
+        or geozone_payload["obstacles"]
+        or geozone_payload["runway_buffers"]
+    )
+    if not has_any:
+        return
+
+    folder = kml.newfolder(name="Keep-out zones")
+    folder.description = _KML_KEEPOUT_ADVISORY
+
+    for z in geozone_payload["safety_zones"]:
+        poly = folder.newpolygon(name=f"{z['type']}: {z['name']}")
+        poly.outerboundaryis = [
+            (pt[0], pt[1], pt[2] if len(pt) > 2 else 0) for pt in z["coordinates"]
+        ]
+        poly.altitudemode = simplekml.AltitudeMode.clamptoground
+        poly.style.linestyle.color = simplekml.Color.red
+        poly.style.linestyle.width = 2
+        poly.style.polystyle.color = simplekml.Color.changealphaint(80, simplekml.Color.red)
+        poly.description = (
+            f"Type: {z['type']}\n"
+            f"Altitude floor: {z['altitude_floor']}\n"
+            f"Altitude ceiling: {z['altitude_ceiling']}\n"
+            f"{_KML_KEEPOUT_ADVISORY}"
+        )
+
+    for o in geozone_payload["obstacles"]:
+        poly = folder.newpolygon(name=f"Obstacle: {o['name']}")
+        poly.outerboundaryis = [
+            (pt[0], pt[1], pt[2] if len(pt) > 2 else 0) for pt in o["coordinates"]
+        ]
+        poly.altitudemode = simplekml.AltitudeMode.clamptoground
+        poly.style.linestyle.color = simplekml.Color.orange
+        poly.style.linestyle.width = 2
+        poly.style.polystyle.color = simplekml.Color.changealphaint(80, simplekml.Color.orange)
+        poly.description = (
+            f"Type: {o['type']}\n"
+            f"Height: {o['height']}m\n"
+            f"Buffer: {o['buffer_distance']}m\n"
+            f"{_KML_KEEPOUT_ADVISORY}"
+        )
+
+    for b in geozone_payload["runway_buffers"]:
+        poly = folder.newpolygon(name=f"{b['surface_type']}: {b['identifier']}")
+        poly.outerboundaryis = [
+            (pt[0], pt[1], pt[2] if len(pt) > 2 else 0) for pt in b["coordinates"]
+        ]
+        poly.altitudemode = simplekml.AltitudeMode.clamptoground
+        poly.style.linestyle.color = simplekml.Color.yellow
+        poly.style.linestyle.width = 2
+        poly.description = (
+            f"Runway buffer (inclusion): {b['buffer_distance']}m\n{_KML_KEEPOUT_ADVISORY}"
+        )
+
+
 def generate_kml(
     flight_plan: FlightPlan,
     mission_name: str = "",
     airport_elevation: float = 0,
+    *,
+    geozone_payload: dict | None = None,
 ) -> bytes:
     """serialize flight plan waypoints to kml format."""
     kml = simplekml.Kml()
@@ -88,6 +255,17 @@ def generate_kml(
         line.style.linestyle.color = simplekml.Color.green
         line.style.linestyle.width = 2
 
+    if geozone_payload is not None:
+        _append_kml_keepout_folder(kml, geozone_payload)
+
+    return kml.kml().encode("utf-8")
+
+
+def _build_geozone_sidecar_kml(geozone_payload: dict) -> bytes:
+    """build a sidecar kml document with keep-out polygons (advisory)."""
+    kml = simplekml.Kml()
+    kml.document.name = "Keep-out zones (advisory)"
+    _append_kml_keepout_folder(kml, geozone_payload)
     return kml.kml().encode("utf-8")
 
 
@@ -98,6 +276,7 @@ def generate_kmz(
     *,
     mission=None,
     drone_profile=None,
+    geozone_payload: dict | None = None,
 ) -> bytes:
     """serialize flight plan to a dji wpmz archive consumable by flight hub 2."""
     template_kml = _build_dji_template_kml(
@@ -111,6 +290,10 @@ def generate_kmz(
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("wpmz/template.kml", template_kml)
         zf.writestr("wpmz/waylines.wpml", waylines_wpml)
+        # wpml has no fence schema; ship a sibling kml for operator visibility.
+        # pilot 2 / fh2 render it as an overlay but do not enforce it in flight.
+        if geozone_payload is not None:
+            zf.writestr("wpmz/geozones.kml", _build_geozone_sidecar_kml(geozone_payload))
 
     return buf.getvalue()
 
@@ -121,6 +304,7 @@ def generate_json(
     airport_elevation: float = 0,
     *,
     mission: Mission | None = None,
+    geozone_payload: dict | None = None,
 ) -> bytes:
     """serialize flight plan to structured json."""
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
@@ -194,6 +378,42 @@ def generate_json(
         if inspections_out:
             data["inspections"] = inspections_out
 
+    if geozone_payload is not None:
+        data["geozones"] = {
+            "safety_zones": [
+                {
+                    "id": z["id"],
+                    "name": z["name"],
+                    "type": z["type"],
+                    "altitude_floor": z["altitude_floor"],
+                    "altitude_ceiling": z["altitude_ceiling"],
+                    "geometry": _geozones_to_geojson_polygon(z["coordinates"]),
+                }
+                for z in geozone_payload["safety_zones"]
+            ],
+            "obstacles": [
+                {
+                    "id": o["id"],
+                    "name": o["name"],
+                    "type": o["type"],
+                    "height": o["height"],
+                    "buffer_distance": o["buffer_distance"],
+                    "geometry": _geozones_to_geojson_polygon(o["coordinates"]),
+                }
+                for o in geozone_payload["obstacles"]
+            ],
+            "runway_buffers": [
+                {
+                    "id": b["id"],
+                    "identifier": b["identifier"],
+                    "surface_type": b["surface_type"],
+                    "buffer_distance": b["buffer_distance"],
+                    "geometry": _geozones_to_geojson_polygon(b["coordinates"]),
+                }
+                for b in geozone_payload["runway_buffers"]
+            ],
+        }
+
     return json.dumps(data, indent=2, cls=_UUIDEncoder).encode("utf-8")
 
 
@@ -261,10 +481,17 @@ def _build_ugcs_actions(wp) -> list[dict]:
     return actions
 
 
+def _ugcs_zone_polygon(ring: list[list[float]]) -> list[dict]:
+    """convert [lon, lat, z] ring to ugcs polygon points (lat/lon in radians)."""
+    return [{"latitude": _deg_to_rad(pt[1]), "longitude": _deg_to_rad(pt[0])} for pt in ring]
+
+
 def generate_ugcs(
     flight_plan: FlightPlan,
     mission_name: str = "",
     airport_elevation: float = 0,
+    *,
+    geozone_payload: dict | None = None,
 ) -> bytes:
     """serialize flight plan to ugcs-compatible json route format."""
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
@@ -305,33 +532,73 @@ def generate_ugcs(
 
     initial_speed = waypoints[0].speed if waypoints else 5.0
 
+    route: dict = {
+        "name": mission_name or "Untitled Route",
+        "creationTime": creation_time,
+        "scheduledTime": None,
+        "startDelay": None,
+        "vehicleProfile": None,
+        "trajectoryType": None,
+        "safeAltitude": 50.0,
+        "maxAltitude": 1500.0,
+        "initialSpeed": initial_speed or 5.0,
+        "maxSpeed": None,
+        "failsafes": {
+            "rcLost": "GO_HOME",
+            "gpsLost": None,
+            "lowBattery": None,
+            "datalinkLost": None,
+        },
+        "checkAerodromeNfz": False,
+        "checkCustomNfz": False,
+        "segments": segments,
+        "takeoffHeight": None,
+        "cornerRadius": 20.0,
+    }
+
+    if geozone_payload is not None:
+        no_fly_zones = []
+        for z in geozone_payload["safety_zones"]:
+            no_fly_zones.append(
+                {
+                    "name": z["name"],
+                    "type": z["type"],
+                    "altitudeFrom": z["altitude_floor"],
+                    "altitudeTo": z["altitude_ceiling"],
+                    "polygon": _ugcs_zone_polygon(z["coordinates"]),
+                    "sourceId": str(z["id"]),
+                }
+            )
+        for o in geozone_payload["obstacles"]:
+            no_fly_zones.append(
+                {
+                    "name": o["name"],
+                    "type": f"OBSTACLE_{o['type']}",
+                    "altitudeFrom": None,
+                    "altitudeTo": o["height"],
+                    "polygon": _ugcs_zone_polygon(o["coordinates"]),
+                    "sourceId": str(o["id"]),
+                }
+            )
+        # ugcs honors uploaded custom nfz polygons when checkCustomNfz is set
+        route["noFlyZones"] = no_fly_zones
+        route["checkCustomNfz"] = True
+        if geozone_payload["runway_buffers"]:
+            route["inclusionZones"] = [
+                {
+                    "name": b["identifier"],
+                    "type": f"RUNWAY_{b['surface_type']}",
+                    "polygon": _ugcs_zone_polygon(b["coordinates"]),
+                    "sourceId": str(b["id"]),
+                }
+                for b in geozone_payload["runway_buffers"]
+            ]
+
     data = {
         "version": _UGCS_VERSION,
         "payloadProfiles": [],
         "vehicleProfiles": [],
-        "route": {
-            "name": mission_name or "Untitled Route",
-            "creationTime": creation_time,
-            "scheduledTime": None,
-            "startDelay": None,
-            "vehicleProfile": None,
-            "trajectoryType": None,
-            "safeAltitude": 50.0,
-            "maxAltitude": 1500.0,
-            "initialSpeed": initial_speed or 5.0,
-            "maxSpeed": None,
-            "failsafes": {
-                "rcLost": "GO_HOME",
-                "gpsLost": None,
-                "lowBattery": None,
-                "datalinkLost": None,
-            },
-            "checkAerodromeNfz": False,
-            "checkCustomNfz": False,
-            "segments": segments,
-            "takeoffHeight": None,
-            "cornerRadius": 20.0,
-        },
+        "route": route,
     }
 
     # ugcs uses java jackson serializer - match its formatting
@@ -349,6 +616,34 @@ _MAV_CMD_VIDEO_STOP_CAPTURE = 2501
 # MAV_FRAME_GLOBAL_RELATIVE_ALT
 _MAV_FRAME = 3
 
+# MAV_AUTOPILOT enum values used by QGC in .plan files; controls which
+# command parameter dialect QGC / Mission Planner renders for each item.
+# ArduPilot and PX4 differ on several per-item params (hover time encoding,
+# camera trigger semantics), so picking the wrong value silently corrupts
+# the mission in the ground station. values per mavlink common.xml.
+_MAV_AUTOPILOT_ARDUPILOTMEGA = 3
+_MAV_AUTOPILOT_PX4 = 12
+
+# manufacturer substrings that run ArduPilot firmware. everything else in
+# the supports_geozone_upload=True set (PX4, Pixhawk, Holybro, CubePilot)
+# defaults to PX4, which matches the prior hardcoded value for that branch.
+_ARDUPILOT_MANUFACTURER_PATTERNS = ("ardupilot",)
+
+
+def _mavlink_firmware_type(drone_profile) -> int:
+    """pick the MAV_AUTOPILOT value for a drone profile's .plan export.
+
+    ArduPilot-branded manufacturers map to ARDUPILOTMEGA; everything else
+    (PX4/Pixhawk/Holybro/CubePilot and unknown) falls back to PX4.
+    """
+    manufacturer = getattr(drone_profile, "manufacturer", None) or ""
+    manufacturer_lc = manufacturer.lower()
+    for pattern in _ARDUPILOT_MANUFACTURER_PATTERNS:
+        if pattern in manufacturer_lc:
+            return _MAV_AUTOPILOT_ARDUPILOTMEGA
+    return _MAV_AUTOPILOT_PX4
+
+
 _WAYPOINT_TYPE_COMMANDS = {
     "TAKEOFF": _MAV_CMD_NAV_TAKEOFF,
     "LANDING": _MAV_CMD_NAV_LAND,
@@ -361,12 +656,137 @@ _CAMERA_ACTION_COMMANDS = {
 }
 
 
+def _build_mavlink_mission_items(flight_plan: FlightPlan, airport_elevation: float) -> list[dict]:
+    """build qgc .plan mission items array from waypoints."""
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+    items = []
+
+    for wp in waypoints:
+        lon, lat, alt = _extract_coords(wp.position)
+        agl = alt - airport_elevation
+        command = _WAYPOINT_TYPE_COMMANDS.get(wp.waypoint_type, _MAV_CMD_NAV_WAYPOINT)
+        p1 = wp.hover_duration or 0
+        items.append(
+            {
+                "type": "SimpleItem",
+                "command": command,
+                "frame": _MAV_FRAME,
+                "autoContinue": True,
+                "params": [p1, 0, 0, wp.heading or 0, lat, lon, agl],
+            }
+        )
+        cam_cmd = _CAMERA_ACTION_COMMANDS.get(wp.camera_action)
+        if cam_cmd:
+            items.append(
+                {
+                    "type": "SimpleItem",
+                    "command": cam_cmd,
+                    "frame": 2,
+                    "autoContinue": True,
+                    "params": [0, 0, 0, 0, 0, 0, 0],
+                }
+            )
+
+    return items
+
+
+def _build_mavlink_geofence_polygons(geozone_payload: dict) -> list[dict]:
+    """build qgc geoFence.polygons[] from safety zones + obstacles + runway buffers.
+
+    safety zones and obstacles are emitted with inclusion=False (keep-out);
+    runway buffers use inclusion=True so the drone stays inside them when present.
+    """
+    polygons = []
+
+    for z in geozone_payload["safety_zones"]:
+        polygons.append(
+            {
+                "inclusion": False,
+                "version": 1,
+                "polygon": [[pt[1], pt[0]] for pt in z["coordinates"]],
+            }
+        )
+    for o in geozone_payload["obstacles"]:
+        polygons.append(
+            {
+                "inclusion": False,
+                "version": 1,
+                "polygon": [[pt[1], pt[0]] for pt in o["coordinates"]],
+            }
+        )
+    for b in geozone_payload["runway_buffers"]:
+        polygons.append(
+            {
+                "inclusion": True,
+                "version": 1,
+                "polygon": [[pt[1], pt[0]] for pt in b["coordinates"]],
+            }
+        )
+
+    return polygons
+
+
+def _generate_mavlink_plan(
+    flight_plan: FlightPlan,
+    mission_name: str,
+    airport_elevation: float,
+    geozone_payload: dict,
+    drone_profile=None,
+) -> bytes:
+    """serialize flight plan to qgc .plan json with embedded geoFence polygons."""
+    items = _build_mavlink_mission_items(flight_plan, airport_elevation)
+    polygons = _build_mavlink_geofence_polygons(geozone_payload)
+
+    # qgc .plan planned-home: first waypoint's lat/lon at airport elevation, else 0/0
+    waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
+    if waypoints:
+        hlon, hlat, _ = _extract_coords(waypoints[0].position)
+        planned_home = [hlat, hlon, airport_elevation]
+    else:
+        planned_home = [0, 0, airport_elevation]
+
+    plan = {
+        "fileType": "Plan",
+        "version": 1,
+        "groundStation": "TarmacView",
+        "mission": {
+            "version": 2,
+            "firmwareType": _mavlink_firmware_type(drone_profile),
+            "vehicleType": 2,
+            "cruiseSpeed": 5,
+            "hoverSpeed": 5,
+            "plannedHomePosition": planned_home,
+            "items": items,
+            "globalPlanAltitudeMode": 1,
+        },
+        "geoFence": {
+            "version": 2,
+            "circles": [],
+            "polygons": polygons,
+        },
+        "rallyPoints": {
+            "version": 2,
+            "points": [],
+        },
+    }
+
+    return json.dumps(plan, indent=4, cls=_UUIDEncoder).encode("utf-8")
+
+
 def generate_mavlink(
     flight_plan: FlightPlan,
     mission_name: str = "",
     airport_elevation: float = 0,
+    *,
+    geozone_payload: dict | None = None,
+    drone_profile=None,
 ) -> bytes:
-    """serialize flight plan to qgc wpl 110 mavlink waypoint format."""
+    """serialize flight plan to mavlink: wpl 110 text, or .plan json when geozones included."""
+    if geozone_payload is not None:
+        return _generate_mavlink_plan(
+            flight_plan, mission_name, airport_elevation, geozone_payload, drone_profile
+        )
+
     lines = ["QGC WPL 110"]
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
 
@@ -1102,7 +1522,12 @@ def _sanitize_filename(name: str) -> str:
 
 
 def export_mission(
-    db: Session, mission_id: UUID, formats: list[str]
+    db: Session,
+    mission_id: UUID,
+    formats: list[str],
+    *,
+    include_geozones: bool = False,
+    include_runway_buffers: bool = False,
 ) -> tuple[dict[str, tuple[bytes, str]], str]:
     """transition mission to EXPORTED and generate requested export files.
 
@@ -1129,6 +1554,44 @@ def export_mission(
             status_code=409,
         )
 
+    # runway buffers only make sense alongside the rest of the geozone payload
+    if include_runway_buffers and not include_geozones:
+        raise DomainError(
+            "include_runway_buffers requires include_geozones to be enabled",
+            status_code=400,
+        )
+
+    unsupported = [fmt for fmt in formats if fmt not in _EXPORT_GENERATORS]
+    if unsupported:
+        raise DomainError(
+            f"unsupported export format(s): {', '.join(unsupported)}", status_code=422
+        )
+
+    # load the drone profile early so the gate can check its capability.
+    # cheap single-row query; also used below for KMZ/WPML dji enums.
+    drone_profile = None
+    if mission.drone_profile_id is not None:
+        drone_profile = (
+            db.query(DroneProfile).filter(DroneProfile.id == mission.drone_profile_id).first()
+        )
+
+    # geozone gate: format capability + drone capability
+    if include_geozones:
+        incapable = [fmt for fmt in formats if fmt not in GEOZONE_CAPABLE_FORMATS]
+        if incapable:
+            raise DomainError(
+                f"format(s) {', '.join(incapable)} do not support embedded geozones; "
+                f"supported formats are {sorted(GEOZONE_CAPABLE_FORMATS)}",
+                status_code=400,
+            )
+        if drone_profile is None or not getattr(drone_profile, "supports_geozone_upload", False):
+            raise DomainError(
+                "mission drone profile does not support uploading geozones; "
+                "set supports_geozone_upload=true on a compatible airframe or "
+                "remove include_geozones",
+                status_code=400,
+            )
+
     # verify flight plan and airport exist before committing status transition
     flight_plan = (
         db.query(FlightPlan)
@@ -1139,7 +1602,16 @@ def export_mission(
     if not flight_plan:
         raise NotFoundError("no flight plan found for this mission")
 
-    airport = db.query(Airport).filter(Airport.id == flight_plan.airport_id).first()
+    # eager-load airport geozone sources only when needed - keeps the common
+    # path (no geozones) identical in query count to prior behavior.
+    airport_query = db.query(Airport).filter(Airport.id == flight_plan.airport_id)
+    if include_geozones:
+        airport_query = airport_query.options(
+            joinedload(Airport.obstacles),
+            joinedload(Airport.safety_zones),
+            joinedload(Airport.surfaces),
+        )
+    airport = airport_query.first()
     if not airport or airport.elevation is None:
         raise DomainError(
             "airport elevation is required for export - AGL altitudes cannot be calculated",
@@ -1147,10 +1619,10 @@ def export_mission(
         )
     airport_elevation = airport.elevation
 
-    unsupported = [fmt for fmt in formats if fmt not in _EXPORT_GENERATORS]
-    if unsupported:
-        raise DomainError(
-            f"unsupported export format(s): {', '.join(unsupported)}", status_code=422
+    geozone_payload = None
+    if include_geozones:
+        geozone_payload = build_geozone_payload(
+            airport, include_runway_buffers=include_runway_buffers
         )
 
     if mission.status == "VALIDATED":
@@ -1168,20 +1640,27 @@ def export_mission(
     }.get(scope, "")
     safe_name = _sanitize_filename(mission.name + scope_suffix)
 
-    # load the drone profile for dji enum lookup - cheap, single-row query, only
-    # needed for KMZ/WPML but simpler than branching inside the loop.
-    drone_profile = None
-    if mission.drone_profile_id is not None:
-        drone_profile = (
-            db.query(DroneProfile).filter(DroneProfile.id == mission.drone_profile_id).first()
-        )
-
     files: dict[str, tuple[bytes, str]] = {}
     for fmt in formats:
         generator = _EXPORT_GENERATORS[fmt]
         content_type, ext = _EXPORT_CONTENT_TYPES[fmt]
+        # mavlink switches from wpl 110 text to qgc .plan json when fences are
+        # embedded, so the filename + content-type follow suit.
+        if fmt == "MAVLINK" and geozone_payload is not None:
+            ext = "plan"
+            content_type = "application/json"
         filename = f"{safe_name}.{ext}"
-        if fmt in ("KMZ", "WPML"):
+
+        if fmt == "KMZ":
+            content = generator(
+                flight_plan,
+                mission.name,
+                airport_elevation,
+                mission=mission,
+                drone_profile=drone_profile,
+                geozone_payload=geozone_payload,
+            )
+        elif fmt == "WPML":
             content = generator(
                 flight_plan,
                 mission.name,
@@ -1195,6 +1674,22 @@ def export_mission(
                 mission.name,
                 airport_elevation,
                 mission=mission,
+                geozone_payload=geozone_payload,
+            )
+        elif fmt == "MAVLINK":
+            content = generator(
+                flight_plan,
+                mission.name,
+                airport_elevation,
+                geozone_payload=geozone_payload,
+                drone_profile=drone_profile,
+            )
+        elif fmt in ("KML", "UGCS"):
+            content = generator(
+                flight_plan,
+                mission.name,
+                airport_elevation,
+                geozone_payload=geozone_payload,
             )
         else:
             content = generator(flight_plan, mission.name, airport_elevation)

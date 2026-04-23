@@ -3,12 +3,20 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Download, FileText, Loader2 } from "lucide-react";
 import type { MissionStatus } from "@/types/enums";
 import type { MissionDetailResponse } from "@/types/mission";
+import type { DroneProfileResponse } from "@/types/droneProfile";
+import type { ExportOptions } from "@/api/missions";
+import {
+  GEOZONE_CAPABLE_FORMATS,
+  anyGeozoneAdvisory,
+  anyGeozoneCapable,
+  anyGeozoneEnforced,
+} from "@/constants/exportCapabilities";
 import Button from "@/components/common/Button";
 import Modal from "@/components/common/Modal";
 
 export interface ExportPanelProps {
   mission: MissionDetailResponse;
-  onExport: (formats: string[]) => void;
+  onExport: (formats: string[], options?: ExportOptions) => void;
   onComplete: () => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -17,6 +25,7 @@ export interface ExportPanelProps {
   onDownloadReport?: () => void;
   isDownloadingReport?: boolean;
   hasFlightPlan?: boolean;
+  droneProfile?: DroneProfileResponse | null;
 }
 
 const EXPORT_FORMATS = [
@@ -51,12 +60,15 @@ export default function ExportPanel({
   onDownloadReport,
   isDownloadingReport = false,
   hasFlightPlan = false,
+  droneProfile = null,
 }: ExportPanelProps) {
   const { t } = useTranslation();
   const [exportCollapsed, setExportCollapsed] = useState(false);
   const [selectedFormats, setSelectedFormats] = useState<Set<string>>(
     new Set(["KML"]),
   );
+  const [includeGeozones, setIncludeGeozones] = useState(false);
+  const [includeRunwayBuffers, setIncludeRunwayBuffers] = useState(false);
   const [confirmModal, setConfirmModal] = useState<
     "complete" | "cancel" | "delete" | null
   >(null);
@@ -64,6 +76,30 @@ export default function ExportPanel({
   const status = mission.status;
   const exportEnabled = canExport(status);
   const terminal = isTerminal(status);
+
+  // geozone gate mirrors the backend: at least one selected format must be
+  // geozone-capable AND the drone profile must declare supports_geozone_upload.
+  const droneCapable = !!droneProfile?.supports_geozone_upload;
+  const formatCapable = anyGeozoneCapable(selectedFormats);
+  const geozonesAvailable = exportEnabled && droneCapable && formatCapable;
+  const showEnforcedNote = geozonesAvailable && includeGeozones && anyGeozoneEnforced(selectedFormats);
+  const showAdvisoryNote = geozonesAvailable && includeGeozones && anyGeozoneAdvisory(selectedFormats);
+
+  function geozoneDisabledReason(): string | undefined {
+    if (!exportEnabled) return undefined;
+    if (selectedFormats.size === 0) {
+      return t("mission.validationExportPage.geozones.tooltipNoFormatSelected");
+    }
+    if (!formatCapable) {
+      return t("mission.validationExportPage.geozones.tooltipUnsupportedFormat", {
+        formats: [...GEOZONE_CAPABLE_FORMATS].join(", "),
+      });
+    }
+    if (!droneCapable) {
+      return t("mission.validationExportPage.geozones.tooltipDroneIncapable");
+    }
+    return undefined;
+  }
 
   // lifecycle button gating
   const canComplete = status === "EXPORTED";
@@ -84,7 +120,11 @@ export default function ExportPanel({
 
   function handleDownload() {
     if (selectedFormats.size > 0) {
-      onExport(Array.from(selectedFormats));
+      const safeIncludeGeozones = geozonesAvailable && includeGeozones;
+      onExport(Array.from(selectedFormats), {
+        includeGeozones: safeIncludeGeozones,
+        includeRunwayBuffers: safeIncludeGeozones && includeRunwayBuffers,
+      });
     }
   }
 
@@ -176,6 +216,55 @@ export default function ExportPanel({
                 </label>
               ))}
             </div>
+
+            {/* geozones opt-in */}
+            {!terminal && (
+              <div className="flex flex-col gap-2 px-1" data-testid="geozones-section">
+                <label
+                  className={`flex items-start gap-2 ${geozonesAvailable ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+                  title={geozoneDisabledReason()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={geozonesAvailable && includeGeozones}
+                    onChange={(e) => setIncludeGeozones(e.target.checked)}
+                    disabled={!geozonesAvailable}
+                    className="mt-0.5 accent-[var(--tv-accent)]"
+                    data-testid="include-geozones-checkbox"
+                  />
+                  <span className="text-sm font-medium text-tv-text-primary">
+                    {t("mission.validationExportPage.geozones.label")}
+                  </span>
+                </label>
+                {geozonesAvailable && includeGeozones && (
+                  <label
+                    className="flex items-start gap-2 pl-6 cursor-pointer"
+                    data-testid="include-runway-buffers-label"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={includeRunwayBuffers}
+                      onChange={(e) => setIncludeRunwayBuffers(e.target.checked)}
+                      className="mt-0.5 accent-[var(--tv-accent)]"
+                      data-testid="include-runway-buffers-checkbox"
+                    />
+                    <span className="text-xs text-tv-text-secondary">
+                      {t("mission.validationExportPage.geozones.runwayBuffersLabel")}
+                    </span>
+                  </label>
+                )}
+                {showEnforcedNote && (
+                  <p className="text-xs text-tv-text-muted italic" data-testid="geozones-enforced-note">
+                    {t("mission.validationExportPage.geozones.enforcedNote")}
+                  </p>
+                )}
+                {showAdvisoryNote && (
+                  <p className="text-xs text-tv-text-muted italic" data-testid="geozones-advisory-note">
+                    {t("mission.validationExportPage.geozones.advisoryNote")}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* scope info */}
             {!terminal && (

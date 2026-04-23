@@ -13,6 +13,7 @@ import {
   cancelMission,
   deleteMission,
 } from "@/api/missions";
+import type { ExportOptions } from "@/api/missions";
 import useDownloadMissionReport from "@/hooks/useDownloadMissionReport";
 import type { MissionDetailResponse } from "@/types/mission";
 import type { FlightPlanResponse } from "@/types/flightPlan";
@@ -186,11 +187,11 @@ export default function MissionValidationPage() {
     }
   }
 
-  async function handleExport(formats: string[]) {
+  async function handleExport(formats: string[], options?: ExportOptions) {
     if (!id || !mission) return;
     setIsExporting(true);
     try {
-      const { blob, filename } = await exportMissionFiles(id, formats);
+      const { blob, filename } = await exportMissionFiles(id, formats, options);
 
       // trigger browser download using the filename from the backend
       // (the backend sanitizer enforces dji flight hub 2 naming rules)
@@ -425,6 +426,7 @@ export default function MissionValidationPage() {
               onDownloadReport={handleDownloadReport}
               isDownloadingReport={isDownloadingReport}
               hasFlightPlan={flightPlan !== null}
+              droneProfile={droneProfiles.find((dp) => dp.id === mission.drone_profile_id) ?? null}
               statsSlot={
                 <div className="bg-tv-surface border border-tv-border rounded-2xl p-4">
                   <StatsPanel

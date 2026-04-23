@@ -74,6 +74,10 @@ class DroneProfile(Base):
     weight = Column(Float)
     model_identifier = Column(String, nullable=True)
     max_optical_zoom = Column(Float, nullable=True)
+    # whether this airframe can receive embedded geofence polygons at upload time
+    # (e.g. ArduPilot/PX4 mavlink fences). consumer DJI = False; pilot 2 / fh2
+    # route the keep-outs out-of-band so the file-level capability is False here.
+    supports_geozone_upload = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

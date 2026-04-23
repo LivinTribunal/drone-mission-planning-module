@@ -14,6 +14,7 @@ export interface DroneProfileResponse {
   weight: number | null;
   model_identifier: string | null;
   max_optical_zoom: number | null;
+  supports_geozone_upload: boolean;
   created_at: string;
   updated_at: string;
   mission_count: number;
@@ -34,6 +35,7 @@ export interface DroneProfileCreate {
   weight?: number | null;
   model_identifier?: string | null;
   max_optical_zoom?: number | null;
+  supports_geozone_upload?: boolean;
 }
 
 export interface DroneProfileUpdate {
@@ -51,4 +53,5 @@ export interface DroneProfileUpdate {
   weight?: number | null;
   model_identifier?: string | null;
   max_optical_zoom?: number | null;
+  supports_geozone_upload?: boolean;
 }

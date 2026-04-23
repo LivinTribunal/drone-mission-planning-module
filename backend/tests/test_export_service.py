@@ -8,6 +8,8 @@ from io import BytesIO
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+import pytest
+
 from app.services import export_service
 
 # WKB constants for building mock geometry
@@ -762,6 +764,8 @@ def _build_export_db_mock(mission, fp, airport, drone_profile=None):
             mock_chain.options.return_value.filter.return_value.first.return_value = fp
         elif model.__name__ == "Airport":
             mock_chain.filter.return_value.first.return_value = airport
+            # eager-loaded path: query(Airport).filter().options(...).first()
+            mock_chain.filter.return_value.options.return_value.first.return_value = airport
         elif model.__name__ == "DroneProfile":
             mock_chain.filter.return_value.first.return_value = drone_profile
         return mock_chain
@@ -1520,3 +1524,447 @@ class TestGenerateDronedeploy:
         wp = data["waypoints"][0]
         # alt = 300 - 290 = 10
         assert abs(wp["alt"] - 10.0) < 0.01
+
+
+# WKB polygon builder for geozone tests
+_WKB_POLYGON_Z = 0x80000003
+
+
+def _make_polygon_ewkb(coords: list[list[float]]) -> bytes:
+    """build a minimal EWKB PolygonZ (single outer ring) with SRID 4326."""
+    import struct as _struct
+
+    n_rings = 1
+    n_points = len(coords)
+    buf = _struct.pack(
+        "<BII",
+        1,
+        _WKB_POLYGON_Z | 0x20000000,
+        _SRID,
+    )
+    buf += _struct.pack("<II", n_rings, n_points)
+    for pt in coords:
+        z = pt[2] if len(pt) > 2 else 0.0
+        buf += _struct.pack("<ddd", pt[0], pt[1], z)
+    return buf
+
+
+def _make_safety_zone(name="SZ", zone_type="RESTRICTED", is_active=True):
+    """build a mock safety zone with a triangular polygon."""
+    sz = MagicMock()
+    sz.id = uuid4()
+    sz.name = name
+    sz.type = zone_type
+    sz.is_active = is_active
+    sz.altitude_floor = 0.0
+    sz.altitude_ceiling = 500.0
+    sz.geometry = MagicMock()
+    sz.geometry.data = _make_polygon_ewkb(
+        [[18.10, 49.69, 0.0], [18.11, 49.69, 0.0], [18.11, 49.70, 0.0], [18.10, 49.69, 0.0]]
+    )
+    return sz
+
+
+def _make_obstacle(name="Tower", obs_type="TOWER", height=50.0):
+    """build a mock obstacle with polygon boundary."""
+    ob = MagicMock()
+    ob.id = uuid4()
+    ob.name = name
+    ob.type = obs_type
+    ob.height = height
+    ob.buffer_distance = 5.0
+    ob.boundary = MagicMock()
+    ob.boundary.data = _make_polygon_ewkb(
+        [[18.12, 49.68, 0.0], [18.13, 49.68, 0.0], [18.13, 49.69, 0.0], [18.12, 49.68, 0.0]]
+    )
+    return ob
+
+
+def _make_surface(identifier="RW22", surface_type="RUNWAY", buffer_distance=15.0):
+    """build a mock airfield surface with polygon boundary."""
+    surf = MagicMock()
+    surf.id = uuid4()
+    surf.identifier = identifier
+    surf.surface_type = surface_type
+    surf.buffer_distance = buffer_distance
+    surf.boundary = MagicMock()
+    surf.boundary.data = _make_polygon_ewkb(
+        [[18.14, 49.70, 0.0], [18.15, 49.70, 0.0], [18.15, 49.71, 0.0], [18.14, 49.70, 0.0]]
+    )
+    return surf
+
+
+def _make_airport_with_geozones(active_zone=True, airport_boundary=False, extra_obstacle=False):
+    """build a mock airport aggregate with safety zones + obstacles + surfaces."""
+    airport = MagicMock()
+    airport.elevation = 100.0
+    zones = [_make_safety_zone(is_active=active_zone)]
+    if airport_boundary:
+        zones.append(_make_safety_zone(name="Boundary", zone_type="AIRPORT_BOUNDARY"))
+    airport.safety_zones = zones
+    obstacles = [_make_obstacle()]
+    if extra_obstacle:
+        obstacles.append(_make_obstacle(name="Antenna", obs_type="ANTENNA", height=30.0))
+    airport.obstacles = obstacles
+    airport.surfaces = [_make_surface()]
+    return airport
+
+
+class TestBuildGeozonePayload:
+    """tests for the airport -> geozone payload builder."""
+
+    def test_active_zones_included(self):
+        """active blocking safety zones are present; airport boundary excluded."""
+        airport = _make_airport_with_geozones(airport_boundary=True)
+
+        payload = export_service.build_geozone_payload(airport)
+
+        assert len(payload["safety_zones"]) == 1
+        assert payload["safety_zones"][0]["type"] == "RESTRICTED"
+        # no AIRPORT_BOUNDARY - shipping it as an exclusion would bar takeoff
+        assert not any(z["type"] == "AIRPORT_BOUNDARY" for z in payload["safety_zones"])
+
+    def test_inactive_zones_excluded(self):
+        """is_active=False safety zones are filtered out."""
+        airport = _make_airport_with_geozones(active_zone=False)
+
+        payload = export_service.build_geozone_payload(airport)
+
+        assert payload["safety_zones"] == []
+
+    def test_obstacles_included(self):
+        """every obstacle with a polygon boundary is included."""
+        airport = _make_airport_with_geozones(extra_obstacle=True)
+
+        payload = export_service.build_geozone_payload(airport)
+
+        assert len(payload["obstacles"]) == 2
+        names = [o["name"] for o in payload["obstacles"]]
+        assert "Tower" in names
+        assert "Antenna" in names
+
+    def test_runway_buffers_gated_by_flag(self):
+        """runway_buffers list stays empty unless include_runway_buffers=True."""
+        airport = _make_airport_with_geozones()
+
+        default_payload = export_service.build_geozone_payload(airport)
+        assert default_payload["runway_buffers"] == []
+
+        with_buffers = export_service.build_geozone_payload(airport, include_runway_buffers=True)
+        assert len(with_buffers["runway_buffers"]) == 1
+        assert with_buffers["runway_buffers"][0]["identifier"] == "RW22"
+
+
+class TestGenerateJsonWithGeozones:
+    """tests for generate_json with geozone_payload."""
+
+    def test_no_geozones_key_when_payload_absent(self):
+        """without the flag, legacy json output is unchanged."""
+        fp = _make_flight_plan(1)
+
+        data = json.loads(export_service.generate_json(fp, "", 0))
+
+        assert "geozones" not in data
+
+    def test_geozones_populated_when_payload_present(self):
+        """payload produces a top-level geozones object with all three arrays."""
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        payload = export_service.build_geozone_payload(airport, include_runway_buffers=True)
+
+        data = json.loads(export_service.generate_json(fp, "", 0, geozone_payload=payload))
+
+        assert "geozones" in data
+        assert len(data["geozones"]["safety_zones"]) == 1
+        assert data["geozones"]["safety_zones"][0]["type"] == "RESTRICTED"
+        assert data["geozones"]["safety_zones"][0]["geometry"]["type"] == "Polygon"
+        assert len(data["geozones"]["obstacles"]) == 1
+        assert len(data["geozones"]["runway_buffers"]) == 1
+
+
+class TestGenerateMavlinkWithGeozones:
+    """tests for mavlink .plan output with embedded fences."""
+
+    def test_plan_json_replaces_wpl_when_payload_present(self):
+        """with payload, mavlink emits qgc .plan json with geoFence polygons."""
+        fp = _make_flight_plan(2)
+        airport = _make_airport_with_geozones()
+        payload = export_service.build_geozone_payload(airport)
+
+        result = export_service.generate_mavlink(fp, "", 0, geozone_payload=payload)
+        data = json.loads(result)
+
+        assert data["fileType"] == "Plan"
+        assert "geoFence" in data
+        assert len(data["geoFence"]["polygons"]) >= 2
+        # every keep-out polygon is emitted with inclusion=false
+        assert all(p["inclusion"] is False for p in data["geoFence"]["polygons"])
+
+    def test_runway_buffers_emit_inclusion_true(self):
+        """runway buffers produce inclusion=True polygons while zones stay false."""
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        payload = export_service.build_geozone_payload(airport, include_runway_buffers=True)
+
+        result = export_service.generate_mavlink(fp, "", 0, geozone_payload=payload)
+        data = json.loads(result)
+
+        inclusions = [p["inclusion"] for p in data["geoFence"]["polygons"]]
+        assert True in inclusions
+        assert False in inclusions
+
+    def test_legacy_wpl_output_preserved_without_payload(self):
+        """no payload -> classic wpl 110 text format, no regression."""
+        fp = _make_flight_plan(2)
+
+        result = export_service.generate_mavlink(fp, "", 0)
+
+        assert result.decode("utf-8").startswith("QGC WPL 110")
+
+
+class TestGenerateUgcsWithGeozones:
+    """tests for ugcs route json with noFlyZones."""
+
+    def test_no_fly_zones_added_when_payload_present(self):
+        """payload populates route.noFlyZones and enables checkCustomNfz."""
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        payload = export_service.build_geozone_payload(airport)
+
+        data = json.loads(export_service.generate_ugcs(fp, "", 0, geozone_payload=payload))
+
+        assert "noFlyZones" in data["route"]
+        assert len(data["route"]["noFlyZones"]) == 2  # 1 safety zone + 1 obstacle
+        assert data["route"]["checkCustomNfz"] is True
+
+    def test_no_payload_preserves_legacy_shape(self):
+        """without payload, ugcs output has no noFlyZones key (no regression)."""
+        fp = _make_flight_plan(1)
+
+        data = json.loads(export_service.generate_ugcs(fp, "", 0))
+
+        assert "noFlyZones" not in data["route"]
+        assert data["route"]["checkCustomNfz"] is False
+
+
+class TestGenerateKmlWithGeozones:
+    """tests for kml keep-out folder."""
+
+    def test_keepout_folder_added_when_payload_present(self):
+        """payload adds a Keep-out zones folder with advisory description."""
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        payload = export_service.build_geozone_payload(airport)
+
+        result = export_service.generate_kml(fp, "", 0, geozone_payload=payload)
+        text = result.decode("utf-8")
+
+        assert "Keep-out zones" in text
+        assert "ADVISORY ONLY" in text
+        assert "<Polygon" in text
+
+    def test_no_folder_when_payload_absent(self):
+        """no payload -> no keep-out folder."""
+        fp = _make_flight_plan(1)
+
+        text = export_service.generate_kml(fp, "", 0).decode("utf-8")
+
+        assert "Keep-out zones" not in text
+
+
+class TestGenerateKmzWithGeozones:
+    """tests for kmz sidecar geozones.kml."""
+
+    def test_sidecar_kml_included_when_payload_present(self):
+        """payload adds wpmz/geozones.kml alongside template.kml + waylines.wpml."""
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        payload = export_service.build_geozone_payload(airport)
+
+        result = export_service.generate_kmz(fp, "", 0, geozone_payload=payload)
+
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            names = set(zf.namelist())
+            assert "wpmz/geozones.kml" in names
+            sidecar = zf.read("wpmz/geozones.kml").decode("utf-8")
+        assert "Keep-out zones" in sidecar
+        assert "ADVISORY ONLY" in sidecar
+
+    def test_no_sidecar_when_payload_absent(self):
+        """legacy kmz archive has no extra files."""
+        fp = _make_flight_plan(1)
+
+        result = export_service.generate_kmz(fp, "", 0)
+
+        with zipfile.ZipFile(BytesIO(result)) as zf:
+            names = set(zf.namelist())
+        assert names == {"wpmz/template.kml", "wpmz/waylines.wpml"}
+
+
+class TestExportMissionGeozoneGate:
+    """tests for export_mission gate logic when include_geozones is set."""
+
+    def _mission(self):
+        """capability-enabled mission fixture."""
+        mission = MagicMock()
+        mission.status = "VALIDATED"
+        mission.name = "Geo Mission"
+        mission.drone_profile_id = uuid4()
+        mission.inspections = []
+        mission.takeoff_coordinate = None
+        return mission
+
+    @pytest.mark.parametrize("incapable_format", ["WPML", "GPX", "LITCHI", "CSV", "DRONEDEPLOY"])
+    def test_unsupported_format_with_flag_raises_400(self, incapable_format):
+        """flag + every incapable format => DomainError 400 (guards GEOZONE_CAPABLE_FORMATS)."""
+        from app.core.exceptions import DomainError
+
+        mission = self._mission()
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        drone = MagicMock()
+        drone.supports_geozone_upload = True
+        db = _build_export_db_mock(mission, fp, airport, drone)
+
+        with pytest.raises(DomainError) as exc_info:
+            export_service.export_mission(db, uuid4(), [incapable_format], include_geozones=True)
+        assert exc_info.value.status_code == 400
+        # gate fires before status transition
+        mission.transition_to.assert_not_called()
+        db.commit.assert_not_called()
+
+    def test_drone_without_capability_raises_400(self):
+        """flag + capable format + drone without capability => DomainError 400."""
+        from app.core.exceptions import DomainError
+
+        mission = self._mission()
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        drone = MagicMock()
+        drone.supports_geozone_upload = False
+        db = _build_export_db_mock(mission, fp, airport, drone)
+
+        with pytest.raises(DomainError) as exc_info:
+            export_service.export_mission(db, uuid4(), ["JSON"], include_geozones=True)
+        assert exc_info.value.status_code == 400
+        mission.transition_to.assert_not_called()
+
+    def test_no_drone_profile_raises_400_when_flag_set(self):
+        """flag set + mission has no drone_profile_id => DomainError 400."""
+        from app.core.exceptions import DomainError
+
+        mission = MagicMock()
+        mission.status = "VALIDATED"
+        mission.name = "x"
+        mission.drone_profile_id = None
+
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        db = _build_export_db_mock(mission, fp, airport, None)
+
+        with pytest.raises(DomainError) as exc_info:
+            export_service.export_mission(db, uuid4(), ["JSON"], include_geozones=True)
+        assert exc_info.value.status_code == 400
+
+    def test_supported_combo_embeds_geozones(self):
+        """capable format + capable drone + flag => zones appear in output."""
+        mission = self._mission()
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        drone = MagicMock()
+        drone.supports_geozone_upload = True
+        db = _build_export_db_mock(mission, fp, airport, drone)
+
+        files, _ = export_service.export_mission(db, uuid4(), ["JSON"], include_geozones=True)
+
+        content, _ = next(iter(files.values()))
+        data = json.loads(content)
+        assert "geozones" in data
+        assert len(data["geozones"]["safety_zones"]) == 1
+        assert len(data["geozones"]["obstacles"]) == 1
+        # runway_buffers flag off by default
+        assert data["geozones"]["runway_buffers"] == []
+
+    def test_runway_buffers_without_geozones_raises_400(self):
+        """include_runway_buffers=True without include_geozones => DomainError 400."""
+        from app.core.exceptions import DomainError
+
+        mission = self._mission()
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        drone = MagicMock()
+        drone.supports_geozone_upload = True
+        db = _build_export_db_mock(mission, fp, airport, drone)
+
+        with pytest.raises(DomainError) as exc_info:
+            export_service.export_mission(db, uuid4(), ["JSON"], include_runway_buffers=True)
+        assert exc_info.value.status_code == 400
+
+    def test_mavlink_with_geozones_produces_plan_file(self):
+        """mavlink + include_geozones => .plan json output with geoFence block."""
+        mission = self._mission()
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        drone = MagicMock()
+        drone.supports_geozone_upload = True
+        db = _build_export_db_mock(mission, fp, airport, drone)
+
+        files, safe_name = export_service.export_mission(
+            db, uuid4(), ["MAVLINK"], include_geozones=True
+        )
+
+        filename = list(files.keys())[0]
+        assert filename.endswith(".plan")
+        content, content_type = files[filename]
+        assert content_type == "application/json"
+        data = json.loads(content)
+        assert data["fileType"] == "Plan"
+        assert len(data["geoFence"]["polygons"]) >= 1
+        # planned-home altitude must reference airport elevation, not sea level
+        assert data["mission"]["plannedHomePosition"][2] == airport.elevation
+
+    def test_mavlink_firmware_type_px4_default(self):
+        """px4-manufactured drone produces firmwareType=12 (MAV_AUTOPILOT_PX4)."""
+        mission = self._mission()
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        drone = MagicMock()
+        drone.supports_geozone_upload = True
+        drone.manufacturer = "PX4 Autopilot"
+        db = _build_export_db_mock(mission, fp, airport, drone)
+
+        files, _ = export_service.export_mission(db, uuid4(), ["MAVLINK"], include_geozones=True)
+
+        content, _ = next(iter(files.values()))
+        data = json.loads(content)
+        assert data["mission"]["firmwareType"] == 12
+
+    def test_mavlink_firmware_type_ardupilot(self):
+        """ardupilot-manufactured drone produces firmwareType=3 (MAV_AUTOPILOT_ARDUPILOTMEGA)."""
+        mission = self._mission()
+        fp = _make_flight_plan(1)
+        airport = _make_airport_with_geozones()
+        drone = MagicMock()
+        drone.supports_geozone_upload = True
+        drone.manufacturer = "ArduPilot"
+        db = _build_export_db_mock(mission, fp, airport, drone)
+
+        files, _ = export_service.export_mission(db, uuid4(), ["MAVLINK"], include_geozones=True)
+
+        content, _ = next(iter(files.values()))
+        data = json.loads(content)
+        assert data["mission"]["firmwareType"] == 3
+
+    def test_legacy_export_without_flag_unchanged(self):
+        """no flag => no geozone handling, no extra queries, legacy output."""
+        mission = self._mission()
+        fp = _make_flight_plan(1)
+        airport = MagicMock()
+        airport.elevation = 100.0
+        db = _build_export_db_mock(mission, fp, airport, MagicMock())
+
+        files, _ = export_service.export_mission(db, uuid4(), ["JSON"])
+
+        content, _ = next(iter(files.values()))
+        data = json.loads(content)
+        assert "geozones" not in data

@@ -13,6 +13,29 @@ def test_create_drone(client):
     assert data["name"] == "DJI Matrice 300 RTK"
     assert data["max_speed"] == 23.0
     assert data["camera_frame_rate"] == 30
+    # new capability flag defaults to false when omitted from the payload
+    assert data["supports_geozone_upload"] is False
+
+
+def test_supports_geozone_upload_round_trip(client):
+    """create + update of supports_geozone_upload persists through the api."""
+    payload = {
+        "name": "Holybro Pixhawk",
+        "manufacturer": "Holybro",
+        "supports_geozone_upload": True,
+    }
+    created = client.post("/api/v1/drone-profiles", json=payload).json()
+    assert created["supports_geozone_upload"] is True
+
+    drone_id = created["id"]
+    updated = client.put(
+        f"/api/v1/drone-profiles/{drone_id}",
+        json={"supports_geozone_upload": False},
+    ).json()
+    assert updated["supports_geozone_upload"] is False
+
+    # cleanup
+    client.delete(f"/api/v1/drone-profiles/{drone_id}")
 
 
 def test_list_drones(client):

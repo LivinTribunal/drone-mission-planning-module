@@ -341,6 +341,10 @@ describe("ExportPanel", () => {
 
     expect(defaultProps.onExport).toHaveBeenCalledWith(
       expect.arrayContaining(["KML", "JSON"]),
+      expect.objectContaining({
+        includeGeozones: false,
+        includeRunwayBuffers: false,
+      }),
     );
   });
 });
