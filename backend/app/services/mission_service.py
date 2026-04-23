@@ -9,6 +9,7 @@ from app.models.enums import MissionStatus
 from app.models.inspection import Inspection, InspectionConfiguration
 from app.models.mission import TRAJECTORY_FIELDS, TRANSITIONS, DroneProfile, Mission
 from app.schemas.mission import MissionCreate, MissionUpdate
+from app.services import drone_service
 from app.services.geometry_converter import schema_to_model_data
 
 
@@ -76,15 +77,12 @@ def list_missions(
     if drone_id:
         filters.append(Mission.drone_id == drone_id)
     if drone_profile_id:
-        # filter by template id - walks the drone fk to find matching fleet units
-        matching_drone_ids = [
-            d.id
-            for d in db.query(Drone.id).filter(Drone.drone_profile_id == drone_profile_id).all()
-        ]
-        if matching_drone_ids:
-            filters.append(Mission.drone_id.in_(matching_drone_ids))
-        else:
-            filters.append(Mission.id.is_(None))
+        # filter by template id - correlated subquery walks the drone fk inline,
+        # avoiding the python round-trip and empty-result special case
+        matching_drone_ids = (
+            db.query(Drone.id).filter(Drone.drone_profile_id == drone_profile_id).scalar_subquery()
+        )
+        filters.append(Mission.drone_id.in_(matching_drone_ids))
 
     query = (
         db.query(Mission)
@@ -135,8 +133,6 @@ def _resolve_drone_for_mission(
         3. airport default fleet drone
     returns (resolved_drone_id, profile_for_validation).
     """
-    from app.services import drone_service
-
     # explicit fleet drone
     if drone_id is not None:
         drone = db.query(Drone).filter(Drone.id == drone_id, Drone.airport_id == airport.id).first()
@@ -233,8 +229,6 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
                 raise DomainError("drone not found at this airport")
             data["drone_id"] = target.id
         elif legacy_profile_id is not None:
-            from app.services import drone_service
-
             target = drone_service.find_or_create_drone_for_profile(
                 db, airport.id, legacy_profile_id
             )
@@ -277,9 +271,18 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
             raise DomainError(str(e), status_code=422)
 
     db.commit()
-    db.refresh(mission)
 
-    return mission
+    # re-query with eager loads so MissionResponse.drone_profile_id does not
+    # lazy-load on expired attributes during response serialization
+    return (
+        db.query(Mission)
+        .options(
+            joinedload(Mission.flight_plan),
+            joinedload(Mission.drone).joinedload(Drone.drone_profile),
+        )
+        .filter(Mission.id == mission_id)
+        .first()
+    )
 
 
 def delete_mission(db: Session, mission_id: UUID):

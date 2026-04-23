@@ -33,6 +33,7 @@ from app.schemas.infrastructure import (
     SurfaceCreate,
     SurfaceUpdate,
 )
+from app.services import drone_service
 from app.services.elevation_provider import create_elevation_provider
 from app.services.geometry_converter import (
     apply_schema_update,
@@ -187,8 +188,6 @@ def set_default_drone(
     which resolves to (or creates) a fleet drone at this airport backed by that
     template.
     """
-    from app.services import drone_service
-
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
         raise NotFoundError("airport not found")
@@ -226,8 +225,6 @@ def bulk_change_drone(
     by the drone currently assigned; the legacy `from_drone_profile_id` maps
     to "any drone whose underlying profile matches".
     """
-    from app.services import drone_service
-
     airport = db.query(Airport).filter(Airport.id == airport_id).first()
     if not airport:
         raise NotFoundError("airport not found")

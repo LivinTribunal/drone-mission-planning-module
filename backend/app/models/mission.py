@@ -220,11 +220,6 @@ class Mission(Base):
         self.invalidate_trajectory()
         self.drone_id = drone_id
 
-    # backward-compat alias - older callers still reach for change_drone_profile
-    def change_drone_profile(self, drone_id):
-        """legacy alias for change_drone - accepts a drone fleet id."""
-        self.change_drone(drone_id)
-
     @property
     def drone_profile(self):
         """return the shared profile template for the assigned drone, if any."""
