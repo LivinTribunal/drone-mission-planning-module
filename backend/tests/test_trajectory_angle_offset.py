@@ -9,12 +9,12 @@ from pydantic import ValidationError
 
 from app.models.enums import WaypointType
 from app.schemas.mission import InspectionConfigOverride
-from app.services.trajectory.helpers import (
+from app.services.trajectory.methods.horizontal_range import calculate_arc_path
+from app.services.trajectory.segment_builder import (
     check_missing_setting_angles,
     derive_observation_angle,
     get_lha_setting_angle_by_id,
 )
-from app.services.trajectory.methods.horizontal_range import calculate_arc_path
 from app.services.trajectory.types import (
     DEFAULT_ANGLE_OFFSET,
     DEFAULT_GLIDE_SLOPE,

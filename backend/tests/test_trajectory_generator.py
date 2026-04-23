@@ -235,7 +235,7 @@ def test_resolve_with_defaults_no_configs():
 # camera action tests
 def test_lead_in_lead_out_none():
     """first and last waypoints should have NONE camera action"""
-    from app.services.trajectory.helpers import _apply_camera_actions
+    from app.services.trajectory.segment_builder import _apply_camera_actions
 
     wps = [
         WaypointData(lon=0, lat=0, alt=0),
@@ -322,7 +322,7 @@ def test_astar_no_path():
 # interface methods
 def test_determine_start_end_positions():
     """start and end positions should differ for horizontal range"""
-    from app.services.trajectory.helpers import determine_end_position, determine_start_position
+    from app.services.trajectory._common import determine_end_position, determine_start_position
 
     config = ResolvedConfig(measurement_density=8)
     center = Point3D(lon=14.274, lat=50.098, alt=380.0)
@@ -723,7 +723,7 @@ def test_get_lha_positions_no_filter(client, db_engine):
     from sqlalchemy.orm import Session, joinedload
 
     from app.models.agl import AGL
-    from app.services.trajectory.helpers import get_lha_positions
+    from app.services.trajectory.segment_builder import get_lha_positions
 
     airport_id, agl_id, lha_ids = _setup_lha_fixtures(client)
 
@@ -741,7 +741,7 @@ def test_get_lha_positions_filtered(client, db_engine):
     from sqlalchemy.orm import Session, joinedload
 
     from app.models.agl import AGL
-    from app.services.trajectory.helpers import get_lha_positions
+    from app.services.trajectory.segment_builder import get_lha_positions
 
     # use different icao code to avoid conflict
     airport = client.post(
@@ -782,7 +782,7 @@ def test_get_lha_positions_skips_no_position():
     """LHAs without position are skipped gracefully."""
     from uuid import uuid4
 
-    from app.services.trajectory.helpers import get_lha_positions
+    from app.services.trajectory.segment_builder import get_lha_positions
 
     lha_with = type("L", (), {"id": uuid4(), "position": None, "setting_angle": 3.0})()
     agl = type("A", (), {"lhas": [lha_with]})()

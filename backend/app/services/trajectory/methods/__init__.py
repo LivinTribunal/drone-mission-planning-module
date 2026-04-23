@@ -7,7 +7,7 @@ from app.core.exceptions import TrajectoryGenerationError
 from app.models.enums import InspectionMethod
 from app.utils.geo import distance_between, point_at_distance
 
-from ..helpers import (
+from .._common import (
     _apply_terrain_delta,
     _insert_video_hover_waypoints,
     determine_end_position,

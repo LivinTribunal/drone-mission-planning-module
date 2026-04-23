@@ -34,6 +34,11 @@ def bearing_between(lon1: float, lat1: float, lon2: float, lat2: float) -> float
     return (math.degrees(math.atan2(east, north)) + 360) % 360
 
 
+def opposite_bearing(heading: float) -> float:
+    """bearing 180 degrees opposite of given heading, wrapped to [0, 360)."""
+    return (heading + 180) % 360
+
+
 def point_at_distance(
     lon: float, lat: float, bearing_deg: float, distance_m: float
 ) -> tuple[float, float]:

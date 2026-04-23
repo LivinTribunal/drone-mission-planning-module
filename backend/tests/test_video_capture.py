@@ -3,13 +3,11 @@
 from uuid import uuid4
 
 from app.models.enums import CameraAction, WaypointType
-from app.services.trajectory.helpers import (
-    _apply_camera_actions,
-    _insert_video_hover_waypoints,
-)
+from app.services.trajectory._common import _insert_video_hover_waypoints
 from app.services.trajectory.methods import compute_measurement_trajectory
 from app.services.trajectory.methods.horizontal_range import calculate_arc_path
 from app.services.trajectory.methods.vertical_profile import calculate_vertical_path
+from app.services.trajectory.segment_builder import _apply_camera_actions
 from app.services.trajectory.types import Point3D, ResolvedConfig, WaypointData
 
 # --- video mode arc path ---
