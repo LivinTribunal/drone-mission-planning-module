@@ -54,6 +54,7 @@ CONFIG_FIELDS: tuple[str, ...] = (
     "hover_bearing",
     "hover_bearing_reference",
     "direction_reversed",
+    "direction_is_auto",
 )
 
 
@@ -103,6 +104,7 @@ class InspectionConfiguration(Base):
     hover_bearing = Column(Float, nullable=True)
     hover_bearing_reference = Column(String(10), nullable=True)
     direction_reversed = Column(Boolean, nullable=False, default=False)
+    direction_is_auto = Column(Boolean, nullable=False, default=False)
 
     # camera preset reference
     camera_preset_id = Column(

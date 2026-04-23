@@ -881,10 +881,30 @@ export default function InspectionConfigForm({
       </div>
       )}
 
-      {/* direction flip - horizontal-range, fly-over, parallel-side-sweep */}
+      {/* direction mode - auto / natural / reversed. horizontal-range, fly-over, parallel-side-sweep */}
       {(inspection.method === "HORIZONTAL_RANGE" ||
         inspection.method === "FLY_OVER" ||
-        inspection.method === "PARALLEL_SIDE_SWEEP") && (
+        inspection.method === "PARALLEL_SIDE_SWEEP") && (() => {
+          const isAuto = resolveBoolean("direction_is_auto");
+          const isReversed = resolveBoolean("direction_reversed");
+          const setMode = (mode: "AUTO" | "NATURAL" | "REVERSED") => {
+            if (mode === "AUTO") {
+              // reset direction_reversed so the bearing display stays coherent
+              // until the optimizer runs and writes back a resolved value.
+              onChange({
+                ...configOverride,
+                direction_is_auto: true,
+                direction_reversed: false,
+              });
+              return;
+            }
+            onChange({
+              ...configOverride,
+              direction_is_auto: false,
+              direction_reversed: mode === "REVERSED",
+            });
+          };
+          return (
         <div
           className="rounded-2xl border border-tv-border bg-tv-bg/50 p-3"
           data-testid="direction-reversed-section"
@@ -912,28 +932,45 @@ export default function InspectionConfigForm({
               >
                 {directionBearing === null
                   ? t("mission.config.direction.unknown")
-                  : `${directionBearing}°`}
+                  : `${directionBearing}°${isAuto ? ` (${t("mission.config.direction.autoResolvedSuffix")})` : ""}`}
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  const current = resolveBoolean("direction_reversed");
-                  onChange({ ...configOverride, direction_reversed: !current });
-                }}
-                disabled={disabled}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover transition-colors flex-shrink-0 disabled:opacity-50"
-                title={t("mission.config.direction.flipTitle")}
-                data-testid="inspection-direction-reversed-toggle"
-              >
-                <RotateCcw className="h-3 w-3" />
-                {resolveBoolean("direction_reversed")
-                  ? t("mission.config.direction.reversed")
-                  : t("mission.config.direction.flip")}
-              </button>
             </div>
           </div>
+          <div
+            className="mt-2 inline-flex rounded-full border border-tv-border bg-tv-bg p-0.5 text-[10px]"
+            data-testid="inspection-direction-mode"
+          >
+            {([
+              { key: "AUTO", active: isAuto },
+              { key: "NATURAL", active: !isAuto && !isReversed },
+              { key: "REVERSED", active: !isAuto && isReversed },
+            ] as const).map(({ key, active }) => (
+              <button
+                key={key}
+                type="button"
+                disabled={disabled}
+                onClick={() => setMode(key)}
+                className={`px-3 py-1 rounded-full transition-colors flex items-center gap-1 ${
+                  active
+                    ? "bg-tv-accent text-white font-medium"
+                    : "text-tv-text-secondary hover:text-tv-text-primary"
+                } disabled:opacity-50`}
+                data-testid={`inspection-direction-mode-${key.toLowerCase()}`}
+                title={t(`mission.config.direction.modeTitle.${key.toLowerCase()}`)}
+              >
+                {key === "REVERSED" ? <RotateCcw className="h-3 w-3" /> : null}
+                {t(`mission.config.direction.mode.${key.toLowerCase()}`)}
+              </button>
+            ))}
+          </div>
+          {isAuto && (
+            <p className="mt-1 text-[11px] text-tv-text-muted leading-tight">
+              {t("mission.config.direction.autoHint")}
+            </p>
+          )}
         </div>
-      )}
+          );
+        })()}
 
       {/* camera settings - falls back to mission defaults */}
       <div data-testid="camera-settings-section">

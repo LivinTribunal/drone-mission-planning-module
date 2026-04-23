@@ -180,6 +180,7 @@ class ResolvedConfig:
     hover_bearing: Degrees | None = None
     hover_bearing_reference: str | None = None
     direction_reversed: bool = False
+    direction_is_auto: bool = False
 
 
 @dataclass

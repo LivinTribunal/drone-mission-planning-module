@@ -17,6 +17,7 @@ from app.core.enums import AuditAction
 from app.schemas.common import DeleteResponse, ListMeta
 from app.schemas.export import ExportRequest
 from app.schemas.mission import (
+    HeadingAutoResponse,
     InspectionCreate,
     InspectionResponse,
     InspectionUpdate,
@@ -28,7 +29,13 @@ from app.schemas.mission import (
     ReorderRequest,
     ReorderResponse,
 )
-from app.services import export_service, inspection_service, mission_report_service, mission_service
+from app.services import (
+    export_service,
+    heading_optimizer,
+    inspection_service,
+    mission_report_service,
+    mission_service,
+)
 from app.utils.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
@@ -274,6 +281,34 @@ def cancel_mission(
         entity_type="Mission",
         entity_id=mission_id,
         details={"to": "CANCELLED"},
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return result
+
+
+# heading optimization
+@router.post("/{mission_id}/headings/auto", response_model=HeadingAutoResponse)
+def auto_resolve_headings(
+    mission_id: UUID,
+    request: Request,
+    current_user: OperatorUser,
+    db: Session = Depends(get_db),
+):
+    """resolve optimal direction_reversed for all auto-heading inspections."""
+    check_mission_access(db, current_user, mission_id)
+    result = heading_optimizer.solve_and_persist(db, mission_id)
+    log_audit(
+        db,
+        current_user,
+        AuditAction.UPDATE,
+        entity_type="Mission",
+        entity_id=mission_id,
+        details={
+            "action": "auto_resolve_headings",
+            "auto_inspection_count": result.auto_inspection_count,
+            "improvement_pct": result.improvement_pct,
+        },
         ip_address=request.client.host if request.client else None,
     )
     db.commit()

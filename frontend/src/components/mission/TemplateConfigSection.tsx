@@ -274,27 +274,52 @@ export default function TemplateConfigSection({
 
       {(method === "HORIZONTAL_RANGE" ||
         method === "FLY_OVER" ||
-        method === "PARALLEL_SIDE_SWEEP") && (
-        <div className="flex items-center justify-between gap-3 py-1">
-          <label className="block text-xs font-medium text-tv-text-secondary">
-            {t("mission.config.direction.label")}
-          </label>
-          <button
-            type="button"
-            onClick={() => onChange("direction_reversed", !(config?.direction_reversed ?? false))}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs border transition-colors ${
-              config?.direction_reversed
-                ? "border-tv-accent bg-tv-accent/10 text-tv-accent"
-                : "border-tv-border text-tv-text-secondary hover:bg-tv-surface-hover"
-            }`}
-            data-testid="template-direction-reversed-toggle"
-          >
-            {config?.direction_reversed
-              ? t("mission.config.direction.reversed")
-              : t("mission.config.direction.natural")}
-          </button>
-        </div>
-      )}
+        method === "PARALLEL_SIDE_SWEEP") && (() => {
+          const isAuto = config?.direction_is_auto ?? false;
+          const isReversed = config?.direction_reversed ?? false;
+          const setMode = (mode: "AUTO" | "NATURAL" | "REVERSED") => {
+            if (mode === "AUTO") {
+              onChange("direction_is_auto", true);
+              // reset direction_reversed so the bearing display stays coherent
+              // until the optimizer runs and writes back a resolved value.
+              onChange("direction_reversed", false);
+              return;
+            }
+            onChange("direction_is_auto", false);
+            onChange("direction_reversed", mode === "REVERSED");
+          };
+          return (
+            <div className="flex items-center justify-between gap-3 py-1">
+              <label className="block text-xs font-medium text-tv-text-secondary">
+                {t("mission.config.direction.label")}
+              </label>
+              <div
+                className="inline-flex rounded-full border border-tv-border bg-tv-bg p-0.5 text-[10px]"
+                data-testid="template-direction-mode"
+              >
+                {([
+                  { key: "AUTO", active: isAuto },
+                  { key: "NATURAL", active: !isAuto && !isReversed },
+                  { key: "REVERSED", active: !isAuto && isReversed },
+                ] as const).map(({ key, active }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setMode(key)}
+                    className={`px-3 py-1 rounded-full transition-colors ${
+                      active
+                        ? "bg-tv-accent text-white font-medium"
+                        : "text-tv-text-secondary hover:text-tv-text-primary"
+                    }`}
+                    data-testid={`template-direction-mode-${key.toLowerCase()}`}
+                  >
+                    {t(`mission.config.direction.mode.${key.toLowerCase()}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 }

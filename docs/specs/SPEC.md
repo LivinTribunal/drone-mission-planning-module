@@ -138,6 +138,15 @@ Compute transit paths between segments (straight-line for MVP). Add TAKEOFF from
 
 **Camera heading:** MEASUREMENT waypoints point at LHA center. TRANSIT/TAKEOFF/LANDING point in direction of travel.
 
+### Heading optimization (auto direction)
+
+Each inspection exposes a `direction_is_auto` flag alongside `direction_reversed`. When auto, the resolver picks `direction_reversed` per inspection to minimize total mission transit distance (with a small heading-change tie-breaker).
+
+- **Candidate set**: binary per inspection — natural (false) or reversed (true). Only `HORIZONTAL_RANGE`, `FLY_OVER`, and `PARALLEL_SIDE_SWEEP` flip geometry; other methods ignore the flag.
+- **Solver**: brute-force over `2^k` assignments for `k` auto inspections (cap `k ≤ 10 = MAX_AUTO_INSPECTIONS`). Pinned inspections (`direction_is_auto=false`) keep their manual value.
+- **Order**: inspection sequence is not changed (out of scope for this pass); only direction per inspection is chosen.
+- **Trigger**: `POST /api/v1/missions/{id}/headings/auto` writes the solved `direction_reversed` into each auto inspection's config, regresses the mission via `Mission.invalidate_trajectory()`, and deletes the current flight plan. Any subsequent `direction_is_auto` toggle or manual `direction_reversed` edit on an inspection already regresses the mission through the standard `update_inspection` path.
+
 ---
 
 ## UI Pages — Wireframe Summary
