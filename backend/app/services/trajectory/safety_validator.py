@@ -51,9 +51,10 @@ def validate_inspection_pass(
 
     boundary_constraint_mode tunes the outside-boundary warning:
     - NONE: suppressed entirely (operator opted to ignore boundary)
-    - INSIDE: downgraded wording (hard constraint already enforced it)
-    - OUTSIDE: warning retained (symmetric - waypoint inside boundary is odd)
-    default keeps legacy soft-warning behavior.
+    - INSIDE: downgraded wording (hard A* already enforced containment)
+    - OUTSIDE: suppressed (drone is expected to be outside the boundary,
+      and the A* hard constraint already enforces outside-containment)
+    any other value keeps the legacy soft-warning behavior.
     """
     violations = []
 
@@ -189,12 +190,15 @@ def _batch_check_boundary_zones(
     mode semantics:
     - NONE: suppressed entirely (operator opted out of boundary awareness)
     - INSIDE: info-level confirmation (hard A* already enforced containment)
-    - OUTSIDE or default: legacy soft warning
+    - OUTSIDE: suppressed (drone should be outside; A* hard-constraint
+      already enforces containment - the outside-boundary warning would fire
+      on every waypoint by design)
+    - any other value: legacy soft warning
     """
     if not local_geoms.boundary_zones or not waypoints:
         return []
 
-    # explicit NONE opt-out or OUTSIDE mode (outside is the target) -> suppress
+    # NONE opt-out or OUTSIDE mode (outside is the target) -> suppress
     if boundary_constraint_mode in ("NONE", "OUTSIDE"):
         return []
 

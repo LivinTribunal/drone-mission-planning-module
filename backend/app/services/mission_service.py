@@ -127,6 +127,14 @@ def create_mission(db: Session, schema: MissionCreate) -> Mission:
                 status_code=422,
             )
 
+    # active soft preference also requires a boundary zone (otherwise silently no-ops)
+    if data.get("boundary_preference", "DONT_CARE") in ("PREFER_INSIDE", "PREFER_OUTSIDE"):
+        if not _airport_has_boundary(db, schema.airport_id):
+            raise DomainError(
+                "boundary preference requires an airport boundary zone to be defined",
+                status_code=422,
+            )
+
     # auto-fill from airport default when no drone specified
     if not data.get("drone_profile_id") and airport.default_drone_profile_id:
         data["drone_profile_id"] = airport.default_drone_profile_id
@@ -168,6 +176,17 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
         if not _airport_has_boundary(db, mission.airport_id):
             raise DomainError(
                 "boundary constraint requires an airport boundary zone to be defined",
+                status_code=422,
+            )
+
+    # active soft preference also requires a boundary zone (otherwise silently no-ops)
+    if "boundary_preference" in data and data["boundary_preference"] in (
+        "PREFER_INSIDE",
+        "PREFER_OUTSIDE",
+    ):
+        if not _airport_has_boundary(db, mission.airport_id):
+            raise DomainError(
+                "boundary preference requires an airport boundary zone to be defined",
                 status_code=422,
             )
 

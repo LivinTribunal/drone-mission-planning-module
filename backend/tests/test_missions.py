@@ -410,6 +410,35 @@ def test_create_mission_rejects_non_none_mode_without_boundary(client, airport_i
     assert "airport boundary" in response.text
 
 
+def test_create_mission_rejects_active_preference_without_boundary(client, airport_id):
+    """active boundary preference requires an AIRPORT_BOUNDARY zone on the airport."""
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Prefer Inside No Zone",
+            "airport_id": airport_id,
+            "boundary_preference": "PREFER_INSIDE",
+        },
+    )
+    assert response.status_code == 422
+    assert "airport boundary" in response.text
+
+
+def test_update_mission_rejects_active_preference_without_boundary(client, airport_id):
+    """update flags active boundary preference without a boundary zone as 422."""
+    mission = client.post(
+        "/api/v1/missions",
+        json={"name": "Pref Update", "airport_id": airport_id},
+    ).json()
+
+    response = client.put(
+        f"/api/v1/missions/{mission['id']}",
+        json={"boundary_preference": "PREFER_OUTSIDE"},
+    )
+    assert response.status_code == 422
+    assert "airport boundary" in response.text
+
+
 def test_create_mission_accepts_non_none_mode_when_boundary_present(client, airport_id, db_session):
     """when the airport has a boundary zone, INSIDE is accepted."""
     from uuid import uuid4

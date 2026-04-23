@@ -116,6 +116,21 @@ def test_outside_mode_suppresses_boundary_warning():
     assert result == []
 
 
+def test_outside_mode_suppresses_inside_waypoint_too():
+    """OUTSIDE mode suppresses the warning for inside-boundary waypoints as well.
+
+    the hard A* constraint already enforces outside-containment - emitting a
+    warning here would contradict that and would fire on every unrelated
+    waypoint check. validator stays silent and lets the A* layer own the rule.
+    """
+    inside = WaypointData(lon=14.26, lat=50.10, alt=100.0)
+    local_geoms = _build_boundary_local_geoms()
+
+    result = _batch_check_boundary_zones([inside], local_geoms, boundary_constraint_mode="OUTSIDE")
+
+    assert result == []
+
+
 def test_check_safety_zone_inverted_for_boundary(db_session, boundary_wkb):
     """check_safety_zone applies inverted semantics to AIRPORT_BOUNDARY zones."""
     outside = WaypointData(lon=14.30, lat=50.20, alt=100.0)
