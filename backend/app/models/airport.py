@@ -44,7 +44,12 @@ class Airport(Base):
         nullable=True,
     )
 
-    default_drone = relationship("Drone", foreign_keys=[default_drone_id], post_update=True)
+    default_drone = relationship(
+        "Drone",
+        foreign_keys=[default_drone_id],
+        post_update=True,
+        lazy="joined",
+    )
 
     # multi-tenancy prep - nullable until org logic is implemented
     organization_id = Column(UUID, nullable=True)

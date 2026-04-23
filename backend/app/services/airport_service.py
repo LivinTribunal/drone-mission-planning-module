@@ -245,8 +245,9 @@ def bulk_change_drone(
     target_drone_id = target_drone.id
 
     # normalize from-drone filter: if caller passed a drone_profile_id via
-    # from_drone_id (legacy behavior), resolve it to a fleet drone id.
-    from_fleet_id: UUID | None = None
+    # from_drone_id (legacy behavior), resolve it to all fleet drone ids
+    # backed by that profile at this airport.
+    from_fleet_ids: list[UUID] | None = None
     if from_drone_id is not None:
         existing_drone = (
             db.query(Drone)
@@ -254,11 +255,15 @@ def bulk_change_drone(
             .first()
         )
         if existing_drone:
-            from_fleet_id = existing_drone.id
+            from_fleet_ids = [existing_drone.id]
         else:
-            from_fleet_id = _resolve_profile_to_drone_ids(db, airport_id, from_drone_id)
+            # legacy-compat: accept a profile id and expand to all fleet drones
+            ids = _resolve_profile_to_drone_ids(db, airport_id, from_drone_id)
+            if not ids:
+                raise DomainError("from drone not found at this airport")
+            from_fleet_ids = ids
     elif from_drone_profile_id is not None:
-        from_fleet_id = _resolve_profile_to_drone_ids(db, airport_id, from_drone_profile_id)
+        from_fleet_ids = _resolve_profile_to_drone_ids(db, airport_id, from_drone_profile_id)
 
     updated_ids: list[UUID] = []
     regressed_count = 0
@@ -286,8 +291,8 @@ def bulk_change_drone(
         query = db.query(Mission).filter(
             Mission.airport_id == airport_id, Mission.status == MissionStatus.DRAFT
         )
-        if from_fleet_id is not None:
-            query = query.filter(Mission.drone_id == from_fleet_id)
+        if from_fleet_ids is not None:
+            query = query.filter(Mission.drone_id.in_(from_fleet_ids))
         draft_missions = query.all()
         for mission in draft_missions:
             mission.change_drone(target_drone_id)
@@ -300,14 +305,14 @@ def bulk_change_drone(
 
 def _resolve_profile_to_drone_ids(
     db: Session, airport_id: UUID, drone_profile_id: UUID
-) -> UUID | None:
-    """return one fleet drone id at the airport backed by the given template, if any."""
-    drone = (
-        db.query(Drone)
+) -> list[UUID]:
+    """return all fleet drone ids at the airport backed by the given template."""
+    rows = (
+        db.query(Drone.id)
         .filter(Drone.airport_id == airport_id, Drone.drone_profile_id == drone_profile_id)
-        .first()
+        .all()
     )
-    return drone.id if drone else None
+    return [r[0] for r in rows]
 
 
 # surfaces

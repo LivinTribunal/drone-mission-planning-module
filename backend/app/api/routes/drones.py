@@ -109,14 +109,16 @@ def delete_drone(
     """delete a drone; blocked when missions still reference it."""
     check_airport_access(current_user, airport_id)
     drone = drone_service.get_drone(db, airport_id, drone_id)
+    drone_name = drone.name
+    warnings = drone_service.delete_drone(db, airport_id, drone_id)
     log_audit(
         db,
         current_user,
         AuditAction.DELETE,
         entity_type="Drone",
         entity_id=drone_id,
-        entity_name=drone.name,
+        entity_name=drone_name,
         ip_address=request.client.host if request.client else None,
     )
-    warnings = drone_service.delete_drone(db, airport_id, drone_id)
+    db.commit()
     return DeleteResponse(deleted=True, warnings=warnings)
