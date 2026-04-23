@@ -10,7 +10,10 @@ interface InfrastructureListPanelProps<T> {
   getName: (item: T) => string;
   renderItem: (item: T) => React.ReactNode;
   onAdd?: () => void;
+  // single-click on a row: select/edit the item, no map recenter
   onEdit: (item: T) => void;
+  // double-click on a row: select AND recenter the map on the item
+  onLocate?: (item: T) => void;
   onDelete: (id: string) => void;
   addLabel: string;
   getDeleteWarnings?: (item: T) => string[];
@@ -24,6 +27,7 @@ export default function InfrastructureListPanel<T>({
   renderItem,
   onAdd,
   onEdit,
+  onLocate,
   onDelete,
   addLabel,
   getDeleteWarnings,
@@ -88,6 +92,7 @@ export default function InfrastructureListPanel<T>({
                 <div
                   key={getId(item)}
                   onClick={() => onEdit(item)}
+                  onDoubleClick={() => onLocate?.(item)}
                   className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-tv-surface-hover transition-colors ${
                     idx === count - 1 ? "rounded-b-2xl" : "border-b border-tv-border"
                   }`}

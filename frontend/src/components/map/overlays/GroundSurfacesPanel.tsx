@@ -7,13 +7,17 @@ import type { MapFeature, MapLayerConfig } from "@/types/map";
 interface GroundSurfacesPanelProps {
   surfaces: SurfaceResponse[];
   layerConfig: MapLayerConfig;
-  onItemClick: (feature: MapFeature) => void;
+  // single-click: select only, no recenter
+  onSelect: (feature: MapFeature) => void;
+  // double-click: select AND recenter
+  onLocate?: (feature: MapFeature) => void;
 }
 
 export default function GroundSurfacesPanel({
   surfaces,
   layerConfig,
-  onItemClick,
+  onSelect,
+  onLocate,
 }: GroundSurfacesPanelProps) {
   /** collapsible list of runways and taxiways. */
   const { t } = useTranslation();
@@ -34,10 +38,16 @@ export default function GroundSurfacesPanel({
     return `TWY ${surface.identifier}`;
   }
 
-  function handleClick(surface: SurfaceResponse) {
-    /** trigger feature selection for a surface. */
+  function handleSelect(surface: SurfaceResponse) {
+    /** single-click: select surface, no recenter. */
     if (isGrayedOut(surface)) return;
-    onItemClick({ type: "surface", data: surface });
+    onSelect({ type: "surface", data: surface });
+  }
+
+  function handleLocate(surface: SurfaceResponse) {
+    /** double-click: select + recenter. */
+    if (isGrayedOut(surface)) return;
+    onLocate?.({ type: "surface", data: surface });
   }
 
   return (
@@ -74,7 +84,8 @@ export default function GroundSurfacesPanel({
               return (
                 <button
                   key={surface.id}
-                  onClick={() => handleClick(surface)}
+                  onClick={() => handleSelect(surface)}
+                  onDoubleClick={() => handleLocate(surface)}
                   className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${
                     grayed
                       ? "opacity-50 pointer-events-none"

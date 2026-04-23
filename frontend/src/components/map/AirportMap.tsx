@@ -13,6 +13,7 @@ import type { WaypointResponse } from "@/types/flightPlan";
 import type { PointZ } from "@/types/common";
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import useCesiumSync from "@/hooks/useCesiumSync";
+import { flyMapLibreToFeature, flyCesiumToFeature } from "@/hooks/useFocusFeature";
 import { MapTool } from "@/hooks/useMapTools";
 import {
   TOOL_CURSOR_MOVE,
@@ -123,6 +124,8 @@ import {
 export interface AirportMapHandle {
   /** get the underlying maplibre-gl map instance. */
   getMap: () => maplibregl.Map | null;
+  /** imperatively recenter on a feature using the shared intent router. */
+  locateFeature: (feature: MapFeature) => void;
 }
 
 const GLYPHS_URL =
@@ -252,40 +255,6 @@ const PENDING_PREVIEW_POINT_LAYER = "pending-preview-point";
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
-/** fly the map to the center of a feature. */
-function flyToFeature(map: maplibregl.Map, feature: MapFeature) {
-  let lon: number | undefined;
-  let lat: number | undefined;
-  let minZoom = 15.5;
-
-  if (feature.type === "waypoint") {
-    const coords = feature.data.position?.coordinates;
-    if (coords) { [lon, lat] = coords; }
-    minZoom = 17;
-  } else if (feature.type === "obstacle") {
-    const ring = feature.data.boundary?.coordinates?.[0];
-    if (ring && ring.length > 0) {
-      lon = ring.reduce((s: number, c: number[]) => s + c[0], 0) / ring.length;
-      lat = ring.reduce((s: number, c: number[]) => s + c[1], 0) / ring.length;
-    }
-  } else if (feature.type === "agl") {
-    [lon, lat] = feature.data.position.coordinates;
-  } else if (feature.type === "lha") {
-    [lon, lat] = feature.data.position.coordinates;
-    minZoom = 18;
-  } else if (feature.type === "surface") {
-    const coords = feature.data.geometry.coordinates;
-    if (coords.length > 0) {
-      lon = coords.reduce((s: number, c: number[]) => s + c[0], 0) / coords.length;
-      lat = coords.reduce((s: number, c: number[]) => s + c[1], 0) / coords.length;
-    }
-  }
-
-  if (lon !== undefined && lat !== undefined) {
-    map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), minZoom), duration: 800 });
-  }
-}
-
 const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   activeTool?: MapTool;
   vertexEditTool?: MapTool;
@@ -336,6 +305,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   zoomPercent,
   onZoomChange,
   focusFeature,
+  locateRequest,
   showZoomControls = true,
   showCompass = true,
   showHelpPanel = true,
@@ -371,8 +341,20 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   const highlightSeverityRef = useRef(highlightSeverity);
   highlightSeverityRef.current = highlightSeverity;
 
+  // cesium viewer ref (declared early so imperative handle can route 3d locates)
+  const cesiumViewerRef = useRef<import("cesium").Viewer | null>(null);
+
   useImperativeHandle(ref, () => ({
     getMap: () => mapRef.current,
+    locateFeature: (feature: MapFeature) => {
+      const viewer = cesiumViewerRef.current;
+      if (viewer && !viewer.isDestroyed()) {
+        void flyCesiumToFeature(viewer, feature);
+        return;
+      }
+      const map = mapRef.current;
+      if (map) flyMapLibreToFeature(map, feature);
+    },
   }), []);
 
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(() => {
@@ -408,9 +390,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   const [internalIs3D] = useState(false);
   const is3D = is3DProp ?? internalIs3D;
 
-  // cesium 3d viewer state
+  // cesium 3d viewer state (ref declared above alongside imperative handle)
   const [cesiumLoaded, setCesiumLoaded] = useState(false);
-  const cesiumViewerRef = useRef<import("cesium").Viewer | null>(null);
   const { syncToCesium, syncToMaplibre } = useCesiumSync(mapRef);
   // fly-along state placeholder - wired from parent via props
   // const [flyAlongState] = useState<FlyAlongState>({ status: "idle", currentIndex: 0, speed: 2, progress: 0 });
@@ -435,19 +416,12 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   const onBearingChangeRef = useRef(onBearingChange);
   onBearingChangeRef.current = onBearingChange;
 
-  // handle waypoint selection from the internal WaypointListPanel
-  const handleWaypointListSelect = useCallback(
-    (wpId: string | null) => {
-      onWaypointClick?.(wpId);
-      if (!wpId) {
-        setSelectedFeature(null);
-        return;
-      }
-
-      // standalone takeoff/landing
+  // build a MapFeature for a waypoint id (including standalone takeoff/landing)
+  const buildWaypointFeatureFromId = useCallback(
+    (wpId: string): MapFeature | null => {
       if (wpId === "takeoff" && takeoffCoordinate) {
         const [lon, lat, alt] = takeoffCoordinate.coordinates;
-        setSelectedFeature({
+        return {
           type: "waypoint",
           data: {
             id: "takeoff",
@@ -456,12 +430,11 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
             position: { type: "Point", coordinates: [lon, lat, alt] },
             stack_count: 1,
           },
-        });
-        return;
+        };
       }
       if (wpId === "landing" && landingCoordinate) {
         const [lon, lat, alt] = landingCoordinate.coordinates;
-        setSelectedFeature({
+        return {
           type: "waypoint",
           data: {
             id: "landing",
@@ -470,32 +443,56 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
             position: { type: "Point", coordinates: [lon, lat, alt] },
             stack_count: 1,
           },
-        });
+        };
+      }
+      const wp = waypoints?.find((w) => w.id === wpId);
+      if (!wp) return null;
+      const [lon, lat, alt] = wp.position.coordinates;
+      return {
+        type: "waypoint",
+        data: {
+          id: wp.id,
+          waypoint_type: wp.waypoint_type,
+          sequence_order: wp.sequence_order,
+          position: { type: "Point", coordinates: [lon, lat, alt] },
+          stack_count: 1,
+          heading: wp.heading ?? null,
+          speed: wp.speed ?? null,
+          camera_action: wp.camera_action ?? null,
+          camera_target: wp.camera_target ?? null,
+          gimbal_pitch: wp.gimbal_pitch ?? null,
+          hover_duration: wp.hover_duration ?? null,
+        },
+      };
+    },
+    [waypoints, takeoffCoordinate, landingCoordinate],
+  );
+
+  // single-click on a waypoint list row: select only, no fly.
+  const handleWaypointListSelect = useCallback(
+    (wpId: string | null) => {
+      onWaypointClick?.(wpId);
+      if (!wpId) {
+        setSelectedFeature(null);
         return;
       }
-
-      const wp = waypoints?.find((w) => w.id === wpId);
-      if (wp) {
-        const [lon, lat, alt] = wp.position.coordinates;
-        setSelectedFeature({
-          type: "waypoint",
-          data: {
-            id: wp.id,
-            waypoint_type: wp.waypoint_type,
-            sequence_order: wp.sequence_order,
-            position: { type: "Point", coordinates: [lon, lat, alt] },
-            stack_count: 1,
-            heading: wp.heading ?? null,
-            speed: wp.speed ?? null,
-            camera_action: wp.camera_action ?? null,
-            camera_target: wp.camera_target ?? null,
-            gimbal_pitch: wp.gimbal_pitch ?? null,
-            hover_duration: wp.hover_duration ?? null,
-          },
-        });
-      }
+      const feature = buildWaypointFeatureFromId(wpId);
+      if (feature) setSelectedFeature(feature);
     },
-    [onWaypointClick, waypoints, takeoffCoordinate, landingCoordinate],
+    [onWaypointClick, buildWaypointFeatureFromId],
+  );
+
+  // double-click on a waypoint list row: select + recenter.
+  const handleWaypointListLocate = useCallback(
+    (wpId: string) => {
+      onWaypointClick?.(wpId);
+      const feature = buildWaypointFeatureFromId(wpId);
+      if (!feature) return;
+      setSelectedFeature(feature);
+      const map = mapRef.current;
+      if (map) flyMapLibreToFeature(map, feature);
+    },
+    [onWaypointClick, buildWaypointFeatureFromId],
   );
 
   // apply 3D pitch toggle
@@ -505,28 +502,25 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
     map.easeTo({ pitch: is3D ? 60 : 0, duration: 400 });
   }, [is3D]);
 
-  // fly to focused feature and highlight it on the map
-  // track whether a focusFeature change originated from a map click (skip flyTo)
-  // vs an external trigger like a list panel click (do flyTo)
-  const skipFlyRef = useRef(false);
-
+  // highlight the focused feature on the map. fly is a separate intent
+  // routed through locateRequest - single clicks never fly.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-
-    // sync highlight even when clearing selection
     syncHighlight(map, focusFeature ?? null);
-
-    if (!focusFeature) return;
-
-    // skip flyTo when the focus change came from a map single-click
-    if (skipFlyRef.current) {
-      skipFlyRef.current = false;
-      return;
-    }
-
-    flyToFeature(map, focusFeature);
   }, [focusFeature]);
+
+  // explicit locate intent - bumps when caller wants to recenter the map.
+  // double-clicks from panels or from the map feed this.
+  const lastLocateKeyRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !locateRequest) return;
+    if (lastLocateKeyRef.current === locateRequest.key) return;
+    lastLocateKeyRef.current = locateRequest.key;
+    flyMapLibreToFeature(map, locateRequest.feature);
+  }, [locateRequest]);
 
   // sync pending creation preview geometry
   useEffect(() => {
@@ -1816,6 +1810,109 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
       }
     }
 
+    // waypoint layers for pick queries (keep in sync between click/dblclick)
+    const waypointQueryLayers = [
+      WAYPOINT_TRANSIT_CIRCLE_LAYER,
+      WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
+      WAYPOINT_TAKEOFF_LAYER,
+      WAYPOINT_LANDING_LAYER,
+      WAYPOINT_HOVER_LAYER,
+      SIMPLIFIED_TAKEOFF_LAYER,
+      SIMPLIFIED_LANDING_LAYER,
+    ];
+
+    function queryHits(point: maplibregl.Point) {
+      /** query all pickable layers at a point. */
+      if (!map) return [];
+      const allQueryLayers = [...INTERACTIVE_LAYERS, ...waypointQueryLayers].filter((id) => {
+        try { return map.getLayer(id); } catch { return false; }
+      });
+      return map.queryRenderedFeatures(point, { layers: allQueryLayers });
+    }
+
+    function buildWaypointFeature(
+      wpHit: maplibregl.MapGeoJSONFeature,
+    ): { wpId: string; feature: MapFeature } | null {
+      /** build a waypoint MapFeature from a queried layer hit. */
+      const wpId = String(wpHit.properties?.id ?? "");
+      if (!wpId) return null;
+      const coords = wpHit.geometry && "coordinates" in wpHit.geometry
+        ? (wpHit.geometry as GeoJSON.Point).coordinates
+        : [0, 0, 0];
+      const alt = Number(wpHit.properties?.altitude ?? coords[2] ?? 0);
+      const stackCount = Number(wpHit.properties?.stack_count ?? 1);
+      const firstId = wpId.includes(",") ? wpId.split(",")[0] : wpId;
+      const fullWp = waypointsRef.current?.find((w) => w.id === firstId);
+      return {
+        wpId,
+        feature: {
+          type: "waypoint",
+          data: {
+            id: wpId,
+            waypoint_type: String(wpHit.properties?.waypoint_type ?? ""),
+            sequence_order: Number(wpHit.properties?.sequence_order ?? 0),
+            position: { type: "Point", coordinates: [coords[0], coords[1], alt] },
+            stack_count: stackCount,
+            seq_min: stackCount > 1 ? Number(wpHit.properties?.seq_min) : undefined,
+            seq_max: stackCount > 1 ? Number(wpHit.properties?.seq_max) : undefined,
+            alt_min: stackCount > 1 ? Number(wpHit.properties?.alt_min) : undefined,
+            alt_max: stackCount > 1 ? Number(wpHit.properties?.alt_max) : undefined,
+            heading: fullWp?.heading ?? null,
+            speed: fullWp?.speed ?? null,
+            camera_action: fullWp?.camera_action ?? null,
+            camera_target: fullWp?.camera_target ?? null,
+            gimbal_pitch: fullWp?.gimbal_pitch ?? null,
+            hover_duration: fullWp?.hover_duration ?? null,
+          },
+        },
+      };
+    }
+
+    function buildInfraFeature(
+      features: maplibregl.MapGeoJSONFeature[],
+    ): MapFeature | null {
+      /** build an infrastructure MapFeature from non-waypoint hits, preferring points. */
+      const pointFeature = features.find(
+        (f) =>
+          f.layer?.id !== SAFETY_ZONE_FILL_LAYER &&
+          f.layer?.id !== SAFETY_ZONE_HATCH_LAYER &&
+          f.layer?.id !== SAFETY_ZONE_BORDER_LAYER &&
+          f.layer?.id !== AIRPORT_BOUNDARY_LINE_LAYER &&
+          f.layer?.id !== OBSTACLE_BOUNDARY_LAYER,
+      );
+      const f = pointFeature ?? features[0];
+      const props = f.properties;
+      if (!props) return null;
+      const entityType = props.entityType as string;
+
+      if (entityType === "surface") {
+        const surface = airport.surfaces.find((s) => s.id === props.id);
+        return surface ? { type: "surface", data: surface } : null;
+      }
+      if (entityType === "obstacle") {
+        const obstacle = airport.obstacles.find((o) => o.id === props.id);
+        return obstacle ? { type: "obstacle", data: obstacle } : null;
+      }
+      if (entityType === "safety_zone" || entityType === "airport_boundary") {
+        const zone = airport.safety_zones.find((z) => z.id === props.id);
+        return zone ? { type: "safety_zone", data: zone } : null;
+      }
+      if (entityType === "agl") {
+        const agl = airport.surfaces
+          .flatMap((s) => s.agls)
+          .find((a) => a.id === props.id);
+        return agl ? { type: "agl", data: agl } : null;
+      }
+      if (entityType === "lha") {
+        const lha = airport.surfaces
+          .flatMap((s) => s.agls)
+          .flatMap((a) => a.lhas)
+          .find((l) => l.id === props.id);
+        return lha ? { type: "lha", data: lha } : null;
+      }
+      return null;
+    }
+
     function handleClick(e: maplibregl.MapMouseEvent) {
       if (!map) return;
 
@@ -1858,26 +1955,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         }
       } catch { /* layer not ready */ }
 
-      // query all interactive layers + waypoint layers in one pass
-      const waypointQueryLayers = [
-        WAYPOINT_TRANSIT_CIRCLE_LAYER,
-        WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
-        WAYPOINT_TAKEOFF_LAYER,
-        WAYPOINT_LANDING_LAYER,
-        WAYPOINT_HOVER_LAYER,
-        SIMPLIFIED_TAKEOFF_LAYER,
-        SIMPLIFIED_LANDING_LAYER,
-      ];
-      const allQueryLayers = [...INTERACTIVE_LAYERS, ...waypointQueryLayers].filter((id) => {
-        try {
-          return map.getLayer(id);
-        } catch {
-          return false;
-        }
-      });
-      const features = map.queryRenderedFeatures(e.point, {
-        layers: allQueryLayers,
-      });
+      const features = queryHits(e.point);
 
       if (!features.length) {
         setSelectedFeature(null);
@@ -1891,89 +1969,21 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         waypointQueryLayers.includes(f.layer?.id ?? ""),
       );
       if (wpHit && wpHit.properties) {
-        const wpId = String(wpHit.properties.id ?? "");
-        if (wpId) {
+        const built = buildWaypointFeature(wpHit);
+        if (built) {
           if (onWaypointClick) {
-            onWaypointClick(selectedWaypointId === wpId ? null : wpId);
+            onWaypointClick(selectedWaypointId === built.wpId ? null : built.wpId);
           }
-          const coords = wpHit.geometry && "coordinates" in wpHit.geometry
-            ? (wpHit.geometry as GeoJSON.Point).coordinates
-            : [0, 0, 0];
-          // maplibre strips Z from point geometries - read altitude from properties
-          const alt = Number(wpHit.properties.altitude ?? coords[2] ?? 0);
-          const stackCount = Number(wpHit.properties.stack_count ?? 1);
-          // look up full waypoint data for camera fields (stacked ids are comma-separated)
-          const firstId = wpId.includes(",") ? wpId.split(",")[0] : wpId;
-          const fullWp = waypointsRef.current?.find((w) => w.id === firstId);
-          setSelectedFeature({
-            type: "waypoint",
-            data: {
-              id: wpId,
-              waypoint_type: String(wpHit.properties.waypoint_type ?? ""),
-              sequence_order: Number(wpHit.properties.sequence_order ?? 0),
-              position: { type: "Point", coordinates: [coords[0], coords[1], alt] },
-              stack_count: stackCount,
-              seq_min: stackCount > 1 ? Number(wpHit.properties.seq_min) : undefined,
-              seq_max: stackCount > 1 ? Number(wpHit.properties.seq_max) : undefined,
-              alt_min: stackCount > 1 ? Number(wpHit.properties.alt_min) : undefined,
-              alt_max: stackCount > 1 ? Number(wpHit.properties.alt_max) : undefined,
-              heading: fullWp?.heading ?? null,
-              speed: fullWp?.speed ?? null,
-              camera_action: fullWp?.camera_action ?? null,
-              camera_target: fullWp?.camera_target ?? null,
-              gimbal_pitch: fullWp?.gimbal_pitch ?? null,
-              hover_duration: fullWp?.hover_duration ?? null,
-            },
-          });
+          setSelectedFeature(built.feature);
+          // single-click: select only. the focusFeature effect syncs highlight;
+          // no fly is ever triggered for plain clicks.
           return;
         }
       }
 
-      // prioritize point/icon features over fill layers
-      const pointFeature = features.find(
-        (f) =>
-          f.layer?.id !== SAFETY_ZONE_FILL_LAYER &&
-          f.layer?.id !== SAFETY_ZONE_HATCH_LAYER &&
-          f.layer?.id !== SAFETY_ZONE_BORDER_LAYER &&
-          f.layer?.id !== AIRPORT_BOUNDARY_LINE_LAYER &&
-          f.layer?.id !== OBSTACLE_BOUNDARY_LAYER,
-      );
-      const f = pointFeature ?? features[0];
-      const props = f.properties;
-      if (!props) return;
-
-      const entityType = props.entityType as string;
-      let mapFeature: MapFeature | null = null;
-
-      if (entityType === "surface") {
-        const surface = airport.surfaces.find((s) => s.id === props.id);
-        if (surface) mapFeature = { type: "surface", data: surface };
-      } else if (entityType === "obstacle") {
-        const obstacle = airport.obstacles.find((o) => o.id === props.id);
-        if (obstacle) mapFeature = { type: "obstacle", data: obstacle };
-      } else if (entityType === "safety_zone") {
-        const zone = airport.safety_zones.find((z) => z.id === props.id);
-        if (zone) mapFeature = { type: "safety_zone", data: zone };
-      } else if (entityType === "airport_boundary") {
-        const zone = airport.safety_zones.find((z) => z.id === props.id);
-        if (zone) mapFeature = { type: "safety_zone", data: zone };
-      } else if (entityType === "agl") {
-        const agl = airport.surfaces
-          .flatMap((s) => s.agls)
-          .find((a) => a.id === props.id);
-        if (agl) mapFeature = { type: "agl", data: agl };
-      } else if (entityType === "lha") {
-        const lha = airport.surfaces
-          .flatMap((s) => s.agls)
-          .flatMap((a) => a.lhas)
-          .find((l) => l.id === props.id);
-        if (lha) mapFeature = { type: "lha", data: lha };
-      }
-
+      const mapFeature = buildInfraFeature(features);
       if (mapFeature) {
         setSelectedFeature(mapFeature);
-        // skip flyTo for map clicks - only double-click should fly
-        skipFlyRef.current = true;
         onFeatureClick?.(mapFeature);
       }
     }
@@ -1995,33 +2005,34 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
         }
       } catch { /* layer not ready */ }
 
-      // double-click on any feature or waypoint: fly to it
-      const waypointQueryLayers = [
-        WAYPOINT_TRANSIT_CIRCLE_LAYER,
-        WAYPOINT_MEASUREMENT_CIRCLE_LAYER,
-        WAYPOINT_TAKEOFF_LAYER,
-        WAYPOINT_LANDING_LAYER,
-        WAYPOINT_HOVER_LAYER,
-        SIMPLIFIED_TAKEOFF_LAYER,
-        SIMPLIFIED_LANDING_LAYER,
-      ];
-      const allQueryLayers = [...INTERACTIVE_LAYERS, ...waypointQueryLayers].filter((id) => {
-        try { return map.getLayer(id); } catch { return false; }
-      });
-      const features = map.queryRenderedFeatures(e.point, { layers: allQueryLayers });
-      if (features.length === 0) return;
+      const features = queryHits(e.point);
+      if (features.length === 0) {
+        // empty-space double-click: let maplibre's default doubleClickZoom run.
+        return;
+      }
 
+      // double-click on a feature: select AND recenter (no built-in zoom).
       e.preventDefault();
 
-      // get coordinates from the hit feature
-      const hit = features[0];
-      if (hit.geometry && "coordinates" in hit.geometry) {
-        const coords = hit.geometry.coordinates as number[];
-        map.flyTo({
-          center: [coords[0], coords[1]],
-          zoom: Math.max(map.getZoom(), 16),
-          duration: 800,
-        });
+      const wpHit = features.find((f) =>
+        waypointQueryLayers.includes(f.layer?.id ?? ""),
+      );
+      if (wpHit && wpHit.properties) {
+        const built = buildWaypointFeature(wpHit);
+        if (built) {
+          if (onWaypointClick) onWaypointClick(built.wpId);
+          setSelectedFeature(built.feature);
+          onFeatureClick?.(built.feature);
+          flyMapLibreToFeature(map, built.feature);
+          return;
+        }
+      }
+
+      const mapFeature = buildInfraFeature(features);
+      if (mapFeature) {
+        setSelectedFeature(mapFeature);
+        onFeatureClick?.(mapFeature);
+        flyMapLibreToFeature(map, mapFeature);
       }
     }
 
@@ -2374,6 +2385,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
                 syncToCesium(viewer);
               }}
               focusFeature={focusFeature}
+              locateRequest={locateRequest}
               highlightedWaypointIds={highlightedWaypointIds}
             />
           </Suspense>
@@ -2400,6 +2412,7 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
               waypoints={waypoints ?? []}
               selectedId={selectedWaypointId ?? null}
               onSelect={handleWaypointListSelect}
+              onLocate={handleWaypointListLocate}
               takeoffCoordinate={takeoffCoordinate}
               landingCoordinate={landingCoordinate}
               visibleInspectionIds={visibleInspectionIds}

@@ -22,7 +22,7 @@ function zone(overrides: Partial<SafetyZoneResponse> = {}): SafetyZoneResponse {
 const layerConfig = DEFAULT_LAYER_CONFIG;
 
 describe("SafetyZonesPanel boundary row", () => {
-  it("renders the boundary row and invokes onItemClick with the boundary zone", () => {
+  it("renders the boundary row and invokes onSelect with the boundary zone", () => {
     const boundary = zone({
       id: "b1",
       name: "OurFence",
@@ -31,13 +31,13 @@ describe("SafetyZonesPanel boundary row", () => {
       altitude_ceiling: null,
     });
     const regular = zone({ id: "z2", name: "Alpha", type: "CTR" });
-    const onItemClick = vi.fn();
+    const onSelect = vi.fn();
 
     render(
       <SafetyZonesPanel
         safetyZones={[boundary, regular]}
         layerConfig={layerConfig}
-        onItemClick={onItemClick}
+        onSelect={onSelect}
       />,
     );
 
@@ -47,7 +47,7 @@ describe("SafetyZonesPanel boundary row", () => {
     expect(screen.getByText("boundary.airportBoundary")).toBeInTheDocument();
 
     fireEvent.click(row);
-    expect(onItemClick).toHaveBeenCalledWith({ type: "safety_zone", data: boundary });
+    expect(onSelect).toHaveBeenCalledWith({ type: "safety_zone", data: boundary });
   });
 
   it("renders the empty-state row when no boundary exists", () => {
@@ -55,7 +55,7 @@ describe("SafetyZonesPanel boundary row", () => {
       <SafetyZonesPanel
         safetyZones={[zone({ id: "z1", type: "CTR" })]}
         layerConfig={layerConfig}
-        onItemClick={vi.fn()}
+        onSelect={vi.fn()}
       />,
     );
 
@@ -72,7 +72,7 @@ describe("SafetyZonesPanel boundary row", () => {
           zone({ id: "z2", type: "RESTRICTED" }),
         ]}
         layerConfig={layerConfig}
-        onItemClick={vi.fn()}
+        onSelect={vi.fn()}
       />,
     );
 

@@ -8,13 +8,17 @@ import { formatAglDisplayName } from "@/utils/agl";
 interface AGLPanelProps {
   surfaces: SurfaceResponse[];
   layerConfig: MapLayerConfig;
-  onItemClick: (feature: MapFeature) => void;
+  // single-click: select only, no recenter
+  onSelect: (feature: MapFeature) => void;
+  // double-click: select AND recenter
+  onLocate?: (feature: MapFeature) => void;
 }
 
 export default function AGLPanel({
   surfaces,
   layerConfig,
-  onItemClick,
+  onSelect,
+  onLocate,
 }: AGLPanelProps) {
   /** collapsible list of agl systems with expandable lha sub-items. */
   const { t } = useTranslation();
@@ -49,17 +53,30 @@ export default function AGLPanel({
     });
   }
 
-  function handleAglClick(agl: AGLResponse) {
-    /** trigger feature selection for an agl system. */
+  function handleAglSelect(agl: AGLResponse) {
+    /** single-click: select agl, no recenter. */
     if (grayed) return;
-    onItemClick({ type: "agl", data: agl });
+    onSelect({ type: "agl", data: agl });
   }
 
-  function handleLhaClick(lha: LHAResponse, e: React.MouseEvent) {
-    /** trigger feature selection for an lha unit. */
+  function handleAglLocate(agl: AGLResponse) {
+    /** double-click: select + recenter. */
+    if (grayed) return;
+    onLocate?.({ type: "agl", data: agl });
+  }
+
+  function handleLhaSelect(lha: LHAResponse, e: React.MouseEvent) {
+    /** single-click: select lha, no recenter. */
     e.stopPropagation();
     if (grayed) return;
-    onItemClick({ type: "lha", data: lha });
+    onSelect({ type: "lha", data: lha });
+  }
+
+  function handleLhaLocate(lha: LHAResponse, e: React.MouseEvent) {
+    /** double-click: select + recenter. */
+    e.stopPropagation();
+    if (grayed) return;
+    onLocate?.({ type: "lha", data: lha });
   }
 
   return (
@@ -100,9 +117,10 @@ export default function AGLPanel({
                 >
                   <button
                     onClick={() => {
-                      handleAglClick(agl);
+                      handleAglSelect(agl);
                       toggleExpand(agl.id);
                     }}
+                    onDoubleClick={() => handleAglLocate(agl)}
                     className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${
                       grayed
                         ? "opacity-50 pointer-events-none"
@@ -146,7 +164,8 @@ export default function AGLPanel({
                       {agl.lhas.map((lha, lhaIdx) => (
                         <button
                           key={lha.id}
-                          onClick={(e) => handleLhaClick(lha, e)}
+                          onClick={(e) => handleLhaSelect(lha, e)}
+                          onDoubleClick={(e) => handleLhaLocate(lha, e)}
                           className={`flex w-full items-center gap-2 pl-8 pr-3 py-2 text-left transition-colors ${
                             grayed
                               ? "opacity-50 pointer-events-none"

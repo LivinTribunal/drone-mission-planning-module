@@ -32,6 +32,7 @@ import type { PointZ } from "@/types/common";
 import type { MapFeature, MapLayerConfig } from "@/types/map";
 import type { MissionTabOutletContext } from "@/components/Layout/MissionTabNav";
 import AirportMap from "@/components/map/AirportMap";
+import type { AirportMapHandle } from "@/components/map/AirportMap";
 import LegendPanel from "@/components/map/overlays/LegendPanel";
 import AirportInfoPanel from "@/components/map/overlays/AirportInfoPanel";
 import WaypointListPanel from "@/components/map/overlays/WaypointListPanel";
@@ -86,6 +87,7 @@ export default function MissionMapPage() {
   const [enduranceMinutes, setEnduranceMinutes] = useState<number | null>(null);
 
   // map state
+  const mapHandleRef = useRef<AirportMapHandle>(null);
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
@@ -447,19 +449,13 @@ export default function MissionMapPage() {
     }
   }, []);
 
-  // handle waypoint click - select waypoint and show as feature info
-  const handleWaypointClick = useCallback(
-    (wpId: string | null) => {
-      setSelectedWaypointId(wpId);
-      if (!wpId) {
-        setSelectedFeature(null);
-        return;
-      }
-
-      // standalone takeoff/landing markers
+  // build a MapFeature for a waypoint id (including standalone takeoff/landing).
+  // shared by click (select-only) and locate (select + recenter) paths.
+  const buildWaypointFeatureFromId = useCallback(
+    (wpId: string): MapFeature | null => {
       if (wpId === "takeoff" && mission?.takeoff_coordinate) {
         const [lon, lat, alt] = mission.takeoff_coordinate.coordinates;
-        setSelectedFeature({
+        return {
           type: "waypoint",
           data: {
             id: "takeoff",
@@ -468,12 +464,11 @@ export default function MissionMapPage() {
             position: { type: "Point", coordinates: [lon, lat, alt] },
             stack_count: 1,
           },
-        });
-        return;
+        };
       }
       if (wpId === "landing" && mission?.landing_coordinate) {
         const [lon, lat, alt] = mission.landing_coordinate.coordinates;
-        setSelectedFeature({
+        return {
           type: "waypoint",
           data: {
             id: "landing",
@@ -482,31 +477,55 @@ export default function MissionMapPage() {
             position: { type: "Point", coordinates: [lon, lat, alt] },
             stack_count: 1,
           },
-        });
-        return;
+        };
       }
-
       const wp = effectiveWaypoints.find((w) => w.id === wpId);
-      if (wp) {
-        const [lon, lat, alt] = wp.position.coordinates;
-        setSelectedFeature({
-          type: "waypoint",
-          data: {
-            id: wp.id,
-            waypoint_type: wp.waypoint_type,
-            sequence_order: wp.sequence_order,
-            position: { type: "Point", coordinates: [lon, lat, alt] },
-            stack_count: 1,
-            heading: wp.heading ?? null,
-            speed: wp.speed ?? null,
-            camera_action: wp.camera_action ?? null,
-            camera_target: wp.camera_target ?? null,
-            gimbal_pitch: wp.gimbal_pitch ?? null,
-          },
-        });
-      }
+      if (!wp) return null;
+      const [lon, lat, alt] = wp.position.coordinates;
+      return {
+        type: "waypoint",
+        data: {
+          id: wp.id,
+          waypoint_type: wp.waypoint_type,
+          sequence_order: wp.sequence_order,
+          position: { type: "Point", coordinates: [lon, lat, alt] },
+          stack_count: 1,
+          heading: wp.heading ?? null,
+          speed: wp.speed ?? null,
+          camera_action: wp.camera_action ?? null,
+          camera_target: wp.camera_target ?? null,
+          gimbal_pitch: wp.gimbal_pitch ?? null,
+        },
+      };
     },
     [effectiveWaypoints, mission],
+  );
+
+  // handle waypoint click - select waypoint and show as feature info
+  const handleWaypointClick = useCallback(
+    (wpId: string | null) => {
+      setSelectedWaypointId(wpId);
+      if (!wpId) {
+        setSelectedFeature(null);
+        return;
+      }
+      const feature = buildWaypointFeatureFromId(wpId);
+      if (feature) setSelectedFeature(feature);
+    },
+    [buildWaypointFeatureFromId],
+  );
+
+  // double-click on a waypoint row in the side panel: select + recenter the map.
+  // routes through the AirportMap imperative handle, which picks 2d vs cesium.
+  const handleWaypointLocate = useCallback(
+    (wpId: string) => {
+      const feature = buildWaypointFeatureFromId(wpId);
+      if (!feature) return;
+      setSelectedWaypointId(wpId);
+      setSelectedFeature(feature);
+      mapHandleRef.current?.locateFeature(feature);
+    },
+    [buildWaypointFeatureFromId],
   );
 
   // handle inspection toggle visibility
@@ -815,6 +834,7 @@ export default function MissionMapPage() {
       {airportDetail ? (
         <div className="relative w-full h-full rounded-2xl overflow-hidden border border-tv-border">
           <AirportMap
+            ref={mapHandleRef}
             airport={airportDetail}
             terrainMode={terrainMode}
             onTerrainChange={setTerrainMode}
@@ -905,6 +925,7 @@ export default function MissionMapPage() {
                     waypoints={filteredWaypoints}
                     selectedId={selectedWaypointId}
                     onSelect={handleWaypointClick}
+                    onLocate={handleWaypointLocate}
                     takeoffCoordinate={selectedInspectionId ? null : mission.takeoff_coordinate}
                     landingCoordinate={selectedInspectionId ? null : mission.landing_coordinate}
                     visibleInspectionIds={visibleInspectionIds}

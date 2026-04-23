@@ -19,7 +19,7 @@ import {
 import { useAirport } from "@/contexts/AirportContext";
 import { OBSTACLE_COLORS, ObstacleTypeIcon } from "@/components/map/obstacleIcons";
 import type { AirportDetailResponse } from "@/types/airport";
-import type { MapFeature, MapLayerConfig } from "@/types/map";
+import type { LocateRequest, MapFeature, MapLayerConfig } from "@/types/map";
 
 const ZONE_COLORS: Record<string, string> = {
   CTR: "#4595e5",
@@ -141,6 +141,7 @@ export default function AirportEditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
+  const [locateRequest, setLocateRequest] = useState<LocateRequest | null>(null);
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(DEFAULT_LAYER_CONFIG);
   const [terrainMode, setTerrainMode] = useState<"map" | "satellite">("satellite");
   const [is3D, setIs3D] = useState(false);
@@ -810,6 +811,14 @@ export default function AirportEditPage() {
     setSelectedFeature(feature);
   }, [isDrawingActive, pickingTouchpoint, pickingLha, pickingThreshold, pickingEnd]);
 
+  const handleFeatureLocate = useCallback((feature: MapFeature) => {
+    /** double-click intent: select and request a map recenter. */
+    if (isDrawingActive) return;
+    if (pickingTouchpoint || pickingLha || pickingThreshold || pickingEnd) return;
+    setSelectedFeature(feature);
+    setLocateRequest((prev) => ({ feature, key: (prev?.key ?? 0) + 1 }));
+  }, [isDrawingActive, pickingTouchpoint, pickingLha, pickingThreshold, pickingEnd]);
+
   const handleLayerChange = useCallback((layers: MapLayerConfig) => {
     /** sync layer config from map component. */
     setLayerConfig(layers);
@@ -1198,6 +1207,7 @@ export default function AirportEditPage() {
           onInfraPointDrag={handleInfraPointDrag}
           onLayerChange={handleLayerChange}
           focusFeature={selectedFeature}
+          locateRequest={locateRequest}
           pendingGeometry={pendingGeometry}
           pendingPointPosition={pendingPointPosition}
           is3D={is3D}
@@ -1235,6 +1245,7 @@ export default function AirportEditPage() {
                 getId={(s) => s.id}
                 getName={(s) => s.identifier}
                 onEdit={(s) => handleFeatureClick({ type: "surface", data: s })}
+                onLocate={(s) => handleFeatureLocate({ type: "surface", data: s })}
                 onDelete={handleDeleteSurface}
                 addLabel={t("coordinator.detail.addSurface")}
                 onAdd={() => setActiveTool("drawPolygon")}
@@ -1290,6 +1301,7 @@ export default function AirportEditPage() {
                 getId={(o) => o.id}
                 getName={(o) => o.name}
                 onEdit={(o) => handleFeatureClick({ type: "obstacle", data: o })}
+                onLocate={(o) => handleFeatureLocate({ type: "obstacle", data: o })}
                 onDelete={handleDeleteObstacle}
                 addLabel={t("coordinator.detail.addObstacle")}
                 onAdd={() => setActiveTool("drawCircle")}
@@ -1323,6 +1335,7 @@ export default function AirportEditPage() {
                 getId={(z) => z.id}
                 getName={(z) => z.name}
                 onEdit={(z) => handleFeatureClick({ type: "safety_zone", data: z })}
+                onLocate={(z) => handleFeatureLocate({ type: "safety_zone", data: z })}
                 onDelete={handleDeleteSafetyZone}
                 addLabel={t("boundary.addBoundary")}
                 onAdd={boundaryZone ? undefined : () => {
@@ -1348,6 +1361,7 @@ export default function AirportEditPage() {
                 getId={(z) => z.id}
                 getName={(z) => z.name}
                 onEdit={(z) => handleFeatureClick({ type: "safety_zone", data: z })}
+                onLocate={(z) => handleFeatureLocate({ type: "safety_zone", data: z })}
                 onDelete={handleDeleteSafetyZone}
                 addLabel={t("coordinator.detail.addSafetyZone")}
                 onAdd={() => setActiveTool("drawPolygon")}
@@ -1393,7 +1407,8 @@ export default function AirportEditPage() {
 
               <CoordinatorAGLPanel
                 surfaces={surfaces}
-                onItemClick={handleFeatureClick}
+                onSelect={handleFeatureClick}
+                onLocate={handleFeatureLocate}
                 onDeleteAgl={handleDeleteAgl}
                 onDeleteLha={handleDeleteLha}
                 onAdd={() => setActiveTool("placePoint")}
