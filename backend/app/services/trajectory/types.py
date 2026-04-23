@@ -111,6 +111,11 @@ TRANSIT_AGL: Meters = 30.0
 DEFAULT_RUNWAY_BUFFER: Meters = 100.0
 HARD_ZONE_TYPES = (SafetyZoneType.PROHIBITED, SafetyZoneType.TEMPORARY_NO_FLY)
 
+# soft-preference cost multiplier for edges that violate the mission-level
+# boundary preference (PREFER_INSIDE / PREFER_OUTSIDE). kept as a single named
+# constant per the #202 audit philosophy - tunable after field testing.
+BOUNDARY_PREFERENCE_PENALTY: float = 1.5
+
 
 @dataclass
 class Point3D:

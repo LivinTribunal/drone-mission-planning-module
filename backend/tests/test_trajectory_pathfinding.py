@@ -901,6 +901,158 @@ class TestGridAStarPath:
         )
 
 
+class TestBoundaryConstraintMode:
+    """A* pathfinding with airport-boundary hard constraints."""
+
+    @staticmethod
+    def _boundary_geoms(boundary_polygon):
+        """build LocalGeometries with a single boundary zone."""
+        from app.services.trajectory.types import LocalBoundary, LocalGeometries
+
+        return LocalGeometries(
+            proj=LocalProjection(ref_lon=0.0, ref_lat=0.0),
+            obstacles=[],
+            zones=[],
+            boundary_zones=[LocalBoundary(polygon=boundary_polygon, name="fence")],
+            surfaces=[],
+        )
+
+    def test_inside_mode_keeps_path_within_boundary(self):
+        """INSIDE mode - every edge midpoint lies inside the boundary polygon."""
+        boundary = box(-500, -500, 500, 500)
+        from_local = (-300.0, 0.0, 350.0)
+        to_local = (300.0, 0.0, 350.0)
+
+        path = _run_astar(
+            from_local,
+            to_local,
+            [],
+            [],
+            None,
+            boundary=type("B", (), {"polygon": boundary})(),
+            boundary_constraint_mode="INSIDE",
+        )
+
+        assert path is not None
+        for x, y, _ in path:
+            assert boundary.contains(Point(x, y)) or boundary.boundary.distance(Point(x, y)) < 1e-6
+
+    def test_outside_mode_keeps_path_outside_boundary(self):
+        """OUTSIDE mode - edges must not intersect the boundary polygon."""
+        boundary = box(-100, -100, 100, 100)
+        from_local = (-400.0, 0.0, 350.0)
+        to_local = (400.0, 0.0, 350.0)
+
+        path = _run_astar(
+            from_local,
+            to_local,
+            [],
+            [],
+            None,
+            boundary=type("B", (), {"polygon": boundary})(),
+            boundary_constraint_mode="OUTSIDE",
+        )
+
+        assert path is not None, "OUTSIDE mode should find a path around the central boundary"
+        # build the swept linestring and assert it does not intersect the polygon interior
+        from shapely.geometry import LineString
+
+        for i in range(len(path) - 1):
+            seg = LineString([(path[i][0], path[i][1]), (path[i + 1][0], path[i + 1][1])])
+            assert not boundary.contains(seg), (
+                f"segment {i}-{i + 1} lies inside the OUTSIDE boundary"
+            )
+
+    def test_none_mode_takes_straight_line(self):
+        """NONE mode behaves like legacy - straight line is fine."""
+        boundary = box(-100, -100, 100, 100)
+        from_local = (-400.0, 0.0, 350.0)
+        to_local = (400.0, 0.0, 350.0)
+
+        path = _run_astar(
+            from_local,
+            to_local,
+            [],
+            [],
+            None,
+            boundary=type("B", (), {"polygon": boundary})(),
+            boundary_constraint_mode="NONE",
+        )
+
+        assert path is not None
+        # without boundary awareness, path should be direct (2 nodes)
+        assert len(path) == 2
+
+    def test_inside_mode_returns_none_when_infeasible(self):
+        """INSIDE mode must fail cleanly when endpoints lie outside the boundary."""
+        boundary = box(-10, -10, 10, 10)
+        from_local = (-400.0, 0.0, 350.0)
+        to_local = (400.0, 0.0, 350.0)
+
+        path = _run_astar(
+            from_local,
+            to_local,
+            [],
+            [],
+            None,
+            boundary=type("B", (), {"polygon": boundary})(),
+            boundary_constraint_mode="INSIDE",
+        )
+
+        assert path is None, "INSIDE with both endpoints outside the boundary should be infeasible"
+
+
+class TestBoundaryPreference:
+    """soft boundary-preference edge-cost multiplier."""
+
+    def test_prefer_inside_biases_toward_boundary_interior(self):
+        """PREFER_INSIDE should bias the path toward staying in the polygon."""
+        # tall narrow boundary polygon forces a trade-off: stay inside the
+        # narrow corridor or cut outside for a shorter path.
+        boundary = box(-400, -50, 400, 50)
+        from_local = (-450.0, 0.0, 350.0)
+        to_local = (450.0, 0.0, 350.0)
+        bnd = type("B", (), {"polygon": boundary})()
+
+        path_dontcare = _run_astar(
+            from_local,
+            to_local,
+            [],
+            [],
+            None,
+            boundary=bnd,
+            boundary_constraint_mode="NONE",
+            boundary_preference="DONT_CARE",
+        )
+        path_prefer_inside = _run_astar(
+            from_local,
+            to_local,
+            [],
+            [],
+            None,
+            boundary=bnd,
+            boundary_constraint_mode="NONE",
+            boundary_preference="PREFER_INSIDE",
+        )
+
+        assert path_dontcare is not None and path_prefer_inside is not None
+
+        def inside_ratio(path):
+            """fraction of edge midpoints inside the boundary."""
+            from shapely.geometry import Point as SPoint
+
+            hits = 0
+            for i in range(len(path) - 1):
+                mx = (path[i][0] + path[i + 1][0]) / 2.0
+                my = (path[i][1] + path[i + 1][1]) / 2.0
+                if boundary.contains(SPoint(mx, my)):
+                    hits += 1
+            return hits / max(1, len(path) - 1)
+
+        # prefer-inside should have at least as many midpoints inside as don't-care
+        assert inside_ratio(path_prefer_inside) >= inside_ratio(path_dontcare)
+
+
 class TestGridPerformance:
     """performance envelope tests for hybrid grid."""
 

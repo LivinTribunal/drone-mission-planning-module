@@ -1,7 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Search } from "lucide-react";
-import type { MissionDetailResponse, MissionUpdate } from "@/types/mission";
+import type {
+  BoundaryConstraintMode,
+  BoundaryPreference,
+  MissionDetailResponse,
+  MissionUpdate,
+} from "@/types/mission";
 import type { CaptureMode, FlightPlanScope } from "@/types/enums";
 import FlightPlanScopeSelector from "./FlightPlanScopeSelector";
 import type { DroneProfileResponse } from "@/types/droneProfile";
@@ -31,6 +36,9 @@ interface MissionConfigFormProps {
   // self-contained; the parent lifts this when pick-on-map also needs to mirror
   useTakeoffAsLanding?: boolean;
   onUseTakeoffAsLandingChange?: (value: boolean) => void;
+  // whether the airport has an AIRPORT_BOUNDARY safety zone - boundary
+  // behavior selectors are disabled when this is false.
+  hasAirportBoundary?: boolean;
 }
 
 function DroneProfileDropdown({
@@ -161,6 +169,7 @@ export default function MissionConfigForm({
   disabled = false,
   useTakeoffAsLanding: useTakeoffAsLandingProp,
   onUseTakeoffAsLandingChange,
+  hasAirportBoundary = true,
 }: MissionConfigFormProps) {
   /** mission-level configuration form with coordinate pick-on-map support. */
   const { t } = useTranslation();
@@ -239,6 +248,14 @@ export default function MissionConfigForm({
     values.flight_plan_scope !== undefined
       ? values.flight_plan_scope
       : mission.flight_plan_scope ?? "FULL";
+  const boundaryConstraintMode: BoundaryConstraintMode =
+    values.boundary_constraint_mode !== undefined
+      ? values.boundary_constraint_mode
+      : mission.boundary_constraint_mode ?? "NONE";
+  const boundaryPreference: BoundaryPreference =
+    values.boundary_preference !== undefined
+      ? values.boundary_preference
+      : mission.boundary_preference ?? "DONT_CARE";
 
   const [presets, setPresets] = useState<CameraPresetResponse[]>([]);
   const [appliedPresetId, setAppliedPresetId] = useState<string>("");
@@ -663,6 +680,98 @@ export default function MissionConfigForm({
         onChange={(scope) => onChange({ flight_plan_scope: scope })}
         disabled={disabled}
       />
+
+      {/* airport boundary behavior */}
+      <div
+        className="rounded-2xl border border-tv-border bg-tv-bg px-3 py-2.5"
+        data-testid="boundary-behavior-section"
+      >
+        <label className="text-xs font-semibold text-tv-text-secondary block mb-1">
+          {t("mission.config.boundary.title")}
+        </label>
+        {!hasAirportBoundary && (
+          <p
+            className="text-[11px] text-tv-text-muted leading-tight mb-2"
+            data-testid="boundary-no-zone-hint"
+          >
+            {t("mission.config.boundary.noBoundaryZone")}
+          </p>
+        )}
+
+        <div className="mb-2">
+          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+            {t("mission.config.boundary.constraintLabel")}
+          </label>
+          <div
+            className="inline-flex w-full rounded-full border border-tv-border bg-tv-bg p-0.5 text-xs"
+            role="radiogroup"
+            aria-label={t("mission.config.boundary.constraintLabel")}
+            data-testid="boundary-constraint-mode"
+          >
+            {(["NONE", "INSIDE", "OUTSIDE"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={boundaryConstraintMode === mode}
+                disabled={disabled || !hasAirportBoundary}
+                onClick={() => onChange({ boundary_constraint_mode: mode })}
+                className={`flex-1 px-3 py-1 rounded-full transition-colors ${
+                  boundaryConstraintMode === mode
+                    ? "bg-tv-accent text-white font-medium"
+                    : "text-tv-text-secondary hover:text-tv-text-primary"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                data-testid={`boundary-constraint-${mode.toLowerCase()}`}
+              >
+                {t(`mission.config.boundary.constraint.${mode.toLowerCase()}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium mb-1 text-tv-text-secondary">
+            {t("mission.config.boundary.preferenceLabel")}
+          </label>
+          <div
+            className="inline-flex w-full rounded-full border border-tv-border bg-tv-bg p-0.5 text-xs"
+            role="radiogroup"
+            aria-label={t("mission.config.boundary.preferenceLabel")}
+            data-testid="boundary-preference"
+          >
+            {(["DONT_CARE", "PREFER_INSIDE", "PREFER_OUTSIDE"] as const).map((pref) => (
+              <button
+                key={pref}
+                type="button"
+                role="radio"
+                aria-checked={boundaryPreference === pref}
+                disabled={
+                  disabled
+                  || !hasAirportBoundary
+                  || boundaryConstraintMode !== "NONE"
+                }
+                onClick={() => onChange({ boundary_preference: pref })}
+                className={`flex-1 px-3 py-1 rounded-full transition-colors ${
+                  boundaryPreference === pref
+                    ? "bg-tv-accent text-white font-medium"
+                    : "text-tv-text-secondary hover:text-tv-text-primary"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                data-testid={`boundary-preference-${pref.toLowerCase()}`}
+              >
+                {t(`mission.config.boundary.preference.${pref.toLowerCase()}`)}
+              </button>
+            ))}
+          </div>
+          {hasAirportBoundary && boundaryConstraintMode !== "NONE" && (
+            <p
+              className="text-[11px] text-tv-text-muted leading-tight mt-1"
+              data-testid="boundary-preference-disabled-hint"
+            >
+              {t("mission.config.boundary.preferenceSubsumedHint")}
+            </p>
+          )}
+        </div>
+      </div>
 
       {/* operator notes */}
       <div>

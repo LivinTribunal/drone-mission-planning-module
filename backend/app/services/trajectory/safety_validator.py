@@ -40,6 +40,7 @@ def validate_inspection_pass(
     elevation_provider=None,
     buffer_distance: Meters = 0.0,
     db: Session | None = None,
+    boundary_constraint_mode: str = "NONE",
 ) -> list[Violation]:
     """validate all waypoints in an inspection pass.
 
@@ -47,6 +48,13 @@ def validate_inspection_pass(
     obstacle and zone checks use Shapely in local coordinates.
     AGL altitude check uses elevation provider for terrain-aware validation.
     buffer_distance inflates obstacle boundaries by this many meters.
+
+    boundary_constraint_mode tunes the outside-boundary warning:
+    - NONE: suppressed entirely (operator opted to ignore boundary)
+    - INSIDE: downgraded wording (hard A* already enforced containment)
+    - OUTSIDE: suppressed (drone is expected to be outside the boundary,
+      and the A* hard constraint already enforces outside-containment)
+    any other value keeps the legacy soft-warning behavior.
     """
     violations = []
 
@@ -66,7 +74,13 @@ def validate_inspection_pass(
     violations.extend(
         _batch_check_obstacles(waypoints, local_geoms, buffer_distance=buffer_distance)
     )
-    violations.extend(_batch_check_zones(waypoints, local_geoms))
+    violations.extend(
+        _batch_check_zones(
+            waypoints,
+            local_geoms,
+            boundary_constraint_mode=boundary_constraint_mode,
+        )
+    )
 
     # AGL altitude check against terrain
     if elevation_provider:
@@ -118,14 +132,22 @@ def _batch_check_obstacles(
 def _batch_check_zones(
     waypoints: list[WaypointData],
     local_geoms: LocalGeometries,
+    boundary_constraint_mode: str = "NONE",
 ) -> list[Violation]:
     """batch safety zone containment using Shapely in local coordinates.
 
     airport boundary zones are handled with inverted semantics - waypoints
-    OUTSIDE the boundary polygon produce hard geofence violations.
+    OUTSIDE the boundary polygon produce soft warnings whose severity is
+    tuned by boundary_constraint_mode.
     """
     violations: list[Violation] = []
-    violations.extend(_batch_check_boundary_zones(waypoints, local_geoms))
+    violations.extend(
+        _batch_check_boundary_zones(
+            waypoints,
+            local_geoms,
+            boundary_constraint_mode=boundary_constraint_mode,
+        )
+    )
 
     if not local_geoms.zones or not waypoints:
         return violations
@@ -161,9 +183,23 @@ def _batch_check_zones(
 def _batch_check_boundary_zones(
     waypoints: list[WaypointData],
     local_geoms: LocalGeometries,
+    boundary_constraint_mode: str = "NONE",
 ) -> list[Violation]:
-    """soft-warn every waypoint not contained in each airport boundary polygon."""
+    """warn for waypoints outside the airport boundary polygon.
+
+    mode semantics:
+    - NONE: suppressed entirely (operator opted out of boundary awareness)
+    - INSIDE: info-level confirmation (hard A* already enforced containment)
+    - OUTSIDE: suppressed (drone should be outside; A* hard-constraint
+      already enforces containment - the outside-boundary warning would fire
+      on every waypoint by design)
+    - any other value: legacy soft warning
+    """
     if not local_geoms.boundary_zones or not waypoints:
+        return []
+
+    # NONE opt-out or OUTSIDE mode (outside is the target) -> suppress
+    if boundary_constraint_mode in ("NONE", "OUTSIDE"):
         return []
 
     proj = local_geoms.proj
@@ -173,12 +209,18 @@ def _batch_check_boundary_zones(
         for wp_idx, wp in enumerate(waypoints):
             pt = proj.point_to_local(wp.lon, wp.lat)
             if not boundary.polygon.contains(pt):
-                # soft until boundary-aware A* routing lands; see follow-up issue.
+                if boundary_constraint_mode == "INSIDE":
+                    msg = (
+                        f"waypoint outside airport boundary: {boundary.name} "
+                        "(info - hard constraint already enforced)"
+                    )
+                else:
+                    msg = f"waypoint outside airport boundary: {boundary.name}"
                 violations.append(
                     Violation(
                         is_warning=True,
                         violation_kind="geofence",
-                        message=f"waypoint outside airport boundary: {boundary.name}",
+                        message=msg,
                         waypoint_index=wp_idx,
                     )
                 )

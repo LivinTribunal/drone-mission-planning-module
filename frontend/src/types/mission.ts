@@ -3,6 +3,9 @@ import type { CaptureMode, ComputationStatus, FlightPlanScope, InspectionMethod,
 
 export type CameraMode = "AUTO" | "MANUAL";
 
+export type BoundaryConstraintMode = "INSIDE" | "OUTSIDE" | "NONE";
+export type BoundaryPreference = "PREFER_INSIDE" | "PREFER_OUTSIDE" | "DONT_CARE";
+
 export interface MissionResponse {
   id: string;
   name: string;
@@ -28,6 +31,8 @@ export interface MissionResponse {
   transit_agl: number | null;
   require_perpendicular_runway_crossing: boolean;
   flight_plan_scope: FlightPlanScope;
+  boundary_constraint_mode: BoundaryConstraintMode;
+  boundary_preference: BoundaryPreference;
   has_unsaved_map_changes: boolean;
   computation_status: ComputationStatus;
   computation_error: string | null;
@@ -138,6 +143,8 @@ export interface MissionCreate {
   transit_agl?: number | null;
   require_perpendicular_runway_crossing?: boolean;
   flight_plan_scope?: FlightPlanScope;
+  boundary_constraint_mode?: BoundaryConstraintMode;
+  boundary_preference?: BoundaryPreference;
 }
 
 export interface MissionUpdate {
@@ -160,6 +167,8 @@ export interface MissionUpdate {
   transit_agl?: number | null;
   require_perpendicular_runway_crossing?: boolean;
   flight_plan_scope?: FlightPlanScope;
+  boundary_constraint_mode?: BoundaryConstraintMode;
+  boundary_preference?: BoundaryPreference;
 }
 
 export interface InspectionCreate {

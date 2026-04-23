@@ -22,6 +22,7 @@ from .safety_validator import (
     segments_intersect_zone,
 )
 from .types import (
+    BOUNDARY_PREFERENCE_PENALTY,
     DEFAULT_OBSTACLE_RADIUS,
     GRID_EDGE_RADIUS,
     GRID_NODE_SPACING,
@@ -33,6 +34,7 @@ from .types import (
     SURFACE_NODE_SPACING,
     TRANSIT_AGL,
     Degrees,
+    LocalBoundary,
     LocalGeometries,
     LocalObstacle,
     LocalSurface,
@@ -77,8 +79,11 @@ def _collect_nearby_objects_local(
     center_y: float,
     search_radius: Meters,
     buffer_distance_override: float | None = None,
-) -> tuple[list[LocalObstacle], list[LocalZone]]:
-    """collect obstacles and hard safety zones within search_radius of center."""
+    boundary_constraint_mode: str = "NONE",
+) -> tuple[list[LocalObstacle], list[LocalZone], LocalBoundary | None]:
+    """collect obstacles, hard safety zones, and (when a hard boundary mode is
+    active) the first airport boundary within search_radius of center.
+    """
     nearby_obs = []
     for obs in local_geoms.obstacles:
         buf = (
@@ -99,7 +104,13 @@ def _collect_nearby_objects_local(
         if euclidean_distance(center_x, center_y, c.x, c.y) <= search_radius:
             nearby_zones.append(zone)
 
-    return nearby_obs, nearby_zones
+    # hard boundary mode - first boundary zone is the canonical airport boundary.
+    # partial unique index guarantees at most one per airport.
+    boundary: LocalBoundary | None = None
+    if boundary_constraint_mode in ("INSIDE", "OUTSIDE") and local_geoms.boundary_zones:
+        boundary = local_geoms.boundary_zones[0]
+
+    return nearby_obs, nearby_zones, boundary
 
 
 def _is_segment_blocked(
@@ -133,6 +144,9 @@ def _build_visibility_graph(
     buffer_distance: Meters = 0.0,
     require_perpendicular_runway_crossing: bool = True,
     grid_start_index: int = -1,
+    boundary: LocalBoundary | None = None,
+    boundary_constraint_mode: str = "NONE",
+    boundary_preference: str = "DONT_CARE",
 ) -> dict[int, list[tuple[int, float]]]:
     """build adjacency list where edges connect unobstructed node pairs.
 
@@ -144,6 +158,11 @@ def _build_visibility_graph(
     when grid_start_index >= 0, grid-to-grid edges beyond GRID_EDGE_RADIUS
     are skipped to keep the O(N^2) check manageable.
 
+    boundary_constraint_mode enforces airport-boundary containment:
+    - INSIDE: reject edges whose linestring leaves the boundary polygon
+    - OUTSIDE: reject edges that intersect the boundary polygon
+    boundary_preference applies a soft penalty when the hard mode is NONE.
+
     all coordinates are in local meters. edge weights use euclidean distance.
     """
     graph: dict[int, list[tuple[int, float]]] = {i: [] for i in range(len(nodes))}
@@ -154,6 +173,20 @@ def _build_visibility_graph(
         buf = buffer_distance if buffer_distance > 0 else obs.buffer_distance
         poly = obs.polygon.buffer(buf) if buf > 0 else obs.polygon
         buffered_polys.append(poly)
+
+    # soft-preference prepared polygon - caller passes boundary only when mode
+    # is active (hard) OR when preference is active (soft); same arg is reused.
+    soft_boundary_poly = None
+    if (
+        boundary is not None
+        and boundary_constraint_mode == "NONE"
+        and boundary_preference
+        in (
+            "PREFER_INSIDE",
+            "PREFER_OUTSIDE",
+        )
+    ):
+        soft_boundary_poly = prep(boundary.polygon)
 
     for i in range(len(nodes)):
         for j in range(i + 1, len(nodes)):
@@ -184,6 +217,14 @@ def _build_visibility_graph(
             if blocked:
                 continue
 
+            # hard boundary mode - reject edges that violate containment
+            if boundary is not None and boundary_constraint_mode == "INSIDE":
+                if not boundary.polygon.contains(line):
+                    continue
+            elif boundary is not None and boundary_constraint_mode == "OUTSIDE":
+                if line.intersects(boundary.polygon):
+                    continue
+
             dist = euclidean_distance(xi, yi, xj, yj)
 
             # add penalty for runway crossing
@@ -192,6 +233,15 @@ def _build_visibility_graph(
                     crossing = segment_runway_crossing_length(xi, yi, xj, yj, surface.polygon)
                     if crossing > 0:
                         dist += crossing * RUNWAY_CROSSING_PENALTY_PER_METER
+
+            # soft boundary preference - penalise edges whose midpoint violates
+            if soft_boundary_poly is not None:
+                mid_pt = Point((xi + xj) / 2.0, (yi + yj) / 2.0)
+                inside = soft_boundary_poly.contains(mid_pt)
+                if boundary_preference == "PREFER_INSIDE" and not inside:
+                    dist *= BOUNDARY_PREFERENCE_PENALTY
+                elif boundary_preference == "PREFER_OUTSIDE" and inside:
+                    dist *= BOUNDARY_PREFERENCE_PENALTY
 
             graph[i].append((j, dist))
             graph[j].append((i, dist))
@@ -208,6 +258,8 @@ def _collect_graph_nodes_in_circle(
     radius: Meters,
     buffer_distance_override: float | None = None,
     require_perpendicular_runway_crossing: bool = True,
+    boundary: LocalBoundary | None = None,
+    boundary_constraint_mode: str = "NONE",
 ) -> tuple[list[tuple[float, float, float]], int]:
     """collect nodes within search circle for visibility graph construction.
 
@@ -237,6 +289,15 @@ def _collect_graph_nodes_in_circle(
             for v in _extract_local_polygon_vertices(zone.polygon):
                 if in_circle(v[0], v[1]):
                     nodes.append((v[0], v[1], 0.0))
+
+    # boundary vertices - inward buffer for INSIDE, outward for OUTSIDE.
+    # keeps A* near the boundary while respecting the constraint at vertices.
+    if boundary is not None and boundary_constraint_mode in ("INSIDE", "OUTSIDE"):
+        buf = settings.vertex_buffer_m
+        inset = -buf if boundary_constraint_mode == "INSIDE" else buf
+        for v in _extract_local_polygon_vertices(boundary.polygon, inset):
+            if in_circle(v[0], v[1]):
+                nodes.append((v[0], v[1], 0.0))
 
     # surface edge nodes - spaced along centerline at SURFACE_NODE_SPACING
     if surfaces:
@@ -322,6 +383,8 @@ def _collect_graph_nodes_in_circle(
         if zone.zone_type in HARD_ZONE_TYPES:
             exclusion_polys.append(prep(zone.polygon))
 
+    prepared_boundary = prep(boundary.polygon) if boundary is not None else None
+
     x_min = center[0] - radius
     x_max = center[0] + radius
     y_min = center[1] - radius
@@ -333,8 +396,19 @@ def _collect_graph_nodes_in_circle(
         while y <= y_max:
             if in_circle(x, y):
                 pt = Point(x, y)
-                if not any(ep.contains(pt) for ep in exclusion_polys):
-                    nodes.append((x, y, cruise_z))
+                if any(ep.contains(pt) for ep in exclusion_polys):
+                    y += GRID_NODE_SPACING
+                    continue
+                # reject grid nodes violating hard boundary constraint
+                if prepared_boundary is not None:
+                    inside = prepared_boundary.contains(pt)
+                    if boundary_constraint_mode == "INSIDE" and not inside:
+                        y += GRID_NODE_SPACING
+                        continue
+                    if boundary_constraint_mode == "OUTSIDE" and inside:
+                        y += GRID_NODE_SPACING
+                        continue
+                nodes.append((x, y, cruise_z))
             y += GRID_NODE_SPACING
         x += GRID_NODE_SPACING
 
@@ -349,6 +423,9 @@ def _run_astar(
     surfaces: list[LocalSurface] | None = None,
     buffer_distance_override: float | None = None,
     require_perpendicular_runway_crossing: bool = True,
+    boundary: LocalBoundary | None = None,
+    boundary_constraint_mode: str = "NONE",
+    boundary_preference: str = "DONT_CARE",
 ) -> list[tuple[float, float, float]] | None:
     """circle-based A* pathfinding with expanding search radius on failure.
 
@@ -371,6 +448,8 @@ def _run_astar(
             radius,
             buffer_distance_override=buffer_distance_override,
             require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
+            boundary=boundary,
+            boundary_constraint_mode=boundary_constraint_mode,
         )
         graph = _build_visibility_graph(
             nodes,
@@ -382,6 +461,9 @@ def _run_astar(
             ),
             require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
             grid_start_index=grid_start_index,
+            boundary=boundary,
+            boundary_constraint_mode=boundary_constraint_mode,
+            boundary_preference=boundary_preference,
         )
 
         path_indices = astar(graph, 0, 1, nodes, use_euclidean=True)
@@ -454,6 +536,8 @@ def resolve_inspection_collisions(
     center: Point3D,
     buffer_distance_override: float | None = None,
     require_perpendicular_runway_crossing: bool = True,
+    boundary_constraint_mode: str = "NONE",
+    boundary_preference: str = "DONT_CARE",
 ) -> list[WaypointData]:
     """A*-based rerouting of measurement waypoints around obstacles and safety zones.
 
@@ -510,13 +594,23 @@ def resolve_inspection_collisions(
         mid_x, mid_y = proj.to_local(mid_lon, mid_lat)
         max_buffer = _max_effective_buffer(local_geoms.obstacles, buffer_distance_override)
         search_radius = max_buffer * REROUTE_SEARCH_RADIUS_MULTIPLIER
-        nearby_obs, nearby_zones = _collect_nearby_objects_local(
+        nearby_obs, nearby_zones, nearby_boundary = _collect_nearby_objects_local(
             local_geoms,
             mid_x,
             mid_y,
             search_radius,
             buffer_distance_override=buffer_distance_override,
+            boundary_constraint_mode=boundary_constraint_mode,
         )
+        # soft preference still needs the boundary polygon
+        soft_boundary = nearby_boundary
+        if (
+            soft_boundary is None
+            and boundary_constraint_mode == "NONE"
+            and boundary_preference in ("PREFER_INSIDE", "PREFER_OUTSIDE")
+            and local_geoms.boundary_zones
+        ):
+            soft_boundary = local_geoms.boundary_zones[0]
 
         from_local = (*proj.to_local(from_pt.lon, from_pt.lat), from_pt.alt)
         to_local = (*proj.to_local(to_pt.lon, to_pt.lat), to_pt.alt)
@@ -530,8 +624,16 @@ def resolve_inspection_collisions(
             local_geoms.surfaces,
             buffer_distance_override=buffer_distance_override,
             require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
+            boundary=soft_boundary,
+            boundary_constraint_mode=boundary_constraint_mode,
+            boundary_preference=boundary_preference,
         )
         if path is None:
+            if boundary_constraint_mode in ("INSIDE", "OUTSIDE"):
+                raise TrajectoryGenerationError(
+                    "no reroute path found under airport boundary "
+                    f"{boundary_constraint_mode} constraint"
+                )
             raise TrajectoryGenerationError("no obstacle-free reroute path found")
 
         # convert path back to WGS84 and build rerouted waypoints (skip anchors)
@@ -651,6 +753,8 @@ def compute_transit_path(
     transit_agl: Meters = TRANSIT_AGL,
     buffer_distance_override: float | None = None,
     require_perpendicular_runway_crossing: bool = True,
+    boundary_constraint_mode: str = "NONE",
+    boundary_preference: str = "DONT_CARE",
 ) -> list[WaypointData]:
     """compute A* transit path - shortest obstacle-free route with runway crossing penalties.
 
@@ -660,14 +764,27 @@ def compute_transit_path(
     when require_perpendicular_runway_crossing is False, runway crossings are
     treated like any other clear segment so the planner picks the shortest
     geodesic, minimising the runway-closure window the operator must request.
+
+    boundary_constraint_mode (INSIDE / OUTSIDE / NONE) is a hard rule that
+    filters A* nodes and edges against the airport boundary polygon. when
+    NONE and boundary_preference is PREFER_INSIDE / PREFER_OUTSIDE, edges
+    that violate the preferred side get a soft cost multiplier.
     """
     proj = local_geoms.proj
     from_x, from_y = proj.to_local(from_point.lon, from_point.lat)
     to_x, to_y = proj.to_local(to_point.lon, to_point.lat)
 
+    # resolve boundary polygon used for both hard and soft modes
+    active_boundary: LocalBoundary | None = None
+    if local_geoms.boundary_zones and (
+        boundary_constraint_mode in ("INSIDE", "OUTSIDE")
+        or boundary_preference in ("PREFER_INSIDE", "PREFER_OUTSIDE")
+    ):
+        active_boundary = local_geoms.boundary_zones[0]
+
     # straight-line if path is clear and doesn't cross runway
     fast_path_buffer = buffer_distance_override if buffer_distance_override is not None else 0.0
-    if not _is_segment_blocked(
+    straight_line_allowed = not _is_segment_blocked(
         from_x,
         from_y,
         to_x,
@@ -675,7 +792,26 @@ def compute_transit_path(
         local_geoms.obstacles,
         local_geoms.zones,
         buffer_distance=fast_path_buffer,
+    )
+
+    # hard boundary mode invalidates a straight-line shortcut when the segment
+    # violates the constraint - fall through to A* which applies containment.
+    if (
+        straight_line_allowed
+        and active_boundary is not None
+        and boundary_constraint_mode
+        in (
+            "INSIDE",
+            "OUTSIDE",
+        )
     ):
+        line = LineString([(from_x, from_y), (to_x, to_y)])
+        if boundary_constraint_mode == "INSIDE" and not active_boundary.polygon.contains(line):
+            straight_line_allowed = False
+        elif boundary_constraint_mode == "OUTSIDE" and line.intersects(active_boundary.polygon):
+            straight_line_allowed = False
+
+    if straight_line_allowed:
         crosses_runway = False
         if local_geoms.surfaces and require_perpendicular_runway_crossing:
             for surface in local_geoms.surfaces:
@@ -717,8 +853,16 @@ def compute_transit_path(
         local_geoms.surfaces,
         buffer_distance_override=buffer_distance_override,
         require_perpendicular_runway_crossing=require_perpendicular_runway_crossing,
+        boundary=active_boundary,
+        boundary_constraint_mode=boundary_constraint_mode,
+        boundary_preference=boundary_preference,
     )
     if path is None:
+        if boundary_constraint_mode in ("INSIDE", "OUTSIDE"):
+            raise TrajectoryGenerationError(
+                "no transit path found under airport boundary "
+                f"{boundary_constraint_mode} constraint"
+            )
         raise TrajectoryGenerationError("no obstacle-free transit path found")
 
     # initial altitude = max of endpoints

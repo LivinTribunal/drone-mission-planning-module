@@ -379,3 +379,196 @@ def test_update_require_perpendicular_invalidates_trajectory(client, airport_id,
     assert response.status_code == 200
     assert response.json()["status"] == "DRAFT"
     assert response.json()["require_perpendicular_runway_crossing"] is False
+
+
+# boundary constraint mode and preference
+
+
+def test_create_mission_defaults_boundary_none_and_dontcare(client, airport_id):
+    """new missions default to boundary NONE + DONT_CARE."""
+    response = client.post(
+        "/api/v1/missions",
+        json={"name": "Boundary Defaults", "airport_id": airport_id},
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["boundary_constraint_mode"] == "NONE"
+    assert body["boundary_preference"] == "DONT_CARE"
+
+
+def test_create_mission_rejects_non_none_mode_without_boundary(client, airport_id):
+    """boundary hard mode requires an AIRPORT_BOUNDARY zone on the airport."""
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Hard Inside",
+            "airport_id": airport_id,
+            "boundary_constraint_mode": "INSIDE",
+        },
+    )
+    assert response.status_code == 422
+    assert "airport boundary" in response.text
+
+
+def test_create_mission_rejects_active_preference_without_boundary(client, airport_id):
+    """active boundary preference requires an AIRPORT_BOUNDARY zone on the airport."""
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Prefer Inside No Zone",
+            "airport_id": airport_id,
+            "boundary_preference": "PREFER_INSIDE",
+        },
+    )
+    assert response.status_code == 422
+    assert "airport boundary" in response.text
+
+
+def test_update_mission_rejects_active_preference_without_boundary(client, airport_id):
+    """update flags active boundary preference without a boundary zone as 422."""
+    mission = client.post(
+        "/api/v1/missions",
+        json={"name": "Pref Update", "airport_id": airport_id},
+    ).json()
+
+    response = client.put(
+        f"/api/v1/missions/{mission['id']}",
+        json={"boundary_preference": "PREFER_OUTSIDE"},
+    )
+    assert response.status_code == 422
+    assert "airport boundary" in response.text
+
+
+def test_create_mission_accepts_non_none_mode_when_boundary_present(client, airport_id, db_session):
+    """when the airport has a boundary zone, INSIDE is accepted."""
+    from uuid import uuid4
+
+    from geoalchemy2.elements import WKTElement
+
+    from app.models.airport import SafetyZone
+
+    zone = SafetyZone(
+        id=uuid4(),
+        airport_id=airport_id,
+        name="bounds",
+        type="AIRPORT_BOUNDARY",
+        is_active=True,
+        geometry=WKTElement(
+            "SRID=4326;POLYGON Z ("
+            "(18.10 49.68 0, 18.12 49.68 0, 18.12 49.70 0, 18.10 49.70 0, 18.10 49.68 0))",
+            srid=4326,
+        ),
+    )
+    db_session.add(zone)
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Hard Inside OK",
+            "airport_id": airport_id,
+            "boundary_constraint_mode": "INSIDE",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["boundary_constraint_mode"] == "INSIDE"
+
+    db_session.delete(zone)
+    db_session.commit()
+
+
+def test_update_boundary_mode_invalidates_trajectory(client, airport_id, db_session):
+    """changing boundary_constraint_mode regresses PLANNED -> DRAFT."""
+    from uuid import uuid4
+
+    from geoalchemy2.elements import WKTElement
+
+    from app.models.airport import SafetyZone
+    from app.models.enums import MissionStatus
+    from app.models.mission import Mission
+
+    zone = SafetyZone(
+        id=uuid4(),
+        airport_id=airport_id,
+        name="bounds",
+        type="AIRPORT_BOUNDARY",
+        is_active=True,
+        geometry=WKTElement(
+            "SRID=4326;POLYGON Z ("
+            "(18.10 49.68 0, 18.12 49.68 0, 18.12 49.70 0, 18.10 49.70 0, 18.10 49.68 0))",
+            srid=4326,
+        ),
+    )
+    db_session.add(zone)
+    db_session.commit()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={"name": "Mode Invalidate", "airport_id": airport_id},
+    ).json()
+    mission_id = mission["id"]
+
+    db_mission = db_session.query(Mission).filter(Mission.id == mission_id).first()
+    db_mission.status = MissionStatus.PLANNED
+    db_session.commit()
+
+    response = client.put(
+        f"/api/v1/missions/{mission_id}",
+        json={"boundary_constraint_mode": "INSIDE"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "DRAFT"
+    assert response.json()["boundary_constraint_mode"] == "INSIDE"
+
+    db_session.delete(zone)
+    db_session.commit()
+
+
+def test_trajectory_fields_includes_boundary_fields():
+    """TRAJECTORY_FIELDS regresses missions when boundary knobs change."""
+    from app.models.mission import TRAJECTORY_FIELDS
+
+    assert "boundary_constraint_mode" in TRAJECTORY_FIELDS
+    assert "boundary_preference" in TRAJECTORY_FIELDS
+
+
+def test_duplicate_mission_preserves_boundary_fields(client, airport_id, db_session):
+    """duplicate copies boundary_constraint_mode and boundary_preference."""
+    from uuid import uuid4
+
+    from geoalchemy2.elements import WKTElement
+
+    from app.models.airport import SafetyZone
+
+    zone = SafetyZone(
+        id=uuid4(),
+        airport_id=airport_id,
+        name="bounds",
+        type="AIRPORT_BOUNDARY",
+        is_active=True,
+        geometry=WKTElement(
+            "SRID=4326;POLYGON Z ("
+            "(18.10 49.68 0, 18.12 49.68 0, 18.12 49.70 0, 18.10 49.70 0, 18.10 49.68 0))",
+            srid=4326,
+        ),
+    )
+    db_session.add(zone)
+    db_session.commit()
+
+    mission = client.post(
+        "/api/v1/missions",
+        json={
+            "name": "Source Boundary",
+            "airport_id": airport_id,
+            "boundary_constraint_mode": "OUTSIDE",
+            "boundary_preference": "PREFER_OUTSIDE",
+        },
+    ).json()
+
+    dup = client.post(f"/api/v1/missions/{mission['id']}/duplicate").json()
+
+    assert dup["boundary_constraint_mode"] == "OUTSIDE"
+    assert dup["boundary_preference"] == "PREFER_OUTSIDE"
+
+    db_session.delete(zone)
+    db_session.commit()
