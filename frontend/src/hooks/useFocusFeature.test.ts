@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
-import { useRef } from "react";
 import type { RefObject } from "react";
 import type maplibregl from "maplibre-gl";
 import type { Viewer as CesiumViewerType } from "cesium";
@@ -155,9 +154,7 @@ describe("useFocusFeature", () => {
 describe("useFocusFeature stability", () => {
   it("returns a stable locateFeature reference across renders when refs don't change", () => {
     const mapRef = { current: null } as RefObject<maplibregl.Map | null>;
-    const { result, rerender } = renderHook(() =>
-      useRef(useFocusFeature({ mapRef })).current,
-    );
+    const { result, rerender } = renderHook(() => useFocusFeature({ mapRef }));
     const first = result.current.locateFeature;
     rerender();
     const second = result.current.locateFeature;

@@ -13,7 +13,7 @@ import type { WaypointResponse } from "@/types/flightPlan";
 import type { PointZ } from "@/types/common";
 import { DEFAULT_LAYER_CONFIG } from "@/types/map";
 import useCesiumSync from "@/hooks/useCesiumSync";
-import { flyMapLibreToFeature } from "@/hooks/useFocusFeature";
+import { flyMapLibreToFeature, flyCesiumToFeature } from "@/hooks/useFocusFeature";
 import { MapTool } from "@/hooks/useMapTools";
 import {
   TOOL_CURSOR_MOVE,
@@ -341,9 +341,17 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   const highlightSeverityRef = useRef(highlightSeverity);
   highlightSeverityRef.current = highlightSeverity;
 
+  // cesium viewer ref (declared early so imperative handle can route 3d locates)
+  const cesiumViewerRef = useRef<import("cesium").Viewer | null>(null);
+
   useImperativeHandle(ref, () => ({
     getMap: () => mapRef.current,
     locateFeature: (feature: MapFeature) => {
+      const viewer = cesiumViewerRef.current;
+      if (viewer && !viewer.isDestroyed()) {
+        void flyCesiumToFeature(viewer, feature);
+        return;
+      }
       const map = mapRef.current;
       if (map) flyMapLibreToFeature(map, feature);
     },
@@ -382,9 +390,8 @@ const AirportMap = forwardRef<AirportMapHandle, AirportMapProps & {
   const [internalIs3D] = useState(false);
   const is3D = is3DProp ?? internalIs3D;
 
-  // cesium 3d viewer state
+  // cesium 3d viewer state (ref declared above alongside imperative handle)
   const [cesiumLoaded, setCesiumLoaded] = useState(false);
-  const cesiumViewerRef = useRef<import("cesium").Viewer | null>(null);
   const { syncToCesium, syncToMaplibre } = useCesiumSync(mapRef);
   // fly-along state placeholder - wired from parent via props
   // const [flyAlongState] = useState<FlyAlongState>({ status: "idle", currentIndex: 0, speed: 2, progress: 0 });

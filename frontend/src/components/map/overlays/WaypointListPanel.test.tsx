@@ -99,4 +99,28 @@ describe("WaypointListPanel click behavior", () => {
 
     expect(onLocate).toHaveBeenCalledWith("takeoff");
   });
+
+  it("skips the second click of a double-click to prevent select flicker", () => {
+    const onSelect = vi.fn();
+    const onLocate = vi.fn();
+    render(
+      <WaypointListPanel
+        waypoints={[wp({ id: "wp-a", sequence_order: 1 })]}
+        selectedId={null}
+        onSelect={onSelect}
+        onLocate={onLocate}
+      />,
+    );
+
+    const row = screen.getByTestId("waypoint-item-wp-a");
+    // browser fires two click events before dblclick on a double-click;
+    // the second click (detail === 2) must not toggle selection back off
+    fireEvent.click(row, { detail: 1 });
+    fireEvent.click(row, { detail: 2 });
+    fireEvent.doubleClick(row);
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith("wp-a");
+    expect(onLocate).toHaveBeenCalledWith("wp-a");
+  });
 });

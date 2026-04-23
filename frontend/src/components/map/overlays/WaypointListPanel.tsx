@@ -154,7 +154,12 @@ export default function WaypointListPanel({
     return (
       <button
         key={wp.id}
-        onClick={() => onSelect(selectedId === wp.id ? null : wp.id)}
+        onClick={(e) => {
+          // on double-click the browser fires a second click before dblclick;
+          // bail so the toggle doesn't flicker the selection off and back on
+          if (e.detail > 1) return;
+          onSelect(selectedId === wp.id ? null : wp.id);
+        }}
         onDoubleClick={() => onLocate?.(wp.id)}
         className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
           selectedId === wp.id
@@ -207,7 +212,10 @@ export default function WaypointListPanel({
           {/* show standalone takeoff/landing when no trajectory waypoints */}
           {waypoints.length === 0 && hasTakeoff && (
             <button
-              onClick={() => onSelect(selectedId === "takeoff" ? null : "takeoff")}
+              onClick={(e) => {
+                if (e.detail > 1) return;
+                onSelect(selectedId === "takeoff" ? null : "takeoff");
+              }}
               onDoubleClick={() => onLocate?.("takeoff")}
               className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
                 selectedId === "takeoff"
@@ -222,7 +230,10 @@ export default function WaypointListPanel({
           )}
           {waypoints.length === 0 && hasLanding && (
             <button
-              onClick={() => onSelect(selectedId === "landing" ? null : "landing")}
+              onClick={(e) => {
+                if (e.detail > 1) return;
+                onSelect(selectedId === "landing" ? null : "landing");
+              }}
               onDoubleClick={() => onLocate?.("landing")}
               className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
                 selectedId === "landing"
