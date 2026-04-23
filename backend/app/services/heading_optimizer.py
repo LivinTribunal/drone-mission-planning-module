@@ -403,7 +403,9 @@ def solve_and_persist(db: Session, mission_id: UUID) -> HeadingAutoResponse:
 
     writes the solver's choice into each direction_is_auto inspection's config.
     calls mission.invalidate_trajectory() and deletes the flight plan, since the
-    heading resolution is a trajectory-affecting change.
+    heading resolution is a trajectory-affecting change. the caller owns the
+    transaction - commit is done by the route after audit logging so data
+    changes and the audit trail land in a single transaction.
     """
     mission, surfaces = _load_mission(db, mission_id)
     if not mission.inspections:
@@ -438,7 +440,7 @@ def solve_and_persist(db: Session, mission_id: UUID) -> HeadingAutoResponse:
         except ValueError as e:
             raise DomainError(str(e), status_code=409)
 
-    db.commit()
+    db.flush()
 
     return HeadingAutoResponse(
         mission_id=mission.id,

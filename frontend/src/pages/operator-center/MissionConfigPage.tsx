@@ -88,6 +88,7 @@ export default function MissionConfigPage() {
   );
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [optimizingHeadings, setOptimizingHeadings] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(
     null,
@@ -381,8 +382,9 @@ export default function MissionConfigPage() {
   }
 
   async function handleAutoResolveHeadings() {
-    if (!id || !mission) return;
+    if (!id || !mission || optimizingHeadings) return;
     const previousStatus = mission.status;
+    setOptimizingHeadings(true);
     try {
       const result = await resolveAutoHeadings(id);
       const fresh = await getMission(id);
@@ -404,6 +406,8 @@ export default function MissionConfigPage() {
       } else {
         showNotification(t("mission.config.direction.optimizeError"));
       }
+    } finally {
+      setOptimizingHeadings(false);
     }
   }
 
@@ -712,10 +716,13 @@ export default function MissionConfigPage() {
               <button
                 type="button"
                 onClick={handleAutoResolveHeadings}
-                className="mt-3 w-full rounded-full border border-tv-border bg-tv-bg px-3 py-1.5 text-xs font-medium text-tv-text-primary hover:bg-tv-surface-hover transition-colors"
+                disabled={optimizingHeadings}
+                className="mt-3 w-full rounded-full border border-tv-border bg-tv-bg px-3 py-1.5 text-xs font-medium text-tv-text-primary hover:bg-tv-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="mission-optimize-headings"
               >
-                {t("mission.config.direction.optimizeButton")}
+                {optimizingHeadings
+                  ? t("mission.config.direction.optimizeInProgress")
+                  : t("mission.config.direction.optimizeButton")}
               </button>
             )}
           </div>

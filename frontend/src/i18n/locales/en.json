@@ -665,6 +665,7 @@
         "autoHint": "Direction is resolved by the heading optimizer over all Auto inspections.",
         "autoResolvedSuffix": "auto-resolved",
         "optimizeButton": "Auto-optimize headings",
+        "optimizeInProgress": "Optimizing headings...",
         "optimizeSuccess": "Optimized {{count}} inspection(s), saved ~{{saved}}m transit",
         "optimizeError": "Failed to optimize headings"
       },
