@@ -4,16 +4,23 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.airport import Airport
+from app.models.drone import Drone
 from app.models.enums import MissionStatus
 from app.models.inspection import Inspection, InspectionConfiguration
 from app.models.mission import TRAJECTORY_FIELDS, TRANSITIONS, DroneProfile, Mission
 from app.schemas.mission import MissionCreate, MissionUpdate
-from app.services.geometry_converter import apply_schema_update, schema_to_model_data
+from app.services import drone_service
+from app.services.geometry_converter import schema_to_model_data
 
 
 def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mission:
     """validate and execute status transition via aggregate root."""
-    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    mission = (
+        db.query(Mission)
+        .options(joinedload(Mission.drone).joinedload(Drone.drone_profile))
+        .filter(Mission.id == mission_id)
+        .first()
+    )
     if not mission:
         raise NotFoundError("mission not found")
 
@@ -32,15 +39,22 @@ def transition_mission(db: Session, mission_id: UUID, target_status: str) -> Mis
         )
 
     db.commit()
-    db.refresh(mission)
 
-    return mission
+    # re-query with eager loads so MissionResponse.drone_profile_id does not
+    # lazy-load on expired attributes during response serialization
+    return (
+        db.query(Mission)
+        .options(joinedload(Mission.drone).joinedload(Drone.drone_profile))
+        .filter(Mission.id == mission_id)
+        .first()
+    )
 
 
 def list_missions(
     db: Session,
     airport_id: UUID | None = None,
     status: str | None = None,
+    drone_id: UUID | None = None,
     drone_profile_id: UUID | None = None,
     limit: int = 20,
     offset: int = 0,
@@ -60,12 +74,23 @@ def list_missions(
         filters.append(Mission.airport_id == airport_id)
     if status:
         filters.append(Mission.status == status)
+    if drone_id:
+        filters.append(Mission.drone_id == drone_id)
     if drone_profile_id:
-        filters.append(Mission.drone_profile_id == drone_profile_id)
+        # filter by template id - correlated subquery walks the drone fk inline,
+        # avoiding the python round-trip and empty-result special case
+        matching_drone_ids = (
+            db.query(Drone.id).filter(Drone.drone_profile_id == drone_profile_id).scalar_subquery()
+        )
+        filters.append(Mission.drone_id.in_(matching_drone_ids))
 
     query = (
         db.query(Mission)
-        .options(joinedload(Mission.inspections), joinedload(Mission.flight_plan))
+        .options(
+            joinedload(Mission.inspections),
+            joinedload(Mission.flight_plan),
+            joinedload(Mission.drone).joinedload(Drone.drone_profile),
+        )
         .filter(*filters)
     )
 
@@ -81,7 +106,10 @@ def get_mission(db: Session, mission_id: UUID) -> Mission:
     """get mission with inspections."""
     mission = (
         db.query(Mission)
-        .options(joinedload(Mission.inspections).joinedload(Inspection.config))
+        .options(
+            joinedload(Mission.inspections).joinedload(Inspection.config),
+            joinedload(Mission.drone).joinedload(Drone.drone_profile),
+        )
         .filter(Mission.id == mission_id)
         .first()
     )
@@ -91,33 +119,68 @@ def get_mission(db: Session, mission_id: UUID) -> Mission:
     return mission
 
 
+def _resolve_drone_for_mission(
+    db: Session,
+    airport: Airport,
+    drone_id: UUID | None,
+    drone_profile_id: UUID | None,
+) -> tuple[UUID | None, DroneProfile | None]:
+    """resolve the drone_id + embedded profile for mission create/update.
+
+    precedence:
+        1. explicit drone_id on the payload
+        2. legacy drone_profile_id (auto-materializes a fleet drone)
+        3. airport default fleet drone
+    returns (resolved_drone_id, profile_for_validation).
+    """
+    # explicit fleet drone
+    if drone_id is not None:
+        drone = db.query(Drone).filter(Drone.id == drone_id, Drone.airport_id == airport.id).first()
+        if not drone:
+            raise DomainError("drone not found at this airport")
+        profile = db.query(DroneProfile).filter(DroneProfile.id == drone.drone_profile_id).first()
+        return drone.id, profile
+
+    # legacy: materialize a drone from a template
+    if drone_profile_id is not None:
+        drone = drone_service.find_or_create_drone_for_profile(db, airport.id, drone_profile_id)
+        profile = db.query(DroneProfile).filter(DroneProfile.id == drone.drone_profile_id).first()
+        return drone.id, profile
+
+    # fall back to airport default
+    if airport.default_drone_id:
+        drone = db.query(Drone).filter(Drone.id == airport.default_drone_id).first()
+        if drone:
+            profile = (
+                db.query(DroneProfile).filter(DroneProfile.id == drone.drone_profile_id).first()
+            )
+            return drone.id, profile
+
+    return None, None
+
+
 def create_mission(db: Session, schema: MissionCreate) -> Mission:
     """create mission in DRAFT status."""
     airport = db.query(Airport).filter(Airport.id == schema.airport_id).first()
     if not airport:
         raise DomainError("airport not found")
 
-    drone: DroneProfile | None = None
-    if schema.drone_profile_id:
-        drone = db.query(DroneProfile).filter(DroneProfile.id == schema.drone_profile_id).first()
-        if not drone:
-            raise DomainError("drone profile not found")
+    resolved_drone_id, profile = _resolve_drone_for_mission(
+        db,
+        airport,
+        drone_id=schema.drone_id,
+        drone_profile_id=schema.drone_profile_id,
+    )
 
     data = schema_to_model_data(schema)
-
-    # auto-fill from airport default when no drone specified
-    if not data.get("drone_profile_id") and airport.default_drone_profile_id:
-        data["drone_profile_id"] = airport.default_drone_profile_id
-        drone = (
-            db.query(DroneProfile)
-            .filter(DroneProfile.id == airport.default_drone_profile_id)
-            .first()
-        )
+    # drone_profile_id was a legacy shim - do not pass it to the ORM
+    data.pop("drone_profile_id", None)
+    data["drone_id"] = resolved_drone_id
 
     mission = Mission(**data)
 
     try:
-        mission.validate_transit_altitude(drone)
+        mission.validate_transit_altitude(profile)
     except ValueError as e:
         raise DomainError(str(e), status_code=422)
 
@@ -132,7 +195,10 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
     """update mission - invalidates trajectory on config changes."""
     mission = (
         db.query(Mission)
-        .options(joinedload(Mission.flight_plan))
+        .options(
+            joinedload(Mission.flight_plan),
+            joinedload(Mission.drone).joinedload(Drone.drone_profile),
+        )
         .filter(Mission.id == mission_id)
         .first()
     )
@@ -140,6 +206,36 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
         raise NotFoundError("mission not found")
 
     data = schema.model_dump(exclude_unset=True)
+
+    # resolve legacy drone_profile_id to a fleet drone_id before trajectory bookkeeping.
+    # explicit `drone_id: null` means "clear assignment" - it must NOT fall back to
+    # the airport default, so we resolve here instead of going through the create-time
+    # helper which always falls back.
+    drone_id_in_payload = "drone_id" in schema.model_fields_set
+    profile_id_in_payload = "drone_profile_id" in schema.model_fields_set
+    explicit_drone_id = data.pop("drone_id", None) if drone_id_in_payload else None
+    legacy_profile_id = data.pop("drone_profile_id", None) if profile_id_in_payload else None
+    drone_touched = drone_id_in_payload or profile_id_in_payload
+
+    if drone_touched:
+        airport = db.query(Airport).filter(Airport.id == mission.airport_id).first()
+        if drone_id_in_payload and explicit_drone_id is not None:
+            target = (
+                db.query(Drone)
+                .filter(Drone.id == explicit_drone_id, Drone.airport_id == airport.id)
+                .first()
+            )
+            if not target:
+                raise DomainError("drone not found at this airport")
+            data["drone_id"] = target.id
+        elif legacy_profile_id is not None:
+            target = drone_service.find_or_create_drone_for_profile(
+                db, airport.id, legacy_profile_id
+            )
+            data["drone_id"] = target.id
+        else:
+            # caller explicitly cleared drone_id - leave the mission unassigned
+            data["drone_id"] = None
 
     # trajectory-affecting fields changed - regress to DRAFT
     trajectory_changed = any(k in TRAJECTORY_FIELDS for k in data.keys())
@@ -153,23 +249,40 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
             raise DomainError(str(e), status_code=409)
         mission.has_unsaved_map_changes = True
 
-    apply_schema_update(mission, schema)
+    # mutate mission fields directly - apply_schema_update would re-inject the
+    # legacy drone_profile_id we already translated
+    for field, value in data.items():
+        setattr(mission, field, value)
 
     # validate the new cruise altitude against the (possibly updated) drone
-    if "transit_agl" in data or "drone_profile_id" in data:
-        drone = None
-        drone_id = mission.drone_profile_id
-        if drone_id:
-            drone = db.query(DroneProfile).filter(DroneProfile.id == drone_id).first()
+    if "transit_agl" in schema.model_fields_set or drone_touched:
+        profile: DroneProfile | None = None
+        if mission.drone_id:
+            current_drone = db.query(Drone).filter(Drone.id == mission.drone_id).first()
+            if current_drone:
+                profile = (
+                    db.query(DroneProfile)
+                    .filter(DroneProfile.id == current_drone.drone_profile_id)
+                    .first()
+                )
         try:
-            mission.validate_transit_altitude(drone)
+            mission.validate_transit_altitude(profile)
         except ValueError as e:
             raise DomainError(str(e), status_code=422)
 
     db.commit()
-    db.refresh(mission)
 
-    return mission
+    # re-query with eager loads so MissionResponse.drone_profile_id does not
+    # lazy-load on expired attributes during response serialization
+    return (
+        db.query(Mission)
+        .options(
+            joinedload(Mission.flight_plan),
+            joinedload(Mission.drone).joinedload(Drone.drone_profile),
+        )
+        .filter(Mission.id == mission_id)
+        .first()
+    )
 
 
 def delete_mission(db: Session, mission_id: UUID):
@@ -196,7 +309,10 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
     """
     original = (
         db.query(Mission)
-        .options(joinedload(Mission.inspections).joinedload(Inspection.config))
+        .options(
+            joinedload(Mission.inspections).joinedload(Inspection.config),
+            joinedload(Mission.drone).joinedload(Drone.drone_profile),
+        )
         .filter(Mission.id == mission_id)
         .first()
     )
@@ -207,7 +323,7 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
         name=f"{original.name} (copy)",
         status=MissionStatus.DRAFT,
         airport_id=original.airport_id,
-        drone_profile_id=original.drone_profile_id,
+        drone_id=original.drone_id,
         operator_notes=original.operator_notes,
         default_speed=original.default_speed,
         measurement_speed_override=original.measurement_speed_override,
@@ -242,6 +358,15 @@ def duplicate_mission(db: Session, mission_id: UUID) -> Mission:
         copy.add_inspection(new_insp)
 
     db.commit()
-    db.refresh(copy)
 
-    return copy
+    # re-query with eager loads so downstream serialization of drone_profile_id
+    # does not trigger a lazy load on expired attributes
+    return (
+        db.query(Mission)
+        .options(
+            joinedload(Mission.inspections).joinedload(Inspection.config),
+            joinedload(Mission.drone).joinedload(Drone.drone_profile),
+        )
+        .filter(Mission.id == copy.id)
+        .first()
+    )

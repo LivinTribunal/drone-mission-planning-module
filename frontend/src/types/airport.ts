@@ -15,6 +15,8 @@ export interface AirportResponse {
   country: string | null;
   elevation: number;
   location: PointZ;
+  default_drone_id?: string | null;
+  /** @deprecated use default_drone_id; kept for back-compat with existing UI */
   default_drone_profile_id: string | null;
   terrain_source: "FLAT" | "DEM_UPLOAD" | "DEM_API";
   has_dem: boolean;

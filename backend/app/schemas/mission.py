@@ -172,6 +172,8 @@ class MissionCreate(BaseModel):
 
     name: str
     airport_id: UUID
+    drone_id: UUID | None = None
+    # legacy compat - auto-creates or reuses a fleet drone at the airport
     drone_profile_id: UUID | None = None
     operator_notes: str | None = None
     default_speed: float | None = None
@@ -201,6 +203,7 @@ class MissionUpdate(BaseModel):
     """update mission"""
 
     name: str | None = None
+    drone_id: UUID | None = None
     drone_profile_id: UUID | None = None
     operator_notes: str | None = None
     default_speed: float | None = None
@@ -237,6 +240,7 @@ class MissionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     operator_notes: str | None = None
+    drone_id: UUID | None = None
     drone_profile_id: UUID | None = None
     date_time: datetime | None = None
     default_speed: float | None = None

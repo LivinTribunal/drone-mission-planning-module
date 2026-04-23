@@ -210,9 +210,9 @@ def list_airports_admin(
     drone_counts = (
         db.query(
             Mission.airport_id,
-            func.count(func.distinct(Mission.drone_profile_id)).label("drone_count"),
+            func.count(func.distinct(Mission.drone_id)).label("drone_count"),
         )
-        .filter(Mission.drone_profile_id.isnot(None))
+        .filter(Mission.drone_id.isnot(None))
         .group_by(Mission.airport_id)
         .subquery()
     )

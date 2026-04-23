@@ -450,18 +450,17 @@ Referenced throughout the app. Every list item (missions, airports, inspections,
 
 ---
 
-### Page 13 — Configurator: Drones (Coordinator)
+### Page 13 — Configurator: Drone Fleet & Profile Templates
 
-**Route:** `/coordinator-center/drones/:id`
+**DroneProfile (global template catalog)** — browsable by all roles; editable by SUPER_ADMIN only. Route: `/super-admin/drone-profiles/:id`.
+  - Fields: name, manufacturer, model, maxAltitude, maxSpeed, batteryCapacity, maxFlightTime, sensorFOV, cameraFrameRate, optional 3D model upload (`.glb`/`.gltf`), maxOpticalZoom.
+  - Actions: Add, Duplicate, Delete (blocked when any fleet drone still references the template).
 
-**Drone Profile Fields:** name, maxAltitude, maxSpeed, batteryCapacity, maxFlightTime, maxPayload, sensorFOV, cameraFrameRate (all with units and validation)
+**Drone (airport-scoped fleet unit)** — one row per physical/logical fleet slot. Route: `/operator-center/:airportId/drones` with detail at `/operator-center/:airportId/drones/:droneId`.
+  - Fields: name (unique per airport), serial_number (optional), notes (optional), drone_profile_id (template lookup, displayed as manufacturer/model secondary text).
+  - Actions: Add (opens `DroneProfileTemplatePicker` then fleet metadata form), Edit, Delete (blocked while missions still reference the drone — requires Bulk Change Drone first). Listing is scoped to the currently selected airport.
 
-**Actions:**
-- Add: new from scratch
-- Duplicate: creates copy with "(Copy)" suffix
-- Delete: allowed even if referenced by missions — shows warning with list of affected missions. Confirmation dialog required.
-
-**Drone list page:** search, filters (Drone Search, Drone Filters), list, "Add New", "Duplicate", "Delete" buttons. List Item Action Pattern applies.
+**Bulk Change Drone** (mission level) — reassigns missions from one fleet drone to another within the same airport; no cross-airport moves.
 
 ---
 

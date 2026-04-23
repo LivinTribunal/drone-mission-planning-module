@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import CoordinatorUser, OperatorUser
+from app.api.dependencies import OperatorUser, SuperAdminUser
 from app.core.dependencies import get_db
 from app.core.enums import AuditAction
 from app.schemas.common import DeleteResponse, ListMeta
@@ -48,7 +48,7 @@ def get_drone(drone_id: UUID, current_user: OperatorUser, db: Session = Depends(
 def create_drone(
     body: DroneProfileCreate,
     request: Request,
-    current_user: CoordinatorUser,
+    current_user: SuperAdminUser,
     db: Session = Depends(get_db),
 ):
     """create drone profile."""
@@ -73,7 +73,7 @@ def update_drone(
     drone_id: UUID,
     body: DroneProfileUpdate,
     request: Request,
-    current_user: CoordinatorUser,
+    current_user: SuperAdminUser,
     db: Session = Depends(get_db),
 ):
     """update drone profile."""
@@ -97,7 +97,7 @@ def update_drone(
 def delete_drone(
     drone_id: UUID,
     request: Request,
-    current_user: CoordinatorUser,
+    current_user: SuperAdminUser,
     db: Session = Depends(get_db),
 ):
     """delete drone profile - returns warnings if missions use it."""
@@ -120,7 +120,7 @@ def delete_drone(
 async def upload_drone_model(
     drone_id: UUID,
     file: UploadFile,
-    current_user: CoordinatorUser,
+    current_user: SuperAdminUser,
     db: Session = Depends(get_db),
 ):
     """upload a custom 3d model file for a drone profile."""

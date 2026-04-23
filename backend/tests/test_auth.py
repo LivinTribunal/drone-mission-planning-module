@@ -442,15 +442,15 @@ class TestRBAC:
         )
         assert resp.status_code == 403
 
-    def test_coordinator_can_create_drone(self, seeded_auth_client):
-        """coordinator role can access coordinator endpoints."""
+    def test_coordinator_cannot_create_drone_profile(self, seeded_auth_client):
+        """drone profile templates are system-wide - coordinators no longer write."""
         token = self._get_token(seeded_auth_client, "coord@tmv.com", "coordinator")
         resp = seeded_auth_client.post(
             "/api/v1/drone-profiles",
             headers={"Authorization": f"Bearer {token}"},
             json={"name": "Test Drone RBAC"},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == 403
 
     def test_unauthenticated_blocked(self, seeded_auth_client):
         """unauthenticated requests are blocked on protected routes."""

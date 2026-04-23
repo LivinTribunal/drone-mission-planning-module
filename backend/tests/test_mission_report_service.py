@@ -328,7 +328,7 @@ class TestLoadReportData:
         db = MagicMock()
         mission = MagicMock()
         mission.airport_id = uuid4()
-        mission.drone_profile_id = None
+        mission.drone = None
         mission.inspections = []
 
         query_mock = MagicMock()

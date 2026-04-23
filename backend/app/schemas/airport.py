@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from app.schemas.common import ListMeta
 from app.schemas.geometry import PointZ
@@ -43,6 +43,7 @@ class AirportResponse(BaseModel):
     country: str | None = None
     elevation: float
     location: PointZ
+    default_drone_id: UUID | None = None
     default_drone_profile_id: UUID | None = None
     terrain_source: Literal["FLAT", "DEM_UPLOAD", "DEM_API"] = "FLAT"
     dem_file_path: str | None = Field(default=None, exclude=True)
@@ -57,18 +58,33 @@ class AirportResponse(BaseModel):
 
 
 class SetDefaultDroneRequest(BaseModel):
-    """request to set or clear the default drone for an airport."""
+    """request to set or clear the default fleet drone for an airport."""
 
+    # canonical fleet drone id
+    drone_id: UUID | None = None
+    # legacy compat - when provided, the service will auto-create or reuse
+    # a fleet drone at the target airport referencing this profile
     drone_profile_id: UUID | None = None
 
 
 class BulkChangeDroneRequest(BaseModel):
-    """request to bulk-change drone profile on missions."""
+    """request to bulk-reassign the fleet drone across missions."""
 
-    drone_profile_id: UUID
+    # canonical fleet drone id to reassign missions to
+    drone_id: UUID | None = None
+    # legacy compat - auto-materializes a fleet drone from this profile template
+    drone_profile_id: UUID | None = None
     from_drone_id: UUID | None = None
+    from_drone_profile_id: UUID | None = None
     scope: Literal["ALL_DRAFT", "SELECTED"] = "ALL_DRAFT"
     mission_ids: list[UUID] = []
+
+    @model_validator(mode="after")
+    def _require_target_drone(self):
+        """reject payloads where neither target drone_id nor drone_profile_id was provided."""
+        if self.drone_id is None and self.drone_profile_id is None:
+            raise ValueError("either drone_id or drone_profile_id must be provided")
+        return self
 
 
 class BulkChangeDroneResponse(BaseModel):

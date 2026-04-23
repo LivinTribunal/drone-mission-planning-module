@@ -271,8 +271,8 @@ class TestMissionInspections:
             m.remove_inspection(uuid4())
 
 
-class TestMissionChangeDroneProfile:
-    """tests for Mission.change_drone_profile."""
+class TestMissionChangeDrone:
+    """tests for Mission.change_drone (fleet reassignment)."""
 
     def _make_mission(self, status="DRAFT"):
         """create a mission with given status."""
@@ -281,36 +281,36 @@ class TestMissionChangeDroneProfile:
         m.flight_plan = None
         return m
 
-    def test_change_drone_profile_validated_to_draft(self):
-        """changing drone profile regresses VALIDATED -> DRAFT."""
+    def test_change_drone_validated_to_draft(self):
+        """changing drone regresses VALIDATED -> DRAFT."""
         m = self._make_mission("VALIDATED")
         new_id = uuid4()
-        m.change_drone_profile(new_id)
-        assert m.drone_profile_id == new_id
+        m.change_drone(new_id)
+        assert m.drone_id == new_id
         assert m.status == "DRAFT"
 
-    def test_change_drone_profile_no_regress_draft(self):
-        """changing drone profile in DRAFT stays DRAFT."""
+    def test_change_drone_no_regress_draft(self):
+        """changing drone in DRAFT stays DRAFT."""
         m = self._make_mission("DRAFT")
         new_id = uuid4()
-        m.change_drone_profile(new_id)
-        assert m.drone_profile_id == new_id
+        m.change_drone(new_id)
+        assert m.drone_id == new_id
         assert m.status == "DRAFT"
 
-    def test_change_drone_profile_planned_to_draft(self):
-        """changing drone profile in PLANNED regresses to DRAFT."""
+    def test_change_drone_planned_to_draft(self):
+        """changing drone in PLANNED regresses to DRAFT."""
         m = self._make_mission("PLANNED")
         new_id = uuid4()
-        m.change_drone_profile(new_id)
-        assert m.drone_profile_id == new_id
+        m.change_drone(new_id)
+        assert m.drone_id == new_id
         assert m.status == "DRAFT"
 
-    def test_change_drone_profile_exported_regresses_to_draft(self):
-        """changing drone profile in EXPORTED regresses to DRAFT."""
+    def test_change_drone_exported_regresses_to_draft(self):
+        """changing drone in EXPORTED regresses to DRAFT."""
         m = self._make_mission("EXPORTED")
         new_id = uuid4()
-        m.change_drone_profile(new_id)
-        assert m.drone_profile_id == new_id
+        m.change_drone(new_id)
+        assert m.drone_id == new_id
         assert m.status == "DRAFT"
 
 
