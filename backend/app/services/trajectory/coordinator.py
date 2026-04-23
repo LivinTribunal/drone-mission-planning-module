@@ -44,6 +44,7 @@ from .types import (
     InspectionPass,
     LocalGeometries,
     MissionData,
+    Point3D,
     Violation,
     WaypointData,
 )
@@ -629,7 +630,9 @@ def _assemble_no_takeoff_landing(
     )
 
     pass_start_indices: list[int] = []
-    for ipass in inspection_passes:
+    for i, ipass in enumerate(inspection_passes):
+        if not ipass.waypoints:
+            raise TrajectoryGenerationError(f"inspection pass {i} produced no waypoints")
         prev = all_waypoints[-1]
         start = ipass.waypoints[0]
         from_pt = _to_point3d(prev)
@@ -723,7 +726,9 @@ def _assemble_full_scope(
         )
 
     pass_start_indices: list[int] = []
-    for ipass in inspection_passes:
+    for i, ipass in enumerate(inspection_passes):
+        if not ipass.waypoints:
+            raise TrajectoryGenerationError(f"inspection pass {i} produced no waypoints")
         if all_waypoints:
             prev = all_waypoints[-1]
             start = ipass.waypoints[0]
@@ -786,13 +791,9 @@ def _assemble_full_scope(
 
 def _to_point3d(wp: WaypointData):
     """build a Point3D from a waypoint's position fields."""
-    from .types import Point3D
-
     return Point3D(lon=wp.lon, lat=wp.lat, alt=wp.alt)
 
 
 def _make_point3d(lon: float, lat: float, alt: float):
     """build a Point3D from raw coordinates."""
-    from .types import Point3D
-
     return Point3D(lon=lon, lat=lat, alt=alt)
