@@ -20,9 +20,6 @@ _VALID_FORMATS = {
 # (Pilot 2 renders the polygons but does not honor them in flight).
 GEOZONE_CAPABLE_FORMATS = frozenset({"MAVLINK", "JSON", "UGCS", "KMZ", "KML"})
 
-# subset that actually enforces at flight time (the rest are visual overlays)
-GEOZONE_ENFORCED_FORMATS = frozenset({"MAVLINK", "JSON", "UGCS"})
-
 
 class ExportRequest(BaseModel):
     """request body for export endpoint"""

@@ -737,13 +737,13 @@ def _generate_mavlink_plan(
     items = _build_mavlink_mission_items(flight_plan, airport_elevation)
     polygons = _build_mavlink_geofence_polygons(geozone_payload)
 
-    # qgc .plan planned-home: first waypoint's lat/lon if any, else 0/0
+    # qgc .plan planned-home: first waypoint's lat/lon at airport elevation, else 0/0
     waypoints = sorted(flight_plan.waypoints, key=_waypoint_sort_key)
     if waypoints:
         hlon, hlat, _ = _extract_coords(waypoints[0].position)
-        planned_home = [hlat, hlon, 0]
+        planned_home = [hlat, hlon, airport_elevation]
     else:
-        planned_home = [0, 0, 0]
+        planned_home = [0, 0, airport_elevation]
 
     plan = {
         "fileType": "Plan",

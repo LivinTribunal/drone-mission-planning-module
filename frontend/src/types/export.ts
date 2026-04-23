@@ -15,3 +15,8 @@ export interface ExportRequest {
   include_geozones: boolean;
   include_runway_buffers: boolean;
 }
+
+export interface ExportOptions {
+  includeGeozones?: boolean;
+  includeRunwayBuffers?: boolean;
+}

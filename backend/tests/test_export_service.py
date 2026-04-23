@@ -1920,6 +1920,8 @@ class TestExportMissionGeozoneGate:
         data = json.loads(content)
         assert data["fileType"] == "Plan"
         assert len(data["geoFence"]["polygons"]) >= 1
+        # planned-home altitude must reference airport elevation, not sea level
+        assert data["mission"]["plannedHomePosition"][2] == airport.elevation
 
     def test_mavlink_firmware_type_px4_default(self):
         """px4-manufactured drone produces firmwareType=12 (MAV_AUTOPILOT_PX4)."""

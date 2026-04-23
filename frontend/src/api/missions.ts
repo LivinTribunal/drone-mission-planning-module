@@ -16,7 +16,10 @@ import type {
   GenerateTrajectoryResponse,
   WaypointPositionUpdate,
 } from "@/types/flightPlan";
+import type { ExportOptions } from "@/types/export";
 import client from "./client";
+
+export type { ExportOptions };
 
 export async function listMissions(params?: {
   limit?: number;
@@ -67,11 +70,6 @@ export async function validateMission(
 ): Promise<MissionResponse> {
   const res = await client.post(`/missions/${id}/validate`);
   return res.data;
-}
-
-export interface ExportOptions {
-  includeGeozones?: boolean;
-  includeRunwayBuffers?: boolean;
 }
 
 export async function exportMissionFiles(
