@@ -173,13 +173,17 @@ def find_or_create_drone_for_profile(
         drone_profile_id=drone_profile_id,
         name=name,
     )
+
+    # nested savepoint isolates the speculative insert so a concurrent-race
+    # rollback only discards this insert, leaving any caller's pending work intact
+    nested = db.begin_nested()
     db.add(drone)
     try:
         db.flush()
     except IntegrityError:
-        # concurrent creator won the race on (airport_id, name) - roll back the
-        # failed insert and return the drone that landed first
-        db.rollback()
+        # concurrent creator won the race on (airport_id, name) - roll back only
+        # the failed insert and return the drone that landed first
+        nested.rollback()
         winner = (
             db.query(Drone)
             .filter(Drone.airport_id == airport_id, Drone.drone_profile_id == drone_profile_id)
@@ -190,61 +194,3 @@ def find_or_create_drone_for_profile(
             return winner
         raise ConflictError(f"a drone named '{name}' already exists at this airport") from None
     return drone
-
-
-def bulk_reassign_missions(
-    db: Session,
-    airport_id: UUID,
-    target_drone_id: UUID,
-    from_drone_id: UUID | None = None,
-    scope: str = "ALL_DRAFT",
-    mission_ids: list[UUID] | None = None,
-) -> tuple[int, int, list[UUID]]:
-    """bulk-reassign missions from one drone to another at an airport."""
-    from app.models.enums import MissionStatus
-
-    airport = db.query(Airport).filter(Airport.id == airport_id).first()
-    if not airport:
-        raise NotFoundError("airport not found")
-
-    target = (
-        db.query(Drone).filter(Drone.id == target_drone_id, Drone.airport_id == airport_id).first()
-    )
-    if not target:
-        raise DomainError("target drone not found at this airport")
-
-    updated_ids: list[UUID] = []
-    regressed_count = 0
-
-    if scope == "SELECTED":
-        if not mission_ids:
-            return 0, 0, []
-        missions = (
-            db.query(Mission)
-            .filter(
-                Mission.airport_id == airport_id,
-                Mission.id.in_(mission_ids),
-                Mission.status.in_([MissionStatus.DRAFT, MissionStatus.PLANNED]),
-            )
-            .all()
-        )
-        for mission in missions:
-            was_planned = mission.status == MissionStatus.PLANNED
-            mission.change_drone(target_drone_id)
-            updated_ids.append(mission.id)
-            if was_planned:
-                regressed_count += 1
-    else:
-        query = db.query(Mission).filter(
-            Mission.airport_id == airport_id,
-            Mission.status == MissionStatus.DRAFT,
-        )
-        if from_drone_id:
-            query = query.filter(Mission.drone_id == from_drone_id)
-        draft_missions = query.all()
-        for mission in draft_missions:
-            mission.change_drone(target_drone_id)
-            updated_ids.append(mission.id)
-
-    db.commit()
-    return len(updated_ids), regressed_count, updated_ids

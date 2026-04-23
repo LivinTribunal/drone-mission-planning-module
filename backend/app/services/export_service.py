@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import DomainError, NotFoundError
 from app.models.airport import Airport
+from app.models.drone import Drone
 from app.models.flight_plan import FlightPlan
 from app.models.inspection import Inspection, InspectionTemplate
 from app.models.mission import DroneProfile, Mission
@@ -1109,8 +1110,11 @@ def export_mission(
     returns (files_dict, sanitized_mission_name) where files_dict maps
     filename -> (content_bytes, content_type).
     """
-    # eager-load inspections + configs when JSON export is requested
-    mission_query = db.query(Mission).filter(Mission.id == mission_id)
+    # eager-load drone + profile (needed below for dji enum lookup) and the
+    # inspection tree when JSON export is requested
+    mission_query = db.query(Mission).options(
+        joinedload(Mission.drone).joinedload(Drone.drone_profile),
+    )
     if "JSON" in formats:
         mission_query = mission_query.options(
             joinedload(Mission.inspections).joinedload(Inspection.config),
@@ -1118,7 +1122,7 @@ def export_mission(
             .joinedload(Inspection.template)
             .joinedload(InspectionTemplate.default_config),
         )
-    mission = mission_query.first()
+    mission = mission_query.filter(Mission.id == mission_id).first()
     if not mission:
         raise NotFoundError("mission not found")
 
@@ -1168,12 +1172,10 @@ def export_mission(
     }.get(scope, "")
     safe_name = _sanitize_filename(mission.name + scope_suffix)
 
-    # load the drone profile template for dji enum lookup via the fleet drone link
-    drone_profile = None
-    if mission.drone is not None and mission.drone.drone_profile_id is not None:
-        drone_profile = (
-            db.query(DroneProfile).filter(DroneProfile.id == mission.drone.drone_profile_id).first()
-        )
+    # drone profile template (for dji enum lookup) is eager-loaded with the mission
+    drone_profile: DroneProfile | None = (
+        mission.drone.drone_profile if mission.drone is not None else None
+    )
 
     files: dict[str, tuple[bytes, str]] = {}
     for fmt in formats:

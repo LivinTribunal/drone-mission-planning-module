@@ -211,19 +211,37 @@ def update_mission(db: Session, mission_id: UUID, schema: MissionUpdate) -> Miss
 
     data = schema.model_dump(exclude_unset=True)
 
-    # resolve legacy drone_profile_id to a fleet drone_id before trajectory bookkeeping
-    resolved_drone_id = data.pop("drone_id", None) if "drone_id" in data else None
-    legacy_profile_id = data.pop("drone_profile_id", None) if "drone_profile_id" in data else None
-    drone_touched = "drone_id" in schema.model_fields_set or legacy_profile_id is not None
+    # resolve legacy drone_profile_id to a fleet drone_id before trajectory bookkeeping.
+    # explicit `drone_id: null` means "clear assignment" - it must NOT fall back to
+    # the airport default, so we resolve here instead of going through the create-time
+    # helper which always falls back.
+    drone_id_in_payload = "drone_id" in schema.model_fields_set
+    profile_id_in_payload = "drone_profile_id" in schema.model_fields_set
+    explicit_drone_id = data.pop("drone_id", None) if drone_id_in_payload else None
+    legacy_profile_id = data.pop("drone_profile_id", None) if profile_id_in_payload else None
+    drone_touched = drone_id_in_payload or profile_id_in_payload
+
     if drone_touched:
         airport = db.query(Airport).filter(Airport.id == mission.airport_id).first()
-        resolved_drone_id, _ = _resolve_drone_for_mission(
-            db,
-            airport,
-            drone_id=resolved_drone_id if "drone_id" in schema.model_fields_set else None,
-            drone_profile_id=legacy_profile_id,
-        )
-        data["drone_id"] = resolved_drone_id
+        if drone_id_in_payload and explicit_drone_id is not None:
+            target = (
+                db.query(Drone)
+                .filter(Drone.id == explicit_drone_id, Drone.airport_id == airport.id)
+                .first()
+            )
+            if not target:
+                raise DomainError("drone not found at this airport")
+            data["drone_id"] = target.id
+        elif legacy_profile_id is not None:
+            from app.services import drone_service
+
+            target = drone_service.find_or_create_drone_for_profile(
+                db, airport.id, legacy_profile_id
+            )
+            data["drone_id"] = target.id
+        else:
+            # caller explicitly cleared drone_id - leave the mission unassigned
+            data["drone_id"] = None
 
     # trajectory-affecting fields changed - regress to DRAFT
     trajectory_changed = any(k in TRAJECTORY_FIELDS for k in data.keys())

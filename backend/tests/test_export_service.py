@@ -753,11 +753,12 @@ def _build_export_db_mock(mission, fp, airport, drone_profile=None):
     def query_side_effect(model):
         mock_chain = MagicMock()
         if model.__name__ == "Mission":
-            mock_chain.filter.return_value.first.return_value = mission
-            # eager-load path: query(Mission).filter().options().first()
-            mock_chain.filter.return_value.options.return_value.first.return_value = mission
-            # options-first path: query(Mission).options().filter().first()
-            mock_chain.options.return_value.filter.return_value.first.return_value = mission
+            # any combination of chained .options()/.filter() collapses to the
+            # same chain, and .first() always returns the mission. lets the mock
+            # survive both legacy and current eager-load chains in export_service.
+            mock_chain.options.return_value = mock_chain
+            mock_chain.filter.return_value = mock_chain
+            mock_chain.first.return_value = mission
         elif model.__name__ == "FlightPlan":
             mock_chain.options.return_value.filter.return_value.first.return_value = fp
         elif model.__name__ == "Airport":
