@@ -24,6 +24,10 @@ import {
 } from "@/utils/cameraAutoCalc";
 import { computeMehtHeight } from "@/utils/mehtHeight";
 
+// mirrors backend DEFAULT_HORIZONTAL_DISTANCE - when the field is empty the
+// trajectory is flown at 400m, so the zoom calc must assume the same.
+const DEFAULT_HORIZONTAL_DISTANCE_M = 400;
+
 interface InspectionConfigFormProps {
   inspection: InspectionResponse;
   template: InspectionTemplateResponse | null;
@@ -135,7 +139,7 @@ export default function InspectionConfigForm({
         return num("lateral_offset") ?? 0;
       case "HORIZONTAL_RANGE":
       case "VERTICAL_PROFILE":
-        return num("horizontal_distance");
+        return num("horizontal_distance") ?? DEFAULT_HORIZONTAL_DISTANCE_M;
       default:
         return null;
     }

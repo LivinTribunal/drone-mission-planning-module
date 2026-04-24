@@ -552,6 +552,26 @@ describe("InspectionConfigForm zoom resync", () => {
     expect(submitted).not.toBe(5);
   });
 
+  it("derives optical_zoom from the 400m default when horizontal_distance is cleared", () => {
+    const { onChangeSpy } = renderControlled({
+      horizontal_distance: 100,
+      optical_zoom: 5,
+    });
+    onChangeSpy.mockClear();
+
+    act(() => {
+      fireEvent.change(screen.getByTestId("inspection-horizontal-distance"), {
+        target: { value: "" },
+      });
+    });
+
+    const expected = computeOpticalZoom(400, 111.195, 84, 20);
+    expect(expected).not.toBeNull();
+    const submitted = lastOpticalZoom(onChangeSpy);
+    expect(submitted).toBeCloseTo(expected as number, 1);
+    expect(submitted).not.toBe(5);
+  });
+
   it("re-derives optical_zoom when horizontal_distance changes even after the slider was touched", () => {
     // MANUAL mode renders the optical-zoom slider so we can fake a real drag.
     const { onChangeSpy } = renderControlled({
