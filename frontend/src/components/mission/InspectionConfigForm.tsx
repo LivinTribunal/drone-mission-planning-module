@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, ChevronDown, ChevronUp, Crosshair, Info, RotateCcw, Save } from "lucide-react";
 import type { InspectionResponse, InspectionConfigOverride, MissionDetailResponse } from "@/types/mission";
@@ -23,6 +23,10 @@ import {
   maxPairwiseDistanceM,
 } from "@/utils/cameraAutoCalc";
 import { computeMehtHeight } from "@/utils/mehtHeight";
+
+// mirrors backend DEFAULT_HORIZONTAL_DISTANCE - when the field is empty the
+// trajectory is flown at 400m, so the zoom calc must assume the same.
+const DEFAULT_HORIZONTAL_DISTANCE_M = 400;
 
 interface InspectionConfigFormProps {
   inspection: InspectionResponse;
@@ -135,7 +139,7 @@ export default function InspectionConfigForm({
         return num("lateral_offset") ?? 0;
       case "HORIZONTAL_RANGE":
       case "VERTICAL_PROFILE":
-        return num("horizontal_distance");
+        return num("horizontal_distance") ?? DEFAULT_HORIZONTAL_DISTANCE_M;
       default:
         return null;
     }
@@ -177,14 +181,29 @@ export default function InspectionConfigForm({
       : savedCfg?.optical_zoom != null,
   );
 
-  // reset touched state when switching to a different inspection
+  // track the inspection + horizontal distance we last keyed zoomTouched against.
+  // when inspection switches, re-seed from saved. when only the distance changes
+  // for the same inspection, release the touched flag so the derived zoom runs.
+  const zoomKeyRef = useRef<{ id: string; dist: number | null }>({
+    id: inspection.id,
+    dist: horizontalDistanceToLha,
+  });
   useEffect(() => {
-    setZoomTouched(
-      "optical_zoom" in configOverride
-        ? configOverride.optical_zoom != null
-        : savedCfg?.optical_zoom != null,
-    );
-  }, [inspection.id]);
+    const last = zoomKeyRef.current;
+    if (last.id !== inspection.id) {
+      zoomKeyRef.current = { id: inspection.id, dist: horizontalDistanceToLha };
+      setZoomTouched(
+        "optical_zoom" in configOverride
+          ? configOverride.optical_zoom != null
+          : savedCfg?.optical_zoom != null,
+      );
+      return;
+    }
+    if (last.dist !== horizontalDistanceToLha) {
+      zoomKeyRef.current = { id: inspection.id, dist: horizontalDistanceToLha };
+      setZoomTouched(false);
+    }
+  }, [inspection.id, horizontalDistanceToLha, configOverride, savedCfg]);
 
   // auto-propagate computed zoom while untouched
   useEffect(() => {

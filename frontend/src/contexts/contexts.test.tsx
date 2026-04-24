@@ -1,13 +1,15 @@
 /**
- * tests for AuthContext, AirportContext, and ThemeContext.
+ * tests for AuthContext, AirportContext, MissionContext, and ThemeContext.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { waitFor, act } from "@testing-library/react";
 import { renderHook } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { type ReactNode } from "react";
 import client from "@/api/client";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { AirportProvider, useAirport } from "./AirportContext";
+import { MissionProvider, useMission } from "./MissionContext";
 import { ThemeProvider, useTheme } from "./ThemeContext";
 
 vi.mock("@/api/client", () => ({
@@ -28,6 +30,11 @@ vi.mock("@/api/airports", () => ({
     safety_zones: [],
   }),
   listAirports: vi.fn().mockResolvedValue({ data: [] }),
+}));
+
+vi.mock("@/api/missions", () => ({
+  getMission: vi.fn(),
+  listMissions: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
 }));
 
 const MOCK_AIRPORT = {
@@ -281,6 +288,95 @@ describe("AirportContext", () => {
     await waitFor(() => {
       expect(localStorage.getItem("tarmacview_airport")).toBeNull();
     });
+  });
+});
+
+// --- MissionContext (rehydration cross-cuts AirportContext) ---
+
+describe("MissionContext rehydration", () => {
+  /**
+   * wrapper that mounts AirportProvider + MissionProvider inside a router
+   * so the mission provider's useNavigate/useLocation hooks resolve.
+   */
+  function wrapper({ children }: { children: ReactNode }) {
+    return (
+      <MemoryRouter>
+        <AirportProvider>
+          <MissionProvider>{children}</MissionProvider>
+        </AirportProvider>
+      </MemoryRouter>
+    );
+  }
+
+  function useMissionAndAirport() {
+    return { mission: useMission(), airport: useAirport() };
+  }
+
+  it("rehydrates mission and drives airport when only MISSION_KEY is in storage", async () => {
+    localStorage.setItem("tarmacview_mission", "mission-1");
+    const { getMission } = await import("@/api/missions");
+    vi.mocked(getMission).mockResolvedValueOnce({
+      id: "mission-1",
+      airport_id: "apt-1",
+      name: "Test Mission",
+      status: "DRAFT",
+      inspections: [],
+    } as never);
+
+    const { result } = renderHook(() => useMissionAndAirport(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.mission.selectedMission?.id).toBe("mission-1");
+    });
+
+    const { getAirport } = await import("@/api/airports");
+    expect(getAirport).toHaveBeenCalledWith("apt-1");
+
+    await waitFor(() => {
+      expect(result.current.airport.selectedAirport?.id).toBe("apt-1");
+    });
+  });
+
+  it("clears mission when airport is cleared", async () => {
+    localStorage.setItem("tarmacview_airport", JSON.stringify(MOCK_AIRPORT));
+    localStorage.setItem("tarmacview_mission", "mission-1");
+    const { getMission } = await import("@/api/missions");
+    vi.mocked(getMission).mockResolvedValueOnce({
+      id: "mission-1",
+      airport_id: "apt-1",
+      name: "Test Mission",
+      status: "DRAFT",
+      inspections: [],
+    } as never);
+
+    const { result } = renderHook(() => useMissionAndAirport(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.airport.selectedAirport?.id).toBe("apt-1");
+      expect(result.current.mission.selectedMission?.id).toBe("mission-1");
+    });
+
+    act(() => {
+      result.current.airport.clearAirport();
+    });
+
+    await waitFor(() => {
+      expect(result.current.mission.selectedMission).toBeNull();
+    });
+    expect(localStorage.getItem("tarmacview_mission")).toBeNull();
+  });
+
+  it("drops stale MISSION_KEY when getMission rejects", async () => {
+    localStorage.setItem("tarmacview_mission", "missing-mission");
+    const { getMission } = await import("@/api/missions");
+    vi.mocked(getMission).mockRejectedValueOnce(new Error("404"));
+
+    const { result } = renderHook(() => useMissionAndAirport(), { wrapper });
+
+    await waitFor(() => {
+      expect(localStorage.getItem("tarmacview_mission")).toBeNull();
+    });
+    expect(result.current.mission.selectedMission).toBeNull();
   });
 });
 

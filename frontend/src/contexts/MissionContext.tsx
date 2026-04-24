@@ -29,7 +29,7 @@ const MissionContext = createContext<MissionContextValue | null>(null);
 
 export function MissionProvider({ children }: { children: ReactNode }) {
   /** provider for centralized mission state with persistence and airport-change handling. */
-  const { selectedAirport } = useAirport();
+  const { selectedAirport, ensureAirport } = useAirport();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -132,27 +132,34 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     }
   }, [selectedAirport?.id, clearMission, navigate]);
 
-  // FIX 3: rehydrate selected mission from localStorage on mount
+  // rehydrate the selected mission from localStorage on mount, regardless of
+  // whether airport is hydrated yet. mission carries its airport - if the two
+  // disagree, mission wins and we drive the airport via ensureAirport.
   const rehydratedRef = useRef(false);
   useEffect(() => {
-    if (rehydratedRef.current || !selectedAirport) return;
+    if (rehydratedRef.current) return;
     const savedId = localStorage.getItem(MISSION_KEY);
     if (!savedId) return;
     rehydratedRef.current = true;
 
     getMission(savedId)
       .then((mission) => {
-        if (mission.airport_id === selectedAirport.id) {
-          setSelectedMissionState(mission);
-        } else {
-          localStorage.removeItem(MISSION_KEY);
-        }
+        // mission determines the airport - update the change baseline so the
+        // mission-driven airport switch does not trip the "airport changed"
+        // clear effect below.
+        // ordering guarantee: react defers state updates past this microtask,
+        // so ensureAirport's setState cannot land before we've moved the ref.
+        // the airport-change effect only reads prevAirportIdRef.current, which
+        // will already equal mission.airport_id by the time it runs.
+        prevAirportIdRef.current = mission.airport_id;
+        ensureAirport(mission.airport_id);
+        setSelectedMissionState(mission);
       })
       .catch(() => {
         rehydratedRef.current = false;
         localStorage.removeItem(MISSION_KEY);
       });
-  }, [selectedAirport]);
+  }, [ensureAirport]);
 
   return (
     <MissionContext.Provider
