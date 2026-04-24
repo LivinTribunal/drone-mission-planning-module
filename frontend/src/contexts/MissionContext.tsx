@@ -147,6 +147,10 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         // mission determines the airport - update the change baseline so the
         // mission-driven airport switch does not trip the "airport changed"
         // clear effect below.
+        // ordering guarantee: react defers state updates past this microtask,
+        // so ensureAirport's setState cannot land before we've moved the ref.
+        // the airport-change effect only reads prevAirportIdRef.current, which
+        // will already equal mission.airport_id by the time it runs.
         prevAirportIdRef.current = mission.airport_id;
         ensureAirport(mission.airport_id);
         setSelectedMissionState(mission);

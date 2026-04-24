@@ -9,7 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-import geoalchemy2
+import geoalchemy2  # noqa: F401
 
 
 revision: str = 'd49ec30dc2a7'

@@ -203,7 +203,7 @@ export default function InspectionConfigForm({
       zoomKeyRef.current = { id: inspection.id, dist: horizontalDistanceToLha };
       setZoomTouched(false);
     }
-  }, [inspection.id, horizontalDistanceToLha]);
+  }, [inspection.id, horizontalDistanceToLha, configOverride, savedCfg]);
 
   // auto-propagate computed zoom while untouched
   useEffect(() => {
